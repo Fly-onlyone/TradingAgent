@@ -1,0 +1,386 @@
+"""Agent session management endpoints for chat history persistence."""
+
+from datetime import datetime, timezone
+from typing import Optional
+
+from beanie import PydanticObjectId
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
+
+from app.api.v1.auth import get_current_active_user
+from app.db.models.agent_session import AgentSession
+from app.db.models.user import User
+
+router = APIRouter()
+
+
+# Request/Response schemas
+class SessionCreate(BaseModel):
+    """Session creation schema."""
+
+    title: Optional[str] = Field(None, max_length=200)
+    description: Optional[str] = Field(None, max_length=500)
+
+
+class SessionUpdate(BaseModel):
+    """Session update schema."""
+
+    title: Optional[str] = Field(None, max_length=200)
+    description: Optional[str] = Field(None, max_length=500)
+
+
+class MessageCreate(BaseModel):
+    """Message creation schema."""
+
+    role: str = Field(..., pattern="^(user|assistant|system)$")
+    content: str = Field(..., min_length=1)
+    decision_id: Optional[str] = None
+    tool_calls: Optional[list[dict]] = None
+    tokens: int = 0
+
+
+class MessageResponse(BaseModel):
+    """Message response schema."""
+
+    role: str
+    content: str
+    timestamp: str
+    decision_id: Optional[str] = None
+    tool_calls: Optional[list[dict]] = None
+
+
+class SessionResponse(BaseModel):
+    """Session response schema."""
+
+    id: str
+    title: Optional[str]
+    description: Optional[str]
+    is_active: bool
+
+    # Statistics
+    total_messages: int
+    user_messages: int
+    assistant_messages: int
+    decisions_made: int
+    trades_executed: int
+    total_tokens: int
+    symbols_discussed: list[str]
+
+    # Timestamps
+    started_at: datetime
+    ended_at: Optional[datetime]
+    last_message_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+class SessionWithMessagesResponse(SessionResponse):
+    """Session response with messages."""
+
+    messages: list[MessageResponse]
+
+
+class SessionListResponse(BaseModel):
+    """Paginated session list response."""
+
+    sessions: list[SessionResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class MessageListResponse(BaseModel):
+    """Paginated message list response."""
+
+    messages: list[MessageResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class SessionsByDateGroup(BaseModel):
+    """Sessions grouped by date."""
+
+    date: str  # YYYY-MM-DD
+    label: str  # "Today", "Yesterday", "Jan 28", etc.
+    sessions: list[SessionResponse]
+
+
+class GroupedSessionsResponse(BaseModel):
+    """Sessions grouped by date for sidebar display."""
+
+    groups: list[SessionsByDateGroup]
+    total: int
+
+
+def session_to_response(session: AgentSession) -> SessionResponse:
+    """Convert AgentSession document to response schema."""
+    return SessionResponse(
+        id=str(session.id),
+        title=session.title or session.generate_title(),
+        description=session.description,
+        is_active=session.is_active,
+        total_messages=session.total_messages,
+        user_messages=session.user_messages,
+        assistant_messages=session.assistant_messages,
+        decisions_made=session.decisions_made,
+        trades_executed=session.trades_executed,
+        total_tokens=session.total_tokens,
+        symbols_discussed=session.symbols_discussed,
+        started_at=session.started_at,
+        ended_at=session.ended_at,
+        last_message_at=session.last_message_at,
+    )
+
+
+def message_to_response(message: dict) -> MessageResponse:
+    """Convert message dict to response schema."""
+    return MessageResponse(
+        role=message.get("role", ""),
+        content=message.get("content", ""),
+        timestamp=message.get("timestamp", ""),
+        decision_id=message.get("decision_id"),
+        tool_calls=message.get("tool_calls"),
+    )
+
+
+def get_date_label(dt: datetime) -> tuple[str, str]:
+    """Get date string and human-readable label for grouping."""
+    now = datetime.now(timezone.utc)
+    date_str = dt.strftime("%Y-%m-%d")
+
+    if dt.date() == now.date():
+        return date_str, "Today"
+    elif dt.date() == (now.date().replace(day=now.day - 1)):
+        return date_str, "Yesterday"
+    elif (now - dt).days < 7:
+        return date_str, dt.strftime("%A")  # Day name
+    else:
+        return date_str, dt.strftime("%b %d")  # "Jan 28"
+
+
+@router.post("", response_model=SessionResponse)
+async def create_session(
+    session_data: SessionCreate,
+    current_user: User = Depends(get_current_active_user),
+) -> SessionResponse:
+    """Create a new chat session."""
+    session = AgentSession(
+        user_id=current_user.id,
+        title=session_data.title,
+        description=session_data.description,
+    )
+    await session.insert()
+    return session_to_response(session)
+
+
+@router.get("", response_model=SessionListResponse)
+async def list_sessions(
+    is_active: Optional[bool] = None,
+    symbol: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(get_current_active_user),
+) -> dict:
+    """List user's chat sessions with filtering and pagination."""
+    query = AgentSession.find(AgentSession.user_id == current_user.id)
+
+    if is_active is not None:
+        query = query.find(AgentSession.is_active == is_active)
+    if symbol:
+        query = query.find({"symbols_discussed": symbol})
+
+    total = await query.count()
+
+    sessions = (
+        await query.sort(-AgentSession.last_message_at, -AgentSession.started_at)
+        .skip((page - 1) * page_size)
+        .limit(page_size)
+        .to_list()
+    )
+
+    return {
+        "sessions": [session_to_response(s) for s in sessions],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+@router.get("/grouped", response_model=GroupedSessionsResponse)
+async def list_sessions_grouped(
+    limit: int = Query(50, ge=1, le=200),
+    current_user: User = Depends(get_current_active_user),
+) -> dict:
+    """List sessions grouped by date for sidebar display."""
+    sessions = (
+        await AgentSession.find(AgentSession.user_id == current_user.id)
+        .sort(-AgentSession.last_message_at, -AgentSession.started_at)
+        .limit(limit)
+        .to_list()
+    )
+
+    # Group by date
+    groups_dict: dict[str, dict] = {}
+    for session in sessions:
+        # Use last_message_at or started_at for grouping
+        group_time = session.last_message_at or session.started_at
+        date_str, label = get_date_label(group_time)
+
+        if date_str not in groups_dict:
+            groups_dict[date_str] = {"date": date_str, "label": label, "sessions": []}
+
+        groups_dict[date_str]["sessions"].append(session_to_response(session))
+
+    # Sort groups by date descending
+    sorted_groups = sorted(groups_dict.values(), key=lambda g: g["date"], reverse=True)
+
+    return {
+        "groups": [
+            SessionsByDateGroup(
+                date=g["date"], label=g["label"], sessions=g["sessions"]
+            )
+            for g in sorted_groups
+        ],
+        "total": len(sessions),
+    }
+
+
+@router.get("/{session_id}", response_model=SessionWithMessagesResponse)
+async def get_session(
+    session_id: str,
+    current_user: User = Depends(get_current_active_user),
+) -> dict:
+    """Get a specific session with all messages."""
+    session = await AgentSession.find_one(
+        AgentSession.id == PydanticObjectId(session_id),
+        AgentSession.user_id == current_user.id,
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    response = session_to_response(session).model_dump()
+    response["messages"] = [message_to_response(m) for m in session.messages]
+    return response
+
+
+@router.get("/{session_id}/messages", response_model=MessageListResponse)
+async def get_session_messages(
+    session_id: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    current_user: User = Depends(get_current_active_user),
+) -> dict:
+    """Get paginated messages for a session."""
+    session = await AgentSession.find_one(
+        AgentSession.id == PydanticObjectId(session_id),
+        AgentSession.user_id == current_user.id,
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    total = len(session.messages)
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+
+    # Get messages in chronological order with pagination
+    messages = session.messages[start_idx:end_idx]
+
+    return {
+        "messages": [message_to_response(m) for m in messages],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+@router.post("/{session_id}/messages", response_model=MessageResponse)
+async def add_message(
+    session_id: str,
+    message_data: MessageCreate,
+    current_user: User = Depends(get_current_active_user),
+) -> MessageResponse:
+    """Add a message to a session."""
+    session = await AgentSession.find_one(
+        AgentSession.id == PydanticObjectId(session_id),
+        AgentSession.user_id == current_user.id,
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if not session.is_active:
+        raise HTTPException(status_code=400, detail="Session is closed")
+
+    decision_id = None
+    if message_data.decision_id:
+        decision_id = PydanticObjectId(message_data.decision_id)
+
+    message = session.add_message(
+        role=message_data.role,
+        content=message_data.content,
+        decision_id=decision_id,
+        tool_calls=message_data.tool_calls,
+        tokens=message_data.tokens,
+    )
+    await session.save()
+
+    return message_to_response(message)
+
+
+@router.put("/{session_id}", response_model=SessionResponse)
+async def update_session(
+    session_id: str,
+    session_data: SessionUpdate,
+    current_user: User = Depends(get_current_active_user),
+) -> SessionResponse:
+    """Update session title or description."""
+    session = await AgentSession.find_one(
+        AgentSession.id == PydanticObjectId(session_id),
+        AgentSession.user_id == current_user.id,
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if session_data.title is not None:
+        session.title = session_data.title
+    if session_data.description is not None:
+        session.description = session_data.description
+
+    await session.save()
+    return session_to_response(session)
+
+
+@router.post("/{session_id}/end", response_model=SessionResponse)
+async def end_session(
+    session_id: str,
+    current_user: User = Depends(get_current_active_user),
+) -> SessionResponse:
+    """End/close a session."""
+    session = await AgentSession.find_one(
+        AgentSession.id == PydanticObjectId(session_id),
+        AgentSession.user_id == current_user.id,
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    session.end_session()
+    await session.save()
+    return session_to_response(session)
+
+
+@router.delete("/{session_id}")
+async def delete_session(
+    session_id: str,
+    current_user: User = Depends(get_current_active_user),
+) -> dict:
+    """Delete a session and all its messages."""
+    session = await AgentSession.find_one(
+        AgentSession.id == PydanticObjectId(session_id),
+        AgentSession.user_id == current_user.id,
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    await session.delete()
+    return {"message": "Session deleted successfully"}
