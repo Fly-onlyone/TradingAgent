@@ -18,17 +18,34 @@ Trading agent/
 │       ├── exchange/           # OKX integration
 │       ├── knowledge/          # RAG system
 │       ├── news/               # News intelligence
+│       ├── services/           # Business logic (P&L, notifications)
 │       ├── config.py           # Settings (pydantic-settings)
 │       └── main.py             # FastAPI app entry
 ├── frontend/
 │   └── src/
-│       ├── api/                # API client functions
-│       ├── components/         # React components
+│       ├── api/
+│       │   ├── endpoints/      # Per-resource API clients
+│       │   ├── websocket/      # WebSocket handlers
+│       │   └── client.ts       # Axios instance + interceptors
+│       ├── components/
+│       │   ├── agent/          # Agent chat UI
+│       │   ├── charts/         # Trading chart components
+│       │   ├── common/         # Shared (PageTransition, etc.)
+│       │   ├── data-display/   # Tables, cards
+│       │   ├── layout/         # AppShell, Sidebar, Header
+│       │   ├── trades/         # Trade summary, tables
+│       │   └── trading/        # Order forms, panels
 │       ├── hooks/              # Custom React hooks
-│       ├── routes/             # TanStack Router pages
-│       ├── store/              # Zustand stores
+│       ├── routes/
+│       │   ├── admin/          # Database management (superuser)
+│       │   ├── auth/           # Login, register
+│       │   ├── knowledge/      # Knowledge base UI
+│       │   ├── strategies/     # Strategy management
+│       │   ├── tasks/          # Scheduled trading tasks
+│       │   └── trades/         # Trade history + P&L
+│       ├── store/              # Zustand stores (uiStore, authStore, tradeStore)
 │       ├── theme/              # MUI theme config
-│       ├── types/              # TypeScript types
+│       ├── types/              # TypeScript types (per-resource files)
 │       └── utils/              # Utility functions
 ├── pyproject.toml              # Python dependencies (uv/hatch)
 └── frontend/package.json       # Node dependencies

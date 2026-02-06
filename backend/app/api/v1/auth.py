@@ -111,6 +111,20 @@ async def get_current_active_user(
     return current_user
 
 
+async def get_dev_user() -> User:
+    """Return a mock superuser for development mode (no JWT required)."""
+    return User(
+        id=PydanticObjectId(),
+        email="dev@localhost.dev",
+        hashed_password="",
+        full_name="Dev User",
+        is_active=True,
+        is_superuser=True,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+
 @router.post("/register", response_model=UserResponse)
 async def register(user_data: UserCreate) -> dict:
     """Register a new user."""

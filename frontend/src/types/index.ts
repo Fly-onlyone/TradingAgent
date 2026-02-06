@@ -11,3 +11,5 @@ export * from './knowledge';
 export * from './news';
 export * from './task';
 export * from './session';
+export * from './trade';
+export * from './admin';

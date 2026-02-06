@@ -19,3 +19,6 @@ export * from './trading';
 
 // Agent
 export * from './agent';
+
+// Trades
+export * from './trades';

@@ -36,4 +36,21 @@ export {
   selectSelectedTask,
   default as taskStore,
 } from './taskStore';
+export {
+  useTradeStore,
+  selectTrades,
+  selectSummary,
+  selectBySymbol,
+  selectFilters,
+  selectViewMode,
+  selectIsLoading,
+  selectPagination,
+  selectWinningTrades,
+  selectLosingTrades,
+  selectOpenTrades,
+  selectClosedTrades,
+  selectTradesBySymbol,
+  selectIsSymbolExpanded,
+  default as tradeStore,
+} from './tradeStore';
 export { useUIStore, notify, default as uiStore } from './uiStore';

@@ -38,6 +38,13 @@ class OrderStatus(str, Enum):
     EXPIRED = "expired"
 
 
+class TradeStatus(str, Enum):
+    """Trade status for P&L tracking."""
+
+    OPEN = "open"
+    CLOSED = "closed"
+
+
 class Order(Document):
     """Trading order document."""
 
@@ -64,6 +71,20 @@ class Order(Document):
     stop_loss_price: Optional[float] = None
     take_profit_price: Optional[float] = None
 
+    # P&L Tracking Fields
+    entry_price: Optional[float] = None  # Actual entry execution price
+    exit_price: Optional[float] = None  # Exit execution price (for closed trades)
+    realized_pnl: Optional[float] = None  # Realized P&L in quote currency (USDT)
+    realized_pnl_percent: Optional[float] = None  # Realized P&L as percentage
+    fees_paid: Optional[float] = None  # Total fees for this trade
+    net_pnl: Optional[float] = None  # Realized P&L minus fees
+
+    # Position Tracking
+    related_order_id: Optional[PydanticObjectId] = None  # Links entry/exit orders
+    is_closing_order: bool = False  # True if this closes a position
+    trade_status: TradeStatus = TradeStatus.OPEN  # Whether trade is open or closed
+    closed_at: Optional[datetime] = None  # When position was closed
+
     # Agent info
     agent_reasoning: Optional[dict] = None
     strategy_id: Optional[PydanticObjectId] = None
@@ -80,3 +101,35 @@ class Order(Document):
     def update_timestamp(self) -> None:
         """Update the updated_at timestamp."""
         self.updated_at = datetime.now(timezone.utc)
+
+    def calculate_pnl(self, exit_price: float, fees: float = 0.0) -> None:
+        """Calculate P&L when closing a position."""
+        if self.entry_price is None:
+            self.entry_price = self.avg_fill_price or self.price
+
+        if self.entry_price is None:
+            return
+
+        self.exit_price = exit_price
+        self.fees_paid = fees
+
+        # Calculate P&L based on position side
+        if self.side == OrderSide.BUY:
+            # Long position: profit when exit > entry
+            self.realized_pnl = (exit_price - self.entry_price) * self.filled_quantity
+        else:
+            # Short position: profit when entry > exit
+            self.realized_pnl = (self.entry_price - exit_price) * self.filled_quantity
+
+        # Calculate percentage P&L
+        position_value = self.entry_price * self.filled_quantity
+        if position_value > 0:
+            self.realized_pnl_percent = (self.realized_pnl / position_value) * 100
+
+        # Net P&L after fees
+        self.net_pnl = self.realized_pnl - fees
+
+        # Mark as closed
+        self.trade_status = TradeStatus.CLOSED
+        self.closed_at = datetime.now(timezone.utc)
+        self.update_timestamp()

@@ -11,3 +11,5 @@ export { newsApi, default as newsApiDefault } from './news';
 export { tasksApi, default as tasksApiDefault } from './tasks';
 export { sessionsApi, default as sessionsApiDefault } from './sessions';
 export { decisionsApi, default as decisionsApiDefault } from './decisions';
+export { tradesApi, default as tradesApiDefault } from './trades';
+export { adminApi, default as adminApiDefault } from './admin';

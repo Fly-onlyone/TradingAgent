@@ -29,7 +29,7 @@ import {
     Accordion,
     AccordionSummary,
     AccordionDetails,
-    Grid,
+    Grid2 as Grid,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';

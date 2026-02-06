@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    admin,
     agent_decisions,
     agent_sessions,
     agent_tasks,
@@ -33,3 +34,4 @@ router.include_router(
 router.include_router(
     notifications.router, prefix="/notifications", tags=["notifications"]
 )
+router.include_router(admin.router, prefix="/admin", tags=["admin"])

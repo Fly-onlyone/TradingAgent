@@ -40,6 +40,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Skip auth in debug mode — all endpoints use a mock superuser
+if settings.debug:
+    from app.api.v1.auth import get_current_active_user, get_dev_user
+
+    app.dependency_overrides[get_current_active_user] = get_dev_user
+
 # Include routers
 app.include_router(api_v1_router, prefix="/api/v1")
 app.include_router(ws_router, prefix="/ws")

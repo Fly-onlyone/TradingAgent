@@ -99,11 +99,16 @@ Trading Agent is a full-stack application with AI-powered cryptocurrency trading
 main.py
   └── api/v1/
         ├── auth.py      → db/models/user.py
-        ├── orders.py    → db/models/order.py, agent/
+        ├── orders.py    → db/models/order.py, services/pnl_calculator.py
         ├── strategies.py → db/models/strategy.py
         ├── market.py    → exchange/okx_client.py
         ├── knowledge.py → knowledge/retriever.py
-        └── news.py      → db/models/news.py
+        ├── news.py      → db/models/news.py
+        ├── admin.py     → db/session.py (direct MongoDB access)
+        ├── agent_tasks.py → db/models/agent_task.py
+        ├── agent_sessions.py → db/models/agent_session.py
+        ├── agent_decisions.py → db/models/agent_decision.py
+        └── notifications.py → db/models/notification.py, services/notification_service.py
 
 agent/trading_agent.py
   ├── tools/*.py         (6 tool modules)

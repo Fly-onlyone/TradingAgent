@@ -213,7 +213,7 @@ export function Sidebar() {
             </List>
 
             {/* Admin Section (superusers only) */}
-            {isSuperuser && (
+            {(isSuperuser || import.meta.env.DEV) && (
                 <>
                     <Divider/>
                     <List sx={{py: 1}}>

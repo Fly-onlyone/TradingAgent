@@ -15,6 +15,7 @@ This file provides guidance to Claude Code when working with this project.
 | Lint frontend | `cd frontend && npm run lint` |
 | Format backend | `uv run ruff format` |
 | Format frontend | `cd frontend && npm run format` |
+| Check frontend | `cd frontend && npm run check` |
 
 ## Project Overview
 
@@ -47,6 +48,12 @@ This file provides guidance to Claude Code when working with this project.
 | `ta` | Technical analysis indicators |
 | `pandas` / `numpy` | Data processing |
 | `feedparser` / `trafilatura` | News intelligence scraping |
+| `uvicorn` | ASGI server |
+| `pydantic-settings` | Environment config management |
+| `python-jose` | JWT token handling |
+| `passlib` | Password hashing (bcrypt) |
+| `httpx` | Async HTTP client |
+| `apscheduler` | Task scheduling |
 
 ### Frontend
 | Package | Purpose |
@@ -57,6 +64,10 @@ This file provides guidance to Claude Code when working with this project.
 | `@mui/material` | UI component library |
 | `lightweight-charts` | Trading charts |
 | `react-hook-form` + `zod` | Form handling + validation |
+| `axios` | HTTP client for API calls |
+| `framer-motion` | Animation library |
+| `date-fns` | Date formatting/manipulation |
+| `@biomejs/biome` | Code formatter + linter (dev) |
 
 ## Project Rules
 
@@ -83,6 +94,13 @@ Pre-resolved library IDs for fast documentation lookup:
 | TanStack Query | `/TanStack/query` |
 | Material UI | `/mui/material-ui` |
 | Zustand | `/pmndrs/zustand` |
+| Pydantic | `/pydantic/pydantic` |
+| Motor | `/mongodb/motor` |
+| python-okx | `/okx/python-okx` |
+| OpenAI SDK | `/openai/openai-python` |
+| Biome | `/biomejs/biome` |
+| Vite | `/vitejs/vite` |
+| Framer Motion | `/framer/motion` |
 
 ## Quick Reference
 
@@ -92,10 +110,14 @@ Pre-resolved library IDs for fast documentation lookup:
 - **Agent tools**: `backend/app/agent/tools/`
 - **Agent subagents**: `backend/app/agent/subagents/`
 - **DB models**: `backend/app/db/models/`
+- **Services**: `backend/app/services/`
+- **Admin API**: `backend/app/api/v1/admin.py`
 - **Frontend entry**: `frontend/src/main.tsx`
 - **Frontend routes**: `frontend/src/routes/`
+- **Frontend API clients**: `frontend/src/api/endpoints/`
+- **Frontend stores**: `frontend/src/store/`
 
-**Last Synced Commit**: Not in git repository
+**Last Synced Commit**: `c304e42` (2026-02-06)
 
 
 <claude-mem-context>

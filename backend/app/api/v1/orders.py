@@ -5,11 +5,21 @@ from typing import Optional
 
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from app.db.models.user import User
 from app.db.models.order import Order, OrderSide, OrderType, OrderStatus
 from app.api.v1.auth import get_current_active_user
+from app.services.pnl_calculator import (
+    TradePnL,
+    TradeSummary,
+    TradesBySymbol,
+    get_trades,
+    get_trades_summary,
+    get_trades_by_symbol,
+    export_trades,
+)
 
 router = APIRouter()
 
@@ -45,10 +55,20 @@ class OrderResponse(BaseModel):
     stop_price: Optional[float]
     stop_loss_price: Optional[float]
     take_profit_price: Optional[float]
+    # P&L fields
+    entry_price: Optional[float]
+    exit_price: Optional[float]
+    realized_pnl: Optional[float]
+    realized_pnl_percent: Optional[float]
+    fees_paid: Optional[float]
+    net_pnl: Optional[float]
+    trade_status: Optional[str]
+    # Metadata
     agent_reasoning: Optional[dict]
     created_at: datetime
     updated_at: datetime
     filled_at: Optional[datetime]
+    closed_at: Optional[datetime]
 
     class Config:
         from_attributes = True
@@ -61,6 +81,21 @@ class OrderListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class TradeListResponse(BaseModel):
+    """Paginated trade list response with P&L."""
+
+    trades: list[TradePnL]
+    total: int
+    page: int
+    page_size: int
+
+
+class TradesBySymbolResponse(BaseModel):
+    """Response with trades grouped by symbol."""
+
+    symbols: list[TradesBySymbol]
 
 
 def order_to_response(order: Order) -> OrderResponse:
@@ -80,10 +115,18 @@ def order_to_response(order: Order) -> OrderResponse:
         stop_price=order.stop_price,
         stop_loss_price=order.stop_loss_price,
         take_profit_price=order.take_profit_price,
+        entry_price=order.entry_price,
+        exit_price=order.exit_price,
+        realized_pnl=order.realized_pnl,
+        realized_pnl_percent=order.realized_pnl_percent,
+        fees_paid=order.fees_paid,
+        net_pnl=order.net_pnl,
+        trade_status=order.trade_status.value if order.trade_status else None,
         agent_reasoning=order.agent_reasoning,
         created_at=order.created_at,
         updated_at=order.updated_at,
         filled_at=order.filled_at,
+        closed_at=order.closed_at,
     )
 
 
@@ -155,6 +198,140 @@ async def list_orders(
         "page": page,
         "page_size": page_size,
     }
+
+
+# ============================================================
+# Trade History & P&L Endpoints
+# (Must be defined before /{order_id} to avoid route conflict)
+# ============================================================
+
+
+@router.get("/trades", response_model=TradeListResponse)
+async def list_trades(
+    symbol: Optional[str] = None,
+    side: Optional[str] = None,
+    status: Optional[str] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(get_current_active_user),
+) -> dict:
+    """
+    Get completed trades with P&L information.
+
+    Filters:
+    - symbol: Filter by trading pair (e.g., BTC-USDT)
+    - side: Filter by order side (buy/sell)
+    - status: Filter by trade status (open/closed)
+    - start_date: Filter trades from this date
+    - end_date: Filter trades until this date
+    """
+    trades, total = await get_trades(
+        user_id=current_user.id,
+        symbol=symbol,
+        side=side,
+        status=status,
+        start_date=start_date,
+        end_date=end_date,
+        page=page,
+        page_size=page_size,
+    )
+
+    return {
+        "trades": trades,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+@router.get("/trades/summary", response_model=TradeSummary)
+async def get_trade_summary(
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    current_user: User = Depends(get_current_active_user),
+) -> TradeSummary:
+    """
+    Get aggregated trade statistics.
+
+    Returns:
+    - Total P&L and percentage
+    - Win rate and trade counts
+    - Average win/loss
+    - Best/worst trade
+    - Profit factor
+    """
+    return await get_trades_summary(
+        user_id=current_user.id,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+
+@router.get("/trades/by-symbol", response_model=TradesBySymbolResponse)
+async def get_trades_grouped_by_symbol(
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    current_user: User = Depends(get_current_active_user),
+) -> dict:
+    """
+    Get trades grouped by symbol with P&L totals.
+
+    Returns trades organized by trading pair with aggregated
+    statistics for each symbol.
+    """
+    symbols = await get_trades_by_symbol(
+        user_id=current_user.id,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    return {"symbols": symbols}
+
+
+@router.get("/trades/export")
+async def export_trades_data(
+    format: str = Query("json", regex="^(json|csv)$"),
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    current_user: User = Depends(get_current_active_user),
+) -> Response:
+    """
+    Export trades to CSV or JSON format.
+
+    Args:
+        format: Export format - "json" or "csv"
+        start_date: Filter trades from this date
+        end_date: Filter trades until this date
+
+    Returns:
+        File download response in requested format
+    """
+    content = await export_trades(
+        user_id=current_user.id,
+        format=format,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    if format == "csv":
+        return Response(
+            content=content,
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=trades_export.csv"},
+        )
+    else:
+        return Response(
+            content=content,
+            media_type="application/json",
+            headers={"Content-Disposition": "attachment; filename=trades_export.json"},
+        )
+
+
+# ============================================================
+# Single Order Endpoints (dynamic /{order_id} must be last)
+# ============================================================
 
 
 @router.get("/{order_id}", response_model=OrderResponse)
