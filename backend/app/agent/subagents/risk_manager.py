@@ -1,11 +1,11 @@
 """Risk Manager subagent for position sizing and risk assessment."""
 
-from typing import Any, Optional
+from typing import Any
 
-from app.config import get_settings
-from app.agent.tools.trading_tools import get_account_balance
 from app.agent.tools.market_tools import get_ticker
 from app.agent.tools.technical_tools import get_technical_indicators
+from app.agent.tools.trading_tools import get_account_balance
+from app.config import get_settings
 
 settings = get_settings()
 
@@ -23,7 +23,7 @@ class RiskManager:
         symbol: str,
         side: str,
         risk_pct: float = 2.0,
-        stop_loss_pct: Optional[float] = None,
+        stop_loss_pct: float | None = None,
     ) -> dict[str, Any]:
         """Calculate optimal position size based on risk parameters.
 
@@ -121,7 +121,7 @@ class RiskManager:
         symbol: str,
         side: str,
         quantity: float,
-        entry_price: Optional[float] = None,
+        entry_price: float | None = None,
     ) -> dict[str, Any]:
         """Assess the risk of a proposed trade.
 
@@ -165,7 +165,7 @@ class RiskManager:
             risk_score += 30
 
         if position_pct > self.max_position_pct * 0.8:
-            warnings.append(f"Position size approaching max limit")
+            warnings.append("Position size approaching max limit")
             risk_score += 15
 
         # Get technical indicators for volatility assessment

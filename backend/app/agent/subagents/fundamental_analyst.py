@@ -1,17 +1,25 @@
 """Fundamental Analyst subagent for on-chain and macro analysis."""
 
+import logging
 from typing import Any
 
-from anthropic import Anthropic
-
-from app.config import get_settings
-from app.agent.tools.fundamental_tools import (
-    get_onchain_metrics,
-    get_project_fundamentals,
-    get_macro_indicators,
+from claude_agent_sdk import (
+    AssistantMessage,
+    ClaudeAgentOptions,
+    ClaudeSDKClient,
+    ResultMessage,
+    TextBlock,
 )
 
+from app.agent.tools.fundamental_tools import (
+    get_macro_indicators,
+    get_onchain_metrics,
+    get_project_fundamentals,
+)
+from app.config import get_settings
+
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 FUNDAMENTAL_ANALYST_PROMPT = """You are an expert fundamental analyst specializing in cryptocurrency and blockchain assets. Your role is to analyze on-chain data, project fundamentals, and macro conditions.
 
@@ -43,7 +51,42 @@ class FundamentalAnalyst:
     """Fundamental analysis subagent."""
 
     def __init__(self):
-        self.client = Anthropic(api_key=settings.anthropic_api_key)
+        self._client: ClaudeSDKClient | None = None
+
+    async def connect(self) -> None:
+        """Initialize the SDK client."""
+        options = ClaudeAgentOptions(
+            system_prompt=FUNDAMENTAL_ANALYST_PROMPT,
+            permission_mode="bypassPermissions",
+            max_turns=1,
+        )
+        if settings.anthropic_api_key:
+            options.env["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
+        self._client = ClaudeSDKClient(options=options)
+        await self._client.connect()
+        logger.info("FundamentalAnalyst connected")
+
+    async def disconnect(self) -> None:
+        """Disconnect and clean up."""
+        if self._client:
+            await self._client.disconnect()
+            self._client = None
+            logger.info("FundamentalAnalyst disconnected")
+
+    async def _collect_response(self) -> str:
+        """Collect text from SDK response stream."""
+        parts: list[str] = []
+        async for message in self._client.receive_response():
+            if isinstance(message, AssistantMessage):
+                for block in message.content:
+                    if isinstance(block, TextBlock):
+                        parts.append(block.text)
+            elif isinstance(message, ResultMessage):
+                if message.is_error:
+                    raise RuntimeError(message.result or "FundamentalAnalyst SDK error")
+                if message.result and not parts:
+                    parts.append(message.result)
+        return "".join(parts)
 
     async def analyze(self, symbol: str) -> dict[str, Any]:
         """Perform fundamental analysis on a symbol.
@@ -54,6 +97,9 @@ class FundamentalAnalyst:
         Returns:
             Fundamental analysis results
         """
+        if not self._client:
+            raise RuntimeError("Analyst not connected. Call connect() first.")
+
         # Gather fundamental data
         onchain = await get_onchain_metrics(symbol)
         fundamentals = await get_project_fundamentals(symbol)
@@ -75,15 +121,9 @@ Asset: {symbol}
 Based on this fundamental data, provide your analysis and valuation assessment.
 """
 
-        # Get Claude's analysis
-        response = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1500,
-            system=FUNDAMENTAL_ANALYST_PROMPT,
-            messages=[{"role": "user", "content": context}],
-        )
-
-        analysis_text = response.content[0].text if response.content else ""
+        # Get Claude's analysis via SDK
+        await self._client.query(context)
+        analysis_text = await self._collect_response()
 
         # Extract valuation from analysis
         valuation = self._extract_valuation(analysis_text)

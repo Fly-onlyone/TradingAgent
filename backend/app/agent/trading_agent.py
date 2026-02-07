@@ -1,301 +1,25 @@
-"""Main Trading Agent using Claude API with tool use."""
+"""Main Trading Agent using Claude Agent SDK with MCP tools."""
 
-import json
 import logging
-from typing import Any, Callable, Optional
+import re
+from collections.abc import Callable
 
-from anthropic import Anthropic
+from claude_agent_sdk import (
+    AssistantMessage,
+    ClaudeAgentOptions,
+    ClaudeSDKClient,
+    ResultMessage,
+    TextBlock,
+    ThinkingBlock,
+    ToolUseBlock,
+)
 
+from app.agent.mcp_tools import ALLOWED_TOOL_NAMES, create_trading_mcp_server
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-
-# Tool definitions for Claude
-TRADING_TOOLS = [
-    {
-        "name": "get_ticker",
-        "description": "Get current ticker/price data for a trading symbol",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "symbol": {
-                    "type": "string",
-                    "description": "Trading pair symbol (e.g., BTC-USDT)",
-                }
-            },
-            "required": ["symbol"],
-        },
-    },
-    {
-        "name": "get_orderbook",
-        "description": "Get order book (bids/asks) for a trading symbol",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "symbol": {
-                    "type": "string",
-                    "description": "Trading pair symbol (e.g., BTC-USDT)",
-                },
-                "depth": {
-                    "type": "integer",
-                    "description": "Number of levels to retrieve (default 20)",
-                    "default": 20,
-                },
-            },
-            "required": ["symbol"],
-        },
-    },
-    {
-        "name": "get_candlesticks",
-        "description": "Get OHLCV candlestick data for technical analysis",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "symbol": {
-                    "type": "string",
-                    "description": "Trading pair symbol (e.g., BTC-USDT)",
-                },
-                "timeframe": {
-                    "type": "string",
-                    "description": "Candle timeframe (1m, 5m, 15m, 30m, 1H, 4H, 1D)",
-                    "default": "1H",
-                },
-                "limit": {
-                    "type": "integer",
-                    "description": "Number of candles to retrieve (default 100)",
-                    "default": 100,
-                },
-            },
-            "required": ["symbol"],
-        },
-    },
-    {
-        "name": "get_technical_indicators",
-        "description": "Calculate technical indicators (RSI, MACD, Bollinger Bands, etc.) for a symbol",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "symbol": {
-                    "type": "string",
-                    "description": "Trading pair symbol (e.g., BTC-USDT)",
-                },
-                "timeframe": {
-                    "type": "string",
-                    "description": "Timeframe for analysis (1H, 4H, 1D)",
-                    "default": "1H",
-                },
-            },
-            "required": ["symbol"],
-        },
-    },
-    {
-        "name": "detect_chart_patterns",
-        "description": "Detect chart patterns (head & shoulders, triangles, etc.)",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "symbol": {
-                    "type": "string",
-                    "description": "Trading pair symbol",
-                },
-                "timeframe": {
-                    "type": "string",
-                    "description": "Timeframe for pattern detection",
-                    "default": "4H",
-                },
-            },
-            "required": ["symbol"],
-        },
-    },
-    {
-        "name": "get_onchain_metrics",
-        "description": "Get on-chain metrics for crypto assets (exchange flows, whale activity, etc.)",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "symbol": {
-                    "type": "string",
-                    "description": "Crypto asset symbol (e.g., BTC, ETH)",
-                }
-            },
-            "required": ["symbol"],
-        },
-    },
-    {
-        "name": "get_macro_indicators",
-        "description": "Get macro economic indicators (BTC dominance, fear/greed index, etc.)",
-        "input_schema": {
-            "type": "object",
-            "properties": {},
-            "required": [],
-        },
-    },
-    {
-        "name": "get_latest_news",
-        "description": "Get latest news articles for specified assets",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "assets": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "List of asset symbols to get news for",
-                },
-                "limit": {
-                    "type": "integer",
-                    "description": "Number of articles to retrieve",
-                    "default": 10,
-                },
-            },
-            "required": [],
-        },
-    },
-    {
-        "name": "get_news_sentiment",
-        "description": "Get aggregated news sentiment for specified assets",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "assets": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "List of asset symbols",
-                },
-                "hours": {
-                    "type": "integer",
-                    "description": "Time window in hours",
-                    "default": 24,
-                },
-            },
-            "required": [],
-        },
-    },
-    {
-        "name": "search_strategies",
-        "description": "Search knowledge base for trading strategies matching a query",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "Natural language query for strategy search",
-                },
-                "limit": {
-                    "type": "integer",
-                    "description": "Number of results to return",
-                    "default": 5,
-                },
-            },
-            "required": ["query"],
-        },
-    },
-    {
-        "name": "search_lessons",
-        "description": "Search past trade lessons for relevant insights",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "Natural language query for lesson search",
-                },
-                "symbol": {
-                    "type": "string",
-                    "description": "Filter by trading symbol",
-                },
-                "limit": {
-                    "type": "integer",
-                    "description": "Number of results to return",
-                    "default": 5,
-                },
-            },
-            "required": ["query"],
-        },
-    },
-    {
-        "name": "get_account_balance",
-        "description": "Get current account balance and available funds",
-        "input_schema": {
-            "type": "object",
-            "properties": {},
-            "required": [],
-        },
-    },
-    {
-        "name": "get_open_orders",
-        "description": "Get list of open orders",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "symbol": {
-                    "type": "string",
-                    "description": "Filter by trading symbol (optional)",
-                }
-            },
-            "required": [],
-        },
-    },
-    {
-        "name": "place_order",
-        "description": "Place a trading order on the exchange",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "symbol": {
-                    "type": "string",
-                    "description": "Trading pair symbol (e.g., BTC-USDT)",
-                },
-                "side": {
-                    "type": "string",
-                    "enum": ["buy", "sell"],
-                    "description": "Order side",
-                },
-                "order_type": {
-                    "type": "string",
-                    "enum": ["market", "limit"],
-                    "description": "Order type",
-                },
-                "quantity": {
-                    "type": "number",
-                    "description": "Order quantity",
-                },
-                "price": {
-                    "type": "number",
-                    "description": "Limit price (required for limit orders)",
-                },
-                "stop_loss": {
-                    "type": "number",
-                    "description": "Stop loss price (optional)",
-                },
-                "take_profit": {
-                    "type": "number",
-                    "description": "Take profit price (optional)",
-                },
-            },
-            "required": ["symbol", "side", "order_type", "quantity"],
-        },
-    },
-    {
-        "name": "cancel_order",
-        "description": "Cancel an open order",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "symbol": {
-                    "type": "string",
-                    "description": "Trading pair symbol",
-                },
-                "order_id": {
-                    "type": "string",
-                    "description": "Order ID to cancel",
-                },
-            },
-            "required": ["symbol", "order_id"],
-        },
-    },
-]
 
 SYSTEM_PROMPT = """You are an expert autonomous trading agent for cryptocurrency markets. Your role is to analyze market conditions and make informed trading decisions.
 
@@ -334,147 +58,120 @@ Be concise but thorough. Explain your reasoning clearly."""
 
 
 class TradingAgent:
-    """Trading Agent using Claude API with tool use capabilities."""
+    """Trading Agent using Claude Agent SDK with in-process MCP tools.
 
-    def __init__(
-        self,
-        tool_handlers: Optional[dict[str, Callable]] = None,
-    ):
-        """Initialize the trading agent.
+    Uses ClaudeSDKClient for conversation continuity and automatic tool execution.
+    Authentication falls back to Claude Code CLI credentials when no API key is set,
+    enabling use with a Claude Pro/Max subscription.
+    """
 
-        Args:
-            tool_handlers: Dictionary mapping tool names to handler functions
+    def __init__(self):
+        self._client: ClaudeSDKClient | None = None
+        self._tool_calls_this_turn: list[dict] = []
+
+    async def connect(self) -> None:
+        """Initialize the SDK client and start a session.
+
+        Reads auth configuration from AppSettings (DB) with env var fallback.
         """
-        self.client = Anthropic(api_key=settings.anthropic_api_key)
-        self.tool_handlers = tool_handlers or {}
-        self.conversation_history: list[dict] = []
+        from app.db.models.app_settings import AgentAuthMode, AppSettings
 
-    def register_tool(self, name: str, handler: Callable) -> None:
-        """Register a tool handler function."""
-        self.tool_handlers[name] = handler
+        server = create_trading_mcp_server()
+        app_settings = await AppSettings.get_instance()
 
-    async def _execute_tool(self, tool_name: str, tool_input: dict) -> Any:
-        """Execute a tool and return the result."""
-        if tool_name not in self.tool_handlers:
-            return {"error": f"Tool '{tool_name}' not found"}
+        options = ClaudeAgentOptions(
+            system_prompt=SYSTEM_PROMPT,
+            mcp_servers={"trading": server},
+            allowed_tools=ALLOWED_TOOL_NAMES,
+            permission_mode="bypassPermissions",
+            max_turns=10,
+        )
 
-        handler = self.tool_handlers[tool_name]
-        try:
-            # Handle both sync and async handlers
-            import asyncio
+        # Resolve API key: DB setting → env var fallback
+        if app_settings.agent_auth_mode == AgentAuthMode.API_KEY:
+            api_key = app_settings.agent_api_key or settings.anthropic_api_key
+            if api_key:
+                options.env["ANTHROPIC_API_KEY"] = api_key
+        elif settings.anthropic_api_key:
+            # Subscription mode but env var is set — still forward it as fallback
+            options.env["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
 
-            if asyncio.iscoroutinefunction(handler):
-                result = await handler(**tool_input)
-            else:
-                result = handler(**tool_input)
-            return result
-        except Exception as e:
-            logger.error(f"Error executing tool {tool_name}: {e}")
-            return {"error": str(e)}
+        self._client = ClaudeSDKClient(options=options)
+        await self._client.connect()
+        logger.info(
+            "Trading agent connected (auth_mode=%s)",
+            app_settings.agent_auth_mode.value,
+        )
+
+    async def disconnect(self) -> None:
+        """Disconnect and clean up the CLI subprocess."""
+        if self._client:
+            await self._client.disconnect()
+            self._client = None
+            logger.info("Trading agent disconnected")
 
     async def chat(
         self,
         user_message: str,
-        max_iterations: int = 10,
+        on_event: Callable | None = None,
     ) -> str:
         """Process a user message and return the agent's response.
 
+        The SDK handles the agentic loop (tool execution, retries) internally.
+        Conversation history is maintained by the SDK across calls.
+
         Args:
             user_message: The user's input message
-            max_iterations: Maximum tool use iterations to prevent infinite loops
+            on_event: Optional async callback for intermediate events
 
         Returns:
             The agent's final text response
         """
-        # Add user message to history
-        self.conversation_history.append(
-            {
-                "role": "user",
-                "content": user_message,
-            }
-        )
+        if not self._client:
+            raise RuntimeError("Agent not connected. Call connect() first.")
 
-        iterations = 0
-        while iterations < max_iterations:
-            iterations += 1
+        self._tool_calls_this_turn = []
+        await self._client.query(user_message)
 
-            # Call Claude API
-            response = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=4096,
-                system=SYSTEM_PROMPT,
-                tools=TRADING_TOOLS,
-                messages=self.conversation_history,
-            )
+        final_text_parts: list[str] = []
 
-            # Check if we need to use tools
-            if response.stop_reason == "tool_use":
-                # Process tool calls
-                tool_results = []
-                assistant_content = response.content
+        async for message in self._client.receive_response():
+            if isinstance(message, AssistantMessage):
+                for block in message.content:
+                    if isinstance(block, ThinkingBlock):
+                        if on_event:
+                            await on_event({"type": "thinking"})
 
-                for block in response.content:
-                    if block.type == "tool_use":
-                        tool_name = block.name
-                        tool_input = block.input
+                    elif isinstance(block, ToolUseBlock):
+                        tool_info = {
+                            "id": block.id,
+                            "name": block.name,
+                            "arguments": block.input,
+                        }
+                        self._tool_calls_this_turn.append(tool_info)
 
-                        logger.info(
-                            f"Executing tool: {tool_name} with input: {tool_input}"
-                        )
+                        if on_event:
+                            await on_event({"type": "tool_call", "data": tool_info})
 
-                        # Execute the tool
-                        result = await self._execute_tool(tool_name, tool_input)
+                        logger.info(f"Tool called: {block.name}")
 
-                        tool_results.append(
-                            {
-                                "type": "tool_result",
-                                "tool_use_id": block.id,
-                                "content": (
-                                    json.dumps(result)
-                                    if not isinstance(result, str)
-                                    else result
-                                ),
-                            }
-                        )
+                    elif isinstance(block, TextBlock):
+                        final_text_parts.append(block.text)
 
-                # Add assistant message with tool use
-                self.conversation_history.append(
-                    {
-                        "role": "assistant",
-                        "content": assistant_content,
-                    }
-                )
+            elif isinstance(message, ResultMessage):
+                if message.is_error:
+                    raise RuntimeError(message.result or "Agent SDK returned an error")
 
-                # Add tool results
-                self.conversation_history.append(
-                    {
-                        "role": "user",
-                        "content": tool_results,
-                    }
-                )
+                # Use result text as fallback if no text blocks were collected
+                if message.result and not final_text_parts:
+                    final_text_parts.append(message.result)
 
-            else:
-                # No more tool use, get final response
-                final_response = ""
-                for block in response.content:
-                    if hasattr(block, "text"):
-                        final_response += block.text
+        return "".join(final_text_parts)
 
-                # Add assistant response to history
-                self.conversation_history.append(
-                    {
-                        "role": "assistant",
-                        "content": response.content,
-                    }
-                )
-
-                return final_response
-
-        return "Maximum iterations reached. Please try a simpler query."
-
-    def clear_history(self) -> None:
-        """Clear conversation history."""
-        self.conversation_history = []
+    @property
+    def tool_calls(self) -> list[dict]:
+        """Get tool calls from the most recent turn."""
+        return self._tool_calls_this_turn
 
     async def analyze_market(self, symbol: str) -> str:
         """Convenience method to analyze a market."""
@@ -494,13 +191,8 @@ class TradingAgent:
             "with confidence level (0-100%) and detailed reasoning."
         )
 
-        # Parse response for structured data
-        # This is a simplified parser - in production, use structured output
         should_trade = "yes" in response.lower()[:100]
-        confidence = 50  # Default
-
-        # Try to extract confidence from response
-        import re
+        confidence = 50
 
         confidence_match = re.search(r"(\d+)%", response)
         if confidence_match:
@@ -511,3 +203,10 @@ class TradingAgent:
             "confidence": confidence,
             "reasoning": response,
         }
+
+
+async def create_agent_with_tools() -> TradingAgent:
+    """Create and connect a TradingAgent with all MCP tools."""
+    agent = TradingAgent()
+    await agent.connect()
+    return agent

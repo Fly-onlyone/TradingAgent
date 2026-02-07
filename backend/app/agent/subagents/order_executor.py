@@ -1,15 +1,14 @@
 """Order Executor subagent for trade execution."""
 
 import logging
-from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
 from beanie import PydanticObjectId
 
-from app.config import get_settings
-from app.exchange.okx_client import OKXClient
-from app.db.models.order import Order, OrderSide, OrderType, OrderStatus
 from app.agent.subagents.risk_manager import RiskManager
+from app.config import get_settings
+from app.db.models.order import Order, OrderSide, OrderStatus, OrderType
+from app.exchange.okx_client import OKXClient
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -18,7 +17,7 @@ settings = get_settings()
 class OrderExecutor:
     """Order execution subagent for managing trades."""
 
-    def __init__(self, user_id: Optional[PydanticObjectId] = None):
+    def __init__(self, user_id: PydanticObjectId | None = None):
         self.client = OKXClient()
         self.risk_manager = RiskManager()
         self.user_id = user_id
@@ -29,10 +28,10 @@ class OrderExecutor:
         side: str,
         quantity: float,
         order_type: str = "market",
-        price: Optional[float] = None,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
-        reasoning: Optional[dict] = None,
+        price: float | None = None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
+        reasoning: dict | None = None,
         skip_risk_check: bool = False,
     ) -> dict[str, Any]:
         """Execute a trade with risk management.
@@ -165,8 +164,8 @@ class OrderExecutor:
         side: str,
         risk_pct: float = 2.0,
         order_type: str = "market",
-        price: Optional[float] = None,
-        reasoning: Optional[dict] = None,
+        price: float | None = None,
+        reasoning: dict | None = None,
     ) -> dict[str, Any]:
         """Execute a trade with automatic position sizing.
 
@@ -304,7 +303,7 @@ class OrderExecutor:
 
     async def get_open_orders(
         self,
-        symbol: Optional[str] = None,
+        symbol: str | None = None,
     ) -> dict[str, Any]:
         """Get all open orders.
 

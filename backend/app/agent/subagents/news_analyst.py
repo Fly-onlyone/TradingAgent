@@ -1,13 +1,21 @@
 """News Analyst subagent for news sentiment analysis."""
 
-from typing import Any, Optional
+import logging
+from typing import Any
 
-from anthropic import Anthropic
+from claude_agent_sdk import (
+    AssistantMessage,
+    ClaudeAgentOptions,
+    ClaudeSDKClient,
+    ResultMessage,
+    TextBlock,
+)
 
-from app.config import get_settings
 from app.agent.tools.news_tools import get_latest_news, get_news_sentiment, search_news
+from app.config import get_settings
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 NEWS_ANALYST_PROMPT = """You are an expert news analyst specializing in cryptocurrency and financial markets. Your role is to analyze news articles, assess sentiment, and identify market-moving information.
 
@@ -41,11 +49,46 @@ class NewsAnalyst:
     """News analysis subagent."""
 
     def __init__(self):
-        self.client = Anthropic(api_key=settings.anthropic_api_key)
+        self._client: ClaudeSDKClient | None = None
+
+    async def connect(self) -> None:
+        """Initialize the SDK client."""
+        options = ClaudeAgentOptions(
+            system_prompt=NEWS_ANALYST_PROMPT,
+            permission_mode="bypassPermissions",
+            max_turns=1,
+        )
+        if settings.anthropic_api_key:
+            options.env["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
+        self._client = ClaudeSDKClient(options=options)
+        await self._client.connect()
+        logger.info("NewsAnalyst connected")
+
+    async def disconnect(self) -> None:
+        """Disconnect and clean up."""
+        if self._client:
+            await self._client.disconnect()
+            self._client = None
+            logger.info("NewsAnalyst disconnected")
+
+    async def _collect_response(self) -> str:
+        """Collect text from SDK response stream."""
+        parts: list[str] = []
+        async for message in self._client.receive_response():
+            if isinstance(message, AssistantMessage):
+                for block in message.content:
+                    if isinstance(block, TextBlock):
+                        parts.append(block.text)
+            elif isinstance(message, ResultMessage):
+                if message.is_error:
+                    raise RuntimeError(message.result or "NewsAnalyst SDK error")
+                if message.result and not parts:
+                    parts.append(message.result)
+        return "".join(parts)
 
     async def analyze(
         self,
-        assets: Optional[list[str]] = None,
+        assets: list[str] | None = None,
         hours: int = 24,
     ) -> dict[str, Any]:
         """Perform news analysis for specified assets.
@@ -57,6 +100,9 @@ class NewsAnalyst:
         Returns:
             News analysis with sentiment and recommendations
         """
+        if not self._client:
+            raise RuntimeError("Analyst not connected. Call connect() first.")
+
         # Gather news data
         news = await get_latest_news(assets=assets, limit=15)
         sentiment = await get_news_sentiment(assets=assets, hours=hours)
@@ -75,15 +121,9 @@ Time Window: Last {hours} hours
 Based on this news data, provide your analysis and trading implications.
 """
 
-        # Get Claude's analysis
-        response = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1500,
-            system=NEWS_ANALYST_PROMPT,
-            messages=[{"role": "user", "content": context}],
-        )
-
-        analysis_text = response.content[0].text if response.content else ""
+        # Get Claude's analysis via SDK
+        await self._client.query(context)
+        analysis_text = await self._collect_response()
 
         # Extract trading signal from analysis
         signal = self._extract_signal(analysis_text, sentiment)
@@ -101,7 +141,7 @@ Based on this news data, provide your analysis and trading implications.
     async def analyze_breaking_news(
         self,
         query: str,
-        assets: Optional[list[str]] = None,
+        assets: list[str] | None = None,
     ) -> dict[str, Any]:
         """Analyze specific news topic or breaking news.
 
@@ -112,6 +152,9 @@ Based on this news data, provide your analysis and trading implications.
         Returns:
             Focused news analysis
         """
+        if not self._client:
+            raise RuntimeError("Analyst not connected. Call connect() first.")
+
         # Search for specific news
         news = await search_news(query=query, assets=assets, limit=10)
 
@@ -139,14 +182,10 @@ Analyze this news and provide:
 5. Immediate trading implications
 """
 
-        response = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1500,
-            system=NEWS_ANALYST_PROMPT,
-            messages=[{"role": "user", "content": context}],
-        )
+        # Get Claude's analysis via SDK
+        await self._client.query(context)
+        analysis_text = await self._collect_response()
 
-        analysis_text = response.content[0].text if response.content else ""
         signal = self._extract_signal(analysis_text, {"weighted_sentiment": 0})
 
         return {

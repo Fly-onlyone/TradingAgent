@@ -1,18 +1,25 @@
 """Technical Analyst subagent for chart patterns and indicators."""
 
+import logging
 from typing import Any
 
-from anthropic import Anthropic
+from claude_agent_sdk import (
+    AssistantMessage,
+    ClaudeAgentOptions,
+    ClaudeSDKClient,
+    ResultMessage,
+    TextBlock,
+)
 
-from app.config import get_settings
 from app.agent.tools.technical_tools import (
-    get_technical_indicators,
     detect_chart_patterns,
     get_price_action,
+    get_technical_indicators,
 )
-from app.agent.tools.market_tools import get_candlesticks
+from app.config import get_settings
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 TECHNICAL_ANALYST_PROMPT = """You are an expert technical analyst specializing in cryptocurrency markets. Your role is to analyze price charts, indicators, and patterns to provide trading signals.
 
@@ -44,7 +51,42 @@ class TechnicalAnalyst:
     """Technical analysis subagent."""
 
     def __init__(self):
-        self.client = Anthropic(api_key=settings.anthropic_api_key)
+        self._client: ClaudeSDKClient | None = None
+
+    async def connect(self) -> None:
+        """Initialize the SDK client."""
+        options = ClaudeAgentOptions(
+            system_prompt=TECHNICAL_ANALYST_PROMPT,
+            permission_mode="bypassPermissions",
+            max_turns=1,
+        )
+        if settings.anthropic_api_key:
+            options.env["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
+        self._client = ClaudeSDKClient(options=options)
+        await self._client.connect()
+        logger.info("TechnicalAnalyst connected")
+
+    async def disconnect(self) -> None:
+        """Disconnect and clean up."""
+        if self._client:
+            await self._client.disconnect()
+            self._client = None
+            logger.info("TechnicalAnalyst disconnected")
+
+    async def _collect_response(self) -> str:
+        """Collect text from SDK response stream."""
+        parts: list[str] = []
+        async for message in self._client.receive_response():
+            if isinstance(message, AssistantMessage):
+                for block in message.content:
+                    if isinstance(block, TextBlock):
+                        parts.append(block.text)
+            elif isinstance(message, ResultMessage):
+                if message.is_error:
+                    raise RuntimeError(message.result or "TechnicalAnalyst SDK error")
+                if message.result and not parts:
+                    parts.append(message.result)
+        return "".join(parts)
 
     async def analyze(self, symbol: str, timeframe: str = "1H") -> dict[str, Any]:
         """Perform technical analysis on a symbol.
@@ -56,6 +98,9 @@ class TechnicalAnalyst:
         Returns:
             Technical analysis results with signals
         """
+        if not self._client:
+            raise RuntimeError("Analyst not connected. Call connect() first.")
+
         # Gather technical data
         indicators = await get_technical_indicators(symbol, timeframe)
         patterns = await detect_chart_patterns(symbol, timeframe)
@@ -78,15 +123,9 @@ Timeframe: {timeframe}
 Based on this technical data, provide your analysis and trading signal.
 """
 
-        # Get Claude's analysis
-        response = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1500,
-            system=TECHNICAL_ANALYST_PROMPT,
-            messages=[{"role": "user", "content": context}],
-        )
-
-        analysis_text = response.content[0].text if response.content else ""
+        # Get Claude's analysis via SDK
+        await self._client.query(context)
+        analysis_text = await self._collect_response()
 
         # Extract signal from analysis
         signal = self._extract_signal(analysis_text)
