@@ -1,37 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "WebSearch",
-      "mcp__brave-search__brave_web_search",
-      "Bash(dir:*)",
-      "WebFetch(domain:www.okx.com)",
-      "WebFetch(domain:www.anthropic.com)",
-      "WebFetch(domain:okx.com)",
-      "WebFetch(domain:claude.com)",
-      "WebFetch(domain:github.com)",
-      "WebFetch(domain:docs.okx.com)",
-      "WebFetch(domain:app.gitbook.com)",
-      "mcp__context7__resolve-library-id",
-      "mcp__context7__query-docs",
-      "mcp__pycharm__list_directory_tree",
-      "mcp__pycharm__get_file_text_by_path",
-      "mcp__pycharm__create_new_file",
+      "mcp__brave__brave_web_search",
       "mcp__pycharm__replace_text_in_file",
       "mcp__pycharm__get_file_problems",
-      "Bash(python3:*)",
-      "Bash(chcp:*)",
-      "Bash(set PYTHONIOENCODING=utf-8)",
-      "Bash(python:*)",
-      "mcp__pycharm__find_files_by_glob",
-      "mcp__pycharm__find_files_by_name_keyword",
-      "Bash(npx tsc:*)",
-      "Bash(curl:*)",
-      "Bash(npm run build:*)",
-      "mcp__pycharm__reformat_file",
-      "mcp__pycharm__get_run_configurations",
-      "mcp__pycharm__search_in_files_by_text",
-      "Bash(xargs:*)",
-      "Bash(git add:*)"
+      "mcp__pycharm__reformat_file"
     ]
   },
   "enableAllProjectMcpServers": true

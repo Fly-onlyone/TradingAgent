@@ -7,7 +7,7 @@ This file provides guidance to Claude Code when working with this project.
 | Task | Command |
 |------|---------|
 | Install dependencies | `uv sync` |
-| Run dev server (backend) | `uv run uvicorn backend.app.main:app --reload` |
+| Run dev server (backend) | `uv run python run.py` |
 | Run dev server (frontend) | `cd frontend && npm run dev` |
 | Test backend | `uv run pytest` |
 | Test frontend | `cd frontend && npm test` |
@@ -112,6 +112,12 @@ Pre-resolved library IDs for fast documentation lookup:
 - **DB models**: `backend/app/db/models/`
 - **Services**: `backend/app/services/`
 - **Admin API**: `backend/app/api/v1/admin.py`
+- **Logs API**: `backend/app/api/v1/logs.py`
+- **Settings API**: `backend/app/api/v1/settings.py`
+- **Logging config**: `backend/app/logging_config.py`
+- **Request middleware**: `backend/app/middleware/request_logging.py`
+- **App settings model**: `backend/app/db/models/app_settings.py`
+- **Log record model**: `backend/app/db/models/log.py`
 - **Frontend entry**: `frontend/src/main.tsx`
 - **Frontend routes**: `frontend/src/routes/`
 - **Frontend API clients**: `frontend/src/api/endpoints/`
