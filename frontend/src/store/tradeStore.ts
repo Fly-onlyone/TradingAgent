@@ -54,7 +54,7 @@ const initialFilters: TradesFilter = {
 
 export const useTradeStore = create<TradeState>()(
     devtools(
-        (set, get) => ({
+        (set) => ({
             // Initial State
             trades: [],
             summary: null,

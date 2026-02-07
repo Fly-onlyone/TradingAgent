@@ -9,7 +9,6 @@ import type {
     TradesBySymbol,
     TradesFilter,
     TradeListResponse,
-    TradesBySymbolResponse,
     ExportFormat,
 } from '@/types';
 

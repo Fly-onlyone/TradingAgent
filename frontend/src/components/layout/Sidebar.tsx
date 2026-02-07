@@ -25,6 +25,7 @@ import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import SchoolIcon from '@mui/icons-material/School';
 import NewspaperIcon from '@mui/icons-material/Newspaper';
 import StorageIcon from '@mui/icons-material/Storage';
+import ArticleIcon from '@mui/icons-material/Article';
 import SettingsIcon from '@mui/icons-material/Settings';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -58,6 +59,7 @@ const strategyMenuItems = [
 // Admin section (only for superusers)
 const adminMenuItems = [
     {path: '/admin/database', label: 'Database', icon: StorageIcon},
+    {path: '/admin/logs', label: 'Logs', icon: ArticleIcon},
 ];
 
 const bottomMenuItems = [

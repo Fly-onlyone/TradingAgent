@@ -354,7 +354,7 @@ function TasksPage() {
                         </Typography>
                         <Grid container spacing={2} sx={{mb: 4}}>
                             {activeTasks.length === 0 ? (
-                                <Grid item xs={12}>
+                                <Grid size={12}>
                                     <Card>
                                         <CardContent>
                                             <Typography color="text.secondary" align="center">
@@ -365,7 +365,7 @@ function TasksPage() {
                                 </Grid>
                             ) : (
                                 activeTasks.map((task) => (
-                                    <Grid item xs={12} md={6} lg={4} key={task.id}>
+                                    <Grid size={{xs: 12, md: 6, lg: 4}} key={task.id}>
                                         <TaskCard
                                             task={task}
                                             onPause={() => handlePauseTask(task.id)}
@@ -389,7 +389,7 @@ function TasksPage() {
                                 </Typography>
                                 <Grid container spacing={2} sx={{mb: 4}}>
                                     {pausedTasks.map((task) => (
-                                        <Grid item xs={12} md={6} lg={4} key={task.id}>
+                                        <Grid size={{xs: 12, md: 6, lg: 4}} key={task.id}>
                                             <TaskCard
                                                 task={task}
                                                 onResume={() => handleResumeTask(task.id)}

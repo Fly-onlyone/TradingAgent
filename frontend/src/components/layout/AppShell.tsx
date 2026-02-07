@@ -4,22 +4,57 @@
 
 import {Box, Toolbar, Snackbar, Alert} from '@mui/material';
 import type {ReactNode} from 'react';
+import {useEffect} from 'react';
+import {useNavigate, useRouterState} from '@tanstack/react-router';
 import {Sidebar} from './Sidebar';
 import {Header} from './Header';
 import {useUIStore} from '@/store/uiStore';
 import {useAuthStore} from '@/store/authStore';
+import {authApi} from '@/api/endpoints/auth';
+import {setAccessToken} from '@/api/client';
 
 interface AppShellProps {
     children: ReactNode;
 }
 
 export function AppShell({children}: AppShellProps) {
-    const {isAuthenticated} = useAuthStore();
+    const {isAuthenticated, isLoading, token, setUser, setLoading} = useAuthStore();
     const {notifications, removeNotification} = useUIStore();
+    const navigate = useNavigate();
+    const routerState = useRouterState();
+    const currentPath = routerState.location.pathname;
+    const isAuthPage = currentPath.startsWith('/auth/');
 
-    // For development: show layout even without auth
-    // TODO: Remove this in production
-    const showLayout = isAuthenticated || import.meta.env.DEV;
+    // Verify auth on mount: restore token and validate with backend
+    useEffect(() => {
+        const checkAuth = async () => {
+            if (token) {
+                setAccessToken(token);
+                try {
+                    const userData = await authApi.getMe();
+                    setUser(userData);
+                } catch {
+                    setUser(null);
+                }
+            } else {
+                setUser(null);
+            }
+            setLoading(false);
+        };
+
+        if (isLoading) {
+            checkAuth();
+        }
+    }, [isLoading, token, setUser, setLoading]);
+
+    // Redirect to login when not authenticated (skip auth pages)
+    useEffect(() => {
+        if (!isLoading && !isAuthenticated && !isAuthPage) {
+            navigate({to: '/auth/login'});
+        }
+    }, [isLoading, isAuthenticated, isAuthPage, navigate]);
+
+    const showLayout = isAuthenticated && !isAuthPage;
 
     return (
         <Box sx={{display: 'flex', minHeight: '100vh'}}>

@@ -17,12 +17,10 @@ import {
     InputLabel,
     Select,
     MenuItem,
-    TextField,
     Stack,
     LinearProgress,
     Button,
     Skeleton,
-    Tooltip,
     Badge,
 } from '@mui/material';
 import {motion, AnimatePresence} from 'framer-motion';
@@ -45,13 +43,9 @@ import ThumbDownIcon from '@mui/icons-material/ThumbDown';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import type {
     AgentDecisionSummary,
-    AgentDecisionDetail,
     DecisionType,
     DecisionAction,
     DecisionStatus,
-    DECISION_TYPE_CONFIG,
-    DECISION_ACTION_CONFIG,
-    DECISION_STATUS_CONFIG,
 } from '@/types/session';
 
 // Icon mappings

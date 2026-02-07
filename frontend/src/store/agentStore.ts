@@ -14,7 +14,7 @@ import type {
     DecisionStatus,
 } from '@/types/session';
 
-type AgentStatus = 'disconnected' | 'connected' | 'thinking' | 'analyzing' | 'error';
+type AgentStatus = 'disconnected' | 'connected' | 'thinking' | 'analyzing' | 'error' | 'auth_required';
 
 // Decision filter state
 interface DecisionFilters {

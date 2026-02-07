@@ -13,3 +13,5 @@ export { sessionsApi, default as sessionsApiDefault } from './sessions';
 export { decisionsApi, default as decisionsApiDefault } from './decisions';
 export { tradesApi, default as tradesApiDefault } from './trades';
 export { adminApi, default as adminApiDefault } from './admin';
+export { settingsApi, default as settingsApiDefault } from './settings';
+export { logsApi, default as logsApiDefault } from './logs';

@@ -15,7 +15,6 @@ import {
     Tab,
     Badge,
     IconButton,
-    Tooltip,
     useMediaQuery,
     useTheme,
     Drawer,
@@ -24,6 +23,24 @@ import SmartToyIcon from '@mui/icons-material/SmartToy';
 import HistoryIcon from '@mui/icons-material/History';
 import AnalyticsIcon from '@mui/icons-material/Analytics';
 import MenuIcon from '@mui/icons-material/Menu';
+import SettingsIcon from '@mui/icons-material/Settings';
+
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ErrorIcon from '@mui/icons-material/Error';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import LoginIcon from '@mui/icons-material/Login';
+import LogoutIcon from '@mui/icons-material/Logout';
+import {
+    Alert,
+    Button,
+    Chip,
+    CircularProgress,
+    MenuItem,
+    TextField,
+    ToggleButton,
+    ToggleButtonGroup,
+} from '@mui/material';
+import {Link} from '@tanstack/react-router';
 
 import {PageTransition} from '@/components/common/PageTransition';
 import {ChatMessage} from '@/components/agent/ChatMessage';
@@ -34,18 +51,298 @@ import {SessionList} from '@/components/agent/SessionList';
 import {DecisionHistoryPanel} from '@/components/agent/DecisionHistoryPanel';
 import {EmptyState} from '@/components/common/EmptyState';
 import {useAgentSocket} from '@/api/websocket/useAgentSocket';
-import {
-    useAgentStore,
-    selectCurrentSession,
-    selectPendingDecisions,
-} from '@/store/agentStore';
+import {useAgentStore} from '@/store/agentStore';
 import {sessionsApi} from '@/api/endpoints/sessions';
 import {decisionsApi} from '@/api/endpoints/decisions';
+import {settingsApi} from '@/api/endpoints/settings';
+import {useAuthStore} from '@/store/authStore';
+import {notify} from '@/store/uiStore';
 import type {AgentSession, SessionMessage} from '@/types/session';
+import type {AgentConfig, AgentConfigUpdate} from '@/api/endpoints/settings';
 
 export const Route = createFileRoute('/agent')({
     component: AgentPage,
 });
+
+const MODEL_OPTIONS = [
+    {value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4'},
+    {value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5'},
+    {value: 'claude-opus-4-6', label: 'Claude Opus 4.6'},
+];
+
+/**
+ * Inline agent configuration shown when agent is disconnected.
+ */
+function AgentSetupPanel() {
+    const queryClient = useQueryClient();
+    const [apiKeyInput, setApiKeyInput] = useState('');
+    const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+    const [loginResult, setLoginResult] = useState<{ success: boolean; message: string } | null>(null);
+
+    const configQuery = useQuery({
+        queryKey: ['agent-config'],
+        queryFn: () => settingsApi.getAgentConfig(),
+        staleTime: 60_000,
+    });
+
+    const updateMutation = useMutation({
+        mutationFn: (update: AgentConfigUpdate) => settingsApi.updateAgentConfig(update),
+        onSuccess: () => {
+            queryClient.invalidateQueries({queryKey: ['agent-config']});
+            notify.success('Agent configuration updated');
+            setTestResult(null);
+        },
+    });
+
+    const testMutation = useMutation({
+        mutationFn: () => settingsApi.testConnection(),
+        onSuccess: (result) => {
+            setTestResult(result);
+            if (result.success) notify.success(result.message);
+            else notify.error(result.message);
+        },
+    });
+
+    const [isPollingLogin, setIsPollingLogin] = useState(false);
+
+    const loginMutation = useMutation({
+        mutationFn: () => settingsApi.startCLILogin(),
+        onSuccess: (result) => {
+            setLoginResult(result);
+            if (result.success) {
+                // Start polling for login completion
+                setIsPollingLogin(true);
+            } else {
+                notify.error(result.message);
+            }
+        },
+        onError: () => {
+            setLoginResult({success: false, message: 'Login request failed'});
+        },
+    });
+
+    // Poll for CLI login status after browser opens
+    useEffect(() => {
+        if (!isPollingLogin) return;
+        const interval = setInterval(async () => {
+            try {
+                const fresh = await settingsApi.getAgentConfig();
+                if (fresh.cliLoggedIn) {
+                    setIsPollingLogin(false);
+                    setLoginResult({success: true, message: 'Successfully logged in to Claude'});
+                    notify.success('Successfully logged in to Claude');
+                    queryClient.invalidateQueries({queryKey: ['agent-config']});
+                }
+            } catch { /* ignore poll errors */
+            }
+        }, 4000);
+        // Stop polling after 2 minutes
+        const timeout = setTimeout(() => {
+            setIsPollingLogin(false);
+            setLoginResult({success: false, message: 'Login timed out. Please try again.'});
+        }, 120_000);
+        return () => {
+            clearInterval(interval);
+            clearTimeout(timeout);
+        };
+    }, [isPollingLogin, queryClient]);
+
+    const logoutMutation = useMutation({
+        mutationFn: () => settingsApi.cliLogout(),
+        onSuccess: (result) => {
+            queryClient.invalidateQueries({queryKey: ['agent-config']});
+            if (result.success) notify.success(result.message);
+            else notify.error(result.message);
+            setLoginResult(null);
+        },
+    });
+
+    const config = configQuery.data;
+
+    const handleAuthModeChange = (_: React.MouseEvent<HTMLElement>, newMode: string | null) => {
+        if (newMode) updateMutation.mutate({authMode: newMode});
+    };
+
+    const handleSaveApiKey = () => {
+        if (apiKeyInput.trim()) {
+            updateMutation.mutate({apiKey: apiKeyInput.trim()});
+            setApiKeyInput('');
+        }
+    };
+
+    if (configQuery.isLoading || !config) {
+        return (
+            <Box sx={{display: 'flex', justifyContent: 'center', py: 3}}>
+                <CircularProgress size={24}/>
+            </Box>
+        );
+    }
+
+    if (configQuery.error) {
+        return (
+            <Alert severity="warning" sx={{mx: 2}}>
+                Could not load agent configuration. Check your admin privileges.
+            </Alert>
+        );
+    }
+
+    return (
+        <Box sx={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            gap: 3, py: 4, px: 3, maxWidth: 480, mx: 'auto',
+        }}>
+            <SmartToyIcon sx={{fontSize: 56, color: 'text.secondary'}}/>
+            <Box sx={{textAlign: 'center'}}>
+                <Typography variant="h6" gutterBottom>Configure AI Agent</Typography>
+                <Typography variant="body2" color="text.secondary">
+                    Set up authentication to start chatting with the trading agent.
+                </Typography>
+            </Box>
+
+            <Box sx={{width: '100%', display: 'flex', flexDirection: 'column', gap: 2.5}}>
+                {/* Auth Mode */}
+                <Box>
+                    <Typography variant="subtitle2" gutterBottom>Authentication Mode</Typography>
+                    <ToggleButtonGroup
+                        value={config.authMode}
+                        exclusive
+                        onChange={handleAuthModeChange}
+                        size="small"
+                        fullWidth
+                        disabled={updateMutation.isPending}
+                    >
+                        <ToggleButton value="subscription">Claude Subscription</ToggleButton>
+                        <ToggleButton value="api_key">API Key</ToggleButton>
+                    </ToggleButtonGroup>
+                    <Typography variant="caption" color="text.secondary" sx={{mt: 0.5, display: 'block'}}>
+                        {config.authMode === 'subscription'
+                            ? 'Free with Claude Pro/Max subscription'
+                            : 'Direct Anthropic API key — pay-per-use billing'}
+                    </Typography>
+                </Box>
+
+                {/* Subscription: CLI login */}
+                {config.authMode === 'subscription' && (
+                    <Box>
+                        <Box sx={{display: 'flex', alignItems: 'center', gap: 1, mb: 1.5}}>
+                            <Typography variant="subtitle2">CLI Status:</Typography>
+                            <Chip
+                                icon={config.cliLoggedIn ? <CheckCircleIcon/> : <ErrorIcon/>}
+                                label={config.cliLoggedIn ? 'Logged In' : 'Not Logged In'}
+                                color={config.cliLoggedIn ? 'success' : 'warning'}
+                                size="small"
+                                variant="outlined"
+                            />
+                        </Box>
+                        {config.cliLoggedIn ? (
+                            <Button
+                                variant="outlined"
+                                color="error"
+                                size="small"
+                                startIcon={logoutMutation.isPending ? <CircularProgress size={14}/> : <LogoutIcon/>}
+                                onClick={() => logoutMutation.mutate()}
+                                disabled={logoutMutation.isPending}
+                            >
+                                Logout
+                            </Button>
+                        ) : (
+                            <Box sx={{display: 'flex', flexDirection: 'column', gap: 1.5}}>
+                                <Button
+                                    variant="contained"
+                                    fullWidth
+                                    startIcon={(loginMutation.isPending || isPollingLogin) ?
+                                        <CircularProgress size={16} color="inherit"/> : <LoginIcon/>}
+                                    onClick={() => loginMutation.mutate()}
+                                    disabled={loginMutation.isPending || isPollingLogin}
+                                >
+                                    {isPollingLogin ? 'Waiting for login...' : loginMutation.isPending ? 'Opening browser...' : 'Login with Claude'}
+                                </Button>
+                                {isPollingLogin && (
+                                    <Alert severity="info" sx={{fontSize: '0.8rem'}}>
+                                        Complete the login in your browser.
+                                        This page will update automatically.
+                                    </Alert>
+                                )}
+                                {loginResult && (
+                                    <Alert severity={loginResult.success ? 'success' : 'error'}>
+                                        {loginResult.message}
+                                    </Alert>
+                                )}
+                            </Box>
+                        )}
+                    </Box>
+                )}
+
+                {/* API Key: input */}
+                {config.authMode === 'api_key' && (
+                    <Box>
+                        <Typography variant="subtitle2" gutterBottom>Anthropic API Key</Typography>
+                        {config.hasApiKey && (
+                            <Chip
+                                label={config.maskedApiKey}
+                                color="success"
+                                size="small"
+                                variant="outlined"
+                                sx={{mb: 1, fontFamily: 'monospace'}}
+                            />
+                        )}
+                        <Box sx={{display: 'flex', gap: 1}}>
+                            <TextField
+                                size="small"
+                                type="password"
+                                placeholder="sk-ant-..."
+                                value={apiKeyInput}
+                                onChange={(e) => setApiKeyInput(e.target.value)}
+                                sx={{flex: 1}}
+                                fullWidth
+                            />
+                            <Button
+                                variant="outlined"
+                                onClick={handleSaveApiKey}
+                                disabled={!apiKeyInput.trim() || updateMutation.isPending}
+                            >
+                                Save
+                            </Button>
+                        </Box>
+                    </Box>
+                )}
+
+                {/* Model */}
+                <Box>
+                    <Typography variant="subtitle2" gutterBottom>Model</Typography>
+                    <TextField
+                        select
+                        size="small"
+                        fullWidth
+                        value={config.model}
+                        onChange={(e) => updateMutation.mutate({model: e.target.value})}
+                        disabled={updateMutation.isPending}
+                    >
+                        {MODEL_OPTIONS.map((opt) => (
+                            <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+                        ))}
+                    </TextField>
+                </Box>
+
+                {/* Test Connection */}
+                <Button
+                    variant="contained"
+                    startIcon={testMutation.isPending ? <CircularProgress size={16}/> : <PlayArrowIcon/>}
+                    onClick={() => testMutation.mutate()}
+                    disabled={testMutation.isPending}
+                    fullWidth
+                >
+                    Test Connection
+                </Button>
+                {testResult && (
+                    <Alert severity={testResult.success ? 'success' : 'error'}>
+                        {testResult.message}
+                    </Alert>
+                )}
+            </Box>
+        </Box>
+    );
+}
 
 // Sidebar tab type
 type SidebarTab = 'sessions' | 'decisions';
@@ -94,6 +391,7 @@ function AgentPage() {
     // Local state
     const [sidebarTab, setSidebarTab] = useState<SidebarTab>('sessions');
     const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+    const [configDrawerOpen, setConfigDrawerOpen] = useState(false);
     const [decisionPage, setDecisionPage] = useState(1);
 
     // WebSocket connection
@@ -200,9 +498,13 @@ function AgentPage() {
                     id: `${sessionData.id}-${index}`,
                     role: msg.role,
                     content: msg.content,
-                    timestamp: msg.timestamp,
-                    decision: undefined, // Would need to fetch decision details
-                    toolCalls: msg.toolCalls,
+                    timestamp: new Date(msg.timestamp).getTime(),
+                    decision: undefined,
+                    toolCalls: msg.toolCalls?.map((tc, i) => ({
+                        id: `${sessionData.id}-${index}-tc-${i}`,
+                        name: tc.name,
+                        arguments: tc.arguments,
+                    })),
                 })
             );
             setMessages(agentMessages);
@@ -307,6 +609,14 @@ function AgentPage() {
 
     const handleLoadMoreDecisions = useCallback(() => {
         setDecisionPage((prev) => prev + 1);
+    }, []);
+
+    // Clear stale error messages on mount when no session is loaded
+    useEffect(() => {
+        if (!currentSessionId) {
+            clearMessages();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Auto-scroll to bottom on new messages
@@ -425,8 +735,38 @@ function AgentPage() {
                                 )}
                             </Box>
                         </Box>
-                        <AgentStatusBadge status={status}/>
+                        <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
+                            <AgentStatusBadge status={status}/>
+                            <IconButton
+                                onClick={() => setConfigDrawerOpen(true)}
+                                size="small"
+                                title="Agent Configuration"
+                            >
+                                <SettingsIcon fontSize="small"/>
+                            </IconButton>
+                        </Box>
                     </Box>
+
+                    {/* Agent Configuration Drawer */}
+                    <Drawer
+                        anchor="right"
+                        open={configDrawerOpen}
+                        onClose={() => setConfigDrawerOpen(false)}
+                        PaperProps={{sx: {width: {xs: '100%', sm: 420}}}}
+                    >
+                        <Box sx={{
+                            display: 'flex', justifyContent: 'space-between',
+                            alignItems: 'center', p: 2, borderBottom: 1, borderColor: 'divider',
+                        }}>
+                            <Typography variant="h6">Agent Configuration</Typography>
+                            <IconButton onClick={() => setConfigDrawerOpen(false)} size="small">
+                                <MenuIcon fontSize="small"/>
+                            </IconButton>
+                        </Box>
+                        <Box sx={{overflow: 'auto', flex: 1}}>
+                            <AgentSetupPanel/>
+                        </Box>
+                    </Drawer>
 
                     {/* Messages */}
                     <CardContent
@@ -440,8 +780,16 @@ function AgentPage() {
                         {messages.length === 0 ? (
                             <EmptyState
                                 icon={<SmartToyIcon sx={{fontSize: 64}}/>}
-                                title="Start a conversation"
-                                description="Ask the trading agent for analysis, recommendations, or help with your trading decisions."
+                                title={status === 'connected' || status === 'thinking'
+                                    ? 'Start a conversation'
+                                    : status === 'auth_required'
+                                        ? 'Authentication required'
+                                        : 'Agent not connected'}
+                                description={status === 'connected' || status === 'thinking'
+                                    ? 'Ask the trading agent for analysis, recommendations, or help with your trading decisions.'
+                                    : status === 'auth_required'
+                                        ? 'Click the gear icon above to configure authentication, then refresh.'
+                                        : 'Check agent configuration via the gear icon above.'}
                             />
                         ) : (
                             messages.map((message) => (
