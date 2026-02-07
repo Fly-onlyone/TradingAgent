@@ -9,10 +9,12 @@ from app.api.v1 import (
     agent_tasks,
     auth,
     knowledge,
+    logs,
     market,
     news,
     notifications,
     orders,
+    settings,
     strategies,
 )
 
@@ -34,4 +36,6 @@ router.include_router(
 router.include_router(
     notifications.router, prefix="/notifications", tags=["notifications"]
 )
+router.include_router(settings.router, prefix="/settings", tags=["settings"])
+router.include_router(logs.router, prefix="/admin/logs", tags=["logs"])
 router.include_router(admin.router, prefix="/admin", tags=["admin"])

@@ -71,7 +71,7 @@ def ohlcv_to_response(data: MarketData) -> OHLCVResponse:
 @router.get("/ohlcv/{symbol}", response_model=list[OHLCVResponse])
 async def get_ohlcv(
     symbol: str,
-    timeframe: str = Query("1H", regex="^(1m|5m|15m|30m|1H|4H|1D|1W)$"),
+    timeframe: str = Query("1H", pattern="^(1m|5m|15m|30m|1H|4H|1D|1W)$"),
     limit: int = Query(100, ge=1, le=1000),
     start_time: Optional[datetime] = None,
     end_time: Optional[datetime] = None,

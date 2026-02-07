@@ -292,7 +292,7 @@ async def get_trades_grouped_by_symbol(
 
 @router.get("/trades/export")
 async def export_trades_data(
-    format: str = Query("json", regex="^(json|csv)$"),
+    format: str = Query("json", pattern="^(json|csv)$"),
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     current_user: User = Depends(get_current_active_user),
