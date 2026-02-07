@@ -14,7 +14,7 @@ export const authApi = {
     formData.append('username', credentials.email);
     formData.append('password', credentials.password);
 
-    const response = await apiClient.post<AuthTokens>('/auth/login', formData, {
+    const response = await apiClient.post<AuthTokens>('/auth/token', formData, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
 
