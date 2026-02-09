@@ -10,6 +10,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from jose import JWTError, jwt
 
 from app.agent.trading_agent import create_agent_with_tools
+from app.api.v1.auth import _DEV_USER_ID
 from app.api.websocket.connection_manager import manager
 from app.config import get_settings
 from app.db.models.agent_session import AgentSession
@@ -29,7 +30,7 @@ async def get_user_from_token(token: str) -> User | None:
     """
     if settings.debug:
         return User(
-            id=PydanticObjectId(),
+            id=_DEV_USER_ID,
             email="dev@localhost.dev",
             hashed_password="",
             full_name="Dev User",
@@ -40,9 +41,7 @@ async def get_user_from_token(token: str) -> User | None:
         )
 
     try:
-        payload = jwt.decode(
-            token, settings.secret_key, algorithms=[settings.algorithm]
-        )
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         email = payload.get("sub")
         if email:
             return await User.find_one(User.email == email)
@@ -188,8 +187,26 @@ async def agent_chat_websocket(
                 # Lazy session creation — only on first real message to
                 # avoid spamming empty sessions on reconnect attempts
                 if session is None:
-                    session = AgentSession(user_id=user.id)
-                    await session.insert()
+                    # Check if frontend provides a session ID to resume
+                    client_session_id = message.get("sessionId")
+                    if client_session_id:
+                        existing = await AgentSession.find_one(
+                            AgentSession.id == PydanticObjectId(client_session_id),
+                            AgentSession.user_id == user.id,
+                        )
+                        if existing:
+                            session = existing
+
+                    if session is None:
+                        session = AgentSession(user_id=user.id)
+                        await session.insert()
+                        await manager.send_personal(
+                            websocket,
+                            {
+                                "type": "session_created",
+                                "data": {"sessionId": str(session.id)},
+                            },
+                        )
 
                 # Persist user message
                 session.add_message(role="user", content=user_message)
@@ -199,8 +216,9 @@ async def agent_chat_websocket(
                 try:
                     response = await agent.chat(user_message, on_event=send_event)
 
-                    # Get tool calls from this turn
+                    # Get tool calls and thinking content from this turn
                     tool_calls = agent.tool_calls or []
+                    thinking_content = agent.thinking_content or None
 
                     # Send final response
                     await manager.send_personal(
@@ -213,6 +231,7 @@ async def agent_chat_websocket(
                                 "content": response,
                                 "timestamp": int(datetime.now(UTC).timestamp() * 1000),
                                 "toolCalls": tool_calls if tool_calls else None,
+                                "thinkingContent": thinking_content,
                             },
                         },
                     )
@@ -222,6 +241,7 @@ async def agent_chat_websocket(
                         role="assistant",
                         content=response,
                         tool_calls=tool_calls if tool_calls else None,
+                        thinking_content=thinking_content,
                     )
                     if not session.title:
                         session.title = session.generate_title()

@@ -9,6 +9,7 @@ export interface AgentConfig {
     hasApiKey: boolean;
     maskedApiKey: string;
     model: string;
+    maxThinkingTokens: number;
     cliLoggedIn: boolean;
 }
 
@@ -16,6 +17,7 @@ export interface AgentConfigUpdate {
     authMode?: string;
     apiKey?: string;
     model?: string;
+    maxThinkingTokens?: number;
 }
 
 export interface TestConnectionResult {
@@ -39,6 +41,7 @@ function transformAgentConfig(data: Record<string, unknown>): AgentConfig {
         hasApiKey: data.has_api_key as boolean,
         maskedApiKey: data.masked_api_key as string,
         model: data.model as string,
+        maxThinkingTokens: data.max_thinking_tokens as number,
         cliLoggedIn: data.cli_logged_in as boolean,
     };
 }
@@ -54,6 +57,7 @@ export const settingsApi = {
         if (update.authMode !== undefined) payload.auth_mode = update.authMode;
         if (update.apiKey !== undefined) payload.api_key = update.apiKey;
         if (update.model !== undefined) payload.model = update.model;
+        if (update.maxThinkingTokens !== undefined) payload.max_thinking_tokens = update.maxThinkingTokens;
 
         const response = await apiClient.put<Record<string, unknown>>('/settings/agent', payload);
         return transformAgentConfig(response.data);

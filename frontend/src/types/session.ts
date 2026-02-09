@@ -21,6 +21,7 @@ export interface SessionMessage {
     timestamp: string;
     decisionId?: string;
     toolCalls?: ToolCall[];
+    thinkingContent?: string;
 }
 
 export interface ToolCall {

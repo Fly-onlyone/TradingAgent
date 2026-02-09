@@ -1,16 +1,20 @@
 """Authentication endpoints using Beanie ODM."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
+import bcrypt
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
-import bcrypt
 from pydantic import BaseModel, EmailStr
 
 from app.config import get_settings
 from app.db.models.user import User
+
+# Fixed dev user ID so all debug-mode layers (REST, WebSocket) share
+# the same identity and can find each other's data.
+_DEV_USER_ID = PydanticObjectId("000000000000000000000000")
 
 router = APIRouter()
 settings = get_settings()
@@ -54,9 +58,7 @@ class UserResponse(BaseModel):
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against hash."""
-    return bcrypt.checkpw(
-        plain_password.encode("utf-8"), hashed_password.encode("utf-8")
-    )
+    return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
 
 
 def get_password_hash(password: str) -> str:
@@ -68,13 +70,11 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     """Create JWT access token."""
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
+        expire = datetime.now(UTC) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=15)
+        expire = datetime.now(UTC) + timedelta(minutes=15)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(
-        to_encode, settings.secret_key, algorithm=settings.algorithm
-    )
+    encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
     return encoded_jwt
 
 
@@ -88,9 +88,7 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(
-            token, settings.secret_key, algorithms=[settings.algorithm]
-        )
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         email: str | None = payload.get("sub")
         if email is None:
             raise credentials_exception
@@ -113,16 +111,20 @@ async def get_current_active_user(
 
 
 async def get_dev_user() -> User:
-    """Return a mock superuser for development mode (no JWT required)."""
+    """Return a mock superuser for development mode (no JWT required).
+
+    Uses a fixed _DEV_USER_ID so the same identity is shared across
+    REST endpoints and WebSocket handlers, preventing user_id mismatches.
+    """
     return User(
-        id=PydanticObjectId(),
+        id=_DEV_USER_ID,
         email="dev@localhost.dev",
         hashed_password="",
         full_name="Dev User",
         is_active=True,
         is_superuser=True,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 
@@ -166,9 +168,7 @@ async def login(
         )
 
     access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
-    access_token = create_access_token(
-        data={"sub": user.email}, expires_delta=access_token_expires
-    )
+    access_token = create_access_token(data={"sub": user.email}, expires_delta=access_token_expires)
     return {"access_token": access_token, "token_type": "bearer"}
 
 

@@ -33,6 +33,8 @@ interface AgentState {
     // Chat
     messages: AgentMessage[];
     toolCalls: ToolCall[];
+    currentTurnToolCalls: ToolCall[];
+    thinkingContent: string;
 
     // Decisions
     decisions: AgentDecisionSummary[];
@@ -46,6 +48,9 @@ interface AgentState {
     status: AgentStatus;
     isThinking: boolean;
     lastDecision: AgentDecision | null;
+
+    // UI preferences
+    showThinkingContent: boolean;
 
     // Session actions
     setCurrentSessionId: (sessionId: string | null) => void;
@@ -61,6 +66,7 @@ interface AgentState {
     clearMessages: () => void;
     addToolCall: (toolCall: ToolCall) => void;
     updateToolCallResult: (toolCallId: string, result: unknown) => void;
+    setThinkingContent: (content: string) => void;
 
     // Decision actions
     setDecisions: (decisions: AgentDecisionSummary[]) => void;
@@ -76,6 +82,9 @@ interface AgentState {
     updateStatus: (status: string) => void;
     setThinking: (thinking: boolean) => void;
     setLastDecision: (decision: AgentDecision | null) => void;
+
+    // UI preference actions
+    toggleThinkingContent: () => void;
 }
 
 const MAX_MESSAGES = 100;
@@ -91,6 +100,8 @@ export const useAgentStore = create<AgentState>()(
             // Chat
             messages: [],
             toolCalls: [],
+            currentTurnToolCalls: [],
+            thinkingContent: '',
 
             // Decisions
             decisions: [],
@@ -104,6 +115,9 @@ export const useAgentStore = create<AgentState>()(
             status: 'disconnected',
             isThinking: false,
             lastDecision: null,
+
+            // UI preferences
+            showThinkingContent: true,
 
             // Session actions
             setCurrentSessionId: (sessionId) =>
@@ -175,6 +189,8 @@ export const useAgentStore = create<AgentState>()(
                 set((state) => ({
                     messages: [...state.messages, message].slice(-MAX_MESSAGES),
                     lastDecision: message.decision || state.lastDecision,
+                    isThinking: false,
+                    status: state.isThinking ? 'connected' : state.status,
                 })),
 
             setMessages: (messages) =>
@@ -190,6 +206,7 @@ export const useAgentStore = create<AgentState>()(
             addToolCall: (toolCall) =>
                 set((state) => ({
                     toolCalls: [...state.toolCalls, toolCall],
+                    currentTurnToolCalls: [...state.currentTurnToolCalls, toolCall],
                 })),
 
             updateToolCallResult: (toolCallId, result) =>
@@ -198,6 +215,9 @@ export const useAgentStore = create<AgentState>()(
                         tc.id === toolCallId ? {...tc, result} : tc
                     ),
                 })),
+
+            setThinkingContent: (thinkingContent) =>
+                set({thinkingContent}),
 
             // Decision actions
             setDecisions: (decisions) =>
@@ -241,18 +261,26 @@ export const useAgentStore = create<AgentState>()(
                 }),
 
             setThinking: (isThinking) =>
-                set({
+                set((state) => ({
                     isThinking,
                     status: isThinking ? 'thinking' : 'connected',
-                }),
+                    // Reset turn state when starting a new thinking cycle
+                    ...(isThinking && !state.isThinking
+                        ? {currentTurnToolCalls: [], thinkingContent: ''}
+                        : {}),
+                })),
 
             setLastDecision: (lastDecision) => set({lastDecision}),
+
+            // UI preference actions
+            toggleThinkingContent: () =>
+                set((state) => ({showThinkingContent: !state.showThinkingContent})),
         }),
         {
             name: 'agent-store',
-            // Only persist session-related data
+            // Only persist session-related data and UI preferences
             partialize: (state) => ({
-                currentSessionId: state.currentSessionId,
+                showThinkingContent: state.showThinkingContent,
             }),
         }
     )

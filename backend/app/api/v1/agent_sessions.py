@@ -47,6 +47,7 @@ class MessageResponse(BaseModel):
     timestamp: str
     decision_id: Optional[str] = None
     tool_calls: Optional[list[dict]] = None
+    thinking_content: Optional[str] = None
 
 
 class SessionResponse(BaseModel):
@@ -142,6 +143,7 @@ def message_to_response(message: dict) -> MessageResponse:
         timestamp=message.get("timestamp", ""),
         decision_id=message.get("decision_id"),
         tool_calls=message.get("tool_calls"),
+        thinking_content=message.get("thinking_content"),
     )
 
 

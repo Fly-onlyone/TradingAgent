@@ -25,6 +25,7 @@ class AppSettings(Document):
     agent_auth_mode: AgentAuthMode = AgentAuthMode.SUBSCRIPTION
     agent_api_key: str = ""  # Encrypted/stored API key (empty = use env var)
     agent_model: str = "claude-sonnet-4-20250514"
+    agent_max_thinking_tokens: int = 10000
 
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

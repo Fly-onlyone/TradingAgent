@@ -24,6 +24,7 @@ import HistoryIcon from '@mui/icons-material/History';
 import AnalyticsIcon from '@mui/icons-material/Analytics';
 import MenuIcon from '@mui/icons-material/Menu';
 import SettingsIcon from '@mui/icons-material/Settings';
+import PsychologyIcon from '@mui/icons-material/Psychology';
 
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
@@ -36,12 +37,14 @@ import {
     Chip,
     CircularProgress,
     MenuItem,
+    Slider,
     TextField,
     ToggleButton,
     ToggleButtonGroup,
+    Tooltip,
 } from '@mui/material';
-import {Link} from '@tanstack/react-router';
 
+import {AnimatePresence} from 'framer-motion';
 import {PageTransition} from '@/components/common/PageTransition';
 import {ChatMessage} from '@/components/agent/ChatMessage';
 import {ChatInput} from '@/components/agent/ChatInput';
@@ -49,16 +52,16 @@ import {AgentStatusBadge} from '@/components/agent/AgentStatusBadge';
 import {DecisionCard} from '@/components/agent/DecisionCard';
 import {SessionList} from '@/components/agent/SessionList';
 import {DecisionHistoryPanel} from '@/components/agent/DecisionHistoryPanel';
+import {ThinkingIndicator} from '@/components/agent/ThinkingIndicator';
 import {EmptyState} from '@/components/common/EmptyState';
 import {useAgentSocket} from '@/api/websocket/useAgentSocket';
 import {useAgentStore} from '@/store/agentStore';
 import {sessionsApi} from '@/api/endpoints/sessions';
 import {decisionsApi} from '@/api/endpoints/decisions';
 import {settingsApi} from '@/api/endpoints/settings';
-import {useAuthStore} from '@/store/authStore';
 import {notify} from '@/store/uiStore';
-import type {AgentSession, SessionMessage} from '@/types/session';
-import type {AgentConfig, AgentConfigUpdate} from '@/api/endpoints/settings';
+import type {SessionMessage} from '@/types/session';
+import type {AgentConfigUpdate} from '@/api/endpoints/settings';
 
 export const Route = createFileRoute('/agent')({
     component: AgentPage,
@@ -324,6 +327,34 @@ function AgentSetupPanel() {
                     </TextField>
                 </Box>
 
+                {/* Thinking Budget */}
+                <Box>
+                    <Typography variant="subtitle2" gutterBottom>
+                        Thinking
+                        Budget: {config.maxThinkingTokens === 0 ? 'Disabled' : `${config.maxThinkingTokens.toLocaleString()} tokens`}
+                    </Typography>
+                    <Slider
+                        value={config.maxThinkingTokens}
+                        onChange={(_, value) => updateMutation.mutate({maxThinkingTokens: value as number})}
+                        min={0}
+                        max={50000}
+                        step={1000}
+                        marks={[
+                            {value: 0, label: 'Off'},
+                            {value: 10000, label: '10k'},
+                            {value: 25000, label: '25k'},
+                            {value: 50000, label: '50k'},
+                        ]}
+                        valueLabelDisplay="auto"
+                        valueLabelFormat={(v) => v === 0 ? 'Off' : `${(v / 1000).toFixed(0)}k`}
+                        disabled={updateMutation.isPending}
+                        size="small"
+                    />
+                    <Typography variant="caption" color="text.secondary">
+                        Maximum tokens for agent reasoning. 0 = disabled.
+                    </Typography>
+                </Box>
+
                 {/* Test Connection */}
                 <Button
                     variant="contained"
@@ -370,10 +401,13 @@ function AgentPage() {
         isLoadingDecisions,
         hasMoreDecisions,
         pendingDecisionsCount,
+        currentTurnToolCalls,
+        thinkingContent,
+        showThinkingContent,
+        toggleThinkingContent,
         setCurrentSessionId,
         setSessionGroups,
         setIsLoadingSessions,
-        addSession,
         removeSession,
         updateSessionTitle,
         setMessages,
@@ -481,13 +515,14 @@ function AgentPage() {
     }, [pendingData, setPendingDecisionsCount]);
 
     // Fetch session messages when session changes
-    const {data: sessionData} = useQuery({
+    const sessionQuery = useQuery({
         queryKey: ['agent-session', currentSessionId],
         queryFn: () =>
             currentSessionId ? sessionsApi.getSession(currentSessionId) : null,
         enabled: !!currentSessionId,
         staleTime: 10_000,
     });
+    const sessionData = sessionQuery.data;
 
     // Load messages when session data changes
     useEffect(() => {
@@ -500,6 +535,7 @@ function AgentPage() {
                     content: msg.content,
                     timestamp: new Date(msg.timestamp).getTime(),
                     decision: undefined,
+                    thinkingContent: msg.thinkingContent,
                     toolCalls: msg.toolCalls?.map((tc, i) => ({
                         id: `${sessionData.id}-${index}-tc-${i}`,
                         name: tc.name,
@@ -511,16 +547,23 @@ function AgentPage() {
         }
     }, [sessionData, setMessages]);
 
-    // Mutations
-    const createSessionMutation = useMutation({
-        mutationFn: () => sessionsApi.createSession({}),
-        onSuccess: (newSession: AgentSession) => {
-            addSession(newSession);
-            clearMessages();
+    // Refresh sidebar after each agent response to pick up auto-generated title
+    useEffect(() => {
+        const last = messages[messages.length - 1];
+        if (last?.role === 'assistant') {
             queryClient.invalidateQueries({queryKey: ['agent-sessions-grouped']});
-        },
-    });
+        }
+    }, [messages, queryClient]);
 
+    // Handle stale session ID on mount (deleted session)
+    useEffect(() => {
+        if (sessionQuery.error && currentSessionId) {
+            setCurrentSessionId(null);
+            clearMessages();
+        }
+    }, [sessionQuery.error, currentSessionId, setCurrentSessionId, clearMessages]);
+
+    // Mutations
     const deleteSessionMutation = useMutation({
         mutationFn: (sessionId: string) => sessionsApi.deleteSession(sessionId),
         onSuccess: (_, sessionId) => {
@@ -577,11 +620,15 @@ function AgentPage() {
     );
 
     const handleNewSession = useCallback(() => {
-        createSessionMutation.mutate();
+        // WHY: Don't create a backend session eagerly. Just clear the UI
+        // so the user sees a blank chat. The backend will create the session
+        // lazily when the first message is sent (via session_created WS event).
+        setCurrentSessionId(null);
+        clearMessages();
         if (isMobile) {
             setMobileDrawerOpen(false);
         }
-    }, [createSessionMutation, isMobile]);
+    }, [setCurrentSessionId, clearMessages, isMobile]);
 
     const handleDeleteSession = useCallback(
         (sessionId: string) => {
@@ -611,18 +658,17 @@ function AgentPage() {
         setDecisionPage((prev) => prev + 1);
     }, []);
 
-    // Clear stale error messages on mount when no session is loaded
+    // Always start with a blank chat when navigating to the agent page
     useEffect(() => {
-        if (!currentSessionId) {
-            clearMessages();
-        }
+        setCurrentSessionId(null);
+        clearMessages();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Auto-scroll to bottom on new messages
+    // Auto-scroll to bottom on new messages or thinking state changes
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({behavior: 'smooth'});
-    }, [messages]);
+    }, [messages, isThinking, currentTurnToolCalls]);
 
     // Sidebar content
     const sidebarContent = (
@@ -693,7 +739,7 @@ function AgentPage() {
                         anchor="left"
                         open={mobileDrawerOpen}
                         onClose={() => setMobileDrawerOpen(false)}
-                        PaperProps={{sx: {width: 300}}}
+                        slotProps={{paper: {sx: {width: 300}}}}
                     >
                         {sidebarContent}
                     </Drawer>
@@ -737,6 +783,15 @@ function AgentPage() {
                         </Box>
                         <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
                             <AgentStatusBadge status={status}/>
+                            <Tooltip title={showThinkingContent ? 'Hide thinking' : 'Show thinking'}>
+                                <IconButton
+                                    onClick={toggleThinkingContent}
+                                    size="small"
+                                    color={showThinkingContent ? 'primary' : 'default'}
+                                >
+                                    <PsychologyIcon fontSize="small"/>
+                                </IconButton>
+                            </Tooltip>
                             <IconButton
                                 onClick={() => setConfigDrawerOpen(true)}
                                 size="small"
@@ -752,7 +807,7 @@ function AgentPage() {
                         anchor="right"
                         open={configDrawerOpen}
                         onClose={() => setConfigDrawerOpen(false)}
-                        PaperProps={{sx: {width: {xs: '100%', sm: 420}}}}
+                        slotProps={{paper: {sx: {width: {xs: '100%', sm: 420}}}}}
                     >
                         <Box sx={{
                             display: 'flex', justifyContent: 'space-between',
@@ -793,9 +848,19 @@ function AgentPage() {
                             />
                         ) : (
                             messages.map((message) => (
-                                <ChatMessage key={message.id} message={message}/>
+                                <ChatMessage key={message.id} message={message}
+                                             showThinkingContent={showThinkingContent}/>
                             ))
                         )}
+                        <AnimatePresence>
+                            {isThinking && (
+                                <ThinkingIndicator
+                                    toolCalls={currentTurnToolCalls}
+                                    thinkingContent={thinkingContent}
+                                    showThinkingContent={showThinkingContent}
+                                />
+                            )}
+                        </AnimatePresence>
                         <div ref={messagesEndRef}/>
                     </CardContent>
 

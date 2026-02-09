@@ -15,6 +15,7 @@ export interface AgentMessage {
     timestamp: number;
     toolCalls?: ToolCall[];
     decision?: AgentDecision;
+    thinkingContent?: string;
 }
 
 export interface ToolCall {
@@ -33,25 +34,51 @@ export interface AgentDecision {
 }
 
 interface AgentSocketMessage extends WebSocketMessage {
-    type: 'message' | 'thinking' | 'tool_call' | 'decision' | 'error' | 'status';
-    data: AgentMessage | ToolCall | AgentDecision | { status: string } | { error: string };
+    type: 'message' | 'thinking' | 'tool_call' | 'decision' | 'error' | 'status' | 'session_created';
+    data: AgentMessage | ToolCall | AgentDecision | { status: string } | { error: string } | { content?: string } | {
+        sessionId: string
+    };
 }
 
 export function useAgentSocket() {
-    const {addMessage, updateStatus, setThinking, addToolCall} = useAgentStore();
+    const {
+        addMessage,
+        updateStatus,
+        setThinking,
+        addToolCall,
+        setThinkingContent,
+        setCurrentSessionId,
+        addSession,
+        currentSessionId,
+    } = useAgentStore();
 
     const handleMessage = useCallback(
         (message: WebSocketMessage) => {
             const agentMessage = message as AgentSocketMessage;
 
             switch (agentMessage.type) {
-                case 'message':
-                    addMessage(agentMessage.data as AgentMessage);
+                case 'message': {
+                    const msg = agentMessage.data as AgentMessage;
+                    // Attach accumulated thinking content from the store as fallback
+                    // (backend also sends it, but store has the real-time accumulated version)
+                    if (msg.role === 'assistant') {
+                        const storeThinking = useAgentStore.getState().thinkingContent;
+                        if (!msg.thinkingContent && storeThinking) {
+                            msg.thinkingContent = storeThinking;
+                        }
+                    }
+                    addMessage(msg);
                     setThinking(false);
                     break;
-                case 'thinking':
+                }
+                case 'thinking': {
+                    const thinkingData = agentMessage.data as { content?: string };
                     setThinking(true);
+                    if (thinkingData?.content) {
+                        setThinkingContent(thinkingData.content);
+                    }
                     break;
+                }
                 case 'tool_call':
                     addToolCall(agentMessage.data as ToolCall);
                     break;
@@ -71,6 +98,23 @@ export function useAgentSocket() {
                     updateStatus(statusData.status);
                     break;
                 }
+                case 'session_created': {
+                    const {sessionId} = agentMessage.data as { sessionId: string };
+                    setCurrentSessionId(sessionId);
+                    addSession({
+                        id: sessionId,
+                        isActive: true,
+                        totalMessages: 0,
+                        userMessages: 0,
+                        assistantMessages: 0,
+                        decisionsMade: 0,
+                        tradesExecuted: 0,
+                        totalTokens: 0,
+                        symbolsDiscussed: [],
+                        startedAt: new Date().toISOString(),
+                    });
+                    break;
+                }
                 case 'error':
                     addMessage({
                         id: crypto.randomUUID(),
@@ -82,7 +126,7 @@ export function useAgentSocket() {
                     break;
             }
         },
-        [addMessage, updateStatus, setThinking, addToolCall]
+        [addMessage, updateStatus, setThinking, addToolCall, setThinkingContent, setCurrentSessionId, addSession]
     );
 
     const token = getAccessToken();
@@ -100,6 +144,7 @@ export function useAgentSocket() {
         onClose: () => {
             console.log('Agent WebSocket disconnected');
             updateStatus('disconnected');
+            setThinking(false);
         },
         onError: (error) => {
             console.error('Agent WebSocket error:', error);
@@ -116,30 +161,35 @@ export function useAgentSocket() {
                 timestamp: Date.now(),
             };
             addMessage(message);
-            send({type: 'message', content});
+            send({type: 'message', content, sessionId: currentSessionId || undefined});
         },
-        [send, addMessage]
+        [send, addMessage, currentSessionId]
     );
 
     const requestAnalysis = useCallback(
         (symbol?: string, analysisType?: 'technical' | 'fundamental' | 'combined') => {
-            send({type: 'analyze', symbol: symbol || 'BTC-USDT', analysisType: analysisType || 'combined'});
+            send({
+                type: 'analyze',
+                symbol: symbol || 'BTC-USDT',
+                analysisType: analysisType || 'combined',
+                sessionId: currentSessionId || undefined
+            });
         },
-        [send]
+        [send, currentSessionId]
     );
 
     const requestRecommendation = useCallback(
         (symbol?: string) => {
-            send({type: 'recommend', symbol});
+            send({type: 'recommend', symbol, sessionId: currentSessionId || undefined});
         },
-        [send]
+        [send, currentSessionId]
     );
 
     const executeDecision = useCallback(
         (decision: AgentDecision) => {
-            send({type: 'execute', decision});
+            send({type: 'execute', decision, sessionId: currentSessionId || undefined});
         },
-        [send]
+        [send, currentSessionId]
     );
 
     return {

@@ -37,7 +37,7 @@ import {useAuth} from '@/hooks/useAuth'
 import {useAuthStore} from '@/store/authStore'
 import {notify} from '@/store/uiStore'
 import {settingsApi} from '@/api/endpoints/settings'
-import type {AgentConfig, AgentConfigUpdate} from '@/api/endpoints/settings'
+import type {AgentConfigUpdate} from '@/api/endpoints/settings'
 
 export const Route = createFileRoute('/settings')({
     component: SettingsPage,

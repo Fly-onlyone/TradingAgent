@@ -73,6 +73,7 @@ class AgentSession(Document):
         content: str,
         decision_id: Optional[PydanticObjectId] = None,
         tool_calls: Optional[list[dict]] = None,
+        thinking_content: Optional[str] = None,
         tokens: int = 0,
     ) -> dict:
         """Add a message to the session."""
@@ -85,6 +86,8 @@ class AgentSession(Document):
             message["decision_id"] = str(decision_id)
         if tool_calls:
             message["tool_calls"] = tool_calls
+        if thinking_content:
+            message["thinking_content"] = thinking_content
 
         self.messages.append(message)
         self.total_messages += 1

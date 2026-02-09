@@ -68,6 +68,7 @@ class TradingAgent:
     def __init__(self):
         self._client: ClaudeSDKClient | None = None
         self._tool_calls_this_turn: list[dict] = []
+        self._thinking_content_this_turn: str = ""
 
     async def connect(self) -> None:
         """Initialize the SDK client and start a session.
@@ -79,12 +80,16 @@ class TradingAgent:
         server = create_trading_mcp_server()
         app_settings = await AppSettings.get_instance()
 
+        # Use thinking budget from DB settings (0 = disabled)
+        thinking_tokens = app_settings.agent_max_thinking_tokens or None
+
         options = ClaudeAgentOptions(
             system_prompt=SYSTEM_PROMPT,
             mcp_servers={"trading": server},
             allowed_tools=ALLOWED_TOOL_NAMES,
             permission_mode="bypassPermissions",
             max_turns=10,
+            max_thinking_tokens=thinking_tokens,
         )
 
         # Resolve API key: DB setting → env var fallback
@@ -131,6 +136,7 @@ class TradingAgent:
             raise RuntimeError("Agent not connected. Call connect() first.")
 
         self._tool_calls_this_turn = []
+        self._thinking_content_this_turn = ""
         await self._client.query(user_message)
 
         final_text_parts: list[str] = []
@@ -139,8 +145,14 @@ class TradingAgent:
             if isinstance(message, AssistantMessage):
                 for block in message.content:
                     if isinstance(block, ThinkingBlock):
+                        self._thinking_content_this_turn += block.thinking + "\n"
                         if on_event:
-                            await on_event({"type": "thinking"})
+                            await on_event(
+                                {
+                                    "type": "thinking",
+                                    "data": {"content": block.thinking},
+                                }
+                            )
 
                     elif isinstance(block, ToolUseBlock):
                         tool_info = {
@@ -172,6 +184,11 @@ class TradingAgent:
     def tool_calls(self) -> list[dict]:
         """Get tool calls from the most recent turn."""
         return self._tool_calls_this_turn
+
+    @property
+    def thinking_content(self) -> str:
+        """Get accumulated thinking content from the most recent turn."""
+        return self._thinking_content_this_turn.strip()
 
     async def analyze_market(self, symbol: str) -> str:
         """Convenience method to analyze a market."""

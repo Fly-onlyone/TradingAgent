@@ -6,16 +6,17 @@ This file provides guidance to Claude Code when working with this project.
 
 | Task | Command |
 |------|---------|
-| Install dependencies | `uv sync` |
+| Install backend deps | `uv sync` |
+| Install frontend deps | `cd frontend && bun install` |
 | Run dev server (backend) | `uv run python run.py` |
-| Run dev server (frontend) | `cd frontend && npm run dev` |
+| Run dev server (frontend) | `cd frontend && bun run dev` |
 | Test backend | `uv run pytest` |
-| Test frontend | `cd frontend && npm test` |
+| Test frontend | `cd frontend && bun test` |
 | Lint backend | `uv run ruff check` |
-| Lint frontend | `cd frontend && npm run lint` |
+| Lint frontend | `cd frontend && bun run lint` |
 | Format backend | `uv run ruff format` |
-| Format frontend | `cd frontend && npm run format` |
-| Check frontend | `cd frontend && npm run check` |
+| Format frontend | `cd frontend && bun run format` |
+| Check frontend | `cd frontend && bun run check` |
 
 ## Project Overview
 

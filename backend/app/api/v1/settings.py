@@ -36,6 +36,7 @@ class AgentConfigResponse(BaseModel):
     has_api_key: bool
     masked_api_key: str
     model: str
+    max_thinking_tokens: int
     cli_logged_in: bool
 
 
@@ -43,6 +44,7 @@ class AgentConfigUpdate(BaseModel):
     auth_mode: Optional[str] = None
     api_key: Optional[str] = None
     model: Optional[str] = None
+    max_thinking_tokens: Optional[int] = None
 
 
 class TestConnectionResponse(BaseModel):
@@ -121,6 +123,7 @@ async def get_agent_config(
         "has_api_key": bool(effective_key),
         "masked_api_key": _mask_key(effective_key),
         "model": app_settings.agent_model,
+        "max_thinking_tokens": app_settings.agent_max_thinking_tokens,
         "cli_logged_in": cli_logged_in,
     }
 
@@ -148,6 +151,9 @@ async def update_agent_config(
     if body.model is not None:
         app_settings.agent_model = body.model
 
+    if body.max_thinking_tokens is not None:
+        app_settings.agent_max_thinking_tokens = body.max_thinking_tokens
+
     await app_settings.save_changes()
     logger.info(
         "Agent config updated: auth_mode=%s", app_settings.agent_auth_mode.value
@@ -161,6 +167,7 @@ async def update_agent_config(
         "has_api_key": bool(effective_key),
         "masked_api_key": _mask_key(effective_key),
         "model": app_settings.agent_model,
+        "max_thinking_tokens": app_settings.agent_max_thinking_tokens,
         "cli_logged_in": cli_logged_in,
     }
 
