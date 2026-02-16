@@ -1,6 +1,6 @@
 """Agent session management endpoints for chat history persistence."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from beanie import PydanticObjectId
@@ -154,9 +154,9 @@ def get_date_label(dt: datetime) -> tuple[str, str]:
 
     if dt.date() == now.date():
         return date_str, "Today"
-    elif dt.date() == (now.date().replace(day=now.day - 1)):
+    if dt.date() == (now - timedelta(days=1)).date():
         return date_str, "Yesterday"
-    elif (now - dt).days < 7:
+    if (now - dt).days < 7:
         return date_str, dt.strftime("%A")  # Day name
     else:
         return date_str, dt.strftime("%b %d")  # "Jan 28"
@@ -196,7 +196,7 @@ async def list_sessions(
     total = await query.count()
 
     sessions = (
-        await query.sort(-AgentSession.last_message_at, -AgentSession.started_at)
+        await query.sort("-last_message_at", "-started_at")
         .skip((page - 1) * page_size)
         .limit(page_size)
         .to_list()
@@ -218,7 +218,7 @@ async def list_sessions_grouped(
     """List sessions grouped by date for sidebar display."""
     sessions = (
         await AgentSession.find(AgentSession.user_id == current_user.id)
-        .sort(-AgentSession.last_message_at, -AgentSession.started_at)
+        .sort("-last_message_at", "-started_at")
         .limit(limit)
         .to_list()
     )

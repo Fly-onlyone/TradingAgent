@@ -1,6 +1,7 @@
 """Order Executor subagent for trade execution."""
 
 import logging
+import uuid
 from typing import Any
 
 from beanie import PydanticObjectId
@@ -38,6 +39,8 @@ class OrderExecutor:
         take_profit: float | None = None,
         reasoning: dict | None = None,
         skip_risk_check: bool = False,
+        idempotency_key: str | None = None,
+        max_position_size: float | None = None,
     ) -> dict[str, Any]:
         """Execute a trade with risk management.
 
@@ -51,6 +54,8 @@ class OrderExecutor:
             take_profit: Take profit price
             reasoning: Agent's reasoning for the trade
             skip_risk_check: Skip risk assessment (not recommended)
+            idempotency_key: Stable key to prevent duplicate order execution
+            max_position_size: Maximum allowed position size in quote currency
 
         Returns:
             Execution result
@@ -67,6 +72,66 @@ class OrderExecutor:
 
         if order_type == "limit" and price is None:
             return {"success": False, "error": "Limit price required for limit orders"}
+
+        if quantity <= 0:
+            return {"success": False, "error": "Quantity must be greater than zero"}
+
+        normalized_idempotency_key = idempotency_key or f"exec-{uuid.uuid4().hex}"
+
+        # Return existing order for duplicate executions with the same idempotency key.
+        if self.user_id and normalized_idempotency_key:
+            existing_order = await Order.find_one(
+                Order.user_id == self.user_id,
+                Order.execution_idempotency_key == normalized_idempotency_key,
+            )
+            if existing_order and existing_order.status in {
+                OrderStatus.PENDING,
+                OrderStatus.OPEN,
+                OrderStatus.PARTIALLY_FILLED,
+                OrderStatus.FILLED,
+            }:
+                return {
+                    "success": True,
+                    "order_id": str(existing_order.id),
+                    "exchange_order_id": existing_order.exchange_order_id,
+                    "symbol": existing_order.symbol,
+                    "side": existing_order.side.value,
+                    "order_type": existing_order.order_type.value,
+                    "quantity": existing_order.quantity,
+                    "price": existing_order.price,
+                    "stop_loss": existing_order.stop_loss_price,
+                    "take_profit": existing_order.take_profit_price,
+                    "message": "Order already executed for this idempotency key",
+                }
+
+        # Enforce task-level position cap when provided.
+        effective_price = price
+        if max_position_size is not None and max_position_size > 0:
+            if effective_price is None:
+                client = await self._get_client()
+                ticker_result = await client.get_ticker(symbol.upper())
+                if ticker_result.get("code") != "0" or not ticker_result.get("data"):
+                    return {
+                        "success": False,
+                        "error": f"Could not verify position size for {symbol}",
+                    }
+                effective_price = float(ticker_result["data"][0].get("last", 0))
+
+            if not effective_price or effective_price <= 0:
+                return {
+                    "success": False,
+                    "error": "Invalid price for position size validation",
+                }
+
+            position_value = quantity * effective_price
+            if position_value > max_position_size:
+                return {
+                    "success": False,
+                    "error": (
+                        f"Position value (${position_value:.2f}) exceeds task max_position_size "
+                        f"(${max_position_size:.2f})"
+                    ),
+                }
 
         # Risk assessment
         if not skip_risk_check:
@@ -101,6 +166,7 @@ class OrderExecutor:
             take_profit_price=take_profit,
             status=OrderStatus.PENDING,
             agent_reasoning=reasoning,
+            execution_idempotency_key=normalized_idempotency_key,
         )
 
         if self.user_id:
@@ -117,6 +183,7 @@ class OrderExecutor:
                 order_type=order_type,
                 size=Decimal(str(quantity)),
                 price=Decimal(str(price)) if price else None,
+                client_order_id=normalized_idempotency_key[:32],
             )
 
             if result.get("code") != "0":
@@ -172,6 +239,8 @@ class OrderExecutor:
         order_type: str = "market",
         price: float | None = None,
         reasoning: dict | None = None,
+        idempotency_key: str | None = None,
+        max_position_size: float | None = None,
     ) -> dict[str, Any]:
         """Execute a trade with automatic position sizing.
 
@@ -184,6 +253,8 @@ class OrderExecutor:
             order_type: 'market' or 'limit'
             price: Limit price for limit orders
             reasoning: Agent's reasoning
+            idempotency_key: Stable key to prevent duplicate order execution
+            max_position_size: Maximum allowed position size in quote currency
 
         Returns:
             Execution result with position sizing details
@@ -208,6 +279,8 @@ class OrderExecutor:
             stop_loss=position["stop_loss_price"],
             take_profit=position["take_profit_price"],
             reasoning=reasoning,
+            idempotency_key=idempotency_key,
+            max_position_size=max_position_size,
         )
 
         result["position_sizing"] = position

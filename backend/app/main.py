@@ -3,8 +3,8 @@
 import asyncio
 import logging
 import sys
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 # Defense-in-depth: set ProactorEventLoop on Windows in case this module is
 # imported before the event loop is created (e.g. running uvicorn directly).
@@ -17,7 +17,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.db.session import init_db, close_db
-from app.logging_config import setup_logging, get_mongo_handler
+from app.logging_config import setup_logging
+from app.agent.task_scheduler import get_scheduler
 from app.api.v1 import router as api_v1_router
 from app.api.websocket import router as ws_router
 
@@ -31,11 +32,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Startup
     mongo_handler = setup_logging()
     await init_db()
+
+    scheduler = get_scheduler()
+    await scheduler.start()
+
     mongo_handler.start()
     logger.info("Application started")
     yield
     # Shutdown
     logger.info("Application shutting down")
+    await scheduler.stop()
     if mongo_handler:
         await mongo_handler.stop()
     await close_db()

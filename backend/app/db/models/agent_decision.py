@@ -39,6 +39,15 @@ class DecisionStatus(str, Enum):
     EXPIRED = "expired"  # Confirmation timeout
 
 
+class ExecutionStatus(str, Enum):
+    """Execution lifecycle status for a trade decision."""
+
+    QUEUED = "queued"
+    SUBMITTED = "submitted"
+    FILLED = "filled"
+    FAILED = "failed"
+
+
 class ToolUsage:
     """Record of a tool used during decision making."""
 
@@ -93,6 +102,9 @@ class AgentDecision(Document):
     # Execution tracking
     order_id: Optional[PydanticObjectId] = None  # If trade was executed
     execution_price: Optional[float] = None
+    execution_status: ExecutionStatus = ExecutionStatus.QUEUED
+    execution_error_code: Optional[str] = None
+    execution_error_message: Optional[str] = None
 
     # Tool and context tracking
     tools_used: list[dict] = Field(default_factory=list)  # List of tool invocations
@@ -129,12 +141,23 @@ class AgentDecision(Document):
         """User rejected the decision."""
         self.status = DecisionStatus.REJECTED
 
-    def mark_executed(self, order_id: PydanticObjectId, price: float) -> None:
+    def mark_executed(self, order_id: PydanticObjectId, price: float | None) -> None:
         """Mark decision as executed with order details."""
         self.status = DecisionStatus.EXECUTED
         self.order_id = order_id
         self.execution_price = price
+        self.execution_status = ExecutionStatus.FILLED
+        self.execution_error_code = None
+        self.execution_error_message = None
         self.executed_at = datetime.now(timezone.utc)
+
+    def mark_execution_failed(
+        self, error_message: str, error_code: str = "execution_failed"
+    ) -> None:
+        """Mark decision execution failure details."""
+        self.execution_status = ExecutionStatus.FAILED
+        self.execution_error_code = error_code
+        self.execution_error_message = error_message
 
     def expire(self) -> None:
         """Mark decision as expired (confirmation timeout)."""

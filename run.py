@@ -67,11 +67,7 @@ if __name__ == "__main__":
     else:
         # ── Dev mode: start frontend + backend with auto-reload ────────
         frontend_dir = os.path.join(PROJECT_DIR, "frontend")
-        frontend_cmd = (
-            ["npm.cmd", "run", "dev"]
-            if sys.platform == "win32"
-            else ["npm", "run", "dev"]
-        )
+        frontend_cmd = ["bun", "run", "dev"]
         frontend_proc = subprocess.Popen(frontend_cmd, cwd=frontend_dir)
         backend_proc: subprocess.Popen | None = None
 

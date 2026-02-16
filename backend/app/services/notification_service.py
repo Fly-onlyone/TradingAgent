@@ -2,17 +2,16 @@
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 
 from beanie import PydanticObjectId
 
 from app.config import get_settings
-from app.db.models.agent_decision import AgentDecision, DecisionStatus
+from app.db.models.agent_decision import AgentDecision
 from app.db.models.notification import (
     Notification,
     NotificationAction,
-    NotificationStatus,
     NotificationType,
     UserNotificationSettings,
 )
@@ -197,7 +196,7 @@ class NotificationService:
         total = await query.count()
 
         notifications = (
-            await query.sort(-Notification.created_at)
+            await query.sort("-created_at")
             .skip((page - 1) * page_size)
             .limit(page_size)
             .to_list()
@@ -258,32 +257,19 @@ class NotificationService:
             return
 
         if action == NotificationAction.CONFIRMED:
-            decision.confirm()
-            await decision.save()
+            from app.services.agent_execution_service import get_agent_execution_service
 
-            # Execute the trade
-            from app.agent.task_scheduler import get_scheduler
-
-            scheduler = get_scheduler()
-            # Get the task to execute the trade
-            if decision.task_id:
-                from app.db.models.agent_task import AgentTask
-
-                task = await AgentTask.get(decision.task_id)
-                if task:
-                    await scheduler._execute_trade(
-                        task,
-                        decision,
-                        {
-                            "action": (
-                                decision.action.value if decision.action else None
-                            ),
-                            "suggested_entry": decision.suggested_entry,
-                            "suggested_stop_loss": decision.suggested_stop_loss,
-                            "suggested_take_profit": decision.suggested_take_profit,
-                            "suggested_position_size": decision.suggested_position_size,
-                        },
-                    )
+            service = get_agent_execution_service()
+            try:
+                await service.confirm_and_execute_decision(
+                    decision_id=decision.id,
+                    user_id=notification.user_id,
+                    source="notification",
+                )
+            except Exception as exc:
+                logger.error(
+                    "Failed to confirm and execute decision %s: %s", decision.id, exc
+                )
 
         elif action == NotificationAction.REJECTED:
             decision.reject()

@@ -1,9 +1,8 @@
 """Agent task scheduler for scheduled trading operations."""
 
-import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -11,6 +10,13 @@ from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from beanie import PydanticObjectId
 
+from app.db.models.agent_decision import (
+    AgentDecision,
+    DecisionAction,
+    DecisionStatus,
+    DecisionType,
+    ExecutionStatus,
+)
 from app.db.models.agent_task import (
     AgentMode,
     AgentTask,
@@ -18,12 +24,6 @@ from app.db.models.agent_task import (
     TaskFrequency,
     TaskStatus,
     TaskType,
-)
-from app.db.models.agent_decision import (
-    AgentDecision,
-    DecisionAction,
-    DecisionStatus,
-    DecisionType,
 )
 from app.db.models.notification import Notification, NotificationType
 
@@ -71,6 +71,13 @@ class AgentTaskScheduler:
         """Stop the scheduler."""
         self._running = False
         self.scheduler.shutdown(wait=False)
+
+        if self._trading_agent:
+            try:
+                await self._trading_agent.disconnect()
+            except Exception as exc:
+                logger.warning("Error disconnecting scheduler trading agent: %s", exc)
+
         logger.info("Agent task scheduler stopped")
 
     async def _load_active_tasks(self) -> None:
@@ -111,7 +118,8 @@ class AgentTaskScheduler:
 
         # Calculate and store next run time
         if task.frequency != TaskFrequency.ONCE:
-            next_run = trigger.get_next_fire_time(None, datetime.now(timezone.utc))
+            now = datetime.now(timezone.utc)
+            next_run = trigger.get_next_fire_time(now, now)
             task.next_run_at = next_run
             await task.save()
 
@@ -245,6 +253,8 @@ class AgentTaskScheduler:
     async def _execute_trading_task(self, task: AgentTask) -> None:
         """Execute a trading task (analysis + potential trade)."""
         agent = self._get_trading_agent()
+        risk_config = self._get_risk_config(task.risk_level)
+        min_confidence = float(risk_config["min_confidence"])
 
         for symbol in task.symbols:
             try:
@@ -258,7 +268,7 @@ class AgentTaskScheduler:
                 )
 
                 action = self._parse_action(result.get("action"))
-                confidence = result.get("confidence", 0)
+                confidence = float(result.get("confidence") or 0)
 
                 # Create decision record
                 decision = AgentDecision(
@@ -278,17 +288,39 @@ class AgentTaskScheduler:
                     risk_reward_ratio=result.get("risk_reward_ratio"),
                     tools_used=result.get("tools_used", []),
                     market_context=result.get("market_context"),
+                    execution_status=ExecutionStatus.QUEUED,
                 )
 
                 # Determine if we should trade
                 should_trade = action in [DecisionAction.BUY, DecisionAction.SELL]
 
+                if should_trade and confidence < min_confidence:
+                    should_trade = False
+                    decision.execution_status = ExecutionStatus.FAILED
+                    decision.execution_error_code = "confidence_below_threshold"
+                    decision.execution_error_message = f"Confidence {confidence:.1f}% is below minimum {min_confidence:.1f}%"
+
+                if should_trade and task.max_daily_trades is not None:
+                    trade_count_today = await self._get_today_trade_count(task.id)
+                    if trade_count_today >= task.max_daily_trades:
+                        should_trade = False
+                        decision.execution_status = ExecutionStatus.FAILED
+                        decision.execution_error_code = "max_daily_trades_reached"
+                        decision.execution_error_message = (
+                            f"Daily trade limit reached ({task.max_daily_trades})"
+                        )
+
                 if should_trade:
                     if task.agent_mode == AgentMode.AUTO:
                         # Auto mode: execute immediately
                         decision.status = DecisionStatus.CONFIRMED
+                        decision.execution_status = ExecutionStatus.SUBMITTED
                         await decision.insert()
-                        await self._execute_trade(task, decision, result)
+                        await self.execute_trade_for_decision(
+                            task=task,
+                            decision=decision,
+                            execution_source="task_auto",
+                        )
                     else:
                         # Ask mode: create notification and wait for confirmation
                         decision.status = DecisionStatus.PENDING
@@ -312,21 +344,46 @@ class AgentTaskScheduler:
                 task.record_execution(success=False, error=str(e))
                 await task.save()
 
+    async def _get_today_trade_count(self, task_id: PydanticObjectId) -> int:
+        """Count today's executed trades for a task."""
+        now = datetime.now(timezone.utc)
+        day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        return await AgentDecision.find(
+            AgentDecision.task_id == task_id,
+            AgentDecision.decision_type == DecisionType.TRADE_EXECUTION,
+            AgentDecision.executed_at >= day_start,
+        ).count()
+
     async def _execute_monitoring_task(self, task: AgentTask) -> None:
         """Execute a monitoring task (price/condition alerts)."""
-        # TODO: Implement price monitoring and alerts
-        logger.info(f"Monitoring task {task.id} - not yet implemented")
-        task.record_execution(success=True)
+        logger.warning("Monitoring task %s is not implemented", task.id)
+        task.record_execution(
+            success=False,
+            error="Monitoring tasks are not implemented yet",
+        )
         await task.save()
 
-    async def _execute_trade(
-        self, task: AgentTask, decision: AgentDecision, result: dict
+    async def execute_trade_for_decision(
+        self,
+        task: AgentTask,
+        decision: AgentDecision,
+        execution_source: str = "task",
     ) -> None:
-        """Execute a trade based on agent decision."""
+        """Execute a trade based on a confirmed decision."""
         agent = self._get_trading_agent()
+        risk_config = self._get_risk_config(task.risk_level)
 
         try:
-            # Execute the trade
+            if not decision.symbol or not decision.action:
+                decision.mark_execution_failed(
+                    "Decision is missing symbol or action",
+                    error_code="invalid_decision",
+                )
+                await decision.save()
+                return
+
+            idempotency_key = f"task-{task.id}-decision-{decision.id}"
+
             trade_result = await agent.execute_trade(
                 user_id=str(task.user_id),
                 symbol=decision.symbol,
@@ -335,24 +392,40 @@ class AgentTaskScheduler:
                 stop_loss=decision.suggested_stop_loss,
                 take_profit=decision.suggested_take_profit,
                 reasoning=decision.reasoning,
+                idempotency_key=idempotency_key,
+                max_position_size=task.max_position_size,
+                risk_pct=float(risk_config["max_risk_percent"]),
             )
 
             if trade_result.get("success"):
                 decision.mark_executed(
                     order_id=PydanticObjectId(trade_result["order_id"]),
-                    price=trade_result.get("execution_price", 0),
+                    price=trade_result.get("execution_price"),
                 )
                 decision.decision_type = DecisionType.TRADE_EXECUTION
                 await decision.save()
 
-                # Send execution notification
                 await self._create_trade_executed_notification(task, decision)
-
-                logger.info(f"Trade executed for {decision.symbol}")
+                logger.info(
+                    "Trade executed for %s (source=%s)",
+                    decision.symbol,
+                    execution_source,
+                )
             else:
-                logger.error(f"Trade execution failed: {trade_result.get('error')}")
+                error_message = trade_result.get("error", "Trade execution failed")
+                decision.mark_execution_failed(
+                    error_message,
+                    error_code="exchange_rejected",
+                )
+                await decision.save()
+                logger.error("Trade execution failed: %s", error_message)
 
         except Exception as e:
+            decision.mark_execution_failed(
+                str(e),
+                error_code="execution_exception",
+            )
+            await decision.save()
             logger.error(f"Error executing trade: {e}")
 
     async def _create_trade_confirmation_notification(
@@ -473,7 +546,7 @@ Provide:
         }
         return configs.get(risk_level, configs[RiskLevel.MODERATE])
 
-    def _parse_action(self, action_str: Optional[str]) -> Optional[DecisionAction]:
+    def _parse_action(self, action_str: str | None) -> DecisionAction | None:
         """Parse action string to DecisionAction enum."""
         if not action_str:
             return None
@@ -519,7 +592,7 @@ Provide:
 
 
 # Global scheduler instance
-_scheduler: Optional[AgentTaskScheduler] = None
+_scheduler: AgentTaskScheduler | None = None
 
 
 def get_scheduler() -> AgentTaskScheduler:

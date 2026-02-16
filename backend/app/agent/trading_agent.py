@@ -2,7 +2,9 @@
 
 import logging
 import re
+import uuid
 from collections.abc import Callable
+from typing import Any
 
 from claude_agent_sdk import (
     AssistantMessage,
@@ -112,6 +114,11 @@ class TradingAgent:
             self._client = None
             logger.info("Trading agent disconnected")
 
+    async def _ensure_connected(self) -> None:
+        """Connect lazily for background workers using the shared agent instance."""
+        if not self._client:
+            await self.connect()
+
     async def chat(
         self,
         user_message: str,
@@ -129,8 +136,7 @@ class TradingAgent:
         Returns:
             The agent's final text response
         """
-        if not self._client:
-            raise RuntimeError("Agent not connected. Call connect() first.")
+        await self._ensure_connected()
 
         self._tool_calls_this_turn = []
         self._thinking_content_this_turn = ""
@@ -187,6 +193,147 @@ class TradingAgent:
         """Get accumulated thinking content from the most recent turn."""
         return self._thinking_content_this_turn.strip()
 
+    def _extract_confidence(self, response: str) -> float:
+        """Extract confidence percentage from free-form model text."""
+        confidence_match = re.search(r"(\d{1,3}(?:\.\d+)?)\s*%", response)
+        if not confidence_match:
+            return 50.0
+
+        confidence = float(confidence_match.group(1))
+        return max(0.0, min(100.0, confidence))
+
+    def _extract_action(self, response: str) -> str | None:
+        """Infer BUY/SELL/HOLD/WAIT recommendation from free-form text."""
+        response_lower = response.lower()
+
+        action_patterns = [
+            (r"\b(recommend|action|decision)\s*:\s*buy\b", "buy"),
+            (r"\b(recommend|action|decision)\s*:\s*sell\b", "sell"),
+            (r"\b(recommend|action|decision)\s*:\s*hold\b", "hold"),
+            (r"\b(recommend|action|decision)\s*:\s*wait\b", "wait"),
+            (r"\bbuy\b", "buy"),
+            (r"\bsell\b", "sell"),
+            (r"\bhold\b", "hold"),
+            (r"\bwait\b", "wait"),
+        ]
+
+        for pattern, action in action_patterns:
+            if re.search(pattern, response_lower):
+                return action
+
+        return None
+
+    def _extract_price_value(self, response: str, label: str) -> float | None:
+        """Extract numeric price for a given label from free-form text."""
+        pattern = rf"{label}\s*[:=]?\s*\$?([0-9]+(?:\.[0-9]+)?)"
+        match = re.search(pattern, response, flags=re.IGNORECASE)
+        return float(match.group(1)) if match else None
+
+    def _extract_position_size(self, response: str) -> float | None:
+        """Extract numeric position size recommendation from free-form text."""
+        match = re.search(
+            r"position\s*size\s*[:=]?\s*([0-9]+(?:\.[0-9]+)?)",
+            response,
+            flags=re.IGNORECASE,
+        )
+        return float(match.group(1)) if match else None
+
+    async def analyze(
+        self, user_message: str, user_id: str | None = None
+    ) -> dict[str, Any]:
+        """Analyze market/trading prompt and normalize output for task scheduler."""
+        _ = user_id
+        response = await self.chat(user_message)
+
+        action = self._extract_action(response)
+        confidence = self._extract_confidence(response)
+
+        summary = response.strip().split("\n\n")[0]
+        if len(summary) > 300:
+            summary = f"{summary[:297]}..."
+
+        return {
+            "summary": summary,
+            "reasoning": response,
+            "key_factors": [],
+            "confidence": confidence,
+            "action": action,
+            "suggested_entry": self._extract_price_value(response, "entry(?: price)?"),
+            "suggested_stop_loss": self._extract_price_value(
+                response,
+                r"stop(?:[-\s]?loss)?",
+            ),
+            "suggested_take_profit": self._extract_price_value(
+                response,
+                r"take(?:[-\s]?profit)?",
+            ),
+            "suggested_position_size": self._extract_position_size(response),
+            "tools_used": self.tool_calls,
+            "market_context": None,
+        }
+
+    async def execute_trade(
+        self,
+        user_id: str,
+        symbol: str,
+        action: str,
+        position_size: float | None = None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
+        reasoning: str | None = None,
+        idempotency_key: str | None = None,
+        max_position_size: float | None = None,
+        risk_pct: float = 2.0,
+    ) -> dict[str, Any]:
+        """Execute a trade through OrderExecutor with idempotency and hard limits."""
+        from beanie import PydanticObjectId
+
+        from app.agent.subagents.order_executor import OrderExecutor
+
+        if action not in {"buy", "sell"}:
+            return {
+                "success": False,
+                "error": f"Unsupported trade action: {action}",
+            }
+
+        try:
+            oid = PydanticObjectId(user_id)
+        except (TypeError, ValueError):
+            return {"success": False, "error": "Invalid user_id for trade execution"}
+
+        executor = OrderExecutor(user_id=oid)
+        normalized_idempotency_key = idempotency_key or f"agent-{uuid.uuid4().hex}"
+
+        reasoning_payload = {"reasoning": reasoning} if reasoning else None
+
+        if position_size and position_size > 0:
+            result = await executor.execute_trade(
+                symbol=symbol,
+                side=action,
+                quantity=position_size,
+                order_type="market",
+                stop_loss=stop_loss,
+                take_profit=take_profit,
+                reasoning=reasoning_payload,
+                idempotency_key=normalized_idempotency_key,
+                max_position_size=max_position_size,
+            )
+        else:
+            result = await executor.execute_with_risk_params(
+                symbol=symbol,
+                side=action,
+                risk_pct=risk_pct,
+                order_type="market",
+                reasoning=reasoning_payload,
+                idempotency_key=normalized_idempotency_key,
+                max_position_size=max_position_size,
+            )
+
+        if result.get("success"):
+            result.setdefault("execution_price", result.get("price"))
+
+        return result
+
     async def analyze_market(self, symbol: str) -> str:
         """Convenience method to analyze a market."""
         return await self.chat(
@@ -205,15 +352,11 @@ class TradingAgent:
             "with confidence level (0-100%) and detailed reasoning."
         )
 
-        should_trade = "yes" in response.lower()[:100]
-        confidence = 50
-
-        confidence_match = re.search(r"(\d+)%", response)
-        if confidence_match:
-            confidence = int(confidence_match.group(1))
+        action = self._extract_action(response)
+        confidence = int(self._extract_confidence(response))
 
         return {
-            "should_trade": should_trade,
+            "should_trade": action in {"buy", "sell"},
             "confidence": confidence,
             "reasoning": response,
         }

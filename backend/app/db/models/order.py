@@ -53,6 +53,7 @@ class Order(Document):
     # Exchange order info
     exchange_order_id: Optional[Indexed(str)] = None  # type: ignore[valid-type]
     client_order_id: Optional[str] = None
+    execution_idempotency_key: Optional[Indexed(str)] = None  # type: ignore[valid-type]
 
     # Order details
     symbol: Indexed(str)  # type: ignore[valid-type]

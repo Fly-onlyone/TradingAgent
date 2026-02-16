@@ -36,6 +36,9 @@ class DecisionSummaryResponse(BaseModel):
 
     created_at: datetime
     executed_at: Optional[datetime]
+    execution_status: Optional[str]
+    execution_error_code: Optional[str]
+    execution_error_message: Optional[str]
 
     class Config:
         from_attributes = True
@@ -93,6 +96,9 @@ class DecisionDetailResponse(BaseModel):
     # Execution
     order_id: Optional[str]
     execution_price: Optional[float]
+    execution_status: Optional[str]
+    execution_error_code: Optional[str]
+    execution_error_message: Optional[str]
 
     # Context
     tools_used: list[dict]
@@ -155,6 +161,9 @@ def decision_to_summary(decision: AgentDecision) -> DecisionSummaryResponse:
         summary=decision.summary,
         created_at=decision.created_at,
         executed_at=decision.executed_at,
+        execution_status=decision.execution_status.value,
+        execution_error_code=decision.execution_error_code,
+        execution_error_message=decision.execution_error_message,
     )
 
 
@@ -179,6 +188,9 @@ def decision_to_detail(decision: AgentDecision) -> DecisionDetailResponse:
         risk_reward_ratio=decision.risk_reward_ratio,
         order_id=str(decision.order_id) if decision.order_id else None,
         execution_price=decision.execution_price,
+        execution_status=decision.execution_status.value,
+        execution_error_code=decision.execution_error_code,
+        execution_error_message=decision.execution_error_message,
         tools_used=decision.tools_used,
         market_context=decision.market_context,
         model_used=decision.model_used,
@@ -225,7 +237,7 @@ async def list_decisions(
     total = await query.count()
 
     decisions = (
-        await query.sort(-AgentDecision.created_at)
+        await query.sort("-created_at")
         .skip((page - 1) * page_size)
         .limit(page_size)
         .to_list()
@@ -259,7 +271,7 @@ async def list_pending_decisions(
     total = await query.count()
 
     decisions = (
-        await query.sort(-AgentDecision.created_at)
+        await query.sort("-created_at")
         .skip((page - 1) * page_size)
         .limit(page_size)
         .to_list()
@@ -374,30 +386,23 @@ async def confirm_decision(
     decision_id: str,
     current_user: User = Depends(get_current_active_user),
 ) -> DecisionDetailResponse:
-    """Confirm a pending decision (for ASK mode)."""
-    decision = await AgentDecision.find_one(
-        AgentDecision.id == PydanticObjectId(decision_id),
-        AgentDecision.user_id == current_user.id,
-    )
-    if not decision:
-        raise HTTPException(status_code=404, detail="Decision not found")
+    """Confirm a pending decision and execute it through the shared flow."""
+    from app.services.agent_execution_service import get_agent_execution_service
 
-    if decision.status != DecisionStatus.PENDING:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Decision is not pending (current status: {decision.status.value})",
+    service = get_agent_execution_service()
+
+    try:
+        decision = await service.confirm_and_execute_decision(
+            decision_id=PydanticObjectId(decision_id),
+            user_id=current_user.id,
+            source="api",
         )
-
-    # Check expiration
-    if decision.expires_at and datetime.now(timezone.utc) > decision.expires_at:
-        decision.expire()
-        await decision.save()
-        raise HTTPException(status_code=400, detail="Decision has expired")
-
-    decision.confirm()
-    await decision.save()
-
-    # TODO: Trigger trade execution via task scheduler
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except TimeoutError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return decision_to_detail(decision)
 

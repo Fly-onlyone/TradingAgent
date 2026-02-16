@@ -8,9 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from app.db.models.user import User
-from app.db.models.order import Order, OrderSide, OrderType, OrderStatus
+from app.agent.subagents.order_executor import OrderExecutor
 from app.api.v1.auth import get_current_active_user
+from app.db.models.order import Order, OrderSide, OrderStatus, OrderType
+from app.db.models.user import User
 from app.services.pnl_calculator import (
     TradePnL,
     TradeSummary,
@@ -135,28 +136,48 @@ async def create_order(
     order_data: OrderCreate,
     current_user: User = Depends(get_current_active_user),
 ) -> OrderResponse:
-    """Create a new trading order."""
-    strategy_id = None
-    if order_data.strategy_id:
-        strategy_id = PydanticObjectId(order_data.strategy_id)
+    """Create and submit a new trading order to the exchange."""
+    if order_data.order_type not in {OrderType.MARKET, OrderType.LIMIT}:
+        raise HTTPException(
+            status_code=400,
+            detail="Only market and limit orders are supported for live submission",
+        )
 
-    order = Order(
-        user_id=current_user.id,
+    executor = OrderExecutor(user_id=current_user.id)
+    result = await executor.execute_trade(
         symbol=order_data.symbol,
-        side=order_data.side,
-        order_type=order_data.order_type,
+        side=order_data.side.value,
         quantity=order_data.quantity,
+        order_type=str(order_data.order_type.value),
         price=order_data.price,
-        stop_price=order_data.stop_price,
-        stop_loss_price=order_data.stop_loss_price,
-        take_profit_price=order_data.take_profit_price,
-        strategy_id=strategy_id,
-        status=OrderStatus.PENDING,
+        stop_loss=order_data.stop_loss_price,
+        take_profit=order_data.take_profit_price,
+        reasoning={"source": "orders_api"},
     )
-    await order.insert()
 
-    # TODO: Submit order to OKX exchange via exchange client
-    # This will be implemented in Phase 2
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Order failed"))
+
+    if not result.get("order_id"):
+        raise HTTPException(
+            status_code=500,
+            detail="Order placed but internal order record is missing",
+        )
+
+    order = await Order.find_one(
+        Order.id == PydanticObjectId(result["order_id"]),
+        Order.user_id == current_user.id,
+    )
+    if not order:
+        raise HTTPException(status_code=404, detail="Order record not found")
+
+    if order_data.strategy_id:
+        try:
+            order.strategy_id = PydanticObjectId(order_data.strategy_id)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="Invalid strategy_id") from exc
+        order.update_timestamp()
+        await order.save()
 
     return order_to_response(order)
 
@@ -186,7 +207,7 @@ async def list_orders(
 
     # Get paginated results
     orders = (
-        await query.sort(-Order.created_at)
+        await query.sort("-created_at")
         .skip((page - 1) * page_size)
         .limit(page_size)
         .to_list()
@@ -354,7 +375,7 @@ async def cancel_order(
     order_id: str,
     current_user: User = Depends(get_current_active_user),
 ) -> OrderResponse:
-    """Cancel an open order."""
+    """Cancel an open order on the exchange and persist local status."""
     order = await Order.find_one(
         Order.id == PydanticObjectId(order_id),
         Order.user_id == current_user.id,
@@ -365,9 +386,30 @@ async def cancel_order(
     if order.status not in [OrderStatus.PENDING, OrderStatus.OPEN]:
         raise HTTPException(status_code=400, detail="Order cannot be cancelled")
 
-    # TODO: Cancel order on OKX exchange
-    order.status = OrderStatus.CANCELLED
-    order.update_timestamp()
-    await order.save()
+    if not order.exchange_order_id:
+        order.status = OrderStatus.CANCELLED
+        order.update_timestamp()
+        await order.save()
+        return order_to_response(order)
 
-    return order_to_response(order)
+    executor = OrderExecutor(user_id=current_user.id)
+    cancel_result = await executor.cancel_order(
+        symbol=order.symbol,
+        order_id=order.exchange_order_id,
+    )
+    if not cancel_result.get("success"):
+        raise HTTPException(
+            status_code=400,
+            detail=cancel_result.get("error", "Order cancellation failed"),
+        )
+
+    refreshed = await Order.find_one(
+        Order.id == PydanticObjectId(order_id),
+        Order.user_id == current_user.id,
+    )
+    if not refreshed:
+        raise HTTPException(
+            status_code=404, detail="Order not found after cancellation"
+        )
+
+    return order_to_response(refreshed)
