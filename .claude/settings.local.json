@@ -25,7 +25,10 @@
       "Bash(git reset:*)",
       "Bash(git add:*)",
       "Bash(git rm:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "mcp__github__search_code",
+      "mcp__github__get_file_contents",
+      "Bash(setx:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

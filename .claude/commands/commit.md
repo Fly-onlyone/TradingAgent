@@ -18,6 +18,7 @@ Run `git status --porcelain` to detect changes.
 **If no changes**: Report "No changes to commit. Working tree is clean." and exit.
 
 **If changes exist**: Categorize into:
+
 - Staged (A/M in first column)
 - Modified (M in second column)
 - Untracked (??)
@@ -25,6 +26,7 @@ Run `git status --porcelain` to detect changes.
 ### Step 2: Stage Changes
 
 If nothing staged but changes exist, use `AskUserQuestion` with options:
+
 - **All** - Stage all changes (`git add -A`)
 - **Modified only** - Stage only modified tracked files (`git add -u`)
 - **Select files** - Let user specify which files
@@ -42,16 +44,16 @@ Use `AskUserQuestion` for each component:
 
 **4a. Commit Type** (required)
 
-| Type | When to Use |
-|------|-------------|
-| `feat` | New feature |
-| `fix` | Bug fix |
-| `docs` | Documentation only |
-| `style` | Formatting, no code change |
+| Type       | When to Use                             |
+|------------|-----------------------------------------|
+| `feat`     | New feature                             |
+| `fix`      | Bug fix                                 |
+| `docs`     | Documentation only                      |
+| `style`    | Formatting, no code change              |
 | `refactor` | Code change that neither fixes nor adds |
-| `perf` | Performance improvement |
-| `test` | Adding or updating tests |
-| `chore` | Build process, dependencies |
+| `perf`     | Performance improvement                 |
+| `test`     | Adding or updating tests                |
+| `chore`    | Build process, dependencies             |
 
 **4b. Scope** (optional)
 Component or module name. Leave empty if not applicable.
@@ -68,16 +70,15 @@ If yes, add `BREAKING CHANGE:` footer with description.
 ### Step 5: Create Commit
 
 Build message format:
+
 ```
 <type>(<scope>): <description>
 
 <body>
-
-<footer>
-Co-Authored-By: Claude <noreply@anthropic.com>
 ```
 
 Execute using heredoc for proper formatting:
+
 ```bash
 git commit -m "$(cat <<'EOF'
 <constructed message>
@@ -94,6 +95,7 @@ Check remote: `git remote -v`
 If remote exists, ask: "Push to remote?"
 
 If yes:
+
 - Check if branch tracks upstream: `git status -sb`
 - If tracking: `git push`
 - If not tracking: `git push -u origin <branch>`
@@ -102,14 +104,14 @@ Report final status with commit hash.
 
 ## Error Handling
 
-| Condition | Response |
-|-----------|----------|
-| Not a git repo | "Error: Not a git repository. Run `git init` first." |
-| No changes | "Nothing to commit. Working tree is clean." |
-| Commit hook fails | Report hook output, suggest fixes |
-| Push rejected | "Push rejected. Pull latest changes: `git pull --rebase`" |
-| No upstream | Suggest `git push -u origin <branch>` |
-| No remote | "No remote configured. Commit created locally." |
+| Condition         | Response                                                  |
+|-------------------|-----------------------------------------------------------|
+| Not a git repo    | "Error: Not a git repository. Run `git init` first."      |
+| No changes        | "Nothing to commit. Working tree is clean."               |
+| Commit hook fails | Report hook output, suggest fixes                         |
+| Push rejected     | "Push rejected. Pull latest changes: `git pull --rebase`" |
+| No upstream       | Suggest `git push -u origin <branch>`                     |
+| No remote         | "No remote configured. Commit created locally."           |
 
 ## Validation Rules
 

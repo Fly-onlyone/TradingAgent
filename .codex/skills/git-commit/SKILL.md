@@ -51,14 +51,6 @@ Collect:
 - `body` (optional, explain why/what)
 - `breaking change` footer (optional): `BREAKING CHANGE: <details>`
 
-Header format:
-
-- `<type>(<scope>): <description>`
-- `<type>: <description>` when no scope
-
-Always include footer line:
-`Co-Authored-By: Claude <noreply@anthropic.com>`
-
 ### 5. Commit
 
 Use non-interactive commit creation.
