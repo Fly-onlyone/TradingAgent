@@ -25,6 +25,27 @@ if sys.platform == "win32":
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
+def _terminate_process(proc: subprocess.Popen | None) -> None:
+    """Terminate a process and all children (important on Windows)."""
+    if proc is None or proc.poll() is not None:
+        return
+
+    if sys.platform == "win32":
+        subprocess.run(
+            ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return
+
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+
+
 def _run_server() -> None:
     """Start uvicorn directly — no reload, no multiprocessing subprocess."""
     import uvicorn
@@ -46,9 +67,12 @@ if __name__ == "__main__":
     else:
         # ── Dev mode: start frontend + backend with auto-reload ────────
         frontend_dir = os.path.join(PROJECT_DIR, "frontend")
-        frontend_proc = subprocess.Popen(
-            ["npm", "run", "dev"], cwd=frontend_dir, shell=True
+        frontend_cmd = (
+            ["npm.cmd", "run", "dev"]
+            if sys.platform == "win32"
+            else ["npm", "run", "dev"]
         )
+        frontend_proc = subprocess.Popen(frontend_cmd, cwd=frontend_dir)
         backend_proc: subprocess.Popen | None = None
 
         def start_backend() -> subprocess.Popen:
@@ -71,25 +95,11 @@ if __name__ == "__main__":
             ):
                 changed_files = [os.path.basename(p) for _, p in changes]
                 print(f"[dev] Reloading — changed: {', '.join(changed_files)}")
-                if backend_proc:
-                    backend_proc.terminate()
-                    try:
-                        backend_proc.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        backend_proc.kill()
+                _terminate_process(backend_proc)
                 backend_proc = start_backend()
 
         except KeyboardInterrupt:
             pass
         finally:
-            if backend_proc:
-                backend_proc.terminate()
-                try:
-                    backend_proc.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    backend_proc.kill()
-            frontend_proc.terminate()
-            try:
-                frontend_proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                frontend_proc.kill()
+            _terminate_process(backend_proc)
+            _terminate_process(frontend_proc)

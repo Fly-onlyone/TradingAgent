@@ -70,6 +70,37 @@ This file provides guidance to Claude Code when working with this project.
 | `date-fns` | Date formatting/manipulation |
 | `@biomejs/biome` | Code formatter + linter (dev) |
 
+## Architecture Notes
+
+- **Backend port**: **7000** (port 8000 is occupied by a different app)
+- **Dev entry**: `python run.py` starts both frontend + backend with watchfiles reload
+- **Auth**: JWT-based. Superuser check via `get_current_superuser` dependency (defined in `logs.py`, reused by `bugs.py`)
+
+## Key Patterns
+
+- **Backend model**: Beanie `Document` with `class Settings` for collection name + indexes. See `log.py`, `bug.py`
+- **Backend API**: Router with Pydantic request/response schemas. Aggregation uses `get_pymongo_collection()` (not the deprecated `get_motor_collection`)
+- **DB session**: All models must be registered in `backend/app/db/session.py` `document_models` list
+- **API router registration**: In `backend/app/api/v1/__init__.py` — order matters (specific prefixes before generic `/admin`)
+- **Frontend types**: snake_case from API → camelCase in TS via transform functions in endpoint files
+- **Frontend state**: Zustand stores with devtools middleware. Pattern: `store/xxxStore.ts`
+- **Query options**: Centralized in `frontend/src/api/queryOptions/admin.ts` with shared `ADMIN_STALE_TIME`/`ADMIN_GC_TIME`
+- **Route pages**: TanStack Router file-based routing. After adding a new route file, run `npx @tanstack/router-cli generate` to regenerate the route tree
+- **Sidebar nav**: Items defined as arrays in `Sidebar.tsx` — `adminMenuItems` for admin section
+
+## Linting Rules
+
+- **Ruff**: Enforces `X | None` over `Optional[X]`, `datetime.UTC` over `timezone.utc`, sorted imports. Run `ruff check --fix` to auto-fix
+- **Biome**: Enforces tabs (not spaces), double quotes, sorted imports. PyCharm reformatter uses spaces — always run `biome check --write` AFTER `reformat_file` to reconcile
+- **Skeleton keys**: `noArrayIndexKey` warnings on skeleton loaders are pre-existing false positives (static placeholders) — same pattern in `logs.tsx`, `bugs.tsx`
+- **Hook ordering**: Biome enforces `useHookAtTopLevel` — early returns (like auth guards) must come AFTER all hooks, not before
+- **Pre-existing errors**: ~581 ruff errors and ~237 biome errors across the codebase — only verify new/modified files
+
+## Seed Scripts
+
+- Seed functions go in `backend/app/db/seed_*.py`, called from `init_db()` in `session.py`
+- Must be idempotent (check `count > 0` before inserting)
+
 ## Project Rules
 
 See `.claude/rules/` for detailed conventions:
@@ -114,11 +145,14 @@ Pre-resolved library IDs for fast documentation lookup:
 - **Services**: `backend/app/services/`
 - **Admin API**: `backend/app/api/v1/admin.py`
 - **Logs API**: `backend/app/api/v1/logs.py`
+- **Bugs API**: `backend/app/api/v1/bugs.py`
 - **Settings API**: `backend/app/api/v1/settings.py`
 - **Logging config**: `backend/app/logging_config.py`
 - **Request middleware**: `backend/app/middleware/request_logging.py`
 - **App settings model**: `backend/app/db/models/app_settings.py`
 - **Log record model**: `backend/app/db/models/log.py`
+- **Bug model**: `backend/app/db/models/bug.py`
+- **Bug seed script**: `backend/app/db/seed_bugs.py`
 - **Frontend entry**: `frontend/src/main.tsx`
 - **Frontend routes**: `frontend/src/routes/`
 - **Frontend API clients**: `frontend/src/api/endpoints/`

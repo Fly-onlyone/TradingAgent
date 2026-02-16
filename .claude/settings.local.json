@@ -1,11 +1,34 @@
 {
   "permissions": {
     "allow": [
-      "mcp__brave__brave_web_search",
+      "Bash(python:*)",
+      "mcp__pycharm__get_file_text_by_path",
+      "mcp__pycharm__find_files_by_name_keyword",
+      "mcp__pycharm__find_files_by_glob",
+      "mcp__pycharm__search_in_files_by_text",
+      "mcp__pycharm__search_in_files_by_regex",
+      "mcp__pycharm__create_new_file",
       "mcp__pycharm__replace_text_in_file",
       "mcp__pycharm__get_file_problems",
-      "mcp__pycharm__reformat_file"
+      "mcp__pycharm__reformat_file",
+      "Bash(uv run ruff:*)",
+      "Bash(uv run pytest:*)",
+      "Bash(git check-ignore:*)",
+      "Bash(echo:*)",
+      "Bash(uv run python:*)",
+      "mcp__pycharm__list_directory_tree",
+      "Bash(npx biome check:*)",
+      "Bash(bun run check:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx @tanstack/router-cli generate:*)",
+      "Bash(curl:*)",
+      "Bash(git reset:*)",
+      "Bash(git add:*)",
+      "Bash(git rm:*)"
     ]
   },
-  "enableAllProjectMcpServers": true
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "pycharm"
+  ]
 }
