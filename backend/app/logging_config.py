@@ -142,11 +142,7 @@ class MongoDBHandler(logging.Handler):
         }
 
         if record.exc_info and record.exc_info[0] is not None:
-            entry["traceback"] = (
-                self.format(record)
-                if self.formatter
-                else traceback.format_exception(*record.exc_info)
-            )
+            entry["traceback"] = "".join(traceback.format_exception(*record.exc_info))
 
         self._buffer.append(entry)
 
@@ -173,9 +169,11 @@ class MongoDBHandler(logging.Handler):
 
             docs = [LogRecord(**r) for r in records]
             await LogRecord.insert_many(docs)
-        except Exception:
+        except Exception as exc:
             # Avoid recursion — don't log failures from the log handler
-            sys.stderr.write(f"Failed to flush {len(records)} log records to MongoDB\n")
+            sys.stderr.write(
+                f"Failed to flush {len(records)} log records to MongoDB: {exc}\n"
+            )
 
 
 # ============================================================

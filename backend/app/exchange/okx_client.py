@@ -1,16 +1,19 @@
 """OKX REST API client for trading operations."""
 
+import base64
 import hashlib
 import hmac
-import base64
 import json
-from datetime import datetime, timezone
+import logging
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
 import httpx
 
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 class OKXClient:
@@ -24,9 +27,35 @@ class OKXClient:
         self.passphrase = self.settings.okx_passphrase
         self.sandbox = self.settings.okx_sandbox
 
+    @classmethod
+    async def create(cls) -> "OKXClient":
+        """Create client with DB settings (fallback to env vars)."""
+        from app.db.models.app_settings import AppSettings
+
+        instance = cls()
+        try:
+            app_settings = await AppSettings.get_instance()
+            resolved_api_key = app_settings.get_okx_api_key()
+            resolved_secret_key = app_settings.get_okx_secret_key()
+            resolved_passphrase = app_settings.get_okx_passphrase()
+
+            if resolved_api_key:
+                instance.api_key = resolved_api_key
+            if resolved_secret_key:
+                instance.secret_key = resolved_secret_key
+            if resolved_passphrase:
+                instance.passphrase = resolved_passphrase
+            instance.sandbox = app_settings.okx_sandbox
+        except Exception:
+            logger.warning(
+                "Failed to load OKX credentials from AppSettings — using env var fallback",
+                exc_info=True,
+            )
+        return instance
+
     def _get_timestamp(self) -> str:
         """Get ISO 8601 timestamp for API requests."""
-        return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+        return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
     def _sign(self, timestamp: str, method: str, path: str, body: str = "") -> str:
         """Create HMAC-SHA256 signature for authenticated requests."""
@@ -193,7 +222,9 @@ class OKXClient:
         if inst_id:
             params["instId"] = inst_id
 
-        result = await self._request("GET", "/api/v5/trade/orders-pending", params=params)
+        result = await self._request(
+            "GET", "/api/v5/trade/orders-pending", params=params
+        )
         return result
 
     async def get_order_history(
@@ -207,7 +238,9 @@ class OKXClient:
         if inst_id:
             params["instId"] = inst_id
 
-        result = await self._request("GET", "/api/v5/trade/orders-history", params=params)
+        result = await self._request(
+            "GET", "/api/v5/trade/orders-history", params=params
+        )
         return result
 
     # Market Data Endpoints (Public - no auth needed)

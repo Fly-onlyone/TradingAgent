@@ -132,7 +132,7 @@ async def get_log_stats(
     _: User = Depends(get_current_superuser),
 ) -> dict:
     """Get aggregate log statistics."""
-    collection = LogRecord.get_motor_collection()
+    collection = LogRecord.get_pymongo_collection()
     total_count = await collection.count_documents({})
 
     # Aggregate by level

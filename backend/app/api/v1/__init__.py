@@ -8,6 +8,7 @@ from app.api.v1 import (
     agent_sessions,
     agent_tasks,
     auth,
+    bugs,
     knowledge,
     logs,
     market,
@@ -38,4 +39,5 @@ router.include_router(
 )
 router.include_router(settings.router, prefix="/settings", tags=["settings"])
 router.include_router(logs.router, prefix="/admin/logs", tags=["logs"])
+router.include_router(bugs.router, prefix="/admin/bugs", tags=["bugs"])
 router.include_router(admin.router, prefix="/admin", tags=["admin"])

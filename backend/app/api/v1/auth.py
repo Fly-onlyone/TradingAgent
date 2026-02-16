@@ -50,6 +50,7 @@ class UserResponse(BaseModel):
     email: str
     full_name: str | None
     is_active: bool
+    is_superuser: bool
     created_at: datetime
 
     class Config:
@@ -58,7 +59,9 @@ class UserResponse(BaseModel):
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against hash."""
-    return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+    return bcrypt.checkpw(
+        plain_password.encode("utf-8"), hashed_password.encode("utf-8")
+    )
 
 
 def get_password_hash(password: str) -> str:
@@ -74,7 +77,9 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     else:
         expire = datetime.now(UTC) + timedelta(minutes=15)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
+    encoded_jwt = jwt.encode(
+        to_encode, settings.secret_key, algorithm=settings.algorithm
+    )
     return encoded_jwt
 
 
@@ -88,7 +93,9 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        payload = jwt.decode(
+            token, settings.secret_key, algorithms=[settings.algorithm]
+        )
         email: str | None = payload.get("sub")
         if email is None:
             raise credentials_exception
@@ -149,6 +156,7 @@ async def register(user_data: UserCreate) -> dict:
         "email": user.email,
         "full_name": user.full_name,
         "is_active": user.is_active,
+        "is_superuser": user.is_superuser,
         "created_at": user.created_at,
     }
 
@@ -168,7 +176,9 @@ async def login(
         )
 
     access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
-    access_token = create_access_token(data={"sub": user.email}, expires_delta=access_token_expires)
+    access_token = create_access_token(
+        data={"sub": user.email}, expires_delta=access_token_expires
+    )
     return {"access_token": access_token, "token_type": "bearer"}
 
 
@@ -182,5 +192,6 @@ async def read_users_me(
         "email": current_user.email,
         "full_name": current_user.full_name,
         "is_active": current_user.is_active,
+        "is_superuser": current_user.is_superuser,
         "created_at": current_user.created_at,
     }

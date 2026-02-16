@@ -2,12 +2,13 @@
 
 import asyncio
 import logging
+import re
 import subprocess
 import sys
 
 from beanie import init_beanie
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
-from pymongo.errors import ServerSelectionTimeoutError
+from pymongo.errors import OperationFailure, ServerSelectionTimeoutError
 
 from app.config import get_settings
 
@@ -76,6 +77,27 @@ async def _ensure_mongodb_running() -> None:
     )
 
 
+async def _validate_app_settings_secret_encryption() -> None:
+    """Validate and migrate app settings secrets before serving traffic."""
+    from app.db.models.app_settings import AppSettings
+    from app.security.secrets_crypto import SecretDecryptionError, SecretEncryptionError
+
+    app_settings = await AppSettings.get_instance()
+    if not app_settings.has_persisted_secret_values():
+        return
+
+    try:
+        await app_settings.migrate_plaintext_secrets_if_needed()
+        app_settings.validate_decryptable_secrets()
+    except (SecretEncryptionError, SecretDecryptionError, RuntimeError) as exc:
+        raise RuntimeError(
+            "Stored application secrets could not be validated. Configure "
+            "`SECRETS_ENCRYPTION_KEYS_REF` (Proton Pass) or "
+            "`SECRETS_ENCRYPTION_KEYS` and ensure pass-cli authentication "
+            "is active before startup."
+        ) from exc
+
+
 async def init_db() -> None:
     """Initialize MongoDB connection and Beanie ODM."""
     global _client, _db
@@ -86,47 +108,97 @@ async def init_db() -> None:
     _db = _client[settings.mongodb_db_name]
 
     # Import all document models for Beanie initialization
-    from app.db.models.user import User
-    from app.db.models.order import Order
-    from app.db.models.strategy import Strategy
-    from app.db.models.knowledge import StrategyKnowledge, TradeLesson, TradingPattern
-    from app.db.models.news import NewsSource, NewsArticle, CredibilityEvent
-    from app.db.models.market import MarketData, Trade
-    from app.db.models.agent_task import AgentTask
     from app.db.models.agent_decision import AgentDecision
     from app.db.models.agent_session import AgentSession
-    from app.db.models.notification import Notification, UserNotificationSettings
+    from app.db.models.agent_task import AgentTask
     from app.db.models.app_settings import AppSettings
+    from app.db.models.bug import Bug
+    from app.db.models.knowledge import StrategyKnowledge, TradeLesson, TradingPattern
     from app.db.models.log import LogRecord
+    from app.db.models.market import MarketData, Trade
+    from app.db.models.news import CredibilityEvent, NewsArticle, NewsSource
+    from app.db.models.notification import Notification, UserNotificationSettings
+    from app.db.models.order import Order
+    from app.db.models.strategy import Strategy
+    from app.db.models.user import User
 
-    # Initialize Beanie with all document models
-    await init_beanie(
-        database=_db,
-        document_models=[
-            User,
-            Order,
-            Strategy,
-            StrategyKnowledge,
-            TradeLesson,
-            TradingPattern,
-            NewsSource,
-            NewsArticle,
-            CredibilityEvent,
-            MarketData,
-            Trade,
-            # Agent models
-            AgentTask,
-            AgentDecision,
-            AgentSession,
-            # Notification models
-            Notification,
-            UserNotificationSettings,
-            # Settings
-            AppSettings,
-            # Logs
-            LogRecord,
-        ],
-    )
+    document_models = [
+        User,
+        Order,
+        Strategy,
+        StrategyKnowledge,
+        TradeLesson,
+        TradingPattern,
+        NewsSource,
+        NewsArticle,
+        CredibilityEvent,
+        MarketData,
+        Trade,
+        # Agent models
+        AgentTask,
+        AgentDecision,
+        AgentSession,
+        # Notification models
+        Notification,
+        UserNotificationSettings,
+        # Settings
+        AppSettings,
+        # Logs
+        LogRecord,
+        # Bugs
+        Bug,
+    ]
+
+    # Initialize Beanie with all document models.
+    # MongoDB time-series indexes can raise IndexOptionsConflict when existing
+    # index metadata ordering differs from what the current driver sends.
+    for _ in range(5):
+        try:
+            await init_beanie(
+                database=_db,
+                document_models=document_models,
+            )
+            break
+        except OperationFailure as exc:
+            error_text = str(exc)
+            is_equivalent_index_conflict = (
+                exc.code == 85
+                and "equivalent index already exists with the same name but different options"
+                in error_text
+            )
+            if not is_equivalent_index_conflict:
+                raise
+
+            index_name_match = re.search(r'name: "([^"]+)"', error_text)
+            if not index_name_match:
+                raise
+
+            index_name = index_name_match.group(1)
+            dropped = False
+            for collection_name in ("market_data", "trades"):
+                try:
+                    await _db[collection_name].drop_index(index_name)
+                    logger.warning(
+                        "Dropped conflicting time-series index %s on %s; retrying Beanie init",
+                        index_name,
+                        collection_name,
+                    )
+                    dropped = True
+                except OperationFailure:
+                    continue
+
+            if not dropped:
+                raise
+    else:
+        raise RuntimeError(
+            "Failed to initialize Beanie after resolving index conflicts"
+        )
+
+    await _validate_app_settings_secret_encryption()
+
+    from app.db.seed_bugs import seed_bugs
+
+    await seed_bugs()
 
 
 async def close_db() -> None:

@@ -49,14 +49,25 @@ app = FastAPI(
 )
 
 # Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
+if settings.cors_origins:
+    _cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+elif settings.debug:
+    _cors_origins = [
         "http://localhost:5173",
         "http://localhost:3000",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:3000",
-    ],
+    ]
+else:
+    _cors_origins = []
+    logger.warning(
+        "No CORS origins configured and debug=False — all cross-origin requests will be denied. "
+        "Set CORS_ORIGINS in your .env file."
+    )
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -68,10 +79,11 @@ from app.middleware.request_logging import RequestLoggingMiddleware
 app.add_middleware(RequestLoggingMiddleware)
 
 # Skip auth in debug mode — all endpoints use a mock superuser
-if settings.debug:
+if settings.debug and settings.allow_debug_auth_bypass:
     from app.api.v1.auth import get_current_active_user, get_dev_user
 
     app.dependency_overrides[get_current_active_user] = get_dev_user
+    logger.warning("Debug auth bypass is ACTIVE — all endpoints use a mock superuser")
 
 # Include routers
 app.include_router(api_v1_router, prefix="/api/v1")

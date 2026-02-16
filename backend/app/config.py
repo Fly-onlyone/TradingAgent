@@ -1,7 +1,9 @@
 """Application configuration using Pydantic settings."""
 
+import warnings
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +22,10 @@ class Settings(BaseSettings):
     secret_key: str = "change-me-in-production"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
+    allow_debug_auth_bypass: bool = True
+
+    # CORS
+    cors_origins: str = ""
 
     # MongoDB
     mongodb_url: str = "mongodb://localhost:27017"
@@ -36,10 +42,16 @@ class Settings(BaseSettings):
     # If empty, falls back to Claude Code CLI credentials (requires `claude login`).
     anthropic_api_key: str = ""
 
-    # OpenAI (for embeddings)
+    # App-managed secret encryption
+    # Comma-separated Fernet keys (first encrypts, all decrypt).
+    secrets_encryption_keys: str = ""
+    # Proton Pass reference resolved by pass-cli (e.g. pass://vault/item/field).
+    secrets_encryption_keys_ref: str = ""
+
+    # OpenAI (for embeddings) — env-var-only, not covered by DB encryption
     openai_api_key: str = ""
 
-    # External Data APIs
+    # External Data APIs — env-var-only, not covered by DB encryption
     glassnode_api_key: str = ""
     coingecko_api_key: str = ""
     defillama_api_url: str = "https://api.llama.fi"
@@ -54,6 +66,34 @@ class Settings(BaseSettings):
     max_position_size_pct: float = 5.0  # Max % of portfolio per trade
     default_stop_loss_pct: float = 2.0
     default_take_profit_pct: float = 6.0
+
+    @model_validator(mode="after")
+    def _validate_security(self) -> "Settings":
+        if self.secret_key == "change-me-in-production":
+            if not self.debug:
+                raise ValueError(
+                    "SECRET_KEY is still the insecure default. "
+                    "Set a strong SECRET_KEY in your .env file before running in production."
+                )
+            warnings.warn(
+                "Using insecure default SECRET_KEY — acceptable only for local development.",
+                UserWarning,
+                stacklevel=2,
+            )
+
+        if (
+            not self.debug
+            and "localhost" in self.mongodb_url
+            and "@" not in self.mongodb_url
+        ):
+            warnings.warn(
+                "MongoDB connection has no authentication credentials. "
+                "Configure a URI with username:password@ for production.",
+                UserWarning,
+                stacklevel=2,
+            )
+
+        return self
 
     @property
     def okx_base_url(self) -> str:
