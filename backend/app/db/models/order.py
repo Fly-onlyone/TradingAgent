@@ -6,6 +6,7 @@ from typing import Optional
 
 from beanie import Document, Indexed, PydanticObjectId
 from pydantic import Field
+from pymongo import ASCENDING, DESCENDING, IndexModel
 
 
 class OrderSide(str, Enum):
@@ -98,6 +99,47 @@ class Order(Document):
     class Settings:
         name = "orders"
         use_state_management = True
+        indexes = [
+            IndexModel(
+                [("user_id", ASCENDING), ("created_at", DESCENDING)],
+                name="orders_user_created_desc",
+            ),
+            IndexModel(
+                [
+                    ("user_id", ASCENDING),
+                    ("status", ASCENDING),
+                    ("created_at", DESCENDING),
+                ],
+                name="orders_user_status_created_desc",
+            ),
+            IndexModel(
+                [
+                    ("user_id", ASCENDING),
+                    ("symbol", ASCENDING),
+                    ("created_at", DESCENDING),
+                ],
+                name="orders_user_symbol_created_desc",
+            ),
+            IndexModel(
+                [
+                    ("user_id", ASCENDING),
+                    ("trade_status", ASCENDING),
+                    ("created_at", DESCENDING),
+                ],
+                name="orders_user_trade_status_created_desc",
+            ),
+            IndexModel(
+                [
+                    ("user_id", ASCENDING),
+                    ("execution_idempotency_key", ASCENDING),
+                ],
+                name="orders_user_idempotency_unique",
+                unique=True,
+                partialFilterExpression={
+                    "execution_idempotency_key": {"$type": "string", "$gt": ""}
+                },
+            ),
+        ]
 
     def update_timestamp(self) -> None:
         """Update the updated_at timestamp."""

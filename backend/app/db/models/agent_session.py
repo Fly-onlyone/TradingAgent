@@ -5,7 +5,8 @@ from enum import Enum
 from typing import Optional
 
 from beanie import Document, Indexed, PydanticObjectId
-from pydantic import Field
+from pydantic import BaseModel, Field
+from pymongo import ASCENDING, DESCENDING, IndexModel
 
 
 class MessageRole(str, Enum):
@@ -16,7 +17,7 @@ class MessageRole(str, Enum):
     SYSTEM = "system"
 
 
-class SessionMessage:
+class SessionMessage(BaseModel):
     """Individual message in a session (embedded, not a separate collection)."""
 
     role: MessageRole
@@ -26,6 +27,7 @@ class SessionMessage:
     # Optional references
     decision_id: Optional[PydanticObjectId] = None  # If message includes a decision
     tool_calls: list[dict] = Field(default_factory=list)  # Tools used in this turn
+    thinking_content: Optional[str] = None
 
     # Message metadata
     tokens_used: Optional[int] = None
@@ -41,8 +43,7 @@ class AgentSession(Document):
     description: Optional[str] = None
 
     # Conversation history
-    messages: list[dict] = Field(default_factory=list)
-    # Each message: {role, content, timestamp, decision_id?, tool_calls?}
+    messages: list[SessionMessage] = Field(default_factory=list)
 
     # Session statistics
     total_messages: int = 0
@@ -66,6 +67,32 @@ class AgentSession(Document):
     class Settings:
         name = "agent_sessions"
         use_state_management = True
+        indexes = [
+            IndexModel(
+                [
+                    ("user_id", ASCENDING),
+                    ("last_message_at", DESCENDING),
+                    ("started_at", DESCENDING),
+                ],
+                name="sessions_user_last_started_desc",
+            ),
+            IndexModel(
+                [
+                    ("user_id", ASCENDING),
+                    ("is_active", ASCENDING),
+                    ("last_message_at", DESCENDING),
+                ],
+                name="sessions_user_active_last_desc",
+            ),
+            IndexModel(
+                [
+                    ("user_id", ASCENDING),
+                    ("symbols_discussed", ASCENDING),
+                    ("last_message_at", DESCENDING),
+                ],
+                name="sessions_user_symbol_last_desc",
+            ),
+        ]
 
     def add_message(
         self,
@@ -75,28 +102,26 @@ class AgentSession(Document):
         tool_calls: Optional[list[dict]] = None,
         thinking_content: Optional[str] = None,
         tokens: int = 0,
-    ) -> dict:
+    ) -> SessionMessage:
         """Add a message to the session."""
-        message = {
-            "role": role,
-            "content": content,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-        if decision_id:
-            message["decision_id"] = str(decision_id)
-        if tool_calls:
-            message["tool_calls"] = tool_calls
-        if thinking_content:
-            message["thinking_content"] = thinking_content
+        role_enum = MessageRole(role)
+        message = SessionMessage(
+            role=role_enum,
+            content=content,
+            decision_id=decision_id,
+            tool_calls=tool_calls or [],
+            thinking_content=thinking_content,
+            tokens_used=tokens if tokens > 0 else None,
+        )
 
         self.messages.append(message)
         self.total_messages += 1
         self.last_message_at = datetime.now(timezone.utc)
         self.total_tokens += tokens
 
-        if role == MessageRole.USER.value:
+        if role_enum == MessageRole.USER:
             self.user_messages += 1
-        elif role == MessageRole.ASSISTANT.value:
+        elif role_enum == MessageRole.ASSISTANT:
             self.assistant_messages += 1
 
         return message
@@ -122,11 +147,11 @@ class AgentSession(Document):
     def generate_title(self) -> str:
         """Generate a title from the first user message."""
         for msg in self.messages:
-            if msg.get("role") == "user":
-                content = msg.get("content", "")
-                # Take first 50 chars
-                title = content[:50]
-                if len(content) > 50:
-                    title += "..."
-                return title
+            if msg.role != MessageRole.USER:
+                continue
+            title = msg.content[:50]
+            if len(msg.content) > 50:
+                title += "..."
+            return title
+
         return f"Session {self.started_at.strftime('%Y-%m-%d %H:%M')}"

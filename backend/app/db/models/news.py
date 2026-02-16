@@ -1,10 +1,23 @@
 """News intelligence models (MongoDB/Beanie)."""
 
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Optional
 
 from beanie import Document, Indexed, PydanticObjectId
-from pydantic import Field
+from pydantic import Field, field_validator
+from pymongo import ASCENDING, DESCENDING, IndexModel
+
+
+class NewsSourceType(str, Enum):
+    """Allowed news source categories."""
+
+    OFFICIAL = "official"
+    MAJOR_NEWS = "major_news"
+    NEWS = "news"
+    BLOG = "blog"
+    SOCIAL = "social"
+    UNKNOWN = "unknown"
 
 
 class NewsSource(Document):
@@ -13,7 +26,7 @@ class NewsSource(Document):
     # Source info
     name: str
     domain: Indexed(str, unique=True)  # type: ignore[valid-type]
-    source_type: str  # 'official', 'major_news', 'news', 'blog', 'social'
+    source_type: NewsSourceType = NewsSourceType.UNKNOWN
     description: Optional[str] = None
 
     # Credibility
@@ -31,9 +44,41 @@ class NewsSource(Document):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+    @field_validator("source_type", mode="before")
+    @classmethod
+    def _normalize_source_type(cls, value: NewsSourceType | str) -> NewsSourceType:
+        if isinstance(value, NewsSourceType):
+            return value
+
+        normalized = value.strip().lower()
+        aliases = {
+            "major": NewsSourceType.MAJOR_NEWS,
+            "major-news": NewsSourceType.MAJOR_NEWS,
+            "majornews": NewsSourceType.MAJOR_NEWS,
+            "official_news": NewsSourceType.OFFICIAL,
+            "official-news": NewsSourceType.OFFICIAL,
+        }
+        if normalized in aliases:
+            return aliases[normalized]
+
+        try:
+            return NewsSourceType(normalized)
+        except ValueError:
+            return NewsSourceType.UNKNOWN
+
     class Settings:
         name = "news_sources"
         use_state_management = True
+        indexes = [
+            IndexModel(
+                [("crawl_enabled", ASCENDING), ("credibility_score", DESCENDING)],
+                name="news_sources_crawl_credibility",
+            ),
+            IndexModel(
+                [("source_type", ASCENDING), ("credibility_score", DESCENDING)],
+                name="news_sources_type_credibility",
+            ),
+        ]
 
     def update_timestamp(self) -> None:
         """Update the updated_at timestamp."""
@@ -75,6 +120,24 @@ class NewsArticle(Document):
     class Settings:
         name = "news_articles"
         use_state_management = True
+        indexes = [
+            IndexModel(
+                [("published_at", DESCENDING)],
+                name="news_published_desc",
+            ),
+            IndexModel(
+                [("source_id", ASCENDING), ("published_at", DESCENDING)],
+                name="news_source_published_desc",
+            ),
+            IndexModel(
+                [("mentioned_assets", ASCENDING), ("published_at", DESCENDING)],
+                name="news_assets_published_desc",
+            ),
+            IndexModel(
+                [("relevance_score", DESCENDING), ("published_at", DESCENDING)],
+                name="news_relevance_published_desc",
+            ),
+        ]
 
 
 class CredibilityEvent(Document):
@@ -99,3 +162,9 @@ class CredibilityEvent(Document):
     class Settings:
         name = "credibility_events"
         use_state_management = True
+        indexes = [
+            IndexModel(
+                [("source_id", ASCENDING), ("evaluated_at", DESCENDING)],
+                name="credibility_source_evaluated_desc",
+            ),
+        ]

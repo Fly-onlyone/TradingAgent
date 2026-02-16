@@ -6,6 +6,7 @@ from typing import Optional
 
 from beanie import Document, Indexed, PydanticObjectId
 from pydantic import Field
+from pymongo import ASCENDING, DESCENDING, IndexModel
 
 
 class NotificationType(str, Enum):
@@ -86,7 +87,26 @@ class Notification(Document):
         indexes = [
             "notification_type",
             "decision_id",
-            "created_at",
+            IndexModel(
+                [("created_at", DESCENDING)],
+                name="notifications_created_desc",
+            ),
+            IndexModel(
+                [("user_id", ASCENDING), ("created_at", DESCENDING)],
+                name="notif_user_created_desc",
+            ),
+            IndexModel(
+                [
+                    ("user_id", ASCENDING),
+                    ("read_at", ASCENDING),
+                    ("created_at", DESCENDING),
+                ],
+                name="notif_user_read_created_desc",
+            ),
+            IndexModel(
+                [("status", ASCENDING), ("expires_at", ASCENDING)],
+                name="notif_status_expires",
+            ),
         ]
 
     def mark_delivered(self) -> None:

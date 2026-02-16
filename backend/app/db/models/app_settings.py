@@ -5,15 +5,17 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 from enum import Enum
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from beanie import Document
 from pydantic import Field
+from pymongo import ASCENDING, IndexModel
+from pymongo.errors import DuplicateKeyError
 
 from app.security.secrets_crypto import (
     SecretDecryptionError,
-    encrypt_secret_value,
     decrypt_secret_value,
+    encrypt_secret_value,
     is_encrypted_secret,
 )
 
@@ -33,12 +35,15 @@ class AppSettings(Document):
     Only one document should exist. Use get_instance() to retrieve it.
     """
 
+    SINGLETON_KEY: ClassVar[str] = "app_settings"
     SECRET_FIELD_NAMES: ClassVar[tuple[str, ...]] = (
         "agent_api_key",
         "okx_api_key",
         "okx_secret_key",
         "okx_passphrase",
     )
+
+    singleton_key: str = SINGLETON_KEY
 
     # Agent configuration
     agent_auth_mode: AgentAuthMode = AgentAuthMode.SUBSCRIPTION
@@ -56,14 +61,89 @@ class AppSettings(Document):
 
     class Settings:
         name = "app_settings"
+        indexes = [
+            IndexModel(
+                [("singleton_key", ASCENDING)],
+                name="app_settings_singleton_unique",
+                unique=True,
+                partialFilterExpression={"singleton_key": "app_settings"},
+            )
+        ]
+
+    @classmethod
+    def _instance_sort_key(cls, instance: "AppSettings") -> tuple[datetime, str]:
+        updated = instance.updated_at
+        if updated.tzinfo is None or updated.utcoffset() is None:
+            updated = updated.replace(tzinfo=timezone.utc)
+        return updated, str(instance.id)
+
+    @classmethod
+    async def _archive_conflicting_instance(
+        cls,
+        canonical_id: Any,
+        instance: "AppSettings",
+    ) -> None:
+        archive_collection = cls.get_pymongo_collection().database[
+            "app_settings_conflicts"
+        ]
+        archived_doc = instance.model_dump(mode="python")
+        archived_doc.pop("id", None)
+        archived_doc["original_id"] = instance.id
+        archived_doc["canonical_id"] = canonical_id
+        archived_doc["archived_at"] = datetime.now(timezone.utc)
+        await archive_collection.insert_one(archived_doc)
+
+    @classmethod
+    async def ensure_singleton_document(cls) -> "AppSettings":
+        """Ensure only one settings document exists and return it."""
+        instances = await cls.find_all().to_list()
+
+        if not instances:
+            instance = cls()
+            try:
+                await instance.insert()
+                return instance
+            except DuplicateKeyError:
+                # Another process created it concurrently.
+                existing = await cls.find_one({"singleton_key": cls.SINGLETON_KEY})
+                if existing:
+                    return existing
+                raise
+
+        canonical = max(instances, key=cls._instance_sort_key)
+        canonical_changed = False
+
+        if (
+            "singleton_key" not in canonical.model_fields_set
+            or canonical.singleton_key != cls.SINGLETON_KEY
+        ):
+            canonical.singleton_key = cls.SINGLETON_KEY
+            canonical_changed = True
+
+        duplicates: list[AppSettings] = []
+        for instance in instances:
+            if instance.id == canonical.id:
+                continue
+            duplicates.append(instance)
+            for field_name in cls.SECRET_FIELD_NAMES:
+                incoming_value = getattr(instance, field_name)
+                if incoming_value and not getattr(canonical, field_name):
+                    setattr(canonical, field_name, incoming_value)
+                    canonical_changed = True
+
+        if canonical_changed:
+            await canonical.save_with_timestamp()
+
+        for duplicate in duplicates:
+            await cls._archive_conflicting_instance(canonical.id, duplicate)
+            await duplicate.delete()
+
+        return canonical
 
     @classmethod
     async def get_instance(cls) -> "AppSettings":
         """Get or create the singleton settings document."""
-        instance = await cls.find_one()
-        if not instance:
-            instance = cls()
-            await instance.insert()
+        instance = await cls.ensure_singleton_document()
 
         migrated = await instance.migrate_plaintext_secrets_if_needed()
         if migrated:
@@ -73,8 +153,8 @@ class AppSettings(Document):
 
         return instance
 
-    async def save_changes(self) -> None:
-        """Save with updated timestamp."""
+    async def save_with_timestamp(self) -> None:
+        """Persist settings and refresh updated_at."""
         self.updated_at = datetime.now(timezone.utc)
         await self.save()
 
@@ -146,7 +226,7 @@ class AppSettings(Document):
                 changed = True
 
         if changed:
-            await self.save_changes()
+            await self.save_with_timestamp()
 
         return changed
 

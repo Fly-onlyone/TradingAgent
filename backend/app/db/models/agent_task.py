@@ -6,6 +6,7 @@ from typing import Optional
 
 from beanie import Document, Indexed, PydanticObjectId
 from pydantic import Field
+from pymongo import ASCENDING, DESCENDING, IndexModel
 
 
 class TaskFrequency(str, Enum):
@@ -96,6 +97,32 @@ class AgentTask(Document):
     class Settings:
         name = "agent_tasks"
         use_state_management = True
+        indexes = [
+            IndexModel(
+                [("user_id", ASCENDING), ("created_at", DESCENDING)],
+                name="tasks_user_created_desc",
+            ),
+            IndexModel(
+                [
+                    ("user_id", ASCENDING),
+                    ("status", ASCENDING),
+                    ("created_at", DESCENDING),
+                ],
+                name="tasks_user_status_created_desc",
+            ),
+            IndexModel(
+                [
+                    ("user_id", ASCENDING),
+                    ("task_type", ASCENDING),
+                    ("created_at", DESCENDING),
+                ],
+                name="tasks_user_type_created_desc",
+            ),
+            IndexModel(
+                [("status", ASCENDING), ("next_run_at", ASCENDING)],
+                name="tasks_status_next_run",
+            ),
+        ]
 
     def update_timestamp(self) -> None:
         """Update the updated_at timestamp."""

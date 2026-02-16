@@ -5,7 +5,8 @@ from enum import Enum
 from typing import Optional
 
 from beanie import Document, Indexed, PydanticObjectId
-from pydantic import Field
+from pydantic import BaseModel, Field
+from pymongo import ASCENDING, DESCENDING, IndexModel
 
 
 class DecisionType(str, Enum):
@@ -48,16 +49,16 @@ class ExecutionStatus(str, Enum):
     FAILED = "failed"
 
 
-class ToolUsage:
+class ToolUsage(BaseModel):
     """Record of a tool used during decision making."""
 
-    name: str
+    name: str = "unknown"
     arguments: dict = Field(default_factory=dict)
     result_summary: Optional[str] = None
     execution_time_ms: Optional[int] = None
 
 
-class MarketContext:
+class MarketContext(BaseModel):
     """Snapshot of market conditions at decision time."""
 
     price: Optional[float] = None
@@ -107,8 +108,8 @@ class AgentDecision(Document):
     execution_error_message: Optional[str] = None
 
     # Tool and context tracking
-    tools_used: list[dict] = Field(default_factory=list)  # List of tool invocations
-    market_context: Optional[dict] = None  # Market snapshot at decision time
+    tools_used: list[ToolUsage] = Field(default_factory=list)
+    market_context: Optional[MarketContext] = None
     model_used: str = "claude-sonnet-4-20250514"
 
     # User feedback (for learning)
@@ -125,11 +126,42 @@ class AgentDecision(Document):
         name = "agent_decisions"
         use_state_management = True
         indexes = [
-            "session_id",
-            "task_id",
-            "decision_type",
-            "symbol",
-            "created_at",
+            IndexModel(
+                [("user_id", ASCENDING), ("created_at", DESCENDING)],
+                name="decisions_user_created_desc",
+            ),
+            IndexModel(
+                [
+                    ("user_id", ASCENDING),
+                    ("status", ASCENDING),
+                    ("created_at", DESCENDING),
+                ],
+                name="decisions_user_status_created_desc",
+            ),
+            IndexModel(
+                [
+                    ("user_id", ASCENDING),
+                    ("task_id", ASCENDING),
+                    ("created_at", DESCENDING),
+                ],
+                name="decisions_user_task_created_desc",
+            ),
+            IndexModel(
+                [
+                    ("user_id", ASCENDING),
+                    ("session_id", ASCENDING),
+                    ("created_at", DESCENDING),
+                ],
+                name="decisions_user_session_created_desc",
+            ),
+            IndexModel(
+                [("task_id", ASCENDING), ("created_at", DESCENDING)],
+                name="decisions_task_created_desc",
+            ),
+            IndexModel(
+                [("status", ASCENDING), ("expires_at", ASCENDING)],
+                name="decisions_status_expires",
+            ),
         ]
 
     def confirm(self) -> None:

@@ -1,10 +1,27 @@
 """Knowledge base models for RAG and trade learning (MongoDB/Beanie)."""
 
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Optional
 
 from beanie import Document, Indexed, PydanticObjectId
-from pydantic import Field
+from pydantic import Field, field_validator
+from pymongo import ASCENDING, DESCENDING, IndexModel
+
+
+class TradeOutcome(str, Enum):
+    """Normalized lesson outcomes."""
+
+    PROFIT = "profit"
+    LOSS = "loss"
+    BREAKEVEN = "breakeven"
+
+
+class TradeSide(str, Enum):
+    """Normalized trade directions."""
+
+    BUY = "buy"
+    SELL = "sell"
 
 
 class StrategyKnowledge(Document):
@@ -39,6 +56,12 @@ class StrategyKnowledge(Document):
     class Settings:
         name = "strategy_knowledge"
         use_state_management = True
+        indexes = [
+            IndexModel(
+                [("created_at", DESCENDING)],
+                name="strategy_knowledge_created_desc",
+            ),
+        ]
 
     def update_timestamp(self) -> None:
         """Update the updated_at timestamp."""
@@ -51,7 +74,7 @@ class TradeLesson(Document):
     order_id: Optional[PydanticObjectId] = None
 
     # Trade outcome
-    outcome: str  # 'profit', 'loss', 'breakeven'
+    outcome: TradeOutcome
     profit_pct: float
     profit_amount: Optional[float] = None
 
@@ -64,7 +87,7 @@ class TradeLesson(Document):
 
     # Trade metadata
     symbol: Indexed(str)  # type: ignore[valid-type]
-    side: str
+    side: TradeSide
     entry_price: float
     exit_price: float
     duration_minutes: Optional[int] = None
@@ -74,9 +97,42 @@ class TradeLesson(Document):
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+    @field_validator("outcome", mode="before")
+    @classmethod
+    def _normalize_outcome(cls, value: TradeOutcome | str) -> TradeOutcome:
+        if isinstance(value, TradeOutcome):
+            return value
+        return TradeOutcome(value.strip().lower())
+
+    @field_validator("side", mode="before")
+    @classmethod
+    def _normalize_side(cls, value: TradeSide | str) -> TradeSide:
+        if isinstance(value, TradeSide):
+            return value
+
+        normalized = value.strip().lower()
+        aliases = {
+            "long": TradeSide.BUY,
+            "short": TradeSide.SELL,
+        }
+        if normalized in aliases:
+            return aliases[normalized]
+
+        return TradeSide(normalized)
+
     class Settings:
         name = "trade_lessons"
         use_state_management = True
+        indexes = [
+            IndexModel(
+                [("symbol", ASCENDING), ("created_at", DESCENDING)],
+                name="trade_lessons_symbol_created_desc",
+            ),
+            IndexModel(
+                [("outcome", ASCENDING), ("created_at", DESCENDING)],
+                name="trade_lessons_outcome_created_desc",
+            ),
+        ]
 
 
 class TradingPattern(Document):
@@ -110,6 +166,12 @@ class TradingPattern(Document):
     class Settings:
         name = "trading_patterns"
         use_state_management = True
+        indexes = [
+            IndexModel(
+                [("pattern_type", ASCENDING), ("success_rate", DESCENDING)],
+                name="trading_patterns_type_success_desc",
+            ),
+        ]
 
 
 # Note: StrategyEmbedding is no longer needed as embeddings are stored inline
