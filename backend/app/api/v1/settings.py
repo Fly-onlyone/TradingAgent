@@ -212,7 +212,7 @@ async def update_agent_config(
     if body.max_thinking_tokens is not None:
         app_settings.agent_max_thinking_tokens = body.max_thinking_tokens
 
-    await app_settings.save_changes()
+    await app_settings.save_with_timestamp()
     logger.info(
         "Agent config updated: auth_mode=%s", app_settings.agent_auth_mode.value
     )
@@ -504,7 +504,7 @@ async def update_exchange_config(
     if body.sandbox is not None:
         app_settings.okx_sandbox = body.sandbox
 
-    await app_settings.save_changes()
+    await app_settings.save_with_timestamp()
     logger.info("Exchange config updated (sandbox=%s)", app_settings.okx_sandbox)
 
     return _build_exchange_response(app_settings)

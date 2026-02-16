@@ -1,6 +1,6 @@
 """Agent session management endpoints for chat history persistence."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Optional
 
 from beanie import PydanticObjectId
@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.api.v1.auth import get_current_active_user
-from app.db.models.agent_session import AgentSession
+from app.db.models.agent_session import AgentSession, SessionMessage
 from app.db.models.user import User
 
 router = APIRouter()
@@ -135,13 +135,31 @@ def session_to_response(session: AgentSession) -> SessionResponse:
     )
 
 
-def message_to_response(message: dict) -> MessageResponse:
-    """Convert message dict to response schema."""
+def message_to_response(message: SessionMessage | dict) -> MessageResponse:
+    """Convert message model to response schema."""
+    if isinstance(message, SessionMessage):
+        return MessageResponse(
+            role=message.role.value,
+            content=message.content,
+            timestamp=message.timestamp.isoformat(),
+            decision_id=str(message.decision_id) if message.decision_id else None,
+            tool_calls=message.tool_calls,
+            thinking_content=message.thinking_content,
+        )
+
+    timestamp = message.get("timestamp", "")
+    if isinstance(timestamp, datetime):
+        timestamp = timestamp.isoformat()
+
+    decision_id = message.get("decision_id")
+    if decision_id is not None:
+        decision_id = str(decision_id)
+
     return MessageResponse(
         role=message.get("role", ""),
         content=message.get("content", ""),
-        timestamp=message.get("timestamp", ""),
-        decision_id=message.get("decision_id"),
+        timestamp=timestamp,
+        decision_id=decision_id,
         tool_calls=message.get("tool_calls"),
         thinking_content=message.get("thinking_content"),
     )
@@ -149,7 +167,13 @@ def message_to_response(message: dict) -> MessageResponse:
 
 def get_date_label(dt: datetime) -> tuple[str, str]:
     """Get date string and human-readable label for grouping."""
-    now = datetime.now(timezone.utc)
+    # Legacy documents may contain naive datetimes; treat them as UTC.
+    if dt.tzinfo is None or dt.utcoffset() is None:
+        dt = dt.replace(tzinfo=UTC)
+    else:
+        dt = dt.astimezone(UTC)
+
+    now = datetime.now(UTC)
     date_str = dt.strftime("%Y-%m-%d")
 
     if dt.date() == now.date():

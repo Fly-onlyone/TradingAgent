@@ -5,6 +5,7 @@ import uuid
 from typing import Any
 
 from beanie import PydanticObjectId
+from pymongo.errors import DuplicateKeyError
 
 from app.agent.subagents.risk_manager import RiskManager
 from app.config import get_settings
@@ -27,6 +28,23 @@ class OrderExecutor:
         if self.client is None:
             self.client = await OKXClient.create()
         return self.client
+
+    @staticmethod
+    def _idempotent_order_response(order: Order) -> dict[str, Any]:
+        """Build response payload for an existing idempotent order."""
+        return {
+            "success": True,
+            "order_id": str(order.id),
+            "exchange_order_id": order.exchange_order_id,
+            "symbol": order.symbol,
+            "side": order.side.value,
+            "order_type": order.order_type.value,
+            "quantity": order.quantity,
+            "price": order.price,
+            "stop_loss": order.stop_loss_price,
+            "take_profit": order.take_profit_price,
+            "message": "Order already executed for this idempotency key",
+        }
 
     async def execute_trade(
         self,
@@ -90,19 +108,7 @@ class OrderExecutor:
                 OrderStatus.PARTIALLY_FILLED,
                 OrderStatus.FILLED,
             }:
-                return {
-                    "success": True,
-                    "order_id": str(existing_order.id),
-                    "exchange_order_id": existing_order.exchange_order_id,
-                    "symbol": existing_order.symbol,
-                    "side": existing_order.side.value,
-                    "order_type": existing_order.order_type.value,
-                    "quantity": existing_order.quantity,
-                    "price": existing_order.price,
-                    "stop_loss": existing_order.stop_loss_price,
-                    "take_profit": existing_order.take_profit_price,
-                    "message": "Order already executed for this idempotency key",
-                }
+                return self._idempotent_order_response(existing_order)
 
         # Enforce task-level position cap when provided.
         effective_price = price
@@ -170,7 +176,16 @@ class OrderExecutor:
         )
 
         if self.user_id:
-            await order.insert()
+            try:
+                await order.insert()
+            except DuplicateKeyError:
+                existing_order = await Order.find_one(
+                    Order.user_id == self.user_id,
+                    Order.execution_idempotency_key == normalized_idempotency_key,
+                )
+                if existing_order:
+                    return self._idempotent_order_response(existing_order)
+                raise
 
         # Execute on exchange
         try:

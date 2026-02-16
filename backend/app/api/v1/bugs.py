@@ -24,6 +24,23 @@ class BugResponse(BaseModel):
     severity: str
     status: str
     category: str | None = None
+
+    auto_created: bool = False
+    source: str | None = None
+    fingerprint: str | None = None
+    occurrence_count: int = 1
+    first_seen_at: datetime | None = None
+    last_seen_at: datetime | None = None
+    last_level: str | None = None
+    last_logger_name: str | None = None
+    last_module: str | None = None
+    last_function: str | None = None
+    last_line: int | None = None
+    last_request_id: str | None = None
+    last_user_id: str | None = None
+    last_message: str | None = None
+    last_traceback: str | None = None
+
     created_at: datetime
     updated_at: datetime
     resolved_at: datetime | None = None
@@ -40,6 +57,9 @@ class BugStatsResponse(BaseModel):
     total: int
     status_counts: dict[str, int]
     severity_counts: dict[str, int]
+    auto_created_count: int
+    manual_count: int
+    open_auto_created_count: int
 
 
 class BugCreateRequest(BaseModel):
@@ -69,6 +89,21 @@ def _bug_to_response(bug: Bug) -> BugResponse:
         severity=bug.severity,
         status=bug.status,
         category=bug.category,
+        auto_created=bug.auto_created,
+        source=bug.source,
+        fingerprint=bug.fingerprint,
+        occurrence_count=bug.occurrence_count,
+        first_seen_at=bug.first_seen_at,
+        last_seen_at=bug.last_seen_at,
+        last_level=bug.last_level,
+        last_logger_name=bug.last_logger_name,
+        last_module=bug.last_module,
+        last_function=bug.last_function,
+        last_line=bug.last_line,
+        last_request_id=bug.last_request_id,
+        last_user_id=bug.last_user_id,
+        last_message=bug.last_message,
+        last_traceback=bug.last_traceback,
         created_at=bug.created_at,
         updated_at=bug.updated_at,
         resolved_at=bug.resolved_at,
@@ -82,7 +117,11 @@ def _bug_to_response(bug: Bug) -> BugResponse:
 async def list_bugs(
     status: str | None = Query(None, description="Filter by status"),
     severity: str | None = Query(None, description="Filter by severity"),
-    search: str | None = Query(None, description="Search in title/description"),
+    auto_created: bool | None = Query(None, description="Filter by auto-created bugs"),
+    source: str | None = Query(None, description="Filter by source"),
+    search: str | None = Query(
+        None, description="Search in title/description/fingerprint"
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     _: User = Depends(get_current_superuser),
@@ -94,16 +133,22 @@ async def list_bugs(
         query["status"] = status
     if severity:
         query["severity"] = severity
+    if auto_created is not None:
+        query["auto_created"] = auto_created
+    if source:
+        query["source"] = source
     if search:
         query["$or"] = [
             {"title": {"$regex": search, "$options": "i"}},
             {"description": {"$regex": search, "$options": "i"}},
+            {"fingerprint": {"$regex": search, "$options": "i"}},
+            {"last_message": {"$regex": search, "$options": "i"}},
         ]
 
     total = await Bug.find(query).count()
     bugs = (
         await Bug.find(query)
-        .sort(-Bug.created_at)
+        .sort("-created_at")
         .skip((page - 1) * page_size)
         .limit(page_size)
         .to_list()
@@ -133,10 +178,18 @@ async def get_bug_stats(
     severity_results = await collection.aggregate(severity_pipeline).to_list(length=100)
     severity_counts = {r["_id"]: r["count"] for r in severity_results if r["_id"]}
 
+    auto_created_count = await collection.count_documents({"auto_created": True})
+    open_auto_created_count = await collection.count_documents(
+        {"auto_created": True, "status": "open"}
+    )
+
     return {
         "total": total,
         "status_counts": status_counts,
         "severity_counts": severity_counts,
+        "auto_created_count": auto_created_count,
+        "manual_count": max(total - auto_created_count, 0),
+        "open_auto_created_count": open_auto_created_count,
     }
 
 
@@ -153,6 +206,8 @@ async def create_bug(
         severity=body.severity,
         status=body.status,
         category=body.category,
+        auto_created=False,
+        source="manual",
         created_at=now,
         updated_at=now,
         resolved_at=now if body.status == "resolved" else None,

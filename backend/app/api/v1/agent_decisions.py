@@ -191,8 +191,12 @@ def decision_to_detail(decision: AgentDecision) -> DecisionDetailResponse:
         execution_status=decision.execution_status.value,
         execution_error_code=decision.execution_error_code,
         execution_error_message=decision.execution_error_message,
-        tools_used=decision.tools_used,
-        market_context=decision.market_context,
+        tools_used=[tool.model_dump(mode="json") for tool in decision.tools_used],
+        market_context=(
+            decision.market_context.model_dump(mode="json")
+            if decision.market_context
+            else None
+        ),
         model_used=decision.model_used,
         user_feedback=decision.user_feedback,
         feedback_comment=decision.feedback_comment,
