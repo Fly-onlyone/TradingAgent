@@ -2,15 +2,16 @@
  * Type Exports
  */
 
-export * from './api';
-export * from './user';
-export * from './market';
-export * from './order';
-export * from './strategy';
-export * from './knowledge';
-export * from './news';
-export * from './task';
-export * from './session';
-export * from './trade';
-export * from './admin';
-export * from './log';
+export * from "./admin";
+export * from "./api";
+export * from "./bug";
+export * from "./knowledge";
+export * from "./log";
+export * from "./market";
+export * from "./news";
+export * from "./order";
+export * from "./session";
+export * from "./strategy";
+export * from "./task";
+export * from "./trade";
+export * from "./user";

@@ -6,6 +6,7 @@ import {Box, Toolbar, Snackbar, Alert} from '@mui/material';
 import type {ReactNode} from 'react';
 import {useEffect} from 'react';
 import {useNavigate, useRouterState} from '@tanstack/react-router';
+import {markNavEnd, reportNavDuration} from '@/utils/performance/navigationMetrics';
 import {Sidebar} from './Sidebar';
 import {Header} from './Header';
 import {useUIStore} from '@/store/uiStore';
@@ -21,8 +22,9 @@ export function AppShell({children}: AppShellProps) {
     const {isAuthenticated, isLoading, token, setUser, setLoading} = useAuthStore();
     const {notifications, removeNotification} = useUIStore();
     const navigate = useNavigate();
-    const routerState = useRouterState();
-    const currentPath = routerState.location.pathname;
+    const currentPath = useRouterState({
+        select: (state) => state.location.pathname,
+    });
     const isAuthPage = currentPath.startsWith('/auth/');
 
     // Verify auth on mount: restore token and validate with backend
@@ -43,16 +45,23 @@ export function AppShell({children}: AppShellProps) {
         };
 
         if (isLoading) {
-            checkAuth();
+            void checkAuth();
         }
     }, [isLoading, token, setUser, setLoading]);
 
     // Redirect to login when not authenticated (skip auth pages)
     useEffect(() => {
         if (!isLoading && !isAuthenticated && !isAuthPage) {
-            navigate({to: '/auth/login'});
+            void navigate({to: '/auth/login'});
         }
     }, [isLoading, isAuthenticated, isAuthPage, navigate]);
+
+    useEffect(() => {
+        const durationMs = markNavEnd(currentPath);
+        if (durationMs !== null) {
+            reportNavDuration(currentPath, durationMs);
+        }
+    }, [currentPath]);
 
     const showLayout = isAuthenticated && !isAuthPage;
 

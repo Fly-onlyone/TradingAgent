@@ -4,8 +4,9 @@
  */
 
 import {useState} from 'react';
+import type {KeyboardEvent} from 'react';
 import {createFileRoute, Navigate} from '@tanstack/react-router';
-import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
+import {keepPreviousData, useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {
     Box,
     Typography,
@@ -44,6 +45,11 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import {PageTransition} from '@/components/common/PageTransition';
 import {useAuthStore} from '@/store/authStore';
 import {adminApi} from '@/api/endpoints/admin';
+import {
+    adminCollectionsQueryOptions,
+    adminDbInfoQueryOptions,
+    adminDocumentsQueryOptions,
+} from '@/api/queryOptions/admin';
 import type {CollectionInfo, DatabaseInfo} from '@/types';
 
 export const Route = createFileRoute('/admin/database')({
@@ -86,28 +92,16 @@ function DatabaseAdminPage() {
     }
 
     // Fetch database info
-    const dbInfoQuery = useQuery({
-        queryKey: ['admin-db-info'],
-        queryFn: () => adminApi.getDatabaseInfo(),
-        staleTime: 120_000,
-    });
+    const dbInfoQuery = useQuery(adminDbInfoQueryOptions());
 
     // Fetch collections
-    const collectionsQuery = useQuery({
-        queryKey: ['admin-collections'],
-        queryFn: () => adminApi.getCollections(),
-        staleTime: 60_000,
-    });
+    const collectionsQuery = useQuery(adminCollectionsQueryOptions());
 
     // Fetch documents for selected collection
     const documentsQuery = useQuery({
-        queryKey: ['admin-documents', selectedCollection, page, pageSize, search],
-        queryFn: () =>
-            selectedCollection
-                ? adminApi.getCollectionDocuments(selectedCollection, {page, pageSize, search})
-                : Promise.resolve(null),
+        ...adminDocumentsQueryOptions(selectedCollection, {page, pageSize, search}),
         enabled: !!selectedCollection,
-        staleTime: 30_000,
+        placeholderData: keepPreviousData,
     });
 
     // Delete mutation
@@ -116,9 +110,9 @@ function DatabaseAdminPage() {
             adminApi.deleteDocument(collection, id),
         onSuccess: () => {
             setDeleteConfirm(null);
-            queryClient.invalidateQueries({queryKey: ['admin-documents']});
-            queryClient.invalidateQueries({queryKey: ['admin-collections']});
-            queryClient.invalidateQueries({queryKey: ['admin-db-info']});
+            void queryClient.invalidateQueries({queryKey: ['admin-documents']});
+            void queryClient.invalidateQueries({queryKey: ['admin-collections']});
+            void queryClient.invalidateQueries({queryKey: ['admin-db-info']});
         },
     });
 
@@ -133,7 +127,7 @@ function DatabaseAdminPage() {
             setViewDocument(updatedDoc);
             setIsEditing(false);
             setEditError(null);
-            queryClient.invalidateQueries({queryKey: ['admin-documents']});
+            void queryClient.invalidateQueries({queryKey: ['admin-documents']});
         },
     });
 
@@ -143,7 +137,7 @@ function DatabaseAdminPage() {
         setSearch('');
     };
 
-    const handleSearch = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    const handleSearch = (event: KeyboardEvent<HTMLInputElement>) => {
         if (event.key === 'Enter') {
             setPage(1);
         }

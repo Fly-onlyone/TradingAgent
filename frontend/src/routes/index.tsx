@@ -2,156 +2,389 @@
  * Dashboard Page
  */
 
-import { createFileRoute } from '@tanstack/react-router'
-import { Box, Grid2 as Grid, Typography, Card, CardContent } from '@mui/material'
-import { motion } from 'framer-motion'
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet'
-import TrendingUpIcon from '@mui/icons-material/TrendingUp'
-import ShowChartIcon from '@mui/icons-material/ShowChart'
-import SwapHorizIcon from '@mui/icons-material/SwapHoriz'
+import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
+import ShowChartIcon from "@mui/icons-material/ShowChart";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import {
+    Alert,
+    Box,
+    Card,
+    CardContent,
+    Chip,
+    Grid2 as Grid,
+    Skeleton,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    Typography,
+} from "@mui/material";
+import {useQuery} from "@tanstack/react-query";
+import {createFileRoute} from "@tanstack/react-router";
+import {motion} from "framer-motion";
+import {marketApi} from "@/api/endpoints/market";
+import {tradesApi} from "@/api/endpoints/trades";
+import {PageTransition, staggerContainerVariants, staggerItemVariants,} from "@/components/common/PageTransition";
+import {StatCard} from "@/components/data-display/StatCard";
+import {TickerCard} from "@/components/trading/TickerCard";
+import {useMarketStore} from "@/store/marketStore";
+import type {MarketOverviewTicker} from "@/types";
+import {
+    formatPercent,
+    formatPrice,
+    formatRelativeTime,
+    formatSymbol,
+    formatUSD,
+    formatVolume,
+} from "@/utils/formatters";
 
-import { PageTransition, staggerContainerVariants, staggerItemVariants } from '@/components/common/PageTransition'
-import { StatCard } from '@/components/data-display/StatCard'
-import { TickerCard } from '@/components/trading/TickerCard'
-import { LineChart } from '@/components/charts/LineChart'
-import { useMarketStore } from '@/store/marketStore'
-import { useOrderStore } from '@/store/orderStore'
-import { formatUSD } from '@/utils/formatters'
-
-export const Route = createFileRoute('/')({
-  component: Dashboard,
-})
+export const Route = createFileRoute("/")({
+    component: Dashboard,
+});
 
 function Dashboard() {
-  const { watchlist, tickers } = useMarketStore()
-  const { positions } = useOrderStore()
+    const watchlist = useMarketStore((state) => state.watchlist);
 
-  // Calculate portfolio stats
-  const totalBalance = 10000 // Placeholder - would come from API
-  const totalPnL = positions.reduce((sum, p) => sum + p.unrealizedPnl, 0)
-  const totalPnLPercent = totalBalance > 0 ? (totalPnL / totalBalance) * 100 : 0
-  const openPositions = positions.length
-  const todayTrades = 5 // Placeholder
+    const accountQuery = useQuery({
+        queryKey: ["account", "balance"],
+        queryFn: () => marketApi.getAccountBalance(),
+        staleTime: 10_000,
+        refetchInterval: 15_000,
+    });
 
-  // Mock portfolio chart data
-  const portfolioData = Array.from({ length: 30 }, (_, i) => ({
-    time: Date.now() - (30 - i) * 24 * 60 * 60 * 1000,
-    value: 10000 + Math.random() * 2000 - 1000 + i * 50,
-  }))
+    const summaryQuery = useQuery({
+        queryKey: ["trades", "summary"],
+        queryFn: () => tradesApi.getSummary(),
+        staleTime: 30_000,
+    });
 
-  return (
-    <PageTransition pageKey="dashboard">
-      <Box>
-        <Typography variant="h4" fontWeight={700} gutterBottom>
-          Dashboard
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
-          Welcome back! Here's an overview of your trading activity.
-        </Typography>
+    const overviewQuery = useQuery({
+        queryKey: ["market", "overview"],
+        queryFn: () => marketApi.getMarketOverview(),
+        staleTime: 30_000,
+        refetchInterval: 60_000,
+    });
 
-        {/* Stats Grid */}
-        <motion.div
-          variants={staggerContainerVariants}
-          initial="hidden"
-          animate="visible"
-        >
-          <Grid container spacing={3} sx={{ mb: 4 }}>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <motion.div variants={staggerItemVariants}>
-                <StatCard
-                  title="Total Balance"
-                  value={formatUSD(totalBalance)}
-                  change={2.5}
-                  icon={<AccountBalanceWalletIcon />}
-                />
-              </motion.div>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <motion.div variants={staggerItemVariants}>
-                <StatCard
-                  title="Unrealized P&L"
-                  value={formatUSD(totalPnL)}
-                  change={totalPnLPercent}
-                  icon={<TrendingUpIcon />}
-                  trend={totalPnL >= 0 ? 'up' : 'down'}
-                />
-              </motion.div>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <motion.div variants={staggerItemVariants}>
-                <StatCard
-                  title="Open Positions"
-                  value={openPositions}
-                  icon={<ShowChartIcon />}
-                />
-              </motion.div>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <motion.div variants={staggerItemVariants}>
-                <StatCard
-                  title="Today's Trades"
-                  value={todayTrades}
-                  icon={<SwapHorizIcon />}
-                />
-              </motion.div>
-            </Grid>
-          </Grid>
-        </motion.div>
+    const recentTradesQuery = useQuery({
+        queryKey: ["trades", "recent"],
+        queryFn: () => tradesApi.getTrades({pageSize: 5}),
+        staleTime: 30_000,
+    });
 
-        <Grid container spacing={3}>
-          {/* Portfolio Chart */}
-          <Grid size={{ xs: 12, md: 8 }}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Portfolio Performance
+    const accountError = accountQuery.isError || accountQuery.data?.error;
+    const overviewError = overviewQuery.isError || overviewQuery.data?.error;
+
+    return (
+        <PageTransition pageKey="dashboard">
+            <Box>
+                <Typography variant="h4" fontWeight={700} gutterBottom>
+                    Dashboard
                 </Typography>
-                <LineChart
-                  data={portfolioData}
-                  height={300}
-                  showArea
-                  title="30 Day Performance"
-                />
-              </CardContent>
-            </Card>
-          </Grid>
+                <Typography variant="body2" color="text.secondary" sx={{mb: 4}}>
+                    Welcome back! Here's an overview of your trading activity.
+                </Typography>
 
-          {/* Watchlist */}
-          <Grid size={{ xs: 12, md: 4 }}>
-            <Card sx={{ height: '100%' }}>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Watchlist
-                </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  {watchlist.map((symbol) => (
-                    <TickerCard
-                      key={symbol}
-                      ticker={tickers[symbol]}
-                      compact
-                      loading={!tickers[symbol]}
-                    />
-                  ))}
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
+                {(accountError || overviewError) && (
+                    <Alert severity="warning" sx={{mb: 3}}>
+                        {accountQuery.data?.error ??
+                            (accountError
+                                ? "Unable to fetch account balance from OKX. "
+                                : "")}
+                        {overviewQuery.data?.error ??
+                            (overviewError ? "Unable to fetch market overview. " : "")}
+                        {!accountQuery.data?.error &&
+                            !overviewQuery.data?.error &&
+                            "Check your API key configuration."}
+                    </Alert>
+                )}
 
-          {/* Recent Activity */}
-          <Grid size={{ xs: 12 }}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Recent Activity
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Your recent trading activity will appear here.
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      </Box>
-    </PageTransition>
-  )
+                {/* Stats Grid */}
+                <motion.div
+                    variants={staggerContainerVariants}
+                    initial="hidden"
+                    animate="visible"
+                >
+                    <Grid container spacing={3} sx={{mb: 4}}>
+                        <Grid size={{xs: 12, sm: 6, md: 3}}>
+                            <motion.div variants={staggerItemVariants}>
+                                <StatCard
+                                    title="Total Equity"
+                                    value={formatUSD(accountQuery.data?.totalEquity ?? 0)}
+                                    icon={<AccountBalanceWalletIcon/>}
+                                    loading={accountQuery.isLoading}
+                                />
+                            </motion.div>
+                        </Grid>
+                        <Grid size={{xs: 12, sm: 6, md: 3}}>
+                            <motion.div variants={staggerItemVariants}>
+                                <StatCard
+                                    title="Unrealized P&L"
+                                    value={formatUSD(accountQuery.data?.unrealizedPnl ?? 0)}
+                                    change={
+                                        accountQuery.data?.totalEquity
+                                            ? (accountQuery.data.unrealizedPnl /
+                                                accountQuery.data.totalEquity) *
+                                            100
+                                            : undefined
+                                    }
+                                    icon={<TrendingUpIcon/>}
+                                    trend={
+                                        (accountQuery.data?.unrealizedPnl ?? 0) >= 0 ? "up" : "down"
+                                    }
+                                    loading={accountQuery.isLoading}
+                                />
+                            </motion.div>
+                        </Grid>
+                        <Grid size={{xs: 12, sm: 6, md: 3}}>
+                            <motion.div variants={staggerItemVariants}>
+                                <StatCard
+                                    title="Realized P&L"
+                                    value={formatUSD(summaryQuery.data?.netPnl ?? 0)}
+                                    change={summaryQuery.data?.totalPnlPercent}
+                                    icon={<ShowChartIcon/>}
+                                    trend={(summaryQuery.data?.netPnl ?? 0) >= 0 ? "up" : "down"}
+                                    loading={summaryQuery.isLoading}
+                                />
+                            </motion.div>
+                        </Grid>
+                        <Grid size={{xs: 12, sm: 6, md: 3}}>
+                            <motion.div variants={staggerItemVariants}>
+                                <StatCard
+                                    title="Total Trades"
+                                    value={summaryQuery.data?.totalTrades ?? 0}
+                                    changeLabel={
+                                        summaryQuery.data
+                                            ? `${formatPercent(summaryQuery.data.winRate, 0)} win rate`
+                                            : undefined
+                                    }
+                                    icon={<SwapHorizIcon/>}
+                                    loading={summaryQuery.isLoading}
+                                />
+                            </motion.div>
+                        </Grid>
+                    </Grid>
+                </motion.div>
+
+                <Grid container spacing={3}>
+                    {/* Market Overview */}
+                    <Grid size={{xs: 12, md: 8}}>
+                        <Card sx={{height: "100%"}}>
+                            <CardContent>
+                                <Box
+                                    sx={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "center",
+                                        mb: 2,
+                                    }}
+                                >
+                                    <Typography variant="h6">Market Overview</Typography>
+                                    {overviewQuery.data && (
+                                        <Typography variant="body2" color="text.secondary">
+                                            24h Volume: $
+                                            {formatVolume(overviewQuery.data.totalVolume24h)}
+                                        </Typography>
+                                    )}
+                                </Box>
+
+                                {overviewQuery.isLoading ? (
+                                    <Box>
+                                        {Array.from({length: 5}).map((_, i) => (
+                                            <Skeleton
+                                                key={`skel-${String(i)}`}
+                                                variant="rectangular"
+                                                height={36}
+                                                sx={{mb: 1, borderRadius: 1}}
+                                            />
+                                        ))}
+                                    </Box>
+                                ) : overviewQuery.data &&
+                                (overviewQuery.data.topGainers.length > 0 ||
+                                    overviewQuery.data.topLosers.length > 0) ? (
+                                    <Grid container spacing={3}>
+                                        <Grid size={{xs: 12, sm: 6}}>
+                                            <Typography
+                                                variant="subtitle2"
+                                                color="success.main"
+                                                sx={{mb: 1}}
+                                            >
+                                                Top Gainers
+                                            </Typography>
+                                            <OverviewTable
+                                                tickers={overviewQuery.data.topGainers}
+                                                colorField="success"
+                                            />
+                                        </Grid>
+                                        <Grid size={{xs: 12, sm: 6}}>
+                                            <Typography
+                                                variant="subtitle2"
+                                                color="error.main"
+                                                sx={{mb: 1}}
+                                            >
+                                                Top Losers
+                                            </Typography>
+                                            <OverviewTable
+                                                tickers={overviewQuery.data.topLosers}
+                                                colorField="error"
+                                            />
+                                        </Grid>
+                                    </Grid>
+                                ) : (
+                                    <Typography variant="body2" color="text.secondary">
+                                        No market data available.
+                                    </Typography>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </Grid>
+
+                    {/* Watchlist */}
+                    <Grid size={{xs: 12, md: 4}}>
+                        <Card sx={{height: "100%"}}>
+                            <CardContent>
+                                <Typography variant="h6" gutterBottom>
+                                    Watchlist
+                                </Typography>
+                                <Box sx={{display: "flex", flexDirection: "column", gap: 2}}>
+                                    {watchlist.map((symbol) => (
+                                        <TickerCard key={symbol} symbol={symbol} compact/>
+                                    ))}
+                                </Box>
+                            </CardContent>
+                        </Card>
+                    </Grid>
+
+                    {/* Recent Activity */}
+                    <Grid size={{xs: 12}}>
+                        <Card>
+                            <CardContent>
+                                <Typography variant="h6" gutterBottom>
+                                    Recent Activity
+                                </Typography>
+
+                                {recentTradesQuery.isLoading ? (
+                                    <Box>
+                                        {Array.from({length: 3}).map((_, i) => (
+                                            <Skeleton
+                                                key={`skel-${String(i)}`}
+                                                variant="rectangular"
+                                                height={40}
+                                                sx={{mb: 1, borderRadius: 1}}
+                                            />
+                                        ))}
+                                    </Box>
+                                ) : recentTradesQuery.data &&
+                                recentTradesQuery.data.trades.length > 0 ? (
+                                    <TableContainer>
+                                        <Table size="small">
+                                            <TableHead>
+                                                <TableRow>
+                                                    <TableCell>Side</TableCell>
+                                                    <TableCell>Symbol</TableCell>
+                                                    <TableCell align="right">Price</TableCell>
+                                                    <TableCell align="right">Quantity</TableCell>
+                                                    <TableCell align="right">P&L</TableCell>
+                                                    <TableCell align="right">Time</TableCell>
+                                                </TableRow>
+                                            </TableHead>
+                                            <TableBody>
+                                                {recentTradesQuery.data.trades.map((trade) => (
+                                                    <TableRow key={trade.id}>
+                                                        <TableCell>
+                                                            <Chip
+                                                                label={trade.side.toUpperCase()}
+                                                                size="small"
+                                                                color={
+                                                                    trade.side === "buy" ? "success" : "error"
+                                                                }
+                                                                sx={{fontWeight: 600, minWidth: 48}}
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell>{formatSymbol(trade.symbol)}</TableCell>
+                                                        <TableCell align="right">
+                                                            ${formatPrice(trade.entryPrice)}
+                                                        </TableCell>
+                                                        <TableCell align="right">
+                                                            {trade.quantity}
+                                                        </TableCell>
+                                                        <TableCell
+                                                            align="right"
+                                                            sx={{
+                                                                color:
+                                                                    (trade.netPnl ?? 0) >= 0
+                                                                        ? "success.main"
+                                                                        : "error.main",
+                                                                fontWeight: 500,
+                                                            }}
+                                                        >
+                                                            {trade.netPnl !== undefined
+                                                                ? formatUSD(trade.netPnl)
+                                                                : "-"}
+                                                        </TableCell>
+                                                        <TableCell align="right">
+                                                            <Typography
+                                                                variant="body2"
+                                                                color="text.secondary"
+                                                            >
+                                                                {formatRelativeTime(trade.entryTime)}
+                                                            </Typography>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </TableContainer>
+                                ) : (
+                                    <Typography variant="body2" color="text.secondary">
+                                        No trades yet. Start trading to see your activity here.
+                                    </Typography>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </Grid>
+                </Grid>
+            </Box>
+        </PageTransition>
+    );
+}
+
+function OverviewTable({
+                           tickers,
+                           colorField,
+                       }: {
+    tickers: MarketOverviewTicker[];
+    colorField: "success" | "error";
+}) {
+    return (
+        <Table size="small">
+            <TableBody>
+                {tickers.map((t) => (
+                    <TableRow key={t.symbol} sx={{"&:last-child td": {border: 0}}}>
+                        <TableCell sx={{py: 0.75, pl: 0}}>
+                            <Typography variant="body2" fontWeight={500}>
+                                {formatSymbol(t.symbol)}
+                            </Typography>
+                        </TableCell>
+                        <TableCell align="right" sx={{py: 0.75}}>
+                            <Typography variant="body2">
+                                ${formatPrice(t.lastPrice)}
+                            </Typography>
+                        </TableCell>
+                        <TableCell align="right" sx={{py: 0.75, pr: 0}}>
+                            <Chip
+                                label={formatPercent(t.changePct24h)}
+                                size="small"
+                                color={colorField}
+                                variant="outlined"
+                                sx={{fontWeight: 600, minWidth: 72}}
+                            />
+                        </TableCell>
+                    </TableRow>
+                ))}
+            </TableBody>
+        </Table>
+    );
 }

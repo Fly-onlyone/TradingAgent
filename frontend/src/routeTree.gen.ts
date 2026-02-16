@@ -23,6 +23,7 @@ import { Route as AuthRegisterRouteImport } from './routes/auth/register'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AdminLogsRouteImport } from './routes/admin/logs'
 import { Route as AdminDatabaseRouteImport } from './routes/admin/database'
+import { Route as AdminBugsRouteImport } from './routes/admin/bugs'
 
 const TradingRoute = TradingRouteImport.update({
   id: '/trading',
@@ -94,6 +95,11 @@ const AdminDatabaseRoute = AdminDatabaseRouteImport.update({
   path: '/admin/database',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminBugsRoute = AdminBugsRouteImport.update({
+  id: '/admin/bugs',
+  path: '/admin/bugs',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -102,6 +108,7 @@ export interface FileRoutesByFullPath {
   '/orders': typeof OrdersRoute
   '/settings': typeof SettingsRoute
   '/trading': typeof TradingRoute
+  '/admin/bugs': typeof AdminBugsRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/logs': typeof AdminLogsRoute
   '/auth/login': typeof AuthLoginRoute
@@ -118,6 +125,7 @@ export interface FileRoutesByTo {
   '/orders': typeof OrdersRoute
   '/settings': typeof SettingsRoute
   '/trading': typeof TradingRoute
+  '/admin/bugs': typeof AdminBugsRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/logs': typeof AdminLogsRoute
   '/auth/login': typeof AuthLoginRoute
@@ -135,6 +143,7 @@ export interface FileRoutesById {
   '/orders': typeof OrdersRoute
   '/settings': typeof SettingsRoute
   '/trading': typeof TradingRoute
+  '/admin/bugs': typeof AdminBugsRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/logs': typeof AdminLogsRoute
   '/auth/login': typeof AuthLoginRoute
@@ -153,6 +162,7 @@ export interface FileRouteTypes {
     | '/orders'
     | '/settings'
     | '/trading'
+    | '/admin/bugs'
     | '/admin/database'
     | '/admin/logs'
     | '/auth/login'
@@ -169,6 +179,7 @@ export interface FileRouteTypes {
     | '/orders'
     | '/settings'
     | '/trading'
+    | '/admin/bugs'
     | '/admin/database'
     | '/admin/logs'
     | '/auth/login'
@@ -185,6 +196,7 @@ export interface FileRouteTypes {
     | '/orders'
     | '/settings'
     | '/trading'
+    | '/admin/bugs'
     | '/admin/database'
     | '/admin/logs'
     | '/auth/login'
@@ -202,6 +214,7 @@ export interface RootRouteChildren {
   OrdersRoute: typeof OrdersRoute
   SettingsRoute: typeof SettingsRoute
   TradingRoute: typeof TradingRoute
+  AdminBugsRoute: typeof AdminBugsRoute
   AdminDatabaseRoute: typeof AdminDatabaseRoute
   AdminLogsRoute: typeof AdminLogsRoute
   AuthLoginRoute: typeof AuthLoginRoute
@@ -312,6 +325,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminDatabaseRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/bugs': {
+      id: '/admin/bugs'
+      path: '/admin/bugs'
+      fullPath: '/admin/bugs'
+      preLoaderRoute: typeof AdminBugsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -322,6 +342,7 @@ const rootRouteChildren: RootRouteChildren = {
   OrdersRoute: OrdersRoute,
   SettingsRoute: SettingsRoute,
   TradingRoute: TradingRoute,
+  AdminBugsRoute: AdminBugsRoute,
   AdminDatabaseRoute: AdminDatabaseRoute,
   AdminLogsRoute: AdminLogsRoute,
   AuthLoginRoute: AuthLoginRoute,

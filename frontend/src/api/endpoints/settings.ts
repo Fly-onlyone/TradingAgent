@@ -2,7 +2,7 @@
  * Settings API Endpoints - Agent Configuration
  */
 
-import apiClient from '../client';
+import apiClient from "../client";
 
 export interface AgentConfig {
     authMode: string;
@@ -35,6 +35,30 @@ export interface CLILoginResult {
     message: string;
 }
 
+export interface ProtonPassStatus {
+    available: boolean;
+    loggedIn: boolean;
+    configured: boolean;
+    usingReference: boolean;
+    message: string;
+}
+
+export interface ExchangeConfig {
+    hasApiKey: boolean;
+    maskedApiKey: string;
+    hasSecretKey: boolean;
+    maskedSecretKey: string;
+    hasPassphrase: boolean;
+    sandbox: boolean;
+}
+
+export interface ExchangeConfigUpdate {
+    apiKey?: string;
+    secretKey?: string;
+    passphrase?: string;
+    sandbox?: boolean;
+}
+
 function transformAgentConfig(data: Record<string, unknown>): AgentConfig {
     return {
         authMode: data.auth_mode as string,
@@ -46,9 +70,23 @@ function transformAgentConfig(data: Record<string, unknown>): AgentConfig {
     };
 }
 
+function transformExchangeConfig(
+    data: Record<string, unknown>,
+): ExchangeConfig {
+    return {
+        hasApiKey: data.has_api_key as boolean,
+        maskedApiKey: data.masked_api_key as string,
+        hasSecretKey: data.has_secret_key as boolean,
+        maskedSecretKey: data.masked_secret_key as string,
+        hasPassphrase: data.has_passphrase as boolean,
+        sandbox: data.sandbox as boolean,
+    };
+}
+
 export const settingsApi = {
     async getAgentConfig(): Promise<AgentConfig> {
-        const response = await apiClient.get<Record<string, unknown>>('/settings/agent');
+        const response =
+            await apiClient.get<Record<string, unknown>>("/settings/agent");
         return transformAgentConfig(response.data);
     },
 
@@ -57,14 +95,20 @@ export const settingsApi = {
         if (update.authMode !== undefined) payload.auth_mode = update.authMode;
         if (update.apiKey !== undefined) payload.api_key = update.apiKey;
         if (update.model !== undefined) payload.model = update.model;
-        if (update.maxThinkingTokens !== undefined) payload.max_thinking_tokens = update.maxThinkingTokens;
+        if (update.maxThinkingTokens !== undefined)
+            payload.max_thinking_tokens = update.maxThinkingTokens;
 
-        const response = await apiClient.put<Record<string, unknown>>('/settings/agent', payload);
+        const response = await apiClient.put<Record<string, unknown>>(
+            "/settings/agent",
+            payload,
+        );
         return transformAgentConfig(response.data);
     },
 
     async testConnection(): Promise<TestConnectionResult> {
-        const response = await apiClient.post<Record<string, unknown>>('/settings/agent/test');
+        const response = await apiClient.post<Record<string, unknown>>(
+            "/settings/agent/test",
+        );
         return {
             success: response.data.success as boolean,
             message: response.data.message as string,
@@ -72,7 +116,9 @@ export const settingsApi = {
     },
 
     async checkCLILoginStatus(): Promise<CLILoginStatus> {
-        const response = await apiClient.post<Record<string, unknown>>('/settings/agent/cli-login-status');
+        const response = await apiClient.post<Record<string, unknown>>(
+            "/settings/agent/cli-login-status",
+        );
         return {
             loggedIn: response.data.logged_in as boolean,
             message: response.data.message as string,
@@ -80,7 +126,9 @@ export const settingsApi = {
     },
 
     async startCLILogin(): Promise<CLILoginResult> {
-        const response = await apiClient.post<Record<string, unknown>>('/settings/agent/cli-login');
+        const response = await apiClient.post<Record<string, unknown>>(
+            "/settings/agent/cli-login",
+        );
         return {
             success: response.data.success as boolean,
             message: response.data.message as string,
@@ -88,7 +136,74 @@ export const settingsApi = {
     },
 
     async cliLogout(): Promise<CLILoginResult> {
-        const response = await apiClient.post<Record<string, unknown>>('/settings/agent/cli-logout');
+        const response = await apiClient.post<Record<string, unknown>>(
+            "/settings/agent/cli-logout",
+        );
+        return {
+            success: response.data.success as boolean,
+            message: response.data.message as string,
+        };
+    },
+
+    async getProtonPassStatus(): Promise<ProtonPassStatus> {
+        const response = await apiClient.get<Record<string, unknown>>(
+            "/settings/security/proton-pass",
+        );
+        return {
+            available: response.data.available as boolean,
+            loggedIn: response.data.logged_in as boolean,
+            configured: response.data.configured as boolean,
+            usingReference: response.data.using_reference as boolean,
+            message: response.data.message as string,
+        };
+    },
+
+    async startProtonPassLogin(): Promise<CLILoginResult> {
+        const response = await apiClient.post<Record<string, unknown>>(
+            "/settings/security/proton-pass/login",
+        );
+        return {
+            success: response.data.success as boolean,
+            message: response.data.message as string,
+        };
+    },
+
+    async protonPassLogout(): Promise<CLILoginResult> {
+        const response = await apiClient.post<Record<string, unknown>>(
+            "/settings/security/proton-pass/logout",
+        );
+        return {
+            success: response.data.success as boolean,
+            message: response.data.message as string,
+        };
+    },
+
+    async getExchangeConfig(): Promise<ExchangeConfig> {
+        const response =
+            await apiClient.get<Record<string, unknown>>("/settings/exchange");
+        return transformExchangeConfig(response.data);
+    },
+
+    async updateExchangeConfig(
+        update: ExchangeConfigUpdate,
+    ): Promise<ExchangeConfig> {
+        const payload: Record<string, unknown> = {};
+        if (update.apiKey !== undefined) payload.api_key = update.apiKey;
+        if (update.secretKey !== undefined) payload.secret_key = update.secretKey;
+        if (update.passphrase !== undefined) payload.passphrase = update.passphrase;
+        if (update.sandbox !== undefined) payload.sandbox = update.sandbox;
+
+        const response = await apiClient.put<Record<string, unknown>>(
+            "/settings/exchange",
+            payload,
+        );
+        return transformExchangeConfig(response.data);
+    },
+
+    async testExchangeConnection(): Promise<TestConnectionResult> {
+        const response = await apiClient.post<Record<string, unknown>>(
+            "/settings/exchange/test",
+        );
         return {
             success: response.data.success as boolean,
             message: response.data.message as string,

@@ -3,8 +3,9 @@
  */
 
 import {useEffect} from 'react';
+import type {KeyboardEvent, ReactElement, ReactNode} from 'react';
 import {createFileRoute, Navigate} from '@tanstack/react-router';
-import {useQuery} from '@tanstack/react-query';
+import {keepPreviousData, useQuery} from '@tanstack/react-query';
 import {
     Box,
     Typography,
@@ -46,7 +47,7 @@ import {format} from 'date-fns';
 import {PageTransition} from '@/components/common/PageTransition';
 import {useAuthStore} from '@/store/authStore';
 import {useLogStore} from '@/store/logStore';
-import {logsApi} from '@/api/endpoints/logs';
+import {adminLogStatsQueryOptions, adminLogsQueryOptions} from '@/api/queryOptions/admin';
 import type {LogEntry} from '@/types/log';
 
 export const Route = createFileRoute('/admin/logs')({
@@ -63,7 +64,7 @@ const LEVEL_COLORS: Record<string, 'success' | 'warning' | 'error' | 'info' | 'd
     DEBUG: 'default',
 };
 
-const LEVEL_ICONS: Record<string, React.ReactNode> = {
+const LEVEL_ICONS: Record<string, ReactNode> = {
     INFO: <InfoOutlinedIcon fontSize="small"/>,
     WARNING: <WarningAmberIcon fontSize="small"/>,
     ERROR: <ErrorOutlineIcon fontSize="small"/>,
@@ -94,16 +95,13 @@ function LogViewerPage() {
     }
 
     const logsQuery = useQuery({
-        queryKey: ['admin-logs', store.filters],
-        queryFn: () => logsApi.getLogs(store.filters),
-        staleTime: 10_000,
+        ...adminLogsQueryOptions(store.filters),
+        placeholderData: keepPreviousData,
         refetchInterval: store.autoRefresh ? 5000 : false,
     });
 
     const statsQuery = useQuery({
-        queryKey: ['admin-logs-stats'],
-        queryFn: () => logsApi.getLogStats(),
-        staleTime: 30_000,
+        ...adminLogStatsQueryOptions(),
         refetchInterval: store.autoRefresh ? 10000 : false,
     });
 
@@ -120,7 +118,7 @@ function LogViewerPage() {
         }
     }, [statsQuery.data]);
 
-    const handleSearch = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    const handleSearch = (event: KeyboardEvent<HTMLInputElement>) => {
         if (event.key === 'Enter') {
             store.setFilters({search: (event.target as HTMLInputElement).value, page: 1});
         }
@@ -157,8 +155,8 @@ function LogViewerPage() {
                         <Tooltip title="Refresh">
                             <IconButton
                                 onClick={() => {
-                                    logsQuery.refetch();
-                                    statsQuery.refetch();
+                                    void logsQuery.refetch();
+                                    void statsQuery.refetch();
                                 }}
                                 size="small"
                             >
@@ -287,7 +285,7 @@ function LogViewerPage() {
                                             </TableCell>
                                             <TableCell>
                                                 <Chip
-                                                    icon={LEVEL_ICONS[log.level] as React.ReactElement}
+                                                    icon={LEVEL_ICONS[log.level] as ReactElement}
                                                     label={log.level}
                                                     size="small"
                                                     color={LEVEL_COLORS[log.level] || 'default'}

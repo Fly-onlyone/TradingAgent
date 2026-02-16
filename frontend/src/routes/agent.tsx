@@ -4,7 +4,8 @@
 
 import {createFileRoute} from '@tanstack/react-router';
 import {useRef, useEffect, useCallback, useState} from 'react';
-import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query';
+import type {MouseEvent} from 'react';
+import {keepPreviousData, useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {
     Box,
     Card,
@@ -56,9 +57,17 @@ import {ThinkingIndicator} from '@/components/agent/ThinkingIndicator';
 import {EmptyState} from '@/components/common/EmptyState';
 import {useAgentSocket} from '@/api/websocket/useAgentSocket';
 import {useAgentStore} from '@/store/agentStore';
-import {sessionsApi} from '@/api/endpoints/sessions';
 import {decisionsApi} from '@/api/endpoints/decisions';
+import {sessionsApi} from '@/api/endpoints/sessions';
 import {settingsApi} from '@/api/endpoints/settings';
+import {
+    agentConfigQueryOptions,
+    agentDecisionsQueryOptions,
+    agentDecisionSymbolsQueryOptions,
+    agentPendingDecisionsQueryOptions,
+    agentSessionQueryOptions,
+    agentSessionsGroupedQueryOptions,
+} from '@/api/queryOptions/agent';
 import {notify} from '@/store/uiStore';
 import type {SessionMessage} from '@/types/session';
 import type {AgentConfigUpdate} from '@/api/endpoints/settings';
@@ -82,16 +91,12 @@ function AgentSetupPanel() {
     const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
     const [loginResult, setLoginResult] = useState<{ success: boolean; message: string } | null>(null);
 
-    const configQuery = useQuery({
-        queryKey: ['agent-config'],
-        queryFn: () => settingsApi.getAgentConfig(),
-        staleTime: 60_000,
-    });
+    const configQuery = useQuery(agentConfigQueryOptions());
 
     const updateMutation = useMutation({
         mutationFn: (update: AgentConfigUpdate) => settingsApi.updateAgentConfig(update),
         onSuccess: () => {
-            queryClient.invalidateQueries({queryKey: ['agent-config']});
+            void queryClient.invalidateQueries({queryKey: ['agent-config']});
             notify.success('Agent configuration updated');
             setTestResult(null);
         },
@@ -134,7 +139,7 @@ function AgentSetupPanel() {
                     setIsPollingLogin(false);
                     setLoginResult({success: true, message: 'Successfully logged in to Claude'});
                     notify.success('Successfully logged in to Claude');
-                    queryClient.invalidateQueries({queryKey: ['agent-config']});
+                    void queryClient.invalidateQueries({queryKey: ['agent-config']});
                 }
             } catch { /* ignore poll errors */
             }
@@ -153,7 +158,7 @@ function AgentSetupPanel() {
     const logoutMutation = useMutation({
         mutationFn: () => settingsApi.cliLogout(),
         onSuccess: (result) => {
-            queryClient.invalidateQueries({queryKey: ['agent-config']});
+            void queryClient.invalidateQueries({queryKey: ['agent-config']});
             if (result.success) notify.success(result.message);
             else notify.error(result.message);
             setLoginResult(null);
@@ -162,7 +167,7 @@ function AgentSetupPanel() {
 
     const config = configQuery.data;
 
-    const handleAuthModeChange = (_: React.MouseEvent<HTMLElement>, newMode: string | null) => {
+    const handleAuthModeChange = (_: MouseEvent<HTMLElement>, newMode: string | null) => {
         if (newMode) updateMutation.mutate({authMode: newMode});
     };
 
@@ -384,6 +389,7 @@ function AgentPage() {
     const isLargeScreen = useMediaQuery(theme.breakpoints.up('lg'));
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const lastSessionInvalidateMessageRef = useRef<string | null>(null);
     const queryClient = useQueryClient();
 
     // Store state
@@ -438,64 +444,80 @@ function AgentPage() {
     } = useAgentSocket();
 
     // Fetch sessions grouped by date
-    const {data: sessionsData, isLoading: sessionsLoading} = useQuery({
-        queryKey: ['agent-sessions-grouped'],
-        queryFn: () => sessionsApi.getSessionsGrouped(50),
-        staleTime: 30_000,
-    });
+    const {data: sessionsData, isLoading: sessionsLoading} = useQuery(
+        agentSessionsGroupedQueryOptions(50),
+    );
 
     // Update store when sessions data changes
     useEffect(() => {
-        if (sessionsData) {
+        if (sessionsData && sessionsData.groups !== sessionGroups) {
             setSessionGroups(sessionsData.groups);
         }
-        setIsLoadingSessions(sessionsLoading);
-    }, [sessionsData, sessionsLoading, setSessionGroups, setIsLoadingSessions]);
+
+        if (isLoadingSessions !== sessionsLoading) {
+            setIsLoadingSessions(sessionsLoading);
+        }
+    }, [
+        sessionsData,
+        sessionsLoading,
+        sessionGroups,
+        isLoadingSessions,
+        setSessionGroups,
+        setIsLoadingSessions,
+    ]);
 
     // Fetch decisions with filters
     const {data: decisionsData, isLoading: decisionsLoading} = useQuery({
-        queryKey: ['agent-decisions', decisionFilters, decisionPage],
-        queryFn: () =>
-            decisionsApi.getDecisions({
-                ...decisionFilters,
-                page: decisionPage,
-                pageSize: 20,
-            }),
-        staleTime: 30_000,
+        ...agentDecisionsQueryOptions(decisionFilters, decisionPage, 20),
+        placeholderData: keepPreviousData,
     });
 
     // Fetch decision symbols for filter dropdown
-    const {data: symbolsData} = useQuery({
-        queryKey: ['agent-decision-symbols'],
-        queryFn: () => decisionsApi.getDecisionSymbols(),
-        staleTime: 60_000,
-    });
+    const {data: symbolsData} = useQuery(agentDecisionSymbolsQueryOptions());
 
     // Fetch pending decisions count
     const {data: pendingData} = useQuery({
-        queryKey: ['agent-decisions-pending'],
-        queryFn: () => decisionsApi.getPendingDecisions({page: 1, pageSize: 1}),
-        staleTime: 10_000,
-        refetchInterval: 30_000, // Refetch every 30 seconds
+        ...agentPendingDecisionsQueryOptions(),
+        refetchInterval: 30_000,
     });
 
     // Update store when decisions data changes
     useEffect(() => {
         if (decisionsData) {
             if (decisionPage === 1) {
-                setDecisions(decisionsData.decisions);
+                const samePageDecisions =
+                    decisions.length === decisionsData.decisions.length &&
+                    decisions.every((decision, index) => decision.id === decisionsData.decisions[index]?.id);
+
+                if (!samePageDecisions) {
+                    setDecisions(decisionsData.decisions);
+                }
             } else {
-                appendDecisions(decisionsData.decisions);
+                const newDecisions = decisionsData.decisions.filter(
+                    (incoming) => !decisions.some((existing) => existing.id === incoming.id),
+                );
+
+                if (newDecisions.length > 0) {
+                    appendDecisions(newDecisions);
+                }
             }
-            setHasMoreDecisions(
-                decisionsData.total > decisionsData.page * decisionsData.pageSize
-            );
+
+            const hasMore = decisionsData.total > decisionsData.page * decisionsData.pageSize;
+            if (hasMoreDecisions !== hasMore) {
+                setHasMoreDecisions(hasMore);
+            }
         }
-        setIsLoadingDecisions(decisionsLoading);
+
+        if (isLoadingDecisions !== decisionsLoading) {
+            setIsLoadingDecisions(decisionsLoading);
+        }
     }, [
         decisionsData,
+        decisions,
         decisionsLoading,
         decisionPage,
+        hasMoreDecisions,
+        isLoadingDecisions,
         setDecisions,
         appendDecisions,
         setHasMoreDecisions,
@@ -503,55 +525,79 @@ function AgentPage() {
     ]);
 
     useEffect(() => {
-        if (symbolsData) {
+        if (!symbolsData) {
+            return;
+        }
+
+        const sameSymbols =
+            decisionSymbols.length === symbolsData.length &&
+            decisionSymbols.every((symbol, index) => symbol === symbolsData[index]);
+
+        if (!sameSymbols) {
             setDecisionSymbols(symbolsData);
         }
-    }, [symbolsData, setDecisionSymbols]);
+    }, [decisionSymbols, symbolsData, setDecisionSymbols]);
 
     useEffect(() => {
-        if (pendingData) {
+        if (pendingData && pendingData.total !== pendingDecisionsCount) {
             setPendingDecisionsCount(pendingData.total);
         }
-    }, [pendingData, setPendingDecisionsCount]);
+    }, [pendingData, pendingDecisionsCount, setPendingDecisionsCount]);
 
     // Fetch session messages when session changes
     const sessionQuery = useQuery({
-        queryKey: ['agent-session', currentSessionId],
-        queryFn: () =>
-            currentSessionId ? sessionsApi.getSession(currentSessionId) : null,
+        ...agentSessionQueryOptions(currentSessionId ?? ''),
         enabled: !!currentSessionId,
-        staleTime: 10_000,
     });
     const sessionData = sessionQuery.data;
 
     // Load messages when session data changes
     useEffect(() => {
-        if (sessionData?.messages) {
-            // Convert session messages to agent message format
-            const agentMessages = sessionData.messages.map(
-                (msg: SessionMessage, index: number) => ({
-                    id: `${sessionData.id}-${index}`,
-                    role: msg.role,
-                    content: msg.content,
-                    timestamp: new Date(msg.timestamp).getTime(),
-                    decision: undefined,
-                    thinkingContent: msg.thinkingContent,
-                    toolCalls: msg.toolCalls?.map((tc, i) => ({
-                        id: `${sessionData.id}-${index}-tc-${i}`,
-                        name: tc.name,
-                        arguments: tc.arguments,
-                    })),
-                })
-            );
+        if (!sessionData?.messages) {
+            return;
+        }
+
+        // Convert session messages to agent message format
+        const agentMessages = sessionData.messages.map(
+            (msg: SessionMessage, index: number) => ({
+                id: `${sessionData.id}-${index}`,
+                role: msg.role,
+                content: msg.content,
+                timestamp: new Date(msg.timestamp).getTime(),
+                decision: undefined,
+                thinkingContent: msg.thinkingContent,
+                toolCalls: msg.toolCalls?.map((tc, i) => ({
+                    id: `${sessionData.id}-${index}-tc-${i}`,
+                    name: tc.name,
+                    arguments: tc.arguments,
+                })),
+            }),
+        );
+
+        const sameMessages =
+            agentMessages.length === messages.length &&
+            agentMessages.every((message, index) => {
+                const current = messages[index];
+                return (
+                    current &&
+                    current.id === message.id &&
+                    current.role === message.role &&
+                    current.content === message.content &&
+                    current.timestamp === message.timestamp
+                );
+            });
+
+        if (!sameMessages) {
             setMessages(agentMessages);
         }
-    }, [sessionData, setMessages]);
+    }, [messages, sessionData, setMessages]);
 
     // Refresh sidebar after each agent response to pick up auto-generated title
     useEffect(() => {
         const last = messages[messages.length - 1];
-        if (last?.role === 'assistant') {
-            queryClient.invalidateQueries({queryKey: ['agent-sessions-grouped']});
+        if (last?.role === 'assistant' && last.id !== lastSessionInvalidateMessageRef.current) {
+            lastSessionInvalidateMessageRef.current = last.id;
+            void queryClient.invalidateQueries({queryKey: ['agent-sessions-grouped']});
         }
     }, [messages, queryClient]);
 
@@ -568,7 +614,7 @@ function AgentPage() {
         mutationFn: (sessionId: string) => sessionsApi.deleteSession(sessionId),
         onSuccess: (_, sessionId) => {
             removeSession(sessionId);
-            queryClient.invalidateQueries({queryKey: ['agent-sessions-grouped']});
+            void queryClient.invalidateQueries({queryKey: ['agent-sessions-grouped']});
         },
     });
 
@@ -584,8 +630,8 @@ function AgentPage() {
         mutationFn: (decisionId: string) => decisionsApi.confirmDecision(decisionId),
         onSuccess: (decision) => {
             updateDecisionStatus(decision.id, 'confirmed');
-            queryClient.invalidateQueries({queryKey: ['agent-decisions']});
-            queryClient.invalidateQueries({queryKey: ['agent-decisions-pending']});
+            void queryClient.invalidateQueries({queryKey: ['agent-decisions']});
+            void queryClient.invalidateQueries({queryKey: ['agent-decisions-pending']});
         },
     });
 
@@ -593,8 +639,8 @@ function AgentPage() {
         mutationFn: (decisionId: string) => decisionsApi.rejectDecision(decisionId),
         onSuccess: (decision) => {
             updateDecisionStatus(decision.id, 'rejected');
-            queryClient.invalidateQueries({queryKey: ['agent-decisions']});
-            queryClient.invalidateQueries({queryKey: ['agent-decisions-pending']});
+            void queryClient.invalidateQueries({queryKey: ['agent-decisions']});
+            void queryClient.invalidateQueries({queryKey: ['agent-decisions-pending']});
         },
     });
 

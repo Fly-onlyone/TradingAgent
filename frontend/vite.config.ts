@@ -1,9 +1,13 @@
-import { defineConfig, type Plugin } from 'vite'
-import { devtools } from '@tanstack/devtools-vite'
+import {defineConfig, type Plugin} from 'vite'
+import {devtools} from '@tanstack/devtools-vite'
 import viteReact from '@vitejs/plugin-react'
-import { tanstackRouter } from '@tanstack/router-plugin/vite'
-import { fileURLToPath, URL } from 'node:url'
-import type { Duplex } from 'node:stream'
+import {tanstackRouter} from '@tanstack/router-plugin/vite'
+import {VitePWA} from 'vite-plugin-pwa'
+import {fileURLToPath, URL} from 'node:url'
+import type {Duplex} from 'node:stream'
+
+const devtoolsEventBusPort = Number(process.env.TANSTACK_DEVTOOLS_PORT ?? '42070')
+const isDevtoolsEventBusEnabled = process.env.TANSTACK_DEVTOOLS_EVENT_BUS === '1'
 
 /**
  * Suppress ECONNRESET errors on WebSocket proxy sockets.
@@ -15,56 +19,118 @@ import type { Duplex } from 'node:stream'
  * to swallow ECONNRESET before it reaches any handler.
  */
 function suppressWsProxyErrors(): Plugin {
-  return {
-    name: 'suppress-ws-proxy-errors',
-    configureServer(server) {
-      server.httpServer?.on('upgrade', (_req, socket: Duplex) => {
-        const origEmit = socket.emit
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        socket.emit = function (this: Duplex, event: string, ...args: unknown[]) {
-          if (event === 'error') {
-            const err = args[0]
-            if (
-              err instanceof Error &&
-              (err as NodeJS.ErrnoException).code === 'ECONNRESET'
-            ) {
-              return true as any
-            }
-          }
-          return origEmit.apply(this, [event, ...args] as Parameters<typeof origEmit>)
-        } as typeof origEmit
-      })
-    },
-  }
+    return {
+        name: 'suppress-ws-proxy-errors',
+        configureServer(server) {
+            server.httpServer?.on('upgrade', (_req, socket: Duplex) => {
+                const origEmit = socket.emit
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                socket.emit = function (this: Duplex, event: string, ...args: unknown[]) {
+                    if (event === 'error') {
+                        const err = args[0]
+                        if (
+                            err instanceof Error &&
+                            (err as NodeJS.ErrnoException).code === 'ECONNRESET'
+                        ) {
+                            return true as any
+                        }
+                    }
+                    return origEmit.apply(this, [event, ...args] as Parameters<typeof origEmit>)
+                } as typeof origEmit
+            })
+        },
+    }
 }
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [
-    suppressWsProxyErrors(),
-    devtools(),
-    tanstackRouter({
-      target: 'react',
-      autoCodeSplitting: true,
-    }),
-    viteReact(),
-  ],
-  resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
+    plugins: [
+        suppressWsProxyErrors(),
+        devtools({
+            eventBusConfig: {
+                enabled: isDevtoolsEventBusEnabled,
+                port: Number.isFinite(devtoolsEventBusPort) ? devtoolsEventBusPort : 42070,
+            },
+        }),
+        tanstackRouter({
+            target: 'react',
+            autoCodeSplitting: true,
+        }),
+        VitePWA({
+            registerType: 'autoUpdate',
+            injectRegister: 'auto',
+            includeAssets: ['coin.png'],
+            manifest: {
+                name: 'Trading Agent',
+                short_name: 'Trading Agent',
+                description: 'AI-powered cryptocurrency trading dashboard',
+                theme_color: '#000000',
+                background_color: '#ffffff',
+                display: 'standalone',
+                icons: [
+                    {
+                        src: 'coin.png',
+                        type: 'image/png',
+                        sizes: '512x512',
+                    },
+                ],
+            },
+            workbox: {
+                globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+                runtimeCaching: [
+                    {
+                        urlPattern: /\/api\/.*/i,
+                        handler: 'NetworkFirst',
+                        options: {
+                            cacheName: 'api-cache',
+                            networkTimeoutSeconds: 2,
+                            cacheableResponse: {
+                                statuses: [0, 200],
+                            },
+                            expiration: {
+                                maxEntries: 80,
+                                maxAgeSeconds: 60 * 60,
+                            },
+                        },
+                    },
+                    {
+                        urlPattern: /\.(?:js|css)$/i,
+                        handler: 'StaleWhileRevalidate',
+                        options: {
+                            cacheName: 'static-resources',
+                            cacheableResponse: {
+                                statuses: [0, 200],
+                            },
+                            expiration: {
+                                maxEntries: 120,
+                                maxAgeSeconds: 24 * 60 * 60,
+                            },
+                        },
+                    },
+                ],
+            },
+            devOptions: {
+                enabled: false,
+            },
+        }),
+        viteReact(),
+    ],
+    resolve: {
+        alias: {
+            '@': fileURLToPath(new URL('./src', import.meta.url)),
+        },
     },
-  },
-  server: {
-    proxy: {
-      '/api': {
-        target: 'http://localhost:7000',
-        changeOrigin: true,
-      },
-      '/ws': {
-        target: 'http://localhost:7000',
-        ws: true,
-        changeOrigin: true,
-      },
+    server: {
+        proxy: {
+            '/api': {
+                target: 'http://localhost:7000',
+                changeOrigin: true,
+            },
+            '/ws': {
+                target: 'http://localhost:7000',
+                ws: true,
+                changeOrigin: true,
+            },
+        },
     },
-  },
 })
