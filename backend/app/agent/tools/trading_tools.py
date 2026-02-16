@@ -15,7 +15,7 @@ async def get_account_balance() -> dict[str, Any]:
     Returns:
         Account balance information including available funds
     """
-    client = OKXClient()
+    client = await OKXClient.create()
     result = await client.get_account_balance()
 
     if result.get("code") != "0" or not result.get("data"):
@@ -51,7 +51,7 @@ async def get_open_orders(symbol: Optional[str] = None) -> dict[str, Any]:
     Returns:
         List of open orders
     """
-    client = OKXClient()
+    client = await OKXClient.create()
     result = await client.get_open_orders(inst_type="SPOT", inst_id=symbol)
 
     if result.get("code") != "0":
@@ -126,7 +126,7 @@ async def place_order(
     total_equity = balance_result.get("total_equity_usd", 0)
 
     # Get current price for risk calculation
-    client = OKXClient()
+    client = await OKXClient.create()
     ticker_result = await client.get_ticker(symbol)
 
     if ticker_result.get("code") != "0" or not ticker_result.get("data"):
@@ -185,7 +185,7 @@ async def cancel_order(symbol: str, order_id: str) -> dict[str, Any]:
     Returns:
         Cancellation result
     """
-    client = OKXClient()
+    client = await OKXClient.create()
     result = await client.cancel_order(inst_id=symbol.upper(), order_id=order_id)
 
     if result.get("code") != "0":

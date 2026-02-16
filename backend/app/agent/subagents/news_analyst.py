@@ -53,13 +53,16 @@ class NewsAnalyst:
 
     async def connect(self) -> None:
         """Initialize the SDK client."""
+        from app.agent.auth import resolve_anthropic_api_key
+
         options = ClaudeAgentOptions(
             system_prompt=NEWS_ANALYST_PROMPT,
             permission_mode="bypassPermissions",
             max_turns=1,
         )
-        if settings.anthropic_api_key:
-            options.env["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
+        api_key = await resolve_anthropic_api_key()
+        if api_key:
+            options.env["ANTHROPIC_API_KEY"] = api_key
         self._client = ClaudeSDKClient(options=options)
         await self._client.connect()
         logger.info("NewsAnalyst connected")

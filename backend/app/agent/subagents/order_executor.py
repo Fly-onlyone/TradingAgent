@@ -18,9 +18,14 @@ class OrderExecutor:
     """Order execution subagent for managing trades."""
 
     def __init__(self, user_id: PydanticObjectId | None = None):
-        self.client = OKXClient()
+        self.client: OKXClient | None = None
         self.risk_manager = RiskManager()
         self.user_id = user_id
+
+    async def _get_client(self) -> OKXClient:
+        if self.client is None:
+            self.client = await OKXClient.create()
+        return self.client
 
     async def execute_trade(
         self,
@@ -105,7 +110,8 @@ class OrderExecutor:
         try:
             from decimal import Decimal
 
-            result = await self.client.place_order(
+            client = await self._get_client()
+            result = await client.place_order(
                 inst_id=symbol.upper(),
                 side=side,
                 order_type=order_type,
@@ -222,7 +228,8 @@ class OrderExecutor:
             Cancellation result
         """
         try:
-            result = await self.client.cancel_order(
+            client = await self._get_client()
+            result = await client.cancel_order(
                 inst_id=symbol.upper(),
                 order_id=order_id,
             )
@@ -272,7 +279,8 @@ class OrderExecutor:
             Order status details
         """
         try:
-            result = await self.client.get_order(
+            client = await self._get_client()
+            result = await client.get_order(
                 inst_id=symbol.upper(),
                 order_id=order_id,
             )
@@ -314,7 +322,8 @@ class OrderExecutor:
             List of open orders
         """
         try:
-            result = await self.client.get_open_orders(
+            client = await self._get_client()
+            result = await client.get_open_orders(
                 inst_type="SPOT",
                 inst_id=symbol.upper() if symbol else None,
             )

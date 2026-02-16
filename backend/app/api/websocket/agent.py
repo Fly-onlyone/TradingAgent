@@ -28,7 +28,8 @@ async def get_user_from_token(token: str) -> User | None:
     In debug mode, returns a mock superuser without validating the token,
     matching the REST endpoint behaviour (see main.py dependency override).
     """
-    if settings.debug:
+    if settings.debug and settings.allow_debug_auth_bypass:
+        logger.warning("WebSocket auth bypass active — returning mock superuser")
         return User(
             id=_DEV_USER_ID,
             email="dev@localhost.dev",
@@ -41,7 +42,9 @@ async def get_user_from_token(token: str) -> User | None:
         )
 
     try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        payload = jwt.decode(
+            token, settings.secret_key, algorithms=[settings.algorithm]
+        )
         email = payload.get("sub")
         if email:
             return await User.find_one(User.email == email)
@@ -129,7 +132,7 @@ async def agent_chat_websocket(
             if not _check_cli_login():
                 auth_error = "Claude CLI not logged in. Use the gear icon to log in."
         elif app_settings.agent_auth_mode == AgentAuthMode.API_KEY:
-            if not app_settings.agent_api_key and not settings.anthropic_api_key:
+            if not app_settings.get_agent_api_key() and not settings.anthropic_api_key:
                 auth_error = "No API key configured. Use the gear icon to add one."
 
         if auth_error:

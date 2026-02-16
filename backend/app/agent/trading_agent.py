@@ -75,7 +75,8 @@ class TradingAgent:
 
         Reads auth configuration from AppSettings (DB) with env var fallback.
         """
-        from app.db.models.app_settings import AgentAuthMode, AppSettings
+        from app.agent.auth import resolve_anthropic_api_key
+        from app.db.models.app_settings import AppSettings
 
         server = create_trading_mcp_server()
         app_settings = await AppSettings.get_instance()
@@ -92,14 +93,10 @@ class TradingAgent:
             max_thinking_tokens=thinking_tokens,
         )
 
-        # Resolve API key: DB setting → env var fallback
-        if app_settings.agent_auth_mode == AgentAuthMode.API_KEY:
-            api_key = app_settings.agent_api_key or settings.anthropic_api_key
-            if api_key:
-                options.env["ANTHROPIC_API_KEY"] = api_key
-        elif settings.anthropic_api_key:
-            # Subscription mode but env var is set — still forward it as fallback
-            options.env["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
+        # Resolve API key: DB → env var → empty (CLI credentials)
+        api_key = await resolve_anthropic_api_key()
+        if api_key:
+            options.env["ANTHROPIC_API_KEY"] = api_key
 
         self._client = ClaudeSDKClient(options=options)
         await self._client.connect()

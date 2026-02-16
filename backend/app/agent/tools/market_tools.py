@@ -14,7 +14,7 @@ async def get_ticker(symbol: str) -> dict[str, Any]:
     Returns:
         Ticker data including price, volume, and 24h changes
     """
-    client = OKXClient()
+    client = await OKXClient.create()
     result = await client.get_ticker(symbol.upper())
 
     if result.get("code") != "0" or not result.get("data"):
@@ -49,7 +49,7 @@ async def get_orderbook(symbol: str, depth: int = 20) -> dict[str, Any]:
     Returns:
         Order book with bids and asks
     """
-    client = OKXClient()
+    client = await OKXClient.create()
     result = await client.get_orderbook(symbol.upper(), depth)
 
     if result.get("code") != "0" or not result.get("data"):
@@ -95,7 +95,7 @@ async def get_candlesticks(
     Returns:
         List of OHLCV candles
     """
-    client = OKXClient()
+    client = await OKXClient.create()
     result = await client.get_candlesticks(symbol.upper(), timeframe, limit)
 
     if result.get("code") != "0" or not result.get("data"):
