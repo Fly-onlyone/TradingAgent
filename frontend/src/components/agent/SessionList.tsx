@@ -2,7 +2,7 @@
  * Session List Component for Chat History Sidebar
  */
 
-import {useState} from 'react';
+import {type MouseEvent, useState} from 'react';
 import {
     Box,
     List,
@@ -17,7 +17,6 @@ import {
     Skeleton,
     Menu,
     MenuItem,
-    ListItemSecondaryAction,
     Tooltip,
     Divider,
 } from '@mui/material';
@@ -52,7 +51,7 @@ interface SessionItemProps {
 function SessionItem({session, isSelected, onSelect, onDelete, onRename}: SessionItemProps) {
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
-    const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    const handleMenuOpen = (event: MouseEvent<HTMLElement>) => {
         event.stopPropagation();
         setAnchorEl(event.currentTarget);
     };
@@ -117,9 +116,10 @@ function SessionItem({session, isSelected, onSelect, onDelete, onRename}: Sessio
                             {displayTitle}
                         </Typography>
                     }
+                    slotProps={{secondary: {component: 'span'}}}
                     secondary={
-                        <Box sx={{display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25}}>
-                            <Typography variant="caption" color="text.secondary">
+                        <Box component="span" sx={{display: 'inline-flex', alignItems: 'center', gap: 0.5, mt: 0.25}}>
+                            <Typography component="span" variant="caption" color="text.secondary">
                                 {messageCount} messages
                             </Typography>
                             {hasDecisions && (
@@ -137,16 +137,14 @@ function SessionItem({session, isSelected, onSelect, onDelete, onRename}: Sessio
                         </Box>
                     }
                 />
-                <ListItemSecondaryAction>
-                    <IconButton
-                        edge="end"
-                        size="small"
-                        onClick={handleMenuOpen}
-                        sx={{opacity: 0.6, '&:hover': {opacity: 1}}}
-                    >
-                        <MoreVertIcon fontSize="small"/>
-                    </IconButton>
-                </ListItemSecondaryAction>
+                <IconButton
+                    edge="end"
+                    size="small"
+                    onClick={handleMenuOpen}
+                    sx={{ml: 1, opacity: 0.6, '&:hover': {opacity: 1}}}
+                >
+                    <MoreVertIcon fontSize="small"/>
+                </IconButton>
             </ListItemButton>
 
             <Menu

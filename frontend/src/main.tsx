@@ -1,6 +1,6 @@
 import {StrictMode} from 'react'
 import ReactDOM from 'react-dom/client'
-import {RouterProvider, createRouter} from '@tanstack/react-router'
+import {createRouter, RouterProvider} from '@tanstack/react-router'
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
 import {ThemeProvider} from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
@@ -12,6 +12,7 @@ import {theme} from './theme'
 import {routeTree} from './routeTree.gen'
 
 import reportWebVitals from './reportWebVitals.ts'
+import {initializeFrontendLogging} from './utils/frontendLogger'
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -42,6 +43,8 @@ declare module '@tanstack/react-router' {
         router: typeof router
     }
 }
+
+initializeFrontendLogging()
 
 // Render the app
 const rootElement = document.getElementById('app')
