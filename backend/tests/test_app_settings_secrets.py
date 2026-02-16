@@ -21,10 +21,11 @@ async def test_migrate_plaintext_secrets_if_needed(
 
     saved = {"called": False}
 
-    async def _save_changes(self: AppSettings) -> None:
+    async def _save_with_timestamp(self: AppSettings) -> None:
+        assert self is settings
         saved["called"] = True
 
-    monkeypatch.setattr(AppSettings, "save_changes", _save_changes)
+    monkeypatch.setattr(AppSettings, "save_with_timestamp", _save_with_timestamp)
     monkeypatch.setattr(
         "app.db.models.app_settings.is_encrypted_secret", lambda _: False
     )

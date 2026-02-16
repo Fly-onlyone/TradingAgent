@@ -174,6 +174,16 @@ class MongoDBHandler(logging.Handler):
             sys.stderr.write(
                 f"Failed to flush {len(records)} log records to MongoDB: {exc}\n"
             )
+            return
+
+        try:
+            from app.services.bug_automation_service import get_bug_automation_service
+
+            service = get_bug_automation_service()
+            await service.ingest_log_records(records)
+        except Exception as exc:
+            # Avoid recursion — don't log failures from the log handler
+            sys.stderr.write(f"Failed to process bug automation records: {exc}\n")
 
 
 # ============================================================
