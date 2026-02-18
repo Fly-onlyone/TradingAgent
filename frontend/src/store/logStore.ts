@@ -1,117 +1,94 @@
 /**
- * Log Store - Log Viewer State Management
+ * Log Store - UI state for Log Viewer
  */
 
-import { create } from 'zustand';
-import { devtools } from 'zustand/middleware';
-import type { LogEntry, LogsFilter, LogStats } from '@/types/log';
+import { create } from "zustand";
+import { devtools } from "zustand/middleware";
+import type { LogEntry, LogsFilter } from "@/types/log";
 
 interface LogState {
-    // Data
-    logs: LogEntry[];
-    stats: LogStats | null;
+	filters: LogsFilter;
+	autoRefresh: boolean;
+	selectedLog: LogEntry | null;
 
-    // UI State
-    filters: LogsFilter;
-    total: number;
-    page: number;
-    pageSize: number;
-    autoRefresh: boolean;
-    selectedLog: LogEntry | null;
-
-    // Actions
-    setLogs: (logs: LogEntry[], total: number) => void;
-    setStats: (stats: LogStats | null) => void;
-    setFilters: (filters: Partial<LogsFilter>) => void;
-    resetFilters: () => void;
-    setPage: (page: number) => void;
-    setPageSize: (pageSize: number) => void;
-    toggleAutoRefresh: () => void;
-    setSelectedLog: (log: LogEntry | null) => void;
-    reset: () => void;
+	setFilters: (filters: Partial<LogsFilter>) => void;
+	resetFilters: () => void;
+	setPage: (page: number) => void;
+	setPageSize: (pageSize: number) => void;
+	toggleAutoRefresh: () => void;
+	setSelectedLog: (log: LogEntry | null) => void;
+	reset: () => void;
 }
 
 const initialFilters: LogsFilter = {
-    page: 1,
-    pageSize: 50,
+	page: 1,
+	pageSize: 50,
 };
 
 export const useLogStore = create<LogState>()(
-    devtools(
-        (set) => ({
-            logs: [],
-            stats: null,
-            filters: initialFilters,
-            total: 0,
-            page: 1,
-            pageSize: 50,
-            autoRefresh: false,
-            selectedLog: null,
+	devtools(
+		(set) => ({
+			filters: initialFilters,
+			autoRefresh: false,
+			selectedLog: null,
 
-            setLogs: (logs, total) =>
-                set({ logs, total }, false, 'setLogs'),
+			setFilters: (newFilters) =>
+				set(
+					(state) => ({
+						filters: {
+							...state.filters,
+							...newFilters,
+							page: newFilters.page ?? 1,
+						},
+					}),
+					false,
+					"setFilters",
+				),
 
-            setStats: (stats) =>
-                set({ stats }, false, 'setStats'),
+			resetFilters: () =>
+				set({ filters: initialFilters }, false, "resetFilters"),
 
-            setFilters: (newFilters) =>
-                set(
-                    (state) => ({
-                        filters: { ...state.filters, ...newFilters },
-                        page: newFilters.page ?? 1,
-                    }),
-                    false,
-                    'setFilters',
-                ),
+			setPage: (page) =>
+				set(
+					(state) => ({
+						filters: { ...state.filters, page },
+					}),
+					false,
+					"setPage",
+				),
 
-            resetFilters: () =>
-                set({ filters: initialFilters, page: 1 }, false, 'resetFilters'),
+			setPageSize: (pageSize) =>
+				set(
+					(state) => ({
+						filters: { ...state.filters, pageSize, page: 1 },
+					}),
+					false,
+					"setPageSize",
+				),
 
-            setPage: (page) =>
-                set(
-                    (state) => ({
-                        page,
-                        filters: { ...state.filters, page },
-                    }),
-                    false,
-                    'setPage',
-                ),
+			toggleAutoRefresh: () =>
+				set(
+					(state) => ({ autoRefresh: !state.autoRefresh }),
+					false,
+					"toggleAutoRefresh",
+				),
 
-            setPageSize: (pageSize) =>
-                set(
-                    (state) => ({
-                        pageSize,
-                        page: 1,
-                        filters: { ...state.filters, pageSize, page: 1 },
-                    }),
-                    false,
-                    'setPageSize',
-                ),
+			setSelectedLog: (log) =>
+				set({ selectedLog: log }, false, "setSelectedLog"),
 
-            toggleAutoRefresh: () =>
-                set((state) => ({ autoRefresh: !state.autoRefresh }), false, 'toggleAutoRefresh'),
-
-            setSelectedLog: (log) =>
-                set({ selectedLog: log }, false, 'setSelectedLog'),
-
-            reset: () =>
-                set(
-                    {
-                        logs: [],
-                        stats: null,
-                        filters: initialFilters,
-                        total: 0,
-                        page: 1,
-                        pageSize: 50,
-                        autoRefresh: false,
-                        selectedLog: null,
-                    },
-                    false,
-                    'reset',
-                ),
-        }),
-        { name: 'LogStore' },
-    ),
+			reset: () =>
+				set(
+					{
+						filters: initialFilters,
+						autoRefresh: false,
+						selectedLog: null,
+					},
+					false,
+					"reset",
+				),
+		}),
+		{ name: "LogStore" },
+	),
 );
 
 export default useLogStore;

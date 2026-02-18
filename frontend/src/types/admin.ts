@@ -11,10 +11,6 @@ export interface CollectionInfo {
     avgDocumentSize: number;
 }
 
-export interface CollectionListResponse {
-    collections: CollectionInfo[];
-}
-
 export interface DatabaseInfo {
     databaseName: string;
     host: string;
@@ -38,8 +34,4 @@ export interface AdminDocumentFilter {
     page?: number;
     pageSize?: number;
     search?: string;
-}
-
-export interface DocumentUpdateRequest {
-    document: Record<string, unknown>;
 }

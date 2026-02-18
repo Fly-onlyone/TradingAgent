@@ -2,55 +2,40 @@
  * Store Exports
  */
 
-export { useAuthStore, default as authStore } from './authStore';
 export {
-  useMarketStore,
-  default as marketStore,
-} from './marketStore';
+	default as agentStore,
+	selectAssistantMessages,
+	selectDecisionMessages,
+	selectRecentMessages,
+	selectUserMessages,
+	useAgentStore,
+} from "./agentStore";
+export { default as authStore, useAuthStore } from "./authStore";
+export { default as bugStore, useBugStore } from "./bugStore";
+export { default as logStore, useLogStore } from "./logStore";
 export {
-  useOrderStore,
-  selectOpenOrders,
-  selectFilledOrders,
-  selectOrdersBySymbol,
-  selectPositionBySymbol,
-  selectTotalUnrealizedPnl,
-  default as orderStore,
-} from './orderStore';
+	default as marketStore,
+	useMarketStore,
+} from "./marketStore";
 export {
-  useAgentStore,
-  selectRecentMessages,
-  selectUserMessages,
-  selectAssistantMessages,
-  selectDecisionMessages,
-  default as agentStore,
-} from './agentStore';
+	default as orderStore,
+	selectFilledOrders,
+	selectOpenOrders,
+	selectOrdersBySymbol,
+	selectPositionBySymbol,
+	selectTotalUnrealizedPnl,
+	useOrderStore,
+} from "./orderStore";
 export {
-  useTaskStore,
-  selectActiveTasks,
-  selectPausedTasks,
-  selectCompletedTasks,
-  selectTaskById,
-  selectTasksByStatus,
-  selectTasksBySymbol,
-  selectExecutionsByTaskId,
-  selectSelectedTask,
-  default as taskStore,
-} from './taskStore';
+	default as taskStore,
+	selectSelectedTaskId,
+	useTaskStore,
+} from "./taskStore";
 export {
-  useTradeStore,
-  selectTrades,
-  selectSummary,
-  selectBySymbol,
-  selectFilters,
-  selectViewMode,
-  selectIsLoading,
-  selectPagination,
-  selectWinningTrades,
-  selectLosingTrades,
-  selectOpenTrades,
-  selectClosedTrades,
-  selectTradesBySymbol,
-  selectIsSymbolExpanded,
-  default as tradeStore,
-} from './tradeStore';
-export { useUIStore, notify, default as uiStore } from './uiStore';
+	default as tradeStore,
+	selectFilters,
+	selectIsSymbolExpanded,
+	selectViewMode,
+	useTradeStore,
+} from "./tradeStore";
+export { default as uiStore, notify, useUIStore } from "./uiStore";

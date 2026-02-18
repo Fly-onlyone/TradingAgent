@@ -13,7 +13,6 @@ import {
     CardContent,
     Chip,
     Grid2 as Grid,
-    Skeleton,
     Table,
     TableBody,
     TableCell,
@@ -25,13 +24,15 @@ import {
 import {useQuery} from "@tanstack/react-query";
 import {createFileRoute} from "@tanstack/react-router";
 import {motion} from "framer-motion";
-import {marketApi} from "@/api/endpoints/market";
 import {tradesApi} from "@/api/endpoints/trades";
-import {PageTransition, staggerContainerVariants, staggerItemVariants,} from "@/components/common/PageTransition";
+import {marketAccountQueryOptions, marketOverviewQueryOptions,} from "@/api/queryOptions/market";
+import {PageTransition} from "@/components/common/PageTransition";
+import {ShimmerSkeleton} from "@/components/common/ShimmerSkeleton";
 import {StatCard} from "@/components/data-display/StatCard";
 import {TickerCard} from "@/components/trading/TickerCard";
 import {useMarketStore} from "@/store/marketStore";
 import type {MarketOverviewTicker} from "@/types";
+import {staggerCascade} from "@/utils/animations/variants";
 import {
     formatPercent,
     formatPrice,
@@ -40,8 +41,10 @@ import {
     formatUSD,
     formatVolume,
 } from "@/utils/formatters";
+import {requireAuth} from "./-guards";
 
 export const Route = createFileRoute("/")({
+    beforeLoad: requireAuth,
     component: Dashboard,
 });
 
@@ -49,10 +52,8 @@ function Dashboard() {
     const watchlist = useMarketStore((state) => state.watchlist);
 
     const accountQuery = useQuery({
-        queryKey: ["account", "balance"],
-        queryFn: () => marketApi.getAccountBalance(),
-        staleTime: 10_000,
-        refetchInterval: 15_000,
+        ...marketAccountQueryOptions(),
+        refetchInterval: 60_000,
     });
 
     const summaryQuery = useQuery({
@@ -62,10 +63,8 @@ function Dashboard() {
     });
 
     const overviewQuery = useQuery({
-        queryKey: ["market", "overview"],
-        queryFn: () => marketApi.getMarketOverview(),
-        staleTime: 30_000,
-        refetchInterval: 60_000,
+        ...marketOverviewQueryOptions(),
+        refetchInterval: 120_000,
     });
 
     const recentTradesQuery = useQuery({
@@ -80,12 +79,18 @@ function Dashboard() {
     return (
         <PageTransition pageKey="dashboard">
             <Box>
-                <Typography variant="h4" fontWeight={700} gutterBottom>
-                    Dashboard
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{mb: 4}}>
-                    Welcome back! Here's an overview of your trading activity.
-                </Typography>
+                <motion.div
+                    initial={{opacity: 0, x: -60}}
+                    animate={{opacity: 1, x: 0}}
+                    transition={{type: "spring", stiffness: 400, damping: 30}}
+                >
+                    <Typography variant="h4" fontWeight={700} gutterBottom>
+                        Dashboard
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{mb: 4}}>
+                        Welcome back! Here's an overview of your trading activity.
+                    </Typography>
+                </motion.div>
 
                 {(accountError || overviewError) && (
                     <Alert severity="warning" sx={{mb: 3}}>
@@ -103,13 +108,13 @@ function Dashboard() {
 
                 {/* Stats Grid */}
                 <motion.div
-                    variants={staggerContainerVariants}
+                    variants={staggerCascade.container}
                     initial="hidden"
                     animate="visible"
                 >
                     <Grid container spacing={3} sx={{mb: 4}}>
                         <Grid size={{xs: 12, sm: 6, md: 3}}>
-                            <motion.div variants={staggerItemVariants}>
+                            <motion.div variants={staggerCascade.item}>
                                 <StatCard
                                     title="Total Equity"
                                     value={formatUSD(accountQuery.data?.totalEquity ?? 0)}
@@ -119,7 +124,7 @@ function Dashboard() {
                             </motion.div>
                         </Grid>
                         <Grid size={{xs: 12, sm: 6, md: 3}}>
-                            <motion.div variants={staggerItemVariants}>
+                            <motion.div variants={staggerCascade.item}>
                                 <StatCard
                                     title="Unrealized P&L"
                                     value={formatUSD(accountQuery.data?.unrealizedPnl ?? 0)}
@@ -139,7 +144,7 @@ function Dashboard() {
                             </motion.div>
                         </Grid>
                         <Grid size={{xs: 12, sm: 6, md: 3}}>
-                            <motion.div variants={staggerItemVariants}>
+                            <motion.div variants={staggerCascade.item}>
                                 <StatCard
                                     title="Realized P&L"
                                     value={formatUSD(summaryQuery.data?.netPnl ?? 0)}
@@ -151,7 +156,7 @@ function Dashboard() {
                             </motion.div>
                         </Grid>
                         <Grid size={{xs: 12, sm: 6, md: 3}}>
-                            <motion.div variants={staggerItemVariants}>
+                            <motion.div variants={staggerCascade.item}>
                                 <StatCard
                                     title="Total Trades"
                                     value={summaryQuery.data?.totalTrades ?? 0}
@@ -171,7 +176,23 @@ function Dashboard() {
                 <Grid container spacing={3}>
                     {/* Market Overview */}
                     <Grid size={{xs: 12, md: 8}}>
-                        <Card sx={{height: "100%"}}>
+                        <Card
+                            component={motion.div}
+                            initial={{opacity: 0, y: 60}}
+                            animate={{opacity: 1, y: 0}}
+                            transition={{
+                                type: "spring",
+                                stiffness: 400,
+                                damping: 30,
+                                delay: 0.3,
+                            }}
+                            sx={{
+                                height: "100%",
+                                borderTop: "2px solid",
+                                borderImage:
+                                    "linear-gradient(135deg, #F97316 0%, #8B5CF6 100%) 1",
+                            }}
+                        >
                             <CardContent>
                                 <Box
                                     sx={{
@@ -193,11 +214,9 @@ function Dashboard() {
                                 {overviewQuery.isLoading ? (
                                     <Box>
                                         {Array.from({length: 5}).map((_, i) => (
-                                            <Skeleton
+                                            <ShimmerSkeleton
                                                 key={`skel-${String(i)}`}
-                                                variant="rectangular"
-                                                height={36}
-                                                sx={{mb: 1, borderRadius: 1}}
+                                                shimmerVariant="table-row"
                                             />
                                         ))}
                                     </Box>
@@ -206,26 +225,64 @@ function Dashboard() {
                                     overviewQuery.data.topLosers.length > 0) ? (
                                     <Grid container spacing={3}>
                                         <Grid size={{xs: 12, sm: 6}}>
-                                            <Typography
-                                                variant="subtitle2"
-                                                color="success.main"
-                                                sx={{mb: 1}}
+                                            <Box
+                                                sx={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: 1,
+                                                    mb: 1,
+                                                }}
                                             >
-                                                Top Gainers
-                                            </Typography>
+                                                <Box
+                                                    component={motion.div}
+                                                    animate={{
+                                                        scale: [1, 1.4, 1],
+                                                        opacity: [0.7, 1, 0.7],
+                                                    }}
+                                                    transition={{duration: 2, repeat: Infinity}}
+                                                    sx={{
+                                                        width: 8,
+                                                        height: 8,
+                                                        borderRadius: "50%",
+                                                        bgcolor: "success.main",
+                                                    }}
+                                                />
+                                                <Typography variant="subtitle2" color="success.main">
+                                                    Top Gainers
+                                                </Typography>
+                                            </Box>
                                             <OverviewTable
                                                 tickers={overviewQuery.data.topGainers}
                                                 colorField="success"
                                             />
                                         </Grid>
                                         <Grid size={{xs: 12, sm: 6}}>
-                                            <Typography
-                                                variant="subtitle2"
-                                                color="error.main"
-                                                sx={{mb: 1}}
+                                            <Box
+                                                sx={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: 1,
+                                                    mb: 1,
+                                                }}
                                             >
-                                                Top Losers
-                                            </Typography>
+                                                <Box
+                                                    component={motion.div}
+                                                    animate={{
+                                                        scale: [1, 1.4, 1],
+                                                        opacity: [0.7, 1, 0.7],
+                                                    }}
+                                                    transition={{duration: 2, repeat: Infinity}}
+                                                    sx={{
+                                                        width: 8,
+                                                        height: 8,
+                                                        borderRadius: "50%",
+                                                        bgcolor: "error.main",
+                                                    }}
+                                                />
+                                                <Typography variant="subtitle2" color="error.main">
+                                                    Top Losers
+                                                </Typography>
+                                            </Box>
                                             <OverviewTable
                                                 tickers={overviewQuery.data.topLosers}
                                                 colorField="error"
@@ -243,7 +300,18 @@ function Dashboard() {
 
                     {/* Watchlist */}
                     <Grid size={{xs: 12, md: 4}}>
-                        <Card sx={{height: "100%"}}>
+                        <Card
+                            component={motion.div}
+                            initial={{opacity: 0, x: 60}}
+                            animate={{opacity: 1, x: 0}}
+                            transition={{
+                                type: "spring",
+                                stiffness: 400,
+                                damping: 30,
+                                delay: 0.35,
+                            }}
+                            sx={{height: "100%"}}
+                        >
                             <CardContent>
                                 <Typography variant="h6" gutterBottom>
                                     Watchlist
@@ -268,11 +336,9 @@ function Dashboard() {
                                 {recentTradesQuery.isLoading ? (
                                     <Box>
                                         {Array.from({length: 3}).map((_, i) => (
-                                            <Skeleton
+                                            <ShimmerSkeleton
                                                 key={`skel-${String(i)}`}
-                                                variant="rectangular"
-                                                height={40}
-                                                sx={{mb: 1, borderRadius: 1}}
+                                                shimmerVariant="table-row"
                                             />
                                         ))}
                                     </Box>

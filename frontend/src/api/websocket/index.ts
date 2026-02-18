@@ -8,7 +8,6 @@ export {
   useTickerSubscription,
   useOrderBookSubscription,
 } from './useMarketSocket';
-export { useOrderSocket } from './useOrderSocket';
 export {
   useAgentSocket,
   type AgentMessage,

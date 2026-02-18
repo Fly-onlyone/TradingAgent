@@ -29,17 +29,6 @@ export interface UserUpdate {
   username?: string;
 }
 
-export interface UserProfile extends User {
-  preferences?: UserPreferences;
-}
-
-export interface UserPreferences {
-  theme?: 'light' | 'dark';
-  defaultSymbol?: string;
-  defaultTimeframe?: string;
-  notifications?: NotificationSettings;
-}
-
 export interface NotificationSettings {
   email: boolean;
   push: boolean;

@@ -2,74 +2,151 @@
  * Orders API Endpoints
  */
 
-import apiClient from '../client';
-import type { Order, OrderCreate, Position, TradeExecution, PaginatedResponse, PaginationParams } from '@/types';
+import type {
+    OkxCancelOrderRequest,
+    OkxCancelOrderResponse,
+    OkxOrder,
+    OkxOrderListResponse,
+    Order,
+    OrderCreate,
+} from "@/types";
+import apiClient from "../client";
 
-export interface OrdersFilter extends PaginationParams {
-  symbol?: string;
-  status?: string;
-  side?: string;
-  startDate?: string;
-  endDate?: string;
+interface OkxOrderParams {
+    symbol?: string;
+    limit?: number;
+}
+
+function toNumber(value: unknown, fallback = 0): number {
+    const parsed =
+        typeof value === "number"
+            ? value
+            : typeof value === "string"
+                ? Number(value)
+                : Number.NaN;
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toOptionalNumber(value: unknown): number | undefined {
+    if (value === null || value === undefined || value === "") {
+        return undefined;
+    }
+    const parsed =
+        typeof value === "number"
+            ? value
+            : typeof value === "string"
+                ? Number(value)
+                : Number.NaN;
+    return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function toTimestamp(value: unknown): number {
+    if (typeof value === "number" && Number.isFinite(value)) {
+        return value;
+    }
+    if (typeof value === "string") {
+        const parsed = Number(value);
+        if (Number.isFinite(parsed)) {
+            return parsed;
+        }
+    }
+    return Date.now();
+}
+
+function transformOkxOrder(order: Record<string, unknown>): OkxOrder {
+    return {
+        orderId: String(order.order_id ?? ""),
+        clientOrderId: order.client_order_id
+            ? String(order.client_order_id)
+            : undefined,
+        symbol: String(order.symbol ?? ""),
+        side: String(order.side ?? ""),
+        orderType: String(order.order_type ?? ""),
+        status: String(order.status ?? "pending"),
+        rawStatus: String(order.raw_status ?? ""),
+        quantity: toNumber(order.quantity),
+        filledQuantity: toNumber(order.filled_quantity),
+        price: toOptionalNumber(order.price),
+        avgFillPrice: toOptionalNumber(order.avg_fill_price),
+        createdAtMs: toTimestamp(order.created_at_ms),
+        updatedAtMs: toTimestamp(order.updated_at_ms),
+    };
 }
 
 export const ordersApi = {
-  /**
-   * Create a new order
-   */
-  async createOrder(data: OrderCreate): Promise<Order> {
-    const response = await apiClient.post<Order>('/orders', data);
-    return response.data;
-  },
+    /**
+     * Create a new order
+     */
+    async createOrder(data: OrderCreate): Promise<Order> {
+        const response = await apiClient.post<Order>("/orders", data);
+        return response.data;
+    },
 
-  /**
-   * Get order by ID
-   */
-  async getOrder(orderId: string): Promise<Order> {
-    const response = await apiClient.get<Order>(`/orders/${orderId}`);
-    return response.data;
-  },
+    /**
+     * Get open orders directly from OKX
+     */
+    async getOkxOpenOrders(
+        params?: OkxOrderParams,
+    ): Promise<OkxOrderListResponse> {
+        const response = await apiClient.get<{
+            orders: Record<string, unknown>[];
+            count: number;
+            error?: string | null;
+        }>("/orders/okx/open", {
+            params: {
+                symbol: params?.symbol || undefined,
+                limit: params?.limit ?? 50,
+            },
+        });
+        return {
+            orders: (response.data.orders || []).map(transformOkxOrder),
+            count: toNumber(response.data.count),
+            error: response.data.error ?? null,
+        };
+    },
 
-  /**
-   * Get all orders with filters
-   */
-  async getOrders(params?: OrdersFilter): Promise<PaginatedResponse<Order>> {
-    const response = await apiClient.get<PaginatedResponse<Order>>('/orders', { params });
-    return response.data;
-  },
+    /**
+     * Get recent order history directly from OKX
+     */
+    async getOkxOrderHistory(
+        params?: OkxOrderParams,
+    ): Promise<OkxOrderListResponse> {
+        const response = await apiClient.get<{
+            orders: Record<string, unknown>[];
+            count: number;
+            error?: string | null;
+        }>("/orders/okx/history", {
+            params: {
+                symbol: params?.symbol || undefined,
+                limit: params?.limit ?? 50,
+            },
+        });
+        return {
+            orders: (response.data.orders || []).map(transformOkxOrder),
+            count: toNumber(response.data.count),
+            error: response.data.error ?? null,
+        };
+    },
 
-  /**
-   * Cancel an order
-   */
-  async cancelOrder(orderId: string): Promise<Order> {
-    const response = await apiClient.delete<Order>(`/orders/${orderId}`);
-    return response.data;
-  },
-
-  /**
-   * Get open positions
-   */
-  async getPositions(): Promise<Position[]> {
-    const response = await apiClient.get<Position[]>('/orders/positions');
-    return response.data;
-  },
-
-  /**
-   * Close a position
-   */
-  async closePosition(symbol: string): Promise<Order> {
-    const response = await apiClient.post<Order>(`/orders/positions/${symbol}/close`);
-    return response.data;
-  },
-
-  /**
-   * Get trade executions
-   */
-  async getExecutions(orderId?: string): Promise<TradeExecution[]> {
-    const params = orderId ? { orderId } : undefined;
-    const response = await apiClient.get<TradeExecution[]>('/orders/executions', { params });
-    return response.data;
-  },
+    /**
+     * Cancel an open OKX order
+     */
+    async cancelOkxOrder(
+        payload: OkxCancelOrderRequest,
+    ): Promise<OkxCancelOrderResponse> {
+        const response = await apiClient.post<Record<string, unknown>>(
+            "/orders/okx/cancel",
+            {
+                symbol: payload.symbol,
+                order_id: payload.orderId,
+            },
+        );
+        return {
+            success: Boolean(response.data.success),
+            message: String(response.data.message ?? ""),
+            error: response.data.error ? String(response.data.error) : null,
+        };
+    },
 };
 
 export default ordersApi;

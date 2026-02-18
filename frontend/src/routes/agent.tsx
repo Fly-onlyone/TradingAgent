@@ -2,64 +2,50 @@
  * Agent Chat Page with Session History and Decision Tracking
  */
 
-import {createFileRoute} from '@tanstack/react-router';
-import {useRef, useEffect, useCallback, useState} from 'react';
-import type {MouseEvent} from 'react';
-import {keepPreviousData, useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
-import {
-    Box,
-    Card,
-    CardContent,
-    Typography,
-    Divider,
-    Tabs,
-    Tab,
-    Badge,
-    IconButton,
-    useMediaQuery,
-    useTheme,
-    Drawer,
-} from '@mui/material';
-import SmartToyIcon from '@mui/icons-material/SmartToy';
-import HistoryIcon from '@mui/icons-material/History';
-import AnalyticsIcon from '@mui/icons-material/Analytics';
-import MenuIcon from '@mui/icons-material/Menu';
-import SettingsIcon from '@mui/icons-material/Settings';
-import PsychologyIcon from '@mui/icons-material/Psychology';
-
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import ErrorIcon from '@mui/icons-material/Error';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import LoginIcon from '@mui/icons-material/Login';
-import LogoutIcon from '@mui/icons-material/Logout';
+import AnalyticsIcon from "@mui/icons-material/Analytics";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import ErrorIcon from "@mui/icons-material/Error";
+import HistoryIcon from "@mui/icons-material/History";
+import LoginIcon from "@mui/icons-material/Login";
+import LogoutIcon from "@mui/icons-material/Logout";
+import MenuIcon from "@mui/icons-material/Menu";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import PsychologyIcon from "@mui/icons-material/Psychology";
+import SettingsIcon from "@mui/icons-material/Settings";
+import SmartToyIcon from "@mui/icons-material/SmartToy";
 import {
     Alert,
+    Badge,
+    Box,
     Button,
+    Card,
+    CardContent,
     Chip,
     CircularProgress,
+    Divider,
+    Drawer,
+    IconButton,
     MenuItem,
     Slider,
+    Tab,
+    Tabs,
     TextField,
     ToggleButton,
     ToggleButtonGroup,
     Tooltip,
-} from '@mui/material';
-
-import {AnimatePresence} from 'framer-motion';
-import {PageTransition} from '@/components/common/PageTransition';
-import {ChatMessage} from '@/components/agent/ChatMessage';
-import {ChatInput} from '@/components/agent/ChatInput';
-import {AgentStatusBadge} from '@/components/agent/AgentStatusBadge';
-import {DecisionCard} from '@/components/agent/DecisionCard';
-import {SessionList} from '@/components/agent/SessionList';
-import {DecisionHistoryPanel} from '@/components/agent/DecisionHistoryPanel';
-import {ThinkingIndicator} from '@/components/agent/ThinkingIndicator';
-import {EmptyState} from '@/components/common/EmptyState';
-import {useAgentSocket} from '@/api/websocket/useAgentSocket';
-import {useAgentStore} from '@/store/agentStore';
-import {decisionsApi} from '@/api/endpoints/decisions';
-import {sessionsApi} from '@/api/endpoints/sessions';
-import {settingsApi} from '@/api/endpoints/settings';
+    Typography,
+    useMediaQuery,
+    useTheme,
+} from "@mui/material";
+import {keepPreviousData, useMutation, useQuery, useQueryClient,} from "@tanstack/react-query";
+import {createFileRoute} from "@tanstack/react-router";
+import {AnimatePresence, motion} from "framer-motion";
+import type {MouseEvent} from "react";
+import {useCallback, useEffect, useRef, useState} from "react";
+import {decisionsApi} from "@/api/endpoints/decisions";
+import {sessionsApi} from "@/api/endpoints/sessions";
+import type {AgentConfigUpdate} from "@/api/endpoints/settings";
+import {settingsApi} from "@/api/endpoints/settings";
 import {
     agentConfigQueryOptions,
     agentDecisionsQueryOptions,
@@ -67,19 +53,31 @@ import {
     agentPendingDecisionsQueryOptions,
     agentSessionQueryOptions,
     agentSessionsGroupedQueryOptions,
-} from '@/api/queryOptions/agent';
-import {notify} from '@/store/uiStore';
-import type {SessionMessage} from '@/types/session';
-import type {AgentConfigUpdate} from '@/api/endpoints/settings';
+} from "@/api/queryOptions/agent";
+import {useAgentSocket} from "@/api/websocket/useAgentSocket";
+import {AgentStatusBadge} from "@/components/agent/AgentStatusBadge";
+import {ChatInput} from "@/components/agent/ChatInput";
+import {ChatMessage} from "@/components/agent/ChatMessage";
+import {DecisionCard} from "@/components/agent/DecisionCard";
+import {DecisionHistoryPanel} from "@/components/agent/DecisionHistoryPanel";
+import {SessionList} from "@/components/agent/SessionList";
+import {ThinkingIndicator} from "@/components/agent/ThinkingIndicator";
+import {EmptyState} from "@/components/common/EmptyState";
+import {PageTransition} from "@/components/common/PageTransition";
+import {useAgentStore} from "@/store/agentStore";
+import {notify} from "@/store/uiStore";
+import type {SessionMessage} from "@/types/session";
+import {requireAuth} from "./-guards";
 
-export const Route = createFileRoute('/agent')({
+export const Route = createFileRoute("/agent")({
+    beforeLoad: requireAuth,
     component: AgentPage,
 });
 
 const MODEL_OPTIONS = [
-    {value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4'},
-    {value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5'},
-    {value: 'claude-opus-4-6', label: 'Claude Opus 4.6'},
+    {value: "claude-sonnet-4-20250514", label: "Claude Sonnet 4"},
+    {value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5"},
+    {value: "claude-opus-4-6", label: "Claude Opus 4.6"},
 ];
 
 /**
@@ -87,17 +85,24 @@ const MODEL_OPTIONS = [
  */
 function AgentSetupPanel() {
     const queryClient = useQueryClient();
-    const [apiKeyInput, setApiKeyInput] = useState('');
-    const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
-    const [loginResult, setLoginResult] = useState<{ success: boolean; message: string } | null>(null);
+    const [apiKeyInput, setApiKeyInput] = useState("");
+    const [testResult, setTestResult] = useState<{
+        success: boolean;
+        message: string;
+    } | null>(null);
+    const [loginResult, setLoginResult] = useState<{
+        success: boolean;
+        message: string;
+    } | null>(null);
 
     const configQuery = useQuery(agentConfigQueryOptions());
 
     const updateMutation = useMutation({
-        mutationFn: (update: AgentConfigUpdate) => settingsApi.updateAgentConfig(update),
+        mutationFn: (update: AgentConfigUpdate) =>
+            settingsApi.updateAgentConfig(update),
         onSuccess: () => {
-            void queryClient.invalidateQueries({queryKey: ['agent-config']});
-            notify.success('Agent configuration updated');
+            void queryClient.invalidateQueries({queryKey: ["agent-config"]});
+            notify.success("Agent configuration updated");
             setTestResult(null);
         },
     });
@@ -125,7 +130,7 @@ function AgentSetupPanel() {
             }
         },
         onError: () => {
-            setLoginResult({success: false, message: 'Login request failed'});
+            setLoginResult({success: false, message: "Login request failed"});
         },
     });
 
@@ -137,17 +142,24 @@ function AgentSetupPanel() {
                 const fresh = await settingsApi.getAgentConfig();
                 if (fresh.cliLoggedIn) {
                     setIsPollingLogin(false);
-                    setLoginResult({success: true, message: 'Successfully logged in to Claude'});
-                    notify.success('Successfully logged in to Claude');
-                    void queryClient.invalidateQueries({queryKey: ['agent-config']});
+                    setLoginResult({
+                        success: true,
+                        message: "Successfully logged in to Claude",
+                    });
+                    notify.success("Successfully logged in to Claude");
+                    void queryClient.invalidateQueries({queryKey: ["agent-config"]});
                 }
-            } catch { /* ignore poll errors */
+            } catch {
+                /* ignore poll errors */
             }
         }, 4000);
         // Stop polling after 2 minutes
         const timeout = setTimeout(() => {
             setIsPollingLogin(false);
-            setLoginResult({success: false, message: 'Login timed out. Please try again.'});
+            setLoginResult({
+                success: false,
+                message: "Login timed out. Please try again.",
+            });
         }, 120_000);
         return () => {
             clearInterval(interval);
@@ -158,7 +170,7 @@ function AgentSetupPanel() {
     const logoutMutation = useMutation({
         mutationFn: () => settingsApi.cliLogout(),
         onSuccess: (result) => {
-            void queryClient.invalidateQueries({queryKey: ['agent-config']});
+            void queryClient.invalidateQueries({queryKey: ["agent-config"]});
             if (result.success) notify.success(result.message);
             else notify.error(result.message);
             setLoginResult(null);
@@ -167,20 +179,23 @@ function AgentSetupPanel() {
 
     const config = configQuery.data;
 
-    const handleAuthModeChange = (_: MouseEvent<HTMLElement>, newMode: string | null) => {
+    const handleAuthModeChange = (
+        _: MouseEvent<HTMLElement>,
+        newMode: string | null,
+    ) => {
         if (newMode) updateMutation.mutate({authMode: newMode});
     };
 
     const handleSaveApiKey = () => {
         if (apiKeyInput.trim()) {
             updateMutation.mutate({apiKey: apiKeyInput.trim()});
-            setApiKeyInput('');
+            setApiKeyInput("");
         }
     };
 
     if (configQuery.isLoading || !config) {
         return (
-            <Box sx={{display: 'flex', justifyContent: 'center', py: 3}}>
+            <Box sx={{display: "flex", justifyContent: "center", py: 3}}>
                 <CircularProgress size={24}/>
             </Box>
         );
@@ -195,22 +210,41 @@ function AgentSetupPanel() {
     }
 
     return (
-        <Box sx={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center',
-            gap: 3, py: 4, px: 3, maxWidth: 480, mx: 'auto',
-        }}>
-            <SmartToyIcon sx={{fontSize: 56, color: 'text.secondary'}}/>
-            <Box sx={{textAlign: 'center'}}>
-                <Typography variant="h6" gutterBottom>Configure AI Agent</Typography>
+        <Box
+            sx={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 3,
+                py: 4,
+                px: 3,
+                maxWidth: 480,
+                mx: "auto",
+            }}
+        >
+            <SmartToyIcon sx={{fontSize: 56, color: "text.secondary"}}/>
+            <Box sx={{textAlign: "center"}}>
+                <Typography variant="h6" gutterBottom>
+                    Configure AI Agent
+                </Typography>
                 <Typography variant="body2" color="text.secondary">
                     Set up authentication to start chatting with the trading agent.
                 </Typography>
             </Box>
 
-            <Box sx={{width: '100%', display: 'flex', flexDirection: 'column', gap: 2.5}}>
+            <Box
+                sx={{
+                    width: "100%",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 2.5,
+                }}
+            >
                 {/* Auth Mode */}
                 <Box>
-                    <Typography variant="subtitle2" gutterBottom>Authentication Mode</Typography>
+                    <Typography variant="subtitle2" gutterBottom>
+                        Authentication Mode
+                    </Typography>
                     <ToggleButtonGroup
                         value={config.authMode}
                         exclusive
@@ -219,25 +253,33 @@ function AgentSetupPanel() {
                         fullWidth
                         disabled={updateMutation.isPending}
                     >
-                        <ToggleButton value="subscription">Claude Subscription</ToggleButton>
+                        <ToggleButton value="subscription">
+                            Claude Subscription
+                        </ToggleButton>
                         <ToggleButton value="api_key">API Key</ToggleButton>
                     </ToggleButtonGroup>
-                    <Typography variant="caption" color="text.secondary" sx={{mt: 0.5, display: 'block'}}>
-                        {config.authMode === 'subscription'
-                            ? 'Free with Claude Pro/Max subscription'
-                            : 'Direct Anthropic API key — pay-per-use billing'}
+                    <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{mt: 0.5, display: "block"}}
+                    >
+                        {config.authMode === "subscription"
+                            ? "Free with Claude Pro/Max subscription"
+                            : "Direct Anthropic API key — pay-per-use billing"}
                     </Typography>
                 </Box>
 
                 {/* Subscription: CLI login */}
-                {config.authMode === 'subscription' && (
+                {config.authMode === "subscription" && (
                     <Box>
-                        <Box sx={{display: 'flex', alignItems: 'center', gap: 1, mb: 1.5}}>
+                        <Box
+                            sx={{display: "flex", alignItems: "center", gap: 1, mb: 1.5}}
+                        >
                             <Typography variant="subtitle2">CLI Status:</Typography>
                             <Chip
                                 icon={config.cliLoggedIn ? <CheckCircleIcon/> : <ErrorIcon/>}
-                                label={config.cliLoggedIn ? 'Logged In' : 'Not Logged In'}
-                                color={config.cliLoggedIn ? 'success' : 'warning'}
+                                label={config.cliLoggedIn ? "Logged In" : "Not Logged In"}
+                                color={config.cliLoggedIn ? "success" : "warning"}
                                 size="small"
                                 variant="outlined"
                             />
@@ -247,32 +289,47 @@ function AgentSetupPanel() {
                                 variant="outlined"
                                 color="error"
                                 size="small"
-                                startIcon={logoutMutation.isPending ? <CircularProgress size={14}/> : <LogoutIcon/>}
+                                startIcon={
+                                    logoutMutation.isPending ? (
+                                        <CircularProgress size={14}/>
+                                    ) : (
+                                        <LogoutIcon/>
+                                    )
+                                }
                                 onClick={() => logoutMutation.mutate()}
                                 disabled={logoutMutation.isPending}
                             >
                                 Logout
                             </Button>
                         ) : (
-                            <Box sx={{display: 'flex', flexDirection: 'column', gap: 1.5}}>
+                            <Box sx={{display: "flex", flexDirection: "column", gap: 1.5}}>
                                 <Button
                                     variant="contained"
                                     fullWidth
-                                    startIcon={(loginMutation.isPending || isPollingLogin) ?
-                                        <CircularProgress size={16} color="inherit"/> : <LoginIcon/>}
+                                    startIcon={
+                                        loginMutation.isPending || isPollingLogin ? (
+                                            <CircularProgress size={16} color="inherit"/>
+                                        ) : (
+                                            <LoginIcon/>
+                                        )
+                                    }
                                     onClick={() => loginMutation.mutate()}
                                     disabled={loginMutation.isPending || isPollingLogin}
                                 >
-                                    {isPollingLogin ? 'Waiting for login...' : loginMutation.isPending ? 'Opening browser...' : 'Login with Claude'}
+                                    {isPollingLogin
+                                        ? "Waiting for login..."
+                                        : loginMutation.isPending
+                                            ? "Opening browser..."
+                                            : "Login with Claude"}
                                 </Button>
                                 {isPollingLogin && (
-                                    <Alert severity="info" sx={{fontSize: '0.8rem'}}>
-                                        Complete the login in your browser.
-                                        This page will update automatically.
+                                    <Alert severity="info" sx={{fontSize: "0.8rem"}}>
+                                        Complete the login in your browser. This page will update
+                                        automatically.
                                     </Alert>
                                 )}
                                 {loginResult && (
-                                    <Alert severity={loginResult.success ? 'success' : 'error'}>
+                                    <Alert severity={loginResult.success ? "success" : "error"}>
                                         {loginResult.message}
                                     </Alert>
                                 )}
@@ -282,19 +339,21 @@ function AgentSetupPanel() {
                 )}
 
                 {/* API Key: input */}
-                {config.authMode === 'api_key' && (
+                {config.authMode === "api_key" && (
                     <Box>
-                        <Typography variant="subtitle2" gutterBottom>Anthropic API Key</Typography>
+                        <Typography variant="subtitle2" gutterBottom>
+                            Anthropic API Key
+                        </Typography>
                         {config.hasApiKey && (
                             <Chip
                                 label={config.maskedApiKey}
                                 color="success"
                                 size="small"
                                 variant="outlined"
-                                sx={{mb: 1, fontFamily: 'monospace'}}
+                                sx={{mb: 1, fontFamily: "monospace"}}
                             />
                         )}
-                        <Box sx={{display: 'flex', gap: 1}}>
+                        <Box sx={{display: "flex", gap: 1}}>
                             <TextField
                                 size="small"
                                 type="password"
@@ -317,7 +376,9 @@ function AgentSetupPanel() {
 
                 {/* Model */}
                 <Box>
-                    <Typography variant="subtitle2" gutterBottom>Model</Typography>
+                    <Typography variant="subtitle2" gutterBottom>
+                        Model
+                    </Typography>
                     <TextField
                         select
                         size="small"
@@ -327,7 +388,9 @@ function AgentSetupPanel() {
                         disabled={updateMutation.isPending}
                     >
                         {MODEL_OPTIONS.map((opt) => (
-                            <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+                            <MenuItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                            </MenuItem>
                         ))}
                     </TextField>
                 </Box>
@@ -335,23 +398,29 @@ function AgentSetupPanel() {
                 {/* Thinking Budget */}
                 <Box>
                     <Typography variant="subtitle2" gutterBottom>
-                        Thinking
-                        Budget: {config.maxThinkingTokens === 0 ? 'Disabled' : `${config.maxThinkingTokens.toLocaleString()} tokens`}
+                        Thinking Budget:{" "}
+                        {config.maxThinkingTokens === 0
+                            ? "Disabled"
+                            : `${config.maxThinkingTokens.toLocaleString()} tokens`}
                     </Typography>
                     <Slider
                         value={config.maxThinkingTokens}
-                        onChange={(_, value) => updateMutation.mutate({maxThinkingTokens: value as number})}
+                        onChange={(_, value) =>
+                            updateMutation.mutate({maxThinkingTokens: value as number})
+                        }
                         min={0}
                         max={50000}
                         step={1000}
                         marks={[
-                            {value: 0, label: 'Off'},
-                            {value: 10000, label: '10k'},
-                            {value: 25000, label: '25k'},
-                            {value: 50000, label: '50k'},
+                            {value: 0, label: "Off"},
+                            {value: 10000, label: "10k"},
+                            {value: 25000, label: "25k"},
+                            {value: 50000, label: "50k"},
                         ]}
                         valueLabelDisplay="auto"
-                        valueLabelFormat={(v) => v === 0 ? 'Off' : `${(v / 1000).toFixed(0)}k`}
+                        valueLabelFormat={(v) =>
+                            v === 0 ? "Off" : `${(v / 1000).toFixed(0)}k`
+                        }
                         disabled={updateMutation.isPending}
                         size="small"
                     />
@@ -363,7 +432,13 @@ function AgentSetupPanel() {
                 {/* Test Connection */}
                 <Button
                     variant="contained"
-                    startIcon={testMutation.isPending ? <CircularProgress size={16}/> : <PlayArrowIcon/>}
+                    startIcon={
+                        testMutation.isPending ? (
+                            <CircularProgress size={16}/>
+                        ) : (
+                            <PlayArrowIcon/>
+                        )
+                    }
                     onClick={() => testMutation.mutate()}
                     disabled={testMutation.isPending}
                     fullWidth
@@ -371,7 +446,7 @@ function AgentSetupPanel() {
                     Test Connection
                 </Button>
                 {testResult && (
-                    <Alert severity={testResult.success ? 'success' : 'error'}>
+                    <Alert severity={testResult.success ? "success" : "error"}>
                         {testResult.message}
                     </Alert>
                 )}
@@ -381,12 +456,12 @@ function AgentSetupPanel() {
 }
 
 // Sidebar tab type
-type SidebarTab = 'sessions' | 'decisions';
+type SidebarTab = "sessions" | "decisions";
 
 function AgentPage() {
     const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-    const isLargeScreen = useMediaQuery(theme.breakpoints.up('lg'));
+    const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+    const isLargeScreen = useMediaQuery(theme.breakpoints.up("lg"));
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const lastSessionInvalidateMessageRef = useRef<string | null>(null);
@@ -429,10 +504,11 @@ function AgentPage() {
     } = useAgentStore();
 
     // Local state
-    const [sidebarTab, setSidebarTab] = useState<SidebarTab>('sessions');
+    const [sidebarTab, setSidebarTab] = useState<SidebarTab>("sessions");
     const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
     const [configDrawerOpen, setConfigDrawerOpen] = useState(false);
     const [decisionPage, setDecisionPage] = useState(1);
+    const isDecisionsTabActive = sidebarTab === "decisions";
 
     // WebSocket connection
     const {
@@ -466,14 +542,18 @@ function AgentPage() {
         setIsLoadingSessions,
     ]);
 
-    // Fetch decisions with filters
+    // Fetch decisions with filters only when the decisions tab is open
     const {data: decisionsData, isLoading: decisionsLoading} = useQuery({
         ...agentDecisionsQueryOptions(decisionFilters, decisionPage, 20),
         placeholderData: keepPreviousData,
+        enabled: isDecisionsTabActive,
     });
 
-    // Fetch decision symbols for filter dropdown
-    const {data: symbolsData} = useQuery(agentDecisionSymbolsQueryOptions());
+    // Fetch decision symbols for filter dropdown only when needed
+    const {data: symbolsData} = useQuery({
+        ...agentDecisionSymbolsQueryOptions(),
+        enabled: isDecisionsTabActive,
+    });
 
     // Fetch pending decisions count
     const {data: pendingData} = useQuery({
@@ -487,14 +567,18 @@ function AgentPage() {
             if (decisionPage === 1) {
                 const samePageDecisions =
                     decisions.length === decisionsData.decisions.length &&
-                    decisions.every((decision, index) => decision.id === decisionsData.decisions[index]?.id);
+                    decisions.every(
+                        (decision, index) =>
+                            decision.id === decisionsData.decisions[index]?.id,
+                    );
 
                 if (!samePageDecisions) {
                     setDecisions(decisionsData.decisions);
                 }
             } else {
                 const newDecisions = decisionsData.decisions.filter(
-                    (incoming) => !decisions.some((existing) => existing.id === incoming.id),
+                    (incoming) =>
+                        !decisions.some((existing) => existing.id === incoming.id),
                 );
 
                 if (newDecisions.length > 0) {
@@ -502,7 +586,8 @@ function AgentPage() {
                 }
             }
 
-            const hasMore = decisionsData.total > decisionsData.page * decisionsData.pageSize;
+            const hasMore =
+                decisionsData.total > decisionsData.page * decisionsData.pageSize;
             if (hasMoreDecisions !== hasMore) {
                 setHasMoreDecisions(hasMore);
             }
@@ -546,7 +631,7 @@ function AgentPage() {
 
     // Fetch session messages when session changes
     const sessionQuery = useQuery({
-        ...agentSessionQueryOptions(currentSessionId ?? ''),
+        ...agentSessionQueryOptions(currentSessionId ?? ""),
         enabled: !!currentSessionId,
     });
     const sessionData = sessionQuery.data;
@@ -574,30 +659,20 @@ function AgentPage() {
             }),
         );
 
-        const sameMessages =
-            agentMessages.length === messages.length &&
-            agentMessages.every((message, index) => {
-                const current = messages[index];
-                return (
-                    current &&
-                    current.id === message.id &&
-                    current.role === message.role &&
-                    current.content === message.content &&
-                    current.timestamp === message.timestamp
-                );
-            });
-
-        if (!sameMessages) {
-            setMessages(agentMessages);
-        }
-    }, [messages, sessionData, setMessages]);
+        setMessages(agentMessages);
+    }, [sessionData, setMessages]);
 
     // Refresh sidebar after each agent response to pick up auto-generated title
     useEffect(() => {
         const last = messages[messages.length - 1];
-        if (last?.role === 'assistant' && last.id !== lastSessionInvalidateMessageRef.current) {
+        if (
+            last?.role === "assistant" &&
+            last.id !== lastSessionInvalidateMessageRef.current
+        ) {
             lastSessionInvalidateMessageRef.current = last.id;
-            void queryClient.invalidateQueries({queryKey: ['agent-sessions-grouped']});
+            void queryClient.invalidateQueries({
+                queryKey: ["agent-sessions-grouped"],
+            });
         }
     }, [messages, queryClient]);
 
@@ -607,14 +682,21 @@ function AgentPage() {
             setCurrentSessionId(null);
             clearMessages();
         }
-    }, [sessionQuery.error, currentSessionId, setCurrentSessionId, clearMessages]);
+    }, [
+        sessionQuery.error,
+        currentSessionId,
+        setCurrentSessionId,
+        clearMessages,
+    ]);
 
     // Mutations
     const deleteSessionMutation = useMutation({
         mutationFn: (sessionId: string) => sessionsApi.deleteSession(sessionId),
         onSuccess: (_, sessionId) => {
             removeSession(sessionId);
-            void queryClient.invalidateQueries({queryKey: ['agent-sessions-grouped']});
+            void queryClient.invalidateQueries({
+                queryKey: ["agent-sessions-grouped"],
+            });
         },
     });
 
@@ -622,25 +704,30 @@ function AgentPage() {
         mutationFn: ({sessionId, title}: { sessionId: string; title: string }) =>
             sessionsApi.updateSession(sessionId, {title}),
         onSuccess: (updatedSession) => {
-            updateSessionTitle(updatedSession.id, updatedSession.title || '');
+            updateSessionTitle(updatedSession.id, updatedSession.title || "");
         },
     });
 
     const confirmDecisionMutation = useMutation({
-        mutationFn: (decisionId: string) => decisionsApi.confirmDecision(decisionId),
+        mutationFn: (decisionId: string) =>
+            decisionsApi.confirmDecision(decisionId),
         onSuccess: (decision) => {
-            updateDecisionStatus(decision.id, 'confirmed');
-            void queryClient.invalidateQueries({queryKey: ['agent-decisions']});
-            void queryClient.invalidateQueries({queryKey: ['agent-decisions-pending']});
+            updateDecisionStatus(decision.id, "confirmed");
+            void queryClient.invalidateQueries({queryKey: ["agent-decisions"]});
+            void queryClient.invalidateQueries({
+                queryKey: ["agent-decisions-pending"],
+            });
         },
     });
 
     const rejectDecisionMutation = useMutation({
         mutationFn: (decisionId: string) => decisionsApi.rejectDecision(decisionId),
         onSuccess: (decision) => {
-            updateDecisionStatus(decision.id, 'rejected');
-            void queryClient.invalidateQueries({queryKey: ['agent-decisions']});
-            void queryClient.invalidateQueries({queryKey: ['agent-decisions-pending']});
+            updateDecisionStatus(decision.id, "rejected");
+            void queryClient.invalidateQueries({queryKey: ["agent-decisions"]});
+            void queryClient.invalidateQueries({
+                queryKey: ["agent-decisions-pending"],
+            });
         },
     });
 
@@ -650,7 +737,7 @@ function AgentPage() {
                          feedback,
                      }: {
             decisionId: string;
-            feedback: 'thumbs_up' | 'thumbs_down';
+            feedback: "thumbs_up" | "thumbs_down";
         }) => decisionsApi.addFeedback(decisionId, {feedback}),
     });
 
@@ -662,7 +749,7 @@ function AgentPage() {
                 setMobileDrawerOpen(false);
             }
         },
-        [setCurrentSessionId, isMobile]
+        [setCurrentSessionId, isMobile],
     );
 
     const handleNewSession = useCallback(() => {
@@ -678,18 +765,18 @@ function AgentPage() {
 
     const handleDeleteSession = useCallback(
         (sessionId: string) => {
-            if (confirm('Are you sure you want to delete this conversation?')) {
+            if (confirm("Are you sure you want to delete this conversation?")) {
                 deleteSessionMutation.mutate(sessionId);
             }
         },
-        [deleteSessionMutation]
+        [deleteSessionMutation],
     );
 
     const handleRenameSession = useCallback(
         (sessionId: string, newTitle: string) => {
             updateSessionMutation.mutate({sessionId, title: newTitle});
         },
-        [updateSessionMutation]
+        [updateSessionMutation],
     );
 
     const handleFiltersChange = useCallback(
@@ -697,7 +784,7 @@ function AgentPage() {
             setDecisionFilters(filters);
             setDecisionPage(1); // Reset to first page
         },
-        [setDecisionFilters]
+        [setDecisionFilters],
     );
 
     const handleLoadMoreDecisions = useCallback(() => {
@@ -708,22 +795,24 @@ function AgentPage() {
     useEffect(() => {
         setCurrentSessionId(null);
         clearMessages();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [setCurrentSessionId, clearMessages]);
 
     // Auto-scroll to bottom on new messages or thinking state changes
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({behavior: 'smooth'});
-    }, [messages, isThinking, currentTurnToolCalls]);
+        void messages.length;
+        void isThinking;
+        void currentTurnToolCalls.length;
+        messagesEndRef.current?.scrollIntoView({behavior: "smooth"});
+    }, [messages.length, isThinking, currentTurnToolCalls.length]);
 
     // Sidebar content
     const sidebarContent = (
-        <Box sx={{height: '100%', display: 'flex', flexDirection: 'column'}}>
+        <Box sx={{height: "100%", display: "flex", flexDirection: "column"}}>
             <Tabs
                 value={sidebarTab}
                 onChange={(_, value) => setSidebarTab(value)}
                 variant="fullWidth"
-                sx={{borderBottom: 1, borderColor: 'divider'}}
+                sx={{borderBottom: 1, borderColor: "divider"}}
             >
                 <Tab
                     value="sessions"
@@ -745,8 +834,8 @@ function AgentPage() {
                 />
             </Tabs>
 
-            <Box sx={{flex: 1, overflow: 'hidden'}}>
-                {sidebarTab === 'sessions' ? (
+            <Box sx={{flex: 1, overflow: "hidden"}}>
+                {sidebarTab === "sessions" ? (
                     <SessionList
                         groups={sessionGroups}
                         currentSessionId={currentSessionId || undefined}
@@ -778,7 +867,7 @@ function AgentPage() {
 
     return (
         <PageTransition pageKey="agent">
-            <Box sx={{height: 'calc(100vh - 100px)', display: 'flex', gap: 2}}>
+            <Box sx={{height: "calc(100vh - 100px)", display: "flex", gap: 2}}>
                 {/* Mobile Drawer */}
                 {isMobile && (
                     <Drawer
@@ -793,47 +882,52 @@ function AgentPage() {
 
                 {/* Desktop Left Sidebar - Session History */}
                 {!isMobile && (
-                    <Card sx={{width: 300, display: 'flex', flexDirection: 'column'}}>
+                    <Card sx={{width: 300, display: "flex", flexDirection: "column"}}>
                         {sidebarContent}
                     </Card>
                 )}
 
                 {/* Main Chat Area */}
-                <Card sx={{flex: 1, display: 'flex', flexDirection: 'column'}}>
+                <Card sx={{flex: 1, display: "flex", flexDirection: "column"}}>
                     {/* Header */}
                     <Box
                         sx={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
                             p: 2,
                             borderBottom: 1,
-                            borderColor: 'divider',
+                            borderColor: "divider",
                         }}
                     >
-                        <Box sx={{display: 'flex', alignItems: 'center', gap: 2}}>
+                        <Box sx={{display: "flex", alignItems: "center", gap: 2}}>
                             {isMobile && (
-                                <IconButton onClick={() => setMobileDrawerOpen(true)} edge="start">
+                                <IconButton
+                                    onClick={() => setMobileDrawerOpen(true)}
+                                    edge="start"
+                                >
                                     <MenuIcon/>
                                 </IconButton>
                             )}
-                            <SmartToyIcon sx={{color: 'primary.main'}}/>
+                            <SmartToyIcon sx={{color: "primary.main"}}/>
                             <Box>
                                 <Typography variant="h6">Trading Agent</Typography>
                                 {currentSessionId && sessionData && (
                                     <Typography variant="caption" color="text.secondary">
-                                        {sessionData.title || 'New Chat'}
+                                        {sessionData.title || "New Chat"}
                                     </Typography>
                                 )}
                             </Box>
                         </Box>
-                        <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
+                        <Box sx={{display: "flex", alignItems: "center", gap: 1}}>
                             <AgentStatusBadge status={status}/>
-                            <Tooltip title={showThinkingContent ? 'Hide thinking' : 'Show thinking'}>
+                            <Tooltip
+                                title={showThinkingContent ? "Hide thinking" : "Show thinking"}
+                            >
                                 <IconButton
                                     onClick={toggleThinkingContent}
                                     size="small"
-                                    color={showThinkingContent ? 'primary' : 'default'}
+                                    color={showThinkingContent ? "primary" : "default"}
                                 >
                                     <PsychologyIcon fontSize="small"/>
                                 </IconButton>
@@ -853,18 +947,27 @@ function AgentPage() {
                         anchor="right"
                         open={configDrawerOpen}
                         onClose={() => setConfigDrawerOpen(false)}
-                        slotProps={{paper: {sx: {width: {xs: '100%', sm: 420}}}}}
+                        slotProps={{paper: {sx: {width: {xs: "100%", sm: 420}}}}}
                     >
-                        <Box sx={{
-                            display: 'flex', justifyContent: 'space-between',
-                            alignItems: 'center', p: 2, borderBottom: 1, borderColor: 'divider',
-                        }}>
+                        <Box
+                            sx={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                p: 2,
+                                borderBottom: 1,
+                                borderColor: "divider",
+                            }}
+                        >
                             <Typography variant="h6">Agent Configuration</Typography>
-                            <IconButton onClick={() => setConfigDrawerOpen(false)} size="small">
+                            <IconButton
+                                onClick={() => setConfigDrawerOpen(false)}
+                                size="small"
+                            >
                                 <MenuIcon fontSize="small"/>
                             </IconButton>
                         </Box>
-                        <Box sx={{overflow: 'auto', flex: 1}}>
+                        <Box sx={{overflow: "auto", flex: 1}}>
                             <AgentSetupPanel/>
                         </Box>
                     </Drawer>
@@ -873,29 +976,36 @@ function AgentPage() {
                     <CardContent
                         sx={{
                             flex: 1,
-                            overflow: 'auto',
-                            display: 'flex',
-                            flexDirection: 'column',
+                            overflow: "auto",
+                            display: "flex",
+                            flexDirection: "column",
                         }}
                     >
                         {messages.length === 0 ? (
                             <EmptyState
                                 icon={<SmartToyIcon sx={{fontSize: 64}}/>}
-                                title={status === 'connected' || status === 'thinking'
-                                    ? 'Start a conversation'
-                                    : status === 'auth_required'
-                                        ? 'Authentication required'
-                                        : 'Agent not connected'}
-                                description={status === 'connected' || status === 'thinking'
-                                    ? 'Ask the trading agent for analysis, recommendations, or help with your trading decisions.'
-                                    : status === 'auth_required'
-                                        ? 'Click the gear icon above to configure authentication, then refresh.'
-                                        : 'Check agent configuration via the gear icon above.'}
+                                title={
+                                    status === "connected" || status === "thinking"
+                                        ? "Start a conversation"
+                                        : status === "auth_required"
+                                            ? "Authentication required"
+                                            : "Agent not connected"
+                                }
+                                description={
+                                    status === "connected" || status === "thinking"
+                                        ? "Ask the trading agent for analysis, recommendations, or help with your trading decisions."
+                                        : status === "auth_required"
+                                            ? "Click the gear icon above to configure authentication, then refresh."
+                                            : "Check agent configuration via the gear icon above."
+                                }
                             />
                         ) : (
                             messages.map((message) => (
-                                <ChatMessage key={message.id} message={message}
-                                             showThinkingContent={showThinkingContent}/>
+                                <ChatMessage
+                                    key={message.id}
+                                    message={message}
+                                    showThinkingContent={showThinkingContent}
+                                />
                             ))
                         )}
                         <AnimatePresence>
@@ -913,7 +1023,15 @@ function AgentPage() {
                     <Divider/>
 
                     {/* Input */}
-                    <Box sx={{p: 2}}>
+                    <Box
+                        sx={{
+                            p: 2,
+                            "& .MuiOutlinedInput-root:focus-within": {
+                                boxShadow: "0 0 0 3px rgba(249, 115, 22, 0.15)",
+                                borderRadius: 1,
+                            },
+                        }}
+                    >
                         <ChatInput
                             onSendMessage={sendMessage}
                             onRequestAnalysis={requestAnalysis}
@@ -926,7 +1044,14 @@ function AgentPage() {
 
                 {/* Desktop Right Sidebar - Latest Decision & Quick Prompts */}
                 {isLargeScreen && (
-                    <Box sx={{width: 320, display: 'flex', flexDirection: 'column', gap: 2}}>
+                    <Box
+                        sx={{
+                            width: 320,
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 2,
+                        }}
+                    >
                         {/* Latest Decision */}
                         <Card sx={{p: 2}}>
                             <Typography variant="subtitle1" fontWeight={600} gutterBottom>
@@ -938,36 +1063,42 @@ function AgentPage() {
                                     onExecute={() => executeDecision(lastDecision)}
                                 />
                             ) : (
-                                <Typography variant="body2" color="text.secondary" textAlign="center">
+                                <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                    textAlign="center"
+                                >
                                     No recent decisions. Ask the agent for a recommendation.
                                 </Typography>
                             )}
                         </Card>
 
                         {/* Quick Prompts */}
-                        <Card sx={{p: 2, flex: 1, overflow: 'auto'}}>
+                        <Card sx={{p: 2, flex: 1, overflow: "auto"}}>
                             <Typography variant="subtitle1" fontWeight={600} gutterBottom>
                                 Quick Prompts
                             </Typography>
-                            <Box sx={{display: 'flex', flexDirection: 'column', gap: 1}}>
+                            <Box sx={{display: "flex", flexDirection: "column", gap: 1}}>
                                 {[
-                                    'Analyze BTC/USDT market conditions',
-                                    'What is the current market sentiment?',
-                                    'Should I buy or sell ETH right now?',
-                                    'What are the key support and resistance levels?',
+                                    "Analyze BTC/USDT market conditions",
+                                    "What is the current market sentiment?",
+                                    "Should I buy or sell ETH right now?",
+                                    "What are the key support and resistance levels?",
                                     "Summarize today's market news",
                                 ].map((prompt) => (
                                     <Card
                                         key={prompt}
+                                        component={motion.div}
+                                        whileHover={{x: 8}}
+                                        whileTap={{scale: 0.98}}
                                         onClick={() => sendMessage(prompt)}
                                         sx={{
                                             p: 1.5,
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s',
-                                            '&:hover': {
-                                                bgcolor: 'action.hover',
-                                                borderColor: 'primary.main',
-                                                transform: 'translateX(4px)',
+                                            cursor: "pointer",
+                                            transition: "border-color 0.2s",
+                                            "&:hover": {
+                                                bgcolor: "action.hover",
+                                                borderColor: "primary.main",
                                             },
                                         }}
                                     >

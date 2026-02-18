@@ -1,18 +1,16 @@
-import {StrictMode} from 'react'
-import ReactDOM from 'react-dom/client'
-import {createRouter, RouterProvider} from '@tanstack/react-router'
-import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
-import {ThemeProvider} from '@mui/material/styles'
-import CssBaseline from '@mui/material/CssBaseline'
-
-// Import theme
-import {theme} from './theme'
+import CssBaseline from "@mui/material/CssBaseline";
+import {ThemeProvider} from "@mui/material/styles";
+import {QueryClient, QueryClientProvider} from "@tanstack/react-query";
+import {createRouter, RouterProvider} from "@tanstack/react-router";
+import {StrictMode} from "react";
+import ReactDOM from "react-dom/client";
+import reportWebVitals from "./reportWebVitals.ts";
 
 // Import the generated route tree
-import {routeTree} from './routeTree.gen'
-
-import reportWebVitals from './reportWebVitals.ts'
-import {initializeFrontendLogging} from './utils/frontendLogger'
+import {routeTree} from "./routeTree.gen";
+// Import theme
+import {theme} from "./theme";
+import {initializeFrontendLogging} from "./utils/frontendLogger";
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -25,31 +23,31 @@ const queryClient = new QueryClient({
             refetchOnWindowFocus: false,
         },
     },
-})
+});
 
 // Create a new router instance
 const router = createRouter({
     routeTree,
     context: {},
-    defaultPreload: 'intent',
+    defaultPreload: false,
     scrollRestoration: true,
     defaultStructuralSharing: true,
     defaultPreloadStaleTime: 30_000,
-})
+});
 
 // Register the router instance for type safety
-declare module '@tanstack/react-router' {
+declare module "@tanstack/react-router" {
     interface Register {
-        router: typeof router
+        router: typeof router;
     }
 }
 
-initializeFrontendLogging()
+initializeFrontendLogging();
 
 // Render the app
-const rootElement = document.getElementById('app')
+const rootElement = document.getElementById("app");
 if (rootElement && !rootElement.innerHTML) {
-    const root = ReactDOM.createRoot(rootElement)
+    const root = ReactDOM.createRoot(rootElement);
     root.render(
         <StrictMode>
             <QueryClientProvider client={queryClient}>
@@ -59,10 +57,10 @@ if (rootElement && !rootElement.innerHTML) {
                 </ThemeProvider>
             </QueryClientProvider>
         </StrictMode>,
-    )
+    );
 }
 
 // If you want to start measuring performance in your app, pass a function
 // to log results (for example: reportWebVitals(console.log))
 // or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
-reportWebVitals()
+reportWebVitals();

@@ -21,21 +21,63 @@ export interface CandlesParams {
 	endTime?: number;
 }
 
+function toNumber(value: unknown, fallback = 0): number {
+	const parsed =
+		typeof value === "number"
+			? value
+			: typeof value === "string"
+				? Number(value)
+				: Number.NaN;
+	return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toTimestamp(value: unknown): number {
+	if (typeof value === "number" && Number.isFinite(value)) {
+		return value;
+	}
+	if (typeof value === "string") {
+		const parsed = Date.parse(value);
+		if (Number.isFinite(parsed)) {
+			return parsed;
+		}
+	}
+	return Date.now();
+}
+
+function transformTicker(data: Record<string, unknown>): Ticker {
+	return {
+		symbol: data.symbol as string,
+		lastPrice: toNumber(data.last_price),
+		priceChange: toNumber(data.change_24h),
+		priceChangePercent: toNumber(data.change_pct_24h),
+		high24h: toNumber(data.high_24h),
+		low24h: toNumber(data.low_24h),
+		volume24h: toNumber(data.volume_24h),
+		quoteVolume24h: toNumber(data.quote_volume_24h, toNumber(data.volume_24h)),
+		bidPrice: toNumber(data.bid_price),
+		askPrice: toNumber(data.ask_price),
+		timestamp: toTimestamp(data.timestamp),
+	};
+}
+
 export const marketApi = {
 	/**
 	 * Get ticker for a symbol
 	 */
 	async getTicker(symbol: string): Promise<Ticker> {
-		const response = await apiClient.get<Ticker>(`/market/ticker/${symbol}`);
-		return response.data;
+		const response = await apiClient.get<Record<string, unknown>>(
+			`/market/ticker/${symbol}`,
+		);
+		return transformTicker(response.data);
 	},
 
 	/**
 	 * Get all tickers
 	 */
 	async getAllTickers(): Promise<Ticker[]> {
-		const response = await apiClient.get<Ticker[]>("/market/tickers");
-		return response.data;
+		const response =
+			await apiClient.get<Record<string, unknown>[]>("/market/tickers");
+		return response.data.map(transformTicker);
 	},
 
 	/**
@@ -89,18 +131,24 @@ export const marketApi = {
 		const response =
 			await apiClient.get<Record<string, unknown>>("/market/account");
 		return {
-			totalEquity: response.data.total_equity as number,
-			availableBalance: response.data.available_balance as number,
-			unrealizedPnl: response.data.unrealized_pnl as number,
-			marginRatio: response.data.margin_ratio as number | null,
+			totalEquity: toNumber(response.data.total_equity),
+			availableBalance: toNumber(response.data.available_balance),
+			unrealizedPnl: toNumber(response.data.unrealized_pnl),
+			marginRatio: (() => {
+				const ratio = response.data.margin_ratio;
+				if (ratio === null || ratio === undefined || ratio === "") {
+					return null;
+				}
+				return toNumber(ratio, 0);
+			})(),
 			currencies: (
 				(response.data.currencies as Record<string, unknown>[]) || []
 			).map((c) => ({
-				currency: c.currency as string,
-				equity: c.equity as number,
-				available: c.available as number,
-				frozen: c.frozen as number,
-				upl: c.upl as number,
+				currency: String(c.currency ?? ""),
+				equity: toNumber(c.equity),
+				available: toNumber(c.available),
+				frozen: toNumber(c.frozen),
+				upl: toNumber(c.upl),
 			})),
 			error: (response.data.error as string | null) ?? null,
 		};
@@ -109,23 +157,23 @@ export const marketApi = {
 	async getMarketOverview(): Promise<MarketOverview> {
 		const response =
 			await apiClient.get<Record<string, unknown>>("/market/overview");
-		const transformTicker = (t: Record<string, unknown>) => ({
-			symbol: t.symbol as string,
-			lastPrice: t.last_price as number,
-			changePct24h: t.change_pct_24h as number,
-			volume24h: t.volume_24h as number,
+		const transformOverviewTicker = (t: Record<string, unknown>) => ({
+			symbol: String(t.symbol ?? ""),
+			lastPrice: toNumber(t.last_price),
+			changePct24h: toNumber(t.change_pct_24h),
+			volume24h: toNumber(t.volume_24h),
 		});
 		return {
-			totalVolume24h: response.data.total_volume_24h as number,
+			totalVolume24h: toNumber(response.data.total_volume_24h),
 			topGainers: (
 				(response.data.top_gainers as Record<string, unknown>[]) || []
-			).map(transformTicker),
+			).map(transformOverviewTicker),
 			topLosers: (
 				(response.data.top_losers as Record<string, unknown>[]) || []
-			).map(transformTicker),
+			).map(transformOverviewTicker),
 			mostTraded: (
 				(response.data.most_traded as Record<string, unknown>[]) || []
-			).map(transformTicker),
+			).map(transformOverviewTicker),
 			error: (response.data.error as string | null) ?? null,
 		};
 	},

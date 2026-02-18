@@ -2,8 +2,16 @@
  * Trading Components Exports
  */
 
-export { TickerCard, default as TickerCardDefault } from './TickerCard';
-export { OrderForm, default as OrderFormDefault } from './OrderForm';
-export { OrderBook, default as OrderBookDefault } from './OrderBook';
-export { TradeHistory, default as TradeHistoryDefault } from './TradeHistory';
-export { PositionCard, default as PositionCardDefault } from './PositionCard';
+export {
+    default as MarketOverviewPanelDefault,
+    MarketOverviewPanel,
+} from "./MarketOverviewPanel";
+export {default as OrderBookDefault, OrderBook} from "./OrderBook";
+export {default as OrderFormDefault, OrderForm} from "./OrderForm";
+export {default as PositionCardDefault, PositionCard} from "./PositionCard";
+export {
+    default as RecentOrderActivityDefault,
+    RecentOrderActivity,
+} from "./RecentOrderActivity";
+export {default as TickerCardDefault, TickerCard} from "./TickerCard";
+export {default as TradeHistoryDefault, TradeHistory} from "./TradeHistory";
