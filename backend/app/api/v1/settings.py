@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any, Literal, get_args, get_origin
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -45,6 +46,11 @@ class AgentConfigUpdate(BaseModel):
     api_key: str | None = None
     model: str | None = None
     max_thinking_tokens: int | None = None
+
+
+class AgentModelOption(BaseModel):
+    value: str
+    label: str
 
 
 class TestConnectionResponse(BaseModel):
@@ -163,6 +169,156 @@ def _check_proton_pass_login() -> tuple[bool, str, bool]:
     return False, error_message, True
 
 
+def _collect_literal_model_aliases(annotation: Any) -> list[str]:
+    """Collect literal string values from nested typing annotations."""
+    origin = get_origin(annotation)
+    if origin is Literal:
+        return [arg for arg in get_args(annotation) if isinstance(arg, str)]
+    if origin is None:
+        return []
+
+    values: list[str] = []
+    for arg in get_args(annotation):
+        values.extend(_collect_literal_model_aliases(arg))
+    return values
+
+
+def _get_agent_sdk_model_aliases() -> list[str]:
+    """Read built-in model aliases directly from Agent SDK type hints."""
+    try:
+        from claude_agent_sdk.types import AgentDefinition
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not import Agent SDK model aliases: %s", exc)
+        return []
+
+    annotation = AgentDefinition.__annotations__.get("model")
+    if annotation is None:
+        return []
+
+    aliases = [
+        value
+        for value in _collect_literal_model_aliases(annotation)
+        if value != "inherit"
+    ]
+
+    deduplicated: list[str] = []
+    seen: set[str] = set()
+    for alias in aliases:
+        if alias in seen:
+            continue
+        seen.add(alias)
+        deduplicated.append(alias)
+    return deduplicated
+
+
+DEFAULT_MODEL_BY_FAMILY = {
+    "sonnet": "claude-sonnet-4-5-20250929",
+    "opus": "claude-opus-4-6",
+    "haiku": "claude-haiku-4-5-20251001",
+}
+
+MODEL_ALIAS_TO_NAME = {
+    "sonnet": "Claude Sonnet",
+    "opus": "Claude Opus",
+    "haiku": "Claude Haiku",
+}
+
+MODEL_ALIAS_TO_FAMILY = {
+    "sonnet": "sonnet",
+    "opus": "opus",
+    "haiku": "haiku",
+    "claude-sonnet-4-5": "sonnet",
+    "claude-opus-4-5": "opus",
+    "claude-opus-4-6": "opus",
+    "claude-haiku-4-5": "haiku",
+}
+
+FAMILY_TO_API_MODEL = {
+    "sonnet": "claude-sonnet-4-5",
+    "opus": "claude-opus-4-6",
+    "haiku": "claude-haiku-4-5",
+}
+
+MODEL_FAMILY_ORDER = ("sonnet", "opus", "haiku")
+
+
+def _get_supported_model_families() -> tuple[str, ...]:
+    aliases = _get_agent_sdk_model_aliases()
+    if not aliases:
+        return MODEL_FAMILY_ORDER
+
+    ordered = tuple(family for family in MODEL_FAMILY_ORDER if family in aliases)
+    return ordered or MODEL_FAMILY_ORDER
+
+
+def _get_model_family(model_id: str) -> str | None:
+    normalized = model_id.strip().lower()
+    for family in MODEL_FAMILY_ORDER:
+        if f"-{family}-" in normalized or normalized == family:
+            return family
+    return None
+
+
+def _extract_model_version(model_id: str) -> str | None:
+    """Parse version like '4.5' from 'claude-sonnet-4-5-20250929' or '4.6' from 'claude-opus-4-6'."""
+    import re
+
+    normalized = model_id.strip().lower()
+    # With trailing date: claude-{family}-{ver}-YYYYMMDD
+    m = re.match(r"claude-\w+-(\d+(?:-\d+)*)-\d{8}$", normalized)
+    if not m:
+        # Without date: claude-{family}-{ver}
+        m = re.match(r"claude-\w+-(\d+(?:-\d+)*)$", normalized)
+    if m:
+        return m.group(1).replace("-", ".")
+    return None
+
+
+def _normalize_to_family(model: str) -> str:
+    """Normalize any model string to its family alias (sonnet/opus/haiku)."""
+    family = MODEL_ALIAS_TO_FAMILY.get(model.strip().lower())
+    if family:
+        return family
+    family = _get_model_family(model)
+    return family or model
+
+
+def _format_model_label(family: str, latest_exact_id: str | None = None) -> str:
+    """Build a clean display name like 'Claude Sonnet 4.5'."""
+    base_name = MODEL_ALIAS_TO_NAME.get(family)
+    if base_name is None:
+        return family
+    if latest_exact_id:
+        version = _extract_model_version(latest_exact_id)
+        if version:
+            return f"{base_name} {version}"
+    return base_name
+
+
+def _build_agent_model_options(
+    current_model: str,
+    latest_by_family: dict[str, str],
+) -> list[dict[str, str]]:
+    families = _get_supported_model_families()
+    options = [
+        {
+            "value": family,
+            "label": _format_model_label(family, latest_by_family.get(family)),
+        }
+        for family in families
+        if family in latest_by_family
+    ]
+
+    if not current_model:
+        return options
+
+    current_family = _get_model_family(current_model)
+    if current_family and current_family in {o["value"] for o in options}:
+        return options
+
+    return [{"value": current_model, "label": f"{current_model} (current)"}, *options]
+
+
 # ── Endpoints ───────────────────────────────────────────────────
 
 
@@ -174,15 +330,25 @@ async def get_agent_config(
     app_settings = await AppSettings.get_instance()
     effective_key = _resolve_api_key(app_settings)
     cli_logged_in = _check_cli_login()
+    effective_model = _normalize_to_family(app_settings.agent_model)
 
     return {
         "auth_mode": app_settings.agent_auth_mode.value,
         "has_api_key": bool(effective_key),
         "masked_api_key": _mask_key(effective_key),
-        "model": app_settings.agent_model,
+        "model": effective_model,
         "max_thinking_tokens": app_settings.agent_max_thinking_tokens,
         "cli_logged_in": cli_logged_in,
     }
+
+
+@router.get("/agent/models", response_model=list[AgentModelOption])
+async def get_agent_models(
+    _: User = Depends(get_current_superuser),
+) -> list[dict[str, str]]:
+    """Get model options derived from installed Agent SDK."""
+    app_settings = await AppSettings.get_instance()
+    return _build_agent_model_options(app_settings.agent_model, DEFAULT_MODEL_BY_FAMILY)
 
 
 @router.put("/agent", response_model=AgentConfigResponse)
@@ -207,7 +373,7 @@ async def update_agent_config(
         app_settings.set_agent_api_key(body.api_key)
 
     if body.model is not None:
-        app_settings.agent_model = body.model
+        app_settings.agent_model = _normalize_to_family(body.model)
 
     if body.max_thinking_tokens is not None:
         app_settings.agent_max_thinking_tokens = body.max_thinking_tokens
@@ -219,12 +385,13 @@ async def update_agent_config(
 
     effective_key = _resolve_api_key(app_settings)
     cli_logged_in = _check_cli_login()
+    effective_model = _normalize_to_family(app_settings.agent_model)
 
     return {
         "auth_mode": app_settings.agent_auth_mode.value,
         "has_api_key": bool(effective_key),
         "masked_api_key": _mask_key(effective_key),
-        "model": app_settings.agent_model,
+        "model": effective_model,
         "max_thinking_tokens": app_settings.agent_max_thinking_tokens,
         "cli_logged_in": cli_logged_in,
     }
@@ -246,14 +413,17 @@ async def test_agent_connection(
             import anthropic
 
             client = anthropic.Anthropic(api_key=effective_key)
+            family = _normalize_to_family(app_settings.agent_model)
+            api_model = FAMILY_TO_API_MODEL.get(family, family)
             client.messages.create(
-                model=app_settings.agent_model,
+                model=api_model,
                 max_tokens=10,
                 messages=[{"role": "user", "content": "ping"}],
             )
+            friendly_name = _format_model_label(family, DEFAULT_MODEL_BY_FAMILY.get(family))
             return {
                 "success": True,
-                "message": f"Connected successfully (model: {app_settings.agent_model})",
+                "message": f"Connected successfully (model: {friendly_name})",
             }
         except Exception as e:
             return {"success": False, "message": f"Connection failed: {str(e)}"}

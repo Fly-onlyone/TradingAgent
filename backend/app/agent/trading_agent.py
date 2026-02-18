@@ -92,6 +92,7 @@ class TradingAgent:
             allowed_tools=ALLOWED_TOOL_NAMES,
             permission_mode="bypassPermissions",
             max_turns=10,
+            model=app_settings.agent_model or None,
             max_thinking_tokens=thinking_tokens,
         )
 

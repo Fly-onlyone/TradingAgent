@@ -49,12 +49,6 @@ export const Route = createFileRoute("/settings")({
 	component: SettingsPage,
 });
 
-const MODEL_OPTIONS = [
-	{ value: "claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
-	{ value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
-	{ value: "claude-opus-4-6", label: "Claude Opus 4.6" },
-];
-
 function getApiErrorMessage(error: unknown, fallback: string): string {
 	if (error && typeof error === "object" && "detail" in error) {
 		const detail = (error as { detail?: unknown }).detail;
@@ -89,6 +83,13 @@ function AgentConfigCard() {
 		queryFn: () => settingsApi.getAgentConfig(),
 		enabled: isSuperuser || import.meta.env.DEV,
 		staleTime: 60_000,
+	});
+
+	const modelOptionsQuery = useQuery({
+		queryKey: ["agent-model-options"],
+		queryFn: () => settingsApi.getAgentModels(),
+		enabled: (isSuperuser || import.meta.env.DEV) && configQuery.isSuccess,
+		staleTime: 300_000,
 	});
 
 	const updateMutation = useMutation({
@@ -188,6 +189,15 @@ function AgentConfigCard() {
 	if (!isSuperuser && !import.meta.env.DEV) return null;
 
 	const config = configQuery.data;
+	const resolvedModelOptions = config
+		? (() => {
+				const fetched = modelOptionsQuery.data ?? [];
+				if (fetched.some((option) => option.value === config.model)) {
+					return fetched;
+				}
+				return [{ value: config.model, label: config.model }, ...fetched];
+			})()
+		: [];
 
 	const handleAuthModeChange = (
 		_: React.MouseEvent<HTMLElement>,
@@ -404,7 +414,7 @@ function AgentConfigCard() {
 								disabled={updateMutation.isPending}
 								sx={{ minWidth: 280 }}
 							>
-								{MODEL_OPTIONS.map((opt) => (
+								{resolvedModelOptions.map((opt) => (
 									<MenuItem key={opt.value} value={opt.value}>
 										{opt.label}
 									</MenuItem>

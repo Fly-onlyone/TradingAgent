@@ -58,7 +58,7 @@ Use non-interactive commit creation.
 Example:
 
 ```bash
-git commit -m "fix(api): handle empty trade list" -m "Avoid 500 error when no positions exist." -m "Co-Authored-By: Claude <noreply@anthropic.com>"
+git commit -m "fix(api): handle empty trade list" -m "Avoid 500 error when no positions exist."
 ```
 
 Verify with `git log -1 --oneline`.
@@ -88,7 +88,7 @@ Before commit, enforce:
 2. Subject uses imperative mood
 3. Subject has no trailing period
 4. Warn when subject > 50 chars; treat > 72 as invalid
-5. Include `Co-Authored-By: Claude <noreply@anthropic.com>`
+5. Do not add co-author trailers unless the user explicitly asks
 
 ## Error handling
 

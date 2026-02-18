@@ -110,7 +110,7 @@ class AgentDecision(Document):
     # Tool and context tracking
     tools_used: list[ToolUsage] = Field(default_factory=list)
     market_context: Optional[MarketContext] = None
-    model_used: str = "claude-sonnet-4-20250514"
+    model_used: str = "claude-sonnet-4-5"
 
     # User feedback (for learning)
     user_feedback: Optional[str] = None  # thumbs_up, thumbs_down, neutral

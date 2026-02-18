@@ -35,7 +35,7 @@ Content:
 Summary:"""
 
         response = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-5",
             max_tokens=500,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -70,7 +70,7 @@ Provide your analysis in the following format:
 Response:"""
 
         response = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-5",
             max_tokens=500,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -150,7 +150,7 @@ Content:
 Respond with ONLY a number between 0.0 and 1.0:"""
 
         response = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-5",
             max_tokens=50,
             messages=[{"role": "user", "content": prompt}],
         )

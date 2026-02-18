@@ -143,7 +143,7 @@ Format your response as JSON with keys: summary, successes (list), mistakes (lis
 
         try:
             response = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-5",
                 max_tokens=500,
                 messages=[{"role": "user", "content": prompt}],
             )

@@ -28,7 +28,9 @@
       "Bash(git commit:*)",
       "mcp__github__search_code",
       "mcp__github__get_file_contents",
-      "Bash(setx:*)"
+      "Bash(setx:*)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__query-docs"
     ]
   },
   "enableAllProjectMcpServers": true,
