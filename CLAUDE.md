@@ -18,6 +18,33 @@ This file provides guidance to Coding agent when working with this project.
 | Format frontend           | `cd frontend && bun run format` |
 | Check frontend            | `cd frontend && bun run check`  |
 
+## Bug Tracker Data Fetch
+
+- **API (admin auth required)**:
+    - List bugs: `GET /api/v1/bugs`
+    - Bug stats: `GET /api/v1/bugs/stats`
+    - Example filter: `GET /api/v1/bugs?status=open&page=1&page_size=50`
+- **Direct DB check (local dev, PowerShell)**:
+    - Use this command to print total/open counts and latest 20 bug records:
+
+```powershell
+$env:PYTHONIOENCODING='utf-8'; @'
+import asyncio
+from app.db.session import init_db
+from app.db.models.bug import Bug
+
+async def main():
+    await init_db()
+    print('total=', await Bug.find_all().count())
+    print('open=', await Bug.find(Bug.status == 'open').count())
+    bugs = await Bug.find_all().sort('-created_at').limit(20).to_list()
+    for b in bugs:
+        print(b.id, b.status, b.severity, b.title)
+
+asyncio.run(main())
+'@ | uv run python -
+```
+
 ## Project Overview
 
 **Trading Agent** is a full-stack application for automated cryptocurrency trading with AI-powered analysis.
@@ -79,4 +106,7 @@ This file provides guidance to Coding agent when working with this project.
 
 ## Context7 IDs
 
-FastAPI=/tiangolo/fastapi, Beanie=/BeanieODM/beanie, Anthropic=/anthropics/anthropic-sdk-python, React=/facebook/react, TanStack-Router=/TanStack/router, TanStack-Query=/TanStack/query, MUI=/mui/material-ui, Zustand=/pmndrs/zustand, Pydantic=/pydantic/pydantic, Motor=/mongodb/motor, python-okx=/okx/python-okx, OpenAI=/openai/openai-python, Biome=/biomejs/biome, Vite=/vitejs/vite, Framer-Motion=/framer/motion
+FastAPI=/tiangolo/fastapi, Beanie=/BeanieODM/beanie, Anthropic=/anthropics/anthropic-sdk-python, React=/facebook/react,
+TanStack-Router=/TanStack/router, TanStack-Query=/TanStack/query, MUI=/mui/material-ui, Zustand=/pmndrs/zustand,
+Pydantic=/pydantic/pydantic, Motor=/mongodb/motor, python-okx=/okx/python-okx, OpenAI=/openai/openai-python,
+Biome=/biomejs/biome, Vite=/vitejs/vite, Framer-Motion=/framer/motion

@@ -1,5 +1,6 @@
 """Application configuration using Pydantic settings."""
 
+import secrets
 import warnings
 from functools import lru_cache
 
@@ -19,10 +20,10 @@ class Settings(BaseSettings):
     # Application
     app_name: str = "Trading Agent"
     debug: bool = False
-    secret_key: str = "change-me-in-production"
+    secret_key: str = ""
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
-    allow_debug_auth_bypass: bool = True
+    allow_debug_auth_bypass: bool = False
 
     # CORS
     cors_origins: str = ""
@@ -69,14 +70,15 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _validate_security(self) -> "Settings":
-        if self.secret_key == "change-me-in-production":
+        if not self.secret_key or self.secret_key == "change-me-in-production":
             if not self.debug:
                 raise ValueError(
-                    "SECRET_KEY is still the insecure default. "
+                    "SECRET_KEY is required and must not use placeholder values in non-debug mode. "
                     "Set a strong SECRET_KEY in your .env file before running in production."
                 )
+            self.secret_key = secrets.token_urlsafe(48)
             warnings.warn(
-                "Using insecure default SECRET_KEY — acceptable only for local development.",
+                "SECRET_KEY was missing in debug mode; generated an ephemeral in-memory key.",
                 UserWarning,
                 stacklevel=2,
             )

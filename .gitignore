@@ -6,6 +6,14 @@
 .env.*
 !.env.example
 
+# Secret/certificate material
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+
 # Python
 __pycache__/
 *.pyc

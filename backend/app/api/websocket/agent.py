@@ -151,7 +151,7 @@ async def agent_chat_websocket(
         try:
             agent = await create_agent_with_tools()
         except Exception as e:
-            logger.error("Failed to create agent: %s", e, exc_info=True)
+            logger.warning("Failed to create agent: %s", e, exc_info=True)
             await manager.send_personal(
                 websocket,
                 {

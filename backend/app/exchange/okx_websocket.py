@@ -1,16 +1,16 @@
 """OKX WebSocket client for real-time market data and order updates."""
 
 import asyncio
+import base64
 import hashlib
 import hmac
-import base64
 import json
 import logging
-from datetime import datetime, timezone
-from typing import Any, Callable, Coroutine
+from collections.abc import Callable, Coroutine
+from datetime import UTC, datetime
+from typing import Any
 
 import websockets
-from websockets.client import WebSocketClientProtocol
 
 from app.config import get_settings
 
@@ -27,31 +27,63 @@ class OKXWebSocket:
 
     def __init__(self) -> None:
         self.settings = get_settings()
-        self.public_ws: WebSocketClientProtocol | None = None
-        self.private_ws: WebSocketClientProtocol | None = None
+        self.api_key = self.settings.okx_api_key
+        self.secret_key = self.settings.okx_secret_key
+        self.passphrase = self.settings.okx_passphrase
+        self.sandbox = self.settings.okx_sandbox
+        self.public_ws: Any | None = None
+        self.private_ws: Any | None = None
         self._running = False
-        self._callbacks: dict[str, list[Callable[[dict], Coroutine[Any, Any, None]]]] = {}
+        self._callbacks: dict[
+            str, list[Callable[[dict], Coroutine[Any, Any, None]]]
+        ] = {}
         self._ping_task: asyncio.Task | None = None
         self._listen_tasks: list[asyncio.Task] = []
+
+    @classmethod
+    async def create(cls) -> "OKXWebSocket":
+        """Create websocket client with DB settings (fallback to env vars)."""
+        from app.db.models.app_settings import AppSettings
+
+        instance = cls()
+        try:
+            app_settings = await AppSettings.get_instance()
+            resolved_api_key = app_settings.get_okx_api_key()
+            resolved_secret_key = app_settings.get_okx_secret_key()
+            resolved_passphrase = app_settings.get_okx_passphrase()
+
+            if resolved_api_key:
+                instance.api_key = resolved_api_key
+            if resolved_secret_key:
+                instance.secret_key = resolved_secret_key
+            if resolved_passphrase:
+                instance.passphrase = resolved_passphrase
+            instance.sandbox = app_settings.okx_sandbox
+        except Exception:
+            logger.warning(
+                "Failed to load OKX websocket credentials from AppSettings — using env var fallback",
+                exc_info=True,
+            )
+        return instance
 
     @property
     def public_url(self) -> str:
         """Get public WebSocket URL based on sandbox mode."""
-        return self.SANDBOX_PUBLIC_URL if self.settings.okx_sandbox else self.PUBLIC_URL
+        return self.SANDBOX_PUBLIC_URL if self.sandbox else self.PUBLIC_URL
 
     @property
     def private_url(self) -> str:
         """Get private WebSocket URL based on sandbox mode."""
-        return self.SANDBOX_PRIVATE_URL if self.settings.okx_sandbox else self.PRIVATE_URL
+        return self.SANDBOX_PRIVATE_URL if self.sandbox else self.PRIVATE_URL
 
     def _get_login_params(self) -> dict[str, Any]:
         """Generate login parameters for private WebSocket."""
-        timestamp = str(int(datetime.now(timezone.utc).timestamp()))
+        timestamp = str(int(datetime.now(UTC).timestamp()))
         message = timestamp + "GET" + "/users/self/verify"
 
         signature = base64.b64encode(
             hmac.new(
-                self.settings.okx_secret_key.encode(),
+                self.secret_key.encode(),
                 message.encode(),
                 hashlib.sha256,
             ).digest()
@@ -61,8 +93,8 @@ class OKXWebSocket:
             "op": "login",
             "args": [
                 {
-                    "apiKey": self.settings.okx_api_key,
-                    "passphrase": self.settings.okx_passphrase,
+                    "apiKey": self.api_key,
+                    "passphrase": self.passphrase,
                     "timestamp": timestamp,
                     "sign": signature,
                 }
@@ -76,6 +108,11 @@ class OKXWebSocket:
 
     async def connect_private(self) -> None:
         """Connect to private WebSocket for account/order updates."""
+        if not self.api_key or not self.secret_key or not self.passphrase:
+            raise ConnectionError(
+                "OKX credentials are not configured for private websocket access"
+            )
+
         self.private_ws = await websockets.connect(self.private_url)
 
         # Login
@@ -111,7 +148,9 @@ class OKXWebSocket:
 
         logger.info("Disconnected from OKX WebSockets")
 
-    def on(self, channel: str, callback: Callable[[dict], Coroutine[Any, Any, None]]) -> None:
+    def on(
+        self, channel: str, callback: Callable[[dict], Coroutine[Any, Any, None]]
+    ) -> None:
         """Register callback for a channel.
 
         Args:

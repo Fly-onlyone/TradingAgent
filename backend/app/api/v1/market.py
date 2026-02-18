@@ -1,7 +1,7 @@
 """Market data endpoints using Beanie ODM."""
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
@@ -99,6 +99,36 @@ def ohlcv_to_response(data: MarketData) -> OHLCVResponse:
     )
 
 
+def _to_float(value: object, default: float = 0.0) -> float:
+    """Convert numeric-like OKX values to float, tolerating empty strings."""
+    if value is None:
+        return default
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return default
+        value = cleaned
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _to_optional_float(value: object) -> float | None:
+    """Convert numeric-like OKX values to float or return None when blank."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        value = cleaned
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 @router.get("/ohlcv/{symbol}", response_model=list[OHLCVResponse])
 async def get_ohlcv(
     symbol: str,
@@ -131,13 +161,19 @@ async def get_ticker(
     current_user: User = Depends(get_current_active_user),
 ) -> TickerResponse:
     """Get current ticker data for a symbol from OKX."""
-    client = await OKXClient.create()
-    result = await client.get_ticker(symbol.upper())
+    symbol_normalized = symbol.upper()
+
+    try:
+        client = await OKXClient.create()
+        result = await client.get_ticker(symbol_normalized)
+    except Exception as exc:
+        logger.warning("Failed to fetch ticker %s from OKX: %s", symbol_normalized, exc)
+        result = {"code": "error", "data": []}
 
     if result.get("code") != "0" or not result.get("data"):
         # Return placeholder if API fails
         return TickerResponse(
-            symbol=symbol.upper(),
+            symbol=symbol_normalized,
             last_price=0.0,
             bid_price=0.0,
             ask_price=0.0,
@@ -146,26 +182,26 @@ async def get_ticker(
             low_24h=0.0,
             change_24h=0.0,
             change_pct_24h=0.0,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
         )
 
     data = result["data"][0]
-    last_price = float(data.get("last", 0))
-    open_24h = float(data.get("open24h", 0))
+    last_price = _to_float(data.get("last"))
+    open_24h = _to_float(data.get("open24h"))
     change_24h = last_price - open_24h if open_24h else 0
     change_pct = (change_24h / open_24h * 100) if open_24h else 0
 
     return TickerResponse(
-        symbol=symbol.upper(),
+        symbol=symbol_normalized,
         last_price=last_price,
-        bid_price=float(data.get("bidPx", 0)),
-        ask_price=float(data.get("askPx", 0)),
-        volume_24h=float(data.get("vol24h", 0)),
-        high_24h=float(data.get("high24h", 0)),
-        low_24h=float(data.get("low24h", 0)),
+        bid_price=_to_float(data.get("bidPx")),
+        ask_price=_to_float(data.get("askPx")),
+        volume_24h=_to_float(data.get("vol24h")),
+        high_24h=_to_float(data.get("high24h")),
+        low_24h=_to_float(data.get("low24h")),
         change_24h=change_24h,
         change_pct_24h=change_pct,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
     )
 
 
@@ -184,8 +220,8 @@ async def get_tickers(
             result = await client.get_ticker(symbol.upper())
             if result.get("code") == "0" and result.get("data"):
                 data = result["data"][0]
-                last_price = float(data.get("last", 0))
-                open_24h = float(data.get("open24h", 0))
+                last_price = _to_float(data.get("last"))
+                open_24h = _to_float(data.get("open24h"))
                 change_24h = last_price - open_24h if open_24h else 0
                 change_pct = (change_24h / open_24h * 100) if open_24h else 0
 
@@ -193,14 +229,14 @@ async def get_tickers(
                     TickerResponse(
                         symbol=symbol.upper(),
                         last_price=last_price,
-                        bid_price=float(data.get("bidPx", 0)),
-                        ask_price=float(data.get("askPx", 0)),
-                        volume_24h=float(data.get("vol24h", 0)),
-                        high_24h=float(data.get("high24h", 0)),
-                        low_24h=float(data.get("low24h", 0)),
+                        bid_price=_to_float(data.get("bidPx")),
+                        ask_price=_to_float(data.get("askPx")),
+                        volume_24h=_to_float(data.get("vol24h")),
+                        high_24h=_to_float(data.get("high24h")),
+                        low_24h=_to_float(data.get("low24h")),
                         change_24h=change_24h,
                         change_pct_24h=change_pct,
-                        timestamp=datetime.utcnow(),
+                        timestamp=datetime.now(UTC),
                     )
                 )
         except Exception:
@@ -222,37 +258,66 @@ async def get_account_balance(
             data = result["data"][0]
             currencies = []
             for detail in data.get("details", []):
-                eq = float(detail.get("eq", 0))
+                eq = _to_float(detail.get("eq"))
                 if eq > 0:
                     currencies.append(
                         CurrencyBalance(
                             currency=detail.get("ccy", ""),
                             equity=eq,
-                            available=float(detail.get("availBal", 0)),
-                            frozen=float(detail.get("frozenBal", 0)),
-                            upl=float(detail.get("upl", 0)),
+                            available=_to_float(detail.get("availBal")),
+                            frozen=_to_float(detail.get("frozenBal")),
+                            upl=_to_float(detail.get("upl")),
                         )
                     )
+            total_equity = _to_float(data.get("totalEq"))
+            available_balance = _to_optional_float(data.get("adjEq"))
             return AccountBalanceResponse(
-                total_equity=float(data.get("totalEq", 0)),
-                available_balance=float(data.get("adjEq", 0) or data.get("totalEq", 0)),
-                unrealized_pnl=float(data.get("upl", 0)),
-                margin_ratio=(
-                    float(data.get("mgnRatio", 0)) if data.get("mgnRatio") else None
+                total_equity=total_equity,
+                available_balance=(
+                    available_balance if available_balance is not None else total_equity
                 ),
+                unrealized_pnl=_to_float(data.get("upl")),
+                margin_ratio=_to_optional_float(data.get("mgnRatio")),
                 currencies=currencies,
             )
+        code = str(result.get("code", "unknown"))
+        message = str(result.get("msg", "Unknown error from OKX"))
+        sandbox_hint = (
+            " Sandbox Mode is enabled; use OKX demo API credentials or disable "
+            "Sandbox Mode in Settings for production credentials."
+            if client.sandbox
+            else ""
+        )
+        logger.warning(
+            "OKX account balance request failed: code=%s msg=%s sandbox=%s",
+            code,
+            message,
+            client.sandbox,
+        )
+        return AccountBalanceResponse(
+            total_equity=0.0,
+            available_balance=0.0,
+            unrealized_pnl=0.0,
+            margin_ratio=None,
+            currencies=[],
+            error=f"OKX API error ({code}): {message}.{sandbox_hint}",
+        )
     except Exception as exc:
         logger.warning("Failed to fetch account balance from OKX: %s", exc)
-
-    return AccountBalanceResponse(
-        total_equity=0.0,
-        available_balance=0.0,
-        unrealized_pnl=0.0,
-        margin_ratio=None,
-        currencies=[],
-        error="Unable to fetch account balance. Check your OKX API key configuration in Settings.",
-    )
+        sandbox_hint = (
+            " Sandbox Mode is enabled; use OKX demo API credentials or disable "
+            "Sandbox Mode in Settings for production credentials."
+            if client.sandbox
+            else ""
+        )
+        return AccountBalanceResponse(
+            total_equity=0.0,
+            available_balance=0.0,
+            unrealized_pnl=0.0,
+            margin_ratio=None,
+            currencies=[],
+            error=f"Unable to fetch account balance from OKX: {exc}.{sandbox_hint}",
+        )
 
 
 @router.get("/overview", response_model=MarketOverviewResponse)
@@ -271,9 +336,9 @@ async def get_market_overview(
                 # Only include USDT pairs for cleaner overview
                 if not inst_id.endswith("-USDT"):
                     continue
-                last = float(item.get("last", 0))
-                open_24h = float(item.get("open24h", 0))
-                vol_ccy = float(item.get("volCcy24h", 0))
+                last = _to_float(item.get("last"))
+                open_24h = _to_float(item.get("open24h"))
+                vol_ccy = _to_float(item.get("volCcy24h"))
                 change_pct = ((last - open_24h) / open_24h * 100) if open_24h else 0.0
                 total_volume += vol_ccy
                 tickers.append(

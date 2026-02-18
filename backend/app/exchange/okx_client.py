@@ -113,8 +113,26 @@ class OKXClient:
             else:
                 raise ValueError(f"Unsupported HTTP method: {method}")
 
-            response.raise_for_status()
-            return response.json()
+            try:
+                payload = response.json()
+            except ValueError:
+                payload = None
+
+            if response.is_error:
+                if isinstance(payload, dict):
+                    payload.setdefault("code", str(response.status_code))
+                    payload.setdefault(
+                        "msg", response.text.strip() or response.reason_phrase
+                    )
+                    return payload
+                return {
+                    "code": str(response.status_code),
+                    "msg": response.text.strip() or response.reason_phrase,
+                }
+
+            if isinstance(payload, dict):
+                return payload
+            return {"code": "0", "data": payload}
 
     # Account Endpoints
     async def get_account_balance(self) -> dict[str, Any]:

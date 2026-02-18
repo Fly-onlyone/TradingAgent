@@ -1,7 +1,8 @@
 """Order management endpoints using Beanie ODM."""
 
+import logging
 from datetime import datetime
-from typing import Optional
+from typing import Any
 
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -12,17 +13,19 @@ from app.agent.subagents.order_executor import OrderExecutor
 from app.api.v1.auth import get_current_active_user
 from app.db.models.order import Order, OrderSide, OrderStatus, OrderType
 from app.db.models.user import User
+from app.exchange.okx_client import OKXClient
 from app.services.pnl_calculator import (
     TradePnL,
-    TradeSummary,
     TradesBySymbol,
-    get_trades,
-    get_trades_summary,
-    get_trades_by_symbol,
+    TradeSummary,
     export_trades,
+    get_trades,
+    get_trades_by_symbol,
+    get_trades_summary,
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class OrderCreate(BaseModel):
@@ -32,44 +35,44 @@ class OrderCreate(BaseModel):
     side: OrderSide
     order_type: OrderType
     quantity: float
-    price: Optional[float] = None
-    stop_price: Optional[float] = None
-    stop_loss_price: Optional[float] = None
-    take_profit_price: Optional[float] = None
-    strategy_id: Optional[str] = None
+    price: float | None = None
+    stop_price: float | None = None
+    stop_loss_price: float | None = None
+    take_profit_price: float | None = None
+    strategy_id: str | None = None
 
 
 class OrderResponse(BaseModel):
     """Order response schema."""
 
     id: str
-    exchange_order_id: Optional[str]
-    client_order_id: Optional[str]
+    exchange_order_id: str | None
+    client_order_id: str | None
     symbol: str
     side: str
     order_type: str
     status: str
     quantity: float
     filled_quantity: float
-    price: Optional[float]
-    avg_fill_price: Optional[float]
-    stop_price: Optional[float]
-    stop_loss_price: Optional[float]
-    take_profit_price: Optional[float]
+    price: float | None
+    avg_fill_price: float | None
+    stop_price: float | None
+    stop_loss_price: float | None
+    take_profit_price: float | None
     # P&L fields
-    entry_price: Optional[float]
-    exit_price: Optional[float]
-    realized_pnl: Optional[float]
-    realized_pnl_percent: Optional[float]
-    fees_paid: Optional[float]
-    net_pnl: Optional[float]
-    trade_status: Optional[str]
+    entry_price: float | None
+    exit_price: float | None
+    realized_pnl: float | None
+    realized_pnl_percent: float | None
+    fees_paid: float | None
+    net_pnl: float | None
+    trade_status: str | None
     # Metadata
-    agent_reasoning: Optional[dict]
+    agent_reasoning: dict | None
     created_at: datetime
     updated_at: datetime
-    filled_at: Optional[datetime]
-    closed_at: Optional[datetime]
+    filled_at: datetime | None
+    closed_at: datetime | None
 
     class Config:
         from_attributes = True
@@ -97,6 +100,130 @@ class TradesBySymbolResponse(BaseModel):
     """Response with trades grouped by symbol."""
 
     symbols: list[TradesBySymbol]
+
+
+class OKXOrderResponse(BaseModel):
+    """Normalized OKX order response for frontend consumption."""
+
+    order_id: str
+    client_order_id: str | None = None
+    symbol: str
+    side: str
+    order_type: str
+    status: str
+    raw_status: str
+    quantity: float
+    filled_quantity: float
+    price: float | None = None
+    avg_fill_price: float | None = None
+    created_at_ms: int
+    updated_at_ms: int
+
+
+class OKXOrderListResponse(BaseModel):
+    """List response for normalized OKX orders."""
+
+    orders: list[OKXOrderResponse]
+    count: int
+    error: str | None = None
+
+
+class OKXCancelOrderRequest(BaseModel):
+    """Request payload for OKX order cancellation."""
+
+    symbol: str
+    order_id: str
+
+
+class OKXCancelOrderResponse(BaseModel):
+    """Response payload for OKX order cancellation."""
+
+    success: bool
+    message: str
+    error: str | None = None
+
+
+def _to_float(value: object, default: float = 0.0) -> float:
+    """Convert OKX numeric-like values to float while tolerating blanks."""
+    if value is None:
+        return default
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return default
+        value = cleaned
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _to_optional_float(value: object) -> float | None:
+    """Convert OKX numeric-like values to float or None when blank."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        value = cleaned
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _to_timestamp_ms(value: object) -> int:
+    """Convert OKX timestamps to milliseconds since epoch."""
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return int(datetime.now().timestamp() * 1000)
+        try:
+            return int(float(cleaned))
+        except ValueError:
+            return int(datetime.now().timestamp() * 1000)
+    return int(datetime.now().timestamp() * 1000)
+
+
+def _normalize_okx_state(raw_state: object) -> str:
+    """Normalize OKX order state values to frontend-friendly statuses."""
+    state = str(raw_state or "").strip().lower()
+    state_map = {
+        "live": "open",
+        "partially_filled": "partially_filled",
+        "filled": "filled",
+        "canceled": "cancelled",
+    }
+    return state_map.get(state, "pending")
+
+
+def _normalize_okx_order(order_data: dict[str, Any]) -> OKXOrderResponse:
+    """Map raw OKX order payload to normalized API response."""
+    created_at_ms = _to_timestamp_ms(order_data.get("cTime"))
+    updated_at_ms = _to_timestamp_ms(order_data.get("uTime")) or created_at_ms
+    raw_status = str(order_data.get("state", "")).strip().lower()
+    return OKXOrderResponse(
+        order_id=str(order_data.get("ordId", "")),
+        client_order_id=(
+            str(order_data.get("clOrdId")).strip()
+            if order_data.get("clOrdId")
+            else None
+        ),
+        symbol=str(order_data.get("instId", "")),
+        side=str(order_data.get("side", "")),
+        order_type=str(order_data.get("ordType", "")),
+        status=_normalize_okx_state(raw_status),
+        raw_status=raw_status,
+        quantity=_to_float(order_data.get("sz")),
+        filled_quantity=_to_float(order_data.get("accFillSz")),
+        price=_to_optional_float(order_data.get("px")),
+        avg_fill_price=_to_optional_float(order_data.get("avgPx")),
+        created_at_ms=created_at_ms,
+        updated_at_ms=updated_at_ms,
+    )
 
 
 def order_to_response(order: Order) -> OrderResponse:
@@ -184,9 +311,9 @@ async def create_order(
 
 @router.get("", response_model=OrderListResponse)
 async def list_orders(
-    status: Optional[OrderStatus] = None,
-    symbol: Optional[str] = None,
-    side: Optional[OrderSide] = None,
+    status: OrderStatus | None = None,
+    symbol: str | None = None,
+    side: OrderSide | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_active_user),
@@ -229,11 +356,11 @@ async def list_orders(
 
 @router.get("/trades", response_model=TradeListResponse)
 async def list_trades(
-    symbol: Optional[str] = None,
-    side: Optional[str] = None,
-    status: Optional[str] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    symbol: str | None = None,
+    side: str | None = None,
+    status: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_active_user),
@@ -269,8 +396,8 @@ async def list_trades(
 
 @router.get("/trades/summary", response_model=TradeSummary)
 async def get_trade_summary(
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
     current_user: User = Depends(get_current_active_user),
 ) -> TradeSummary:
     """
@@ -292,8 +419,8 @@ async def get_trade_summary(
 
 @router.get("/trades/by-symbol", response_model=TradesBySymbolResponse)
 async def get_trades_grouped_by_symbol(
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
     current_user: User = Depends(get_current_active_user),
 ) -> dict:
     """
@@ -314,8 +441,8 @@ async def get_trades_grouped_by_symbol(
 @router.get("/trades/export")
 async def export_trades_data(
     format: str = Query("json", pattern="^(json|csv)$"),
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
     current_user: User = Depends(get_current_active_user),
 ) -> Response:
     """
@@ -348,6 +475,107 @@ async def export_trades_data(
             media_type="application/json",
             headers={"Content-Disposition": "attachment; filename=trades_export.json"},
         )
+
+
+# ============================================================
+# OKX Orders Endpoints
+# ============================================================
+
+
+@router.get("/okx/open", response_model=OKXOrderListResponse)
+async def list_okx_open_orders(
+    symbol: str | None = None,
+    limit: int = Query(50, ge=1, le=100),
+    current_user: User = Depends(get_current_active_user),
+) -> OKXOrderListResponse:
+    """Get live open orders directly from OKX."""
+    _ = current_user
+    client = await OKXClient.create()
+    try:
+        result = await client.get_open_orders(
+            inst_type="SPOT",
+            inst_id=symbol.upper() if symbol else None,
+        )
+        if result.get("code") == "0":
+            orders = [
+                _normalize_okx_order(item)
+                for item in (result.get("data", []) or [])
+                if isinstance(item, dict)
+            ][:limit]
+            return OKXOrderListResponse(orders=orders, count=len(orders))
+        message = str(result.get("msg", "Unknown error from OKX"))
+        return OKXOrderListResponse(
+            orders=[],
+            count=0,
+            error=f"OKX API error: {message}",
+        )
+    except Exception as exc:
+        logger.warning("Failed to fetch open orders from OKX: %s", exc)
+        return OKXOrderListResponse(
+            orders=[],
+            count=0,
+            error=f"Unable to fetch open OKX orders: {exc}",
+        )
+
+
+@router.get("/okx/history", response_model=OKXOrderListResponse)
+async def list_okx_order_history(
+    symbol: str | None = None,
+    limit: int = Query(50, ge=1, le=100),
+    current_user: User = Depends(get_current_active_user),
+) -> OKXOrderListResponse:
+    """Get recent order history directly from OKX."""
+    _ = current_user
+    client = await OKXClient.create()
+    try:
+        result = await client.get_order_history(
+            inst_type="SPOT",
+            inst_id=symbol.upper() if symbol else None,
+            limit=limit,
+        )
+        if result.get("code") == "0":
+            orders = [
+                _normalize_okx_order(item)
+                for item in (result.get("data", []) or [])
+                if isinstance(item, dict)
+            ]
+            return OKXOrderListResponse(orders=orders, count=len(orders))
+        message = str(result.get("msg", "Unknown error from OKX"))
+        return OKXOrderListResponse(
+            orders=[],
+            count=0,
+            error=f"OKX API error: {message}",
+        )
+    except Exception as exc:
+        logger.warning("Failed to fetch order history from OKX: %s", exc)
+        return OKXOrderListResponse(
+            orders=[],
+            count=0,
+            error=f"Unable to fetch OKX order history: {exc}",
+        )
+
+
+@router.post("/okx/cancel", response_model=OKXCancelOrderResponse)
+async def cancel_okx_order(
+    payload: OKXCancelOrderRequest,
+    current_user: User = Depends(get_current_active_user),
+) -> OKXCancelOrderResponse:
+    """Cancel an OKX order by symbol and exchange order id."""
+    executor = OrderExecutor(user_id=current_user.id)
+    result = await executor.cancel_order(
+        symbol=payload.symbol,
+        order_id=payload.order_id,
+    )
+    if result.get("success"):
+        return OKXCancelOrderResponse(
+            success=True,
+            message=str(result.get("message", "Order cancelled successfully")),
+        )
+    return OKXCancelOrderResponse(
+        success=False,
+        message="Order cancellation failed",
+        error=str(result.get("error", "Unknown error")),
+    )
 
 
 # ============================================================
