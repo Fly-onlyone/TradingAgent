@@ -1,6 +1,6 @@
 """Fundamental analysis tools for the trading agent."""
 
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
@@ -95,7 +95,6 @@ async def get_onchain_metrics(symbol: str) -> dict[str, Any]:
     except Exception as e:
         pass
 
-    # Return placeholder if API fails
     return {
         "symbol": asset,
         "metrics": {

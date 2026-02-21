@@ -1,5 +1,6 @@
 # MCP config (may contain local tool paths / tokens)
 .mcp.json
+opencode.json
 
 # Environment variables
 .env

@@ -23,8 +23,6 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 
 
 class Token(BaseModel):
-    """Token response schema."""
-
     access_token: str
     token_type: str
 
@@ -36,16 +34,12 @@ class TokenData(BaseModel):
 
 
 class UserCreate(BaseModel):
-    """User creation schema."""
-
     email: EmailStr
     password: str
     full_name: str | None = None
 
 
 class UserResponse(BaseModel):
-    """User response schema."""
-
     id: str
     email: str
     full_name: str | None
@@ -136,7 +130,6 @@ async def get_dev_user() -> User:
 @router.post("/register", response_model=UserResponse)
 async def register(user_data: UserCreate) -> dict:
     """Register a new user."""
-    # Check if user exists
     existing_user = await User.find_one(User.email == user_data.email)
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")

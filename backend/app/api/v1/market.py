@@ -17,8 +17,6 @@ router = APIRouter()
 
 
 class OHLCVResponse(BaseModel):
-    """OHLCV data response schema."""
-
     timestamp: datetime
     open: float
     high: float
@@ -32,8 +30,6 @@ class OHLCVResponse(BaseModel):
 
 
 class TickerResponse(BaseModel):
-    """Current ticker response schema."""
-
     symbol: str
     last_price: float
     bid_price: float
@@ -57,8 +53,6 @@ class CurrencyBalance(BaseModel):
 
 
 class AccountBalanceResponse(BaseModel):
-    """Account balance response schema."""
-
     total_equity: float
     available_balance: float
     unrealized_pnl: float
@@ -77,8 +71,6 @@ class MarketOverviewTickerResponse(BaseModel):
 
 
 class MarketOverviewResponse(BaseModel):
-    """Market overview response schema."""
-
     total_volume_24h: float
     top_gainers: list[MarketOverviewTickerResponse]
     top_losers: list[MarketOverviewTickerResponse]
@@ -87,7 +79,6 @@ class MarketOverviewResponse(BaseModel):
 
 
 def ohlcv_to_response(data: MarketData) -> OHLCVResponse:
-    """Convert MarketData document to response schema."""
     return OHLCVResponse(
         timestamp=data.timestamp,
         open=data.open,
@@ -151,7 +142,6 @@ async def get_ohlcv(
 
     data = await query.sort(-MarketData.timestamp).limit(limit).to_list()
 
-    # Return in chronological order
     return [ohlcv_to_response(d) for d in reversed(data)]
 
 
@@ -171,7 +161,6 @@ async def get_ticker(
         result = {"code": "error", "data": []}
 
     if result.get("code") != "0" or not result.get("data"):
-        # Return placeholder if API fails
         return TickerResponse(
             symbol=symbol_normalized,
             last_price=0.0,

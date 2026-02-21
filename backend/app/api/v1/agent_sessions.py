@@ -16,22 +16,16 @@ router = APIRouter()
 
 # Request/Response schemas
 class SessionCreate(BaseModel):
-    """Session creation schema."""
-
     title: Optional[str] = Field(None, max_length=200)
     description: Optional[str] = Field(None, max_length=500)
 
 
 class SessionUpdate(BaseModel):
-    """Session update schema."""
-
     title: Optional[str] = Field(None, max_length=200)
     description: Optional[str] = Field(None, max_length=500)
 
 
 class MessageCreate(BaseModel):
-    """Message creation schema."""
-
     role: str = Field(..., pattern="^(user|assistant|system)$")
     content: str = Field(..., min_length=1)
     decision_id: Optional[str] = None
@@ -40,8 +34,6 @@ class MessageCreate(BaseModel):
 
 
 class MessageResponse(BaseModel):
-    """Message response schema."""
-
     role: str
     content: str
     timestamp: str
@@ -51,8 +43,6 @@ class MessageResponse(BaseModel):
 
 
 class SessionResponse(BaseModel):
-    """Session response schema."""
-
     id: str
     title: Optional[str]
     description: Optional[str]
@@ -116,7 +106,6 @@ class GroupedSessionsResponse(BaseModel):
 
 
 def session_to_response(session: AgentSession) -> SessionResponse:
-    """Convert AgentSession document to response schema."""
     return SessionResponse(
         id=str(session.id),
         title=session.title or session.generate_title(),
@@ -136,7 +125,6 @@ def session_to_response(session: AgentSession) -> SessionResponse:
 
 
 def message_to_response(message: SessionMessage | dict) -> MessageResponse:
-    """Convert message model to response schema."""
     if isinstance(message, SessionMessage):
         return MessageResponse(
             role=message.role.value,
@@ -259,7 +247,6 @@ async def list_sessions_grouped(
 
         groups_dict[date_str]["sessions"].append(session_to_response(session))
 
-    # Sort groups by date descending
     sorted_groups = sorted(groups_dict.values(), key=lambda g: g["date"], reverse=True)
 
     return {

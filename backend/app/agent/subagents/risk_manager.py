@@ -277,7 +277,6 @@ class RiskManager:
                     }
                 )
 
-        # Sort by value
         asset_values.sort(key=lambda x: x["value"], reverse=True)
 
         # Check concentration

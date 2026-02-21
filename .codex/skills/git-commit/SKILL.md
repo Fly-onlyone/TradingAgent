@@ -88,7 +88,6 @@ Before commit, enforce:
 2. Subject uses imperative mood
 3. Subject has no trailing period
 4. Warn when subject > 50 chars; treat > 72 as invalid
-5. Do not add co-author trailers unless the user explicitly asks
 
 ## Error handling
 

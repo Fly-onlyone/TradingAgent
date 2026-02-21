@@ -119,4 +119,3 @@ Report final status with commit hash.
 2. Subject line under 72 characters (warn if over 50)
 3. Use imperative mood ("add" not "added")
 4. No period at end of subject
-5. Always include Co-Authored-By line

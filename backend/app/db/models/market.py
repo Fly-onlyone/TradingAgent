@@ -36,7 +36,7 @@ class MarketData(Document):
     class Settings:
         name = "market_data"
         # Note: Time-series collection settings are applied during init_db
-        # This enables efficient time-based queries and automatic bucketing
+        # Enable efficient time-based queries and automatic bucketing.
         timeseries = {
             "time_field": "timestamp",
             "meta_field": "symbol",

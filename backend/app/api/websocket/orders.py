@@ -1,10 +1,10 @@
 """Order updates WebSocket endpoints."""
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from jose import JWTError, jwt
 
-from app.config import get_settings
 from app.api.websocket.connection_manager import manager
+from app.config import get_settings
 
 router = APIRouter()
 settings = get_settings()
@@ -13,13 +13,14 @@ settings = get_settings()
 async def get_user_id_from_token(token: str) -> int | None:
     """Extract user ID from JWT token."""
     try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        payload = jwt.decode(
+            token, settings.secret_key, algorithms=[settings.algorithm]
+        )
         # In a real implementation, you'd look up the user by email
         # For now, we'll use a simplified approach
         email = payload.get("sub")
         if email:
-            # This would normally be a DB lookup
-            # Return a placeholder user ID
+            # Use a deterministic placeholder ID until user lookup is wired.
             return hash(email) % 1000000
     except JWTError:
         return None

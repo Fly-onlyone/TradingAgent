@@ -116,7 +116,6 @@ async def get_candlesticks(
             }
         )
 
-    # Return in chronological order
     candles.reverse()
 
     return {

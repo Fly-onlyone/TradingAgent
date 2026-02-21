@@ -205,7 +205,6 @@ async def detect_chart_patterns(
         potential_bottoms = np.where(recent_lows < threshold)[0]
 
         if len(potential_bottoms) >= 2:
-            # Check if there's a peak between them
             first_bottom = potential_bottoms[0]
             last_bottom = potential_bottoms[-1]
 

@@ -1,6 +1,6 @@
 """Knowledge retriever for RAG-based strategy and lesson search using MongoDB."""
 
-from typing import Any, Optional
+from typing import Optional
 
 from app.db.models.knowledge import StrategyKnowledge, TradeLesson, TradingPattern
 from app.knowledge.embeddings import EmbeddingService
@@ -46,7 +46,6 @@ class KnowledgeRetriever:
                 if similarity >= min_similarity:
                     scored.append((strategy, similarity))
 
-        # Sort by similarity descending
         scored.sort(key=lambda x: x[1], reverse=True)
 
         return [s[0] for s in scored[:limit]]

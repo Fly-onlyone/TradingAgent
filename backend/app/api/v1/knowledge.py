@@ -16,8 +16,6 @@ router = APIRouter()
 
 # Strategy Knowledge Schemas
 class StrategyKnowledgeCreate(BaseModel):
-    """Strategy knowledge creation schema."""
-
     name: str
     description: str
     entry_rules: dict
@@ -29,8 +27,6 @@ class StrategyKnowledgeCreate(BaseModel):
 
 
 class StrategyKnowledgeResponse(BaseModel):
-    """Strategy knowledge response schema."""
-
     id: str
     name: str
     description: str
@@ -54,8 +50,6 @@ class StrategyKnowledgeResponse(BaseModel):
 
 # Trade Lesson Schemas
 class TradeLessonResponse(BaseModel):
-    """Trade lesson response schema."""
-
     id: str
     order_id: Optional[str]
     outcome: str
@@ -79,8 +73,6 @@ class TradeLessonResponse(BaseModel):
 
 # Trading Pattern Schemas
 class TradingPatternResponse(BaseModel):
-    """Trading pattern response schema."""
-
     id: str
     pattern_name: str
     pattern_type: str
@@ -102,23 +94,18 @@ class TradingPatternResponse(BaseModel):
 
 # Search Schema
 class KnowledgeSearchRequest(BaseModel):
-    """Knowledge search request schema."""
-
     query: str
     search_type: str = "all"  # all, strategies, lessons, patterns
     limit: int = 10
 
 
 class KnowledgeSearchResponse(BaseModel):
-    """Knowledge search response schema."""
-
     strategies: list[StrategyKnowledgeResponse] = []
     lessons: list[TradeLessonResponse] = []
     patterns: list[TradingPatternResponse] = []
 
 
 def strategy_to_response(strategy: StrategyKnowledge) -> StrategyKnowledgeResponse:
-    """Convert StrategyKnowledge document to response schema."""
     return StrategyKnowledgeResponse(
         id=str(strategy.id),
         name=strategy.name,
@@ -140,7 +127,6 @@ def strategy_to_response(strategy: StrategyKnowledge) -> StrategyKnowledgeRespon
 
 
 def lesson_to_response(lesson: TradeLesson) -> TradeLessonResponse:
-    """Convert TradeLesson document to response schema."""
     return TradeLessonResponse(
         id=str(lesson.id),
         order_id=str(lesson.order_id) if lesson.order_id else None,
@@ -162,7 +148,6 @@ def lesson_to_response(lesson: TradeLesson) -> TradeLessonResponse:
 
 
 def pattern_to_response(pattern: TradingPattern) -> TradingPatternResponse:
-    """Convert TradingPattern document to response schema."""
     return TradingPatternResponse(
         id=str(pattern.id),
         pattern_name=pattern.pattern_name,
@@ -201,7 +186,7 @@ async def create_strategy_knowledge(
     await strategy.insert()
 
     # TODO: Generate and store embedding for the strategy
-    # This will be implemented in Phase 3 (Knowledge Database)
+    # Planned for Phase 3 (Knowledge Database).
 
     return strategy_to_response(strategy)
 
@@ -218,7 +203,6 @@ async def list_strategy_knowledge(
     """List strategies in the knowledge base."""
     query = StrategyKnowledge.find()
 
-    # Filter by array contains
     if market_condition:
         query = query.find({"market_conditions": market_condition})
     if asset_class:

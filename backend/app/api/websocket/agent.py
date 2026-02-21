@@ -190,7 +190,6 @@ async def agent_chat_websocket(
                 # Lazy session creation — only on first real message to
                 # avoid spamming empty sessions on reconnect attempts
                 if session is None:
-                    # Check if frontend provides a session ID to resume
                     client_session_id = message.get("sessionId")
                     if client_session_id:
                         existing = await AgentSession.find_one(

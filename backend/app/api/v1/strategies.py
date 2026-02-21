@@ -15,8 +15,6 @@ router = APIRouter()
 
 
 class StrategyCreate(BaseModel):
-    """Strategy creation schema."""
-
     name: str
     description: Optional[str] = None
     entry_rules: dict = {}
@@ -27,8 +25,6 @@ class StrategyCreate(BaseModel):
 
 
 class StrategyUpdate(BaseModel):
-    """Strategy update schema."""
-
     name: Optional[str] = None
     description: Optional[str] = None
     is_active: Optional[bool] = None
@@ -40,8 +36,6 @@ class StrategyUpdate(BaseModel):
 
 
 class StrategyResponse(BaseModel):
-    """Strategy response schema."""
-
     id: str
     name: str
     description: Optional[str]
@@ -71,7 +65,6 @@ class StrategyListResponse(BaseModel):
 
 
 def strategy_to_response(strategy: Strategy) -> StrategyResponse:
-    """Convert Strategy document to response schema."""
     return StrategyResponse(
         id=str(strategy.id),
         name=strategy.name,

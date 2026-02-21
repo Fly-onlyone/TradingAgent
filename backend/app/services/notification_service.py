@@ -127,7 +127,6 @@ class NotificationService:
 
         user_settings = await self.get_user_settings(user_id)
 
-        # Check if user wants this type of notification
         if not user_settings.should_notify(notification.notification_type):
             logger.info(f"User {user_id} has disabled {notification.notification_type}")
             return False

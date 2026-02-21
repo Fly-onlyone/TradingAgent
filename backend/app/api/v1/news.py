@@ -7,17 +7,15 @@ from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from app.db.models.user import User
-from app.db.models.news import NewsSource, NewsArticle, CredibilityEvent
 from app.api.v1.auth import get_current_active_user
+from app.db.models.news import NewsSource, NewsArticle
+from app.db.models.user import User
 
 router = APIRouter()
 
 
 # News Source Schemas
 class NewsSourceCreate(BaseModel):
-    """News source creation schema."""
-
     name: str
     domain: str
     source_type: str  # official, major_news, news, blog, social
@@ -27,8 +25,6 @@ class NewsSourceCreate(BaseModel):
 
 
 class NewsSourceUpdate(BaseModel):
-    """News source update schema."""
-
     name: Optional[str] = None
     description: Optional[str] = None
     source_type: Optional[str] = None
@@ -38,8 +34,6 @@ class NewsSourceUpdate(BaseModel):
 
 
 class NewsSourceResponse(BaseModel):
-    """News source response schema."""
-
     id: str
     name: str
     domain: str
@@ -62,8 +56,6 @@ class NewsSourceResponse(BaseModel):
 
 # News Article Schemas
 class NewsArticleResponse(BaseModel):
-    """News article response schema."""
-
     id: str
     source_id: str
     url: str
@@ -95,7 +87,6 @@ class NewsArticleListResponse(BaseModel):
 
 
 def source_to_response(source: NewsSource) -> NewsSourceResponse:
-    """Convert NewsSource document to response schema."""
     return NewsSourceResponse(
         id=str(source.id),
         name=source.name,
@@ -116,7 +107,6 @@ def source_to_response(source: NewsSource) -> NewsSourceResponse:
 
 
 def article_to_response(article: NewsArticle) -> NewsArticleResponse:
-    """Convert NewsArticle document to response schema."""
     return NewsArticleResponse(
         id=str(article.id),
         source_id=str(article.source_id),
@@ -144,7 +134,6 @@ async def create_news_source(
     current_user: User = Depends(get_current_active_user),
 ) -> NewsSourceResponse:
     """Add a new news source."""
-    # Check if domain already exists
     existing = await NewsSource.find_one(NewsSource.domain == data.domain)
     if existing:
         raise HTTPException(
@@ -298,7 +287,7 @@ async def get_sentiment_feed(
 ) -> dict:
     """Get aggregated sentiment feed for specified assets."""
     # TODO: Implement sentiment aggregation
-    # This will calculate weighted sentiment based on source credibility
+    # Calculate weighted sentiment based on source credibility.
 
     return {
         "assets": assets.split(",") if assets else [],

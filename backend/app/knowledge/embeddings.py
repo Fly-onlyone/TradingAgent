@@ -41,7 +41,6 @@ class EmbeddingService:
             )
             return response.data[0].embedding
         except Exception as e:
-            # Return zero vector on error
             return [0.0] * self.dimension
 
     async def generate_embeddings(self, texts: list[str]) -> list[list[float]]:
@@ -65,7 +64,6 @@ class EmbeddingService:
                 model=self.model,
                 input=processed_texts,
             )
-            # Sort by index to maintain order
             sorted_data = sorted(response.data, key=lambda x: x.index)
             return [d.embedding for d in sorted_data]
         except Exception:

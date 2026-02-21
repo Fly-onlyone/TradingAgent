@@ -1,6 +1,6 @@
 """P&L Calculator Service for trade performance tracking."""
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 
 from beanie import PydanticObjectId
@@ -273,7 +273,6 @@ async def get_trades_by_symbol(
             )
         )
 
-    # Sort by total P&L descending
     result.sort(key=lambda x: x.total_pnl, reverse=True)
     return result
 

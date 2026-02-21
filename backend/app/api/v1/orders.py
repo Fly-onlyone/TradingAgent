@@ -29,8 +29,6 @@ logger = logging.getLogger(__name__)
 
 
 class OrderCreate(BaseModel):
-    """Order creation schema."""
-
     symbol: str
     side: OrderSide
     order_type: OrderType
@@ -43,8 +41,6 @@ class OrderCreate(BaseModel):
 
 
 class OrderResponse(BaseModel):
-    """Order response schema."""
-
     id: str
     exchange_order_id: str | None
     client_order_id: str | None
@@ -227,7 +223,6 @@ def _normalize_okx_order(order_data: dict[str, Any]) -> OKXOrderResponse:
 
 
 def order_to_response(order: Order) -> OrderResponse:
-    """Convert Order document to response schema."""
     return OrderResponse(
         id=str(order.id),
         exchange_order_id=order.exchange_order_id,

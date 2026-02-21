@@ -1,7 +1,9 @@
 """Agent task scheduler for scheduled trading operations."""
 
+import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -20,6 +22,7 @@ from app.db.models.agent_decision import (
 from app.db.models.agent_task import (
     AgentMode,
     AgentTask,
+    MonitoringConditionType,
     RiskLevel,
     TaskFrequency,
     TaskStatus,
@@ -45,6 +48,31 @@ class AgentTaskScheduler:
 
             self._trading_agent = TradingAgent()
         return self._trading_agent
+
+    # Transient error types that justify a retry
+    _RETRYABLE_ERRORS = (ConnectionError, TimeoutError, OSError)
+
+    async def _execute_with_retry(
+        self,
+        fn: Callable[[], Awaitable[Any]],
+        max_retries: int = 2,
+    ) -> Any:
+        """Execute an async callable with exponential backoff on transient errors."""
+        for attempt in range(max_retries + 1):
+            try:
+                return await fn()
+            except self._RETRYABLE_ERRORS as e:
+                if attempt == max_retries:
+                    raise
+                wait = 2**attempt * 5  # 5s, 10s, 20s …
+                logger.warning(
+                    "Retry %d/%d after transient error: %s (waiting %ds)",
+                    attempt + 1,
+                    max_retries,
+                    e,
+                    wait,
+                )
+                await asyncio.sleep(wait)
 
     async def start(self) -> None:
         """Start the scheduler and load active tasks."""
@@ -118,7 +146,7 @@ class AgentTaskScheduler:
 
         # Calculate and store next run time
         if task.frequency != TaskFrequency.ONCE:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             next_run = trigger.get_next_fire_time(now, now)
             task.next_run_at = next_run
             await task.save()
@@ -129,9 +157,7 @@ class AgentTaskScheduler:
         """Create APScheduler trigger from task configuration."""
         if task.frequency == TaskFrequency.ONCE:
             # Run once at next_run_at or immediately
-            run_at = task.next_run_at or datetime.now(timezone.utc) + timedelta(
-                seconds=5
-            )
+            run_at = task.next_run_at or datetime.now(UTC) + timedelta(seconds=5)
             return DateTrigger(run_date=run_at)
 
         elif task.frequency == TaskFrequency.HOURLY:
@@ -162,9 +188,7 @@ class AgentTaskScheduler:
 
         elif task.frequency == TaskFrequency.CUSTOM:
             if task.cron_expression:
-                return CronTrigger.from_crontab(
-                    task.cron_expression, timezone=task.timezone
-                )
+                return CronTrigger.from_crontab(task.cron_expression, timezone=task.timezone)
             else:
                 logger.error(f"Custom frequency task {task.id} missing cron_expression")
                 return None
@@ -206,6 +230,7 @@ class AgentTaskScheduler:
             task = await AgentTask.get(PydanticObjectId(task_id))
             if task:
                 task.record_execution(success=False, error=str(e))
+                await self._check_auto_pause(task)
                 await task.save()
 
     async def _execute_analysis_task(self, task: AgentTask) -> None:
@@ -214,13 +239,22 @@ class AgentTaskScheduler:
 
         for symbol in task.symbols:
             try:
-                # Build analysis prompt
-                prompt = self._build_analysis_prompt(symbol, task)
+                # Build prompt — optionally enriched with subagent results
+                subagent_context = None
+                if task.use_subagents:
+                    logger.info("Running subagent analysis for %s", symbol)
+                    subagent_context = await self._run_subagent_analysis(symbol, task)
+                    prompt = self._build_enriched_prompt(symbol, task, subagent_context)
+                else:
+                    prompt = self._build_analysis_prompt(symbol, task)
 
-                # Run agent analysis
-                result = await agent.analyze(
-                    user_message=prompt,
-                    user_id=str(task.user_id),
+                # Run agent analysis with retry on transient errors
+                result = await self._execute_with_retry(
+                    lambda: agent.analyze(
+                        user_message=prompt,
+                        user_id=str(task.user_id),
+                    ),
+                    max_retries=task.max_retries,
                 )
 
                 # Store decision
@@ -248,6 +282,7 @@ class AgentTaskScheduler:
             except Exception as e:
                 logger.error(f"Error analyzing {symbol}: {e}")
                 task.record_execution(success=False, error=str(e))
+                await self._check_auto_pause(task)
                 await task.save()
 
     async def _execute_trading_task(self, task: AgentTask) -> None:
@@ -258,13 +293,22 @@ class AgentTaskScheduler:
 
         for symbol in task.symbols:
             try:
-                # Build trading prompt with risk parameters
-                prompt = self._build_trading_prompt(symbol, task)
+                # Build prompt — optionally enriched with subagent results
+                subagent_context = None
+                if task.use_subagents:
+                    logger.info("Running subagent analysis for %s", symbol)
+                    subagent_context = await self._run_subagent_analysis(symbol, task)
+                    prompt = self._build_enriched_prompt(symbol, task, subagent_context)
+                else:
+                    prompt = self._build_trading_prompt(symbol, task)
 
-                # Run agent analysis
-                result = await agent.analyze(
-                    user_message=prompt,
-                    user_id=str(task.user_id),
+                # Run agent analysis with retry on transient errors
+                result = await self._execute_with_retry(
+                    lambda: agent.analyze(
+                        user_message=prompt,
+                        user_id=str(task.user_id),
+                    ),
+                    max_retries=task.max_retries,
                 )
 
                 action = self._parse_action(result.get("action"))
@@ -298,7 +342,9 @@ class AgentTaskScheduler:
                     should_trade = False
                     decision.execution_status = ExecutionStatus.FAILED
                     decision.execution_error_code = "confidence_below_threshold"
-                    decision.execution_error_message = f"Confidence {confidence:.1f}% is below minimum {min_confidence:.1f}%"
+                    decision.execution_error_message = (
+                        f"Confidence {confidence:.1f}% is below minimum {min_confidence:.1f}%"
+                    )
 
                 if should_trade and task.max_daily_trades is not None:
                     trade_count_today = await self._get_today_trade_count(task.id)
@@ -324,13 +370,9 @@ class AgentTaskScheduler:
                     else:
                         # Ask mode: create notification and wait for confirmation
                         decision.status = DecisionStatus.PENDING
-                        decision.expires_at = datetime.now(timezone.utc) + timedelta(
-                            hours=1
-                        )
+                        decision.expires_at = datetime.now(UTC) + timedelta(hours=1)
                         await decision.insert()
-                        await self._create_trade_confirmation_notification(
-                            task, decision
-                        )
+                        await self._create_trade_confirmation_notification(task, decision)
                 else:
                     decision.status = DecisionStatus.EXECUTED
                     await decision.insert()
@@ -342,11 +384,12 @@ class AgentTaskScheduler:
             except Exception as e:
                 logger.error(f"Error in trading task for {symbol}: {e}")
                 task.record_execution(success=False, error=str(e))
+                await self._check_auto_pause(task)
                 await task.save()
 
     async def _get_today_trade_count(self, task_id: PydanticObjectId) -> int:
         """Count today's executed trades for a task."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         return await AgentDecision.find(
             AgentDecision.task_id == task_id,
@@ -355,13 +398,208 @@ class AgentTaskScheduler:
         ).count()
 
     async def _execute_monitoring_task(self, task: AgentTask) -> None:
-        """Execute a monitoring task (price/condition alerts)."""
-        logger.warning("Monitoring task %s is not implemented", task.id)
-        task.record_execution(
-            success=False,
-            error="Monitoring tasks are not implemented yet",
-        )
+        """Execute a monitoring task — evaluate conditions and fire alerts."""
+        if not task.monitoring_conditions:
+            logger.warning("Monitoring task %s has no conditions defined", task.id)
+            task.record_execution(success=True)
+            await task.save()
+            return
+
+        # Check cooldown
+        if task.last_alert_at:
+            cooldown_until = task.last_alert_at + timedelta(minutes=task.alert_cooldown_minutes)
+            if datetime.now(UTC) < cooldown_until:
+                logger.info("Monitoring task %s in cooldown, skipping", task.id)
+                task.record_execution(success=True)
+                await task.save()
+                return
+
+        from app.agent.tools.market_tools import get_ticker
+        from app.agent.tools.technical_tools import get_technical_indicators
+
+        for symbol in task.symbols:
+            try:
+                # Fetch market data
+                ticker = await get_ticker(symbol)
+                current_price = float(ticker.get("last", 0))
+                price_change_pct = float(ticker.get("change_24h_pct", 0))
+                volume_24h = float(ticker.get("vol_24h", 0))
+                avg_volume = float(ticker.get("avg_vol_24h", 0)) or volume_24h
+
+                # Fetch technical indicators for RSI conditions
+                indicators_data: dict = {}
+                rsi_conditions = [
+                    c
+                    for c in task.monitoring_conditions
+                    if c.condition_type
+                    in (
+                        MonitoringConditionType.RSI_ABOVE,
+                        MonitoringConditionType.RSI_BELOW,
+                    )
+                ]
+                if rsi_conditions:
+                    tf = rsi_conditions[0].timeframe or "1H"
+                    indicators_data = await get_technical_indicators(symbol, tf)
+
+                rsi_value = indicators_data.get("indicators", {}).get("rsi_14")
+
+                triggered: list[dict] = []
+
+                for condition in task.monitoring_conditions:
+                    ct = condition.condition_type
+                    threshold = condition.threshold
+
+                    if ct == MonitoringConditionType.PRICE_ABOVE:
+                        if current_price > threshold:
+                            triggered.append(
+                                {
+                                    "condition": ct.value,
+                                    "threshold": threshold,
+                                    "current": current_price,
+                                }
+                            )
+                    elif ct == MonitoringConditionType.PRICE_BELOW:
+                        if current_price < threshold:
+                            triggered.append(
+                                {
+                                    "condition": ct.value,
+                                    "threshold": threshold,
+                                    "current": current_price,
+                                }
+                            )
+                    elif ct == MonitoringConditionType.PRICE_CHANGE_PCT:
+                        if abs(price_change_pct) >= threshold:
+                            triggered.append(
+                                {
+                                    "condition": ct.value,
+                                    "threshold": threshold,
+                                    "current": price_change_pct,
+                                }
+                            )
+                    elif ct == MonitoringConditionType.RSI_ABOVE:
+                        if rsi_value is not None and rsi_value > threshold:
+                            triggered.append(
+                                {
+                                    "condition": ct.value,
+                                    "threshold": threshold,
+                                    "current": rsi_value,
+                                }
+                            )
+                    elif ct == MonitoringConditionType.RSI_BELOW:
+                        if rsi_value is not None and rsi_value < threshold:
+                            triggered.append(
+                                {
+                                    "condition": ct.value,
+                                    "threshold": threshold,
+                                    "current": rsi_value,
+                                }
+                            )
+                    elif ct == MonitoringConditionType.VOLUME_SPIKE:
+                        if avg_volume > 0 and volume_24h >= avg_volume * threshold:
+                            triggered.append(
+                                {
+                                    "condition": ct.value,
+                                    "threshold": threshold,
+                                    "current": (volume_24h / avg_volume if avg_volume else 0),
+                                }
+                            )
+                    elif ct == MonitoringConditionType.CUSTOM:
+                        # Delegate to AI for custom condition evaluation
+                        agent = self._get_trading_agent()
+                        prompt = (
+                            f"Evaluate this condition for {symbol}: "
+                            f"{condition.description or 'No description'}. "
+                            f"Current price: {current_price}. "
+                            "Reply with TRIGGERED or NOT_TRIGGERED and a brief reason."
+                        )
+                        try:
+                            ai_response = await agent.chat(prompt)
+                            if "triggered" in ai_response.lower().split("not_triggered")[0]:
+                                triggered.append(
+                                    {
+                                        "condition": ct.value,
+                                        "description": condition.description,
+                                        "ai_response": ai_response[:300],
+                                    }
+                                )
+                        except Exception as ai_err:
+                            logger.warning("Custom condition AI evaluation failed: %s", ai_err)
+
+                if triggered:
+                    # Create monitoring alert decision
+                    triggered_summary = ", ".join(t.get("condition", "unknown") for t in triggered)
+                    decision = AgentDecision(
+                        user_id=task.user_id,
+                        task_id=task.id,
+                        decision_type=DecisionType.MONITORING_ALERT,
+                        symbol=symbol,
+                        summary=f"Alert: {triggered_summary} triggered for {symbol}",
+                        reasoning=str(triggered),
+                        key_factors=[t.get("condition", "") for t in triggered],
+                    )
+                    await decision.insert()
+
+                    # Create notification
+                    notification = Notification(
+                        user_id=task.user_id,
+                        title=f"Alert: {symbol}",
+                        body=f"Conditions triggered: {triggered_summary}",
+                        notification_type=NotificationType.PRICE_ALERT,
+                        task_id=task.id,
+                        decision_id=decision.id,
+                        data={
+                            "symbol": symbol,
+                            "triggered_conditions": triggered,
+                        },
+                    )
+                    await notification.insert()
+
+                    task.last_alert_at = datetime.now(UTC)
+                    task.last_decision_id = decision.id
+
+                    logger.info("Monitoring alert for %s: %s", symbol, triggered_summary)
+
+            except Exception as e:
+                logger.error(f"Error monitoring {symbol}: {e}")
+                task.record_execution(success=False, error=str(e))
+                await self._check_auto_pause(task)
+                await task.save()
+                return
+
+        task.record_execution(success=True)
         await task.save()
+
+    async def _check_auto_pause(self, task: AgentTask) -> None:
+        """Auto-pause task and notify if consecutive failure threshold is reached."""
+        if not task.should_auto_pause:
+            return
+
+        logger.warning(
+            "Task %s (%s) auto-paused after %d consecutive failures",
+            task.name,
+            task.id,
+            task.consecutive_failures,
+        )
+        task.pause()
+        await self.unschedule_task(str(task.id))
+
+        # Create failure notification
+        notification = Notification(
+            user_id=task.user_id,
+            title=f"Task Paused: {task.name}",
+            body=(
+                f"Automatically paused after {task.consecutive_failures} consecutive "
+                f"failures. Last error: {task.last_error or 'Unknown'}"
+            ),
+            notification_type=NotificationType.TASK_FAILED,
+            task_id=task.id,
+            data={
+                "task_name": task.name,
+                "consecutive_failures": task.consecutive_failures,
+                "last_error": task.last_error,
+            },
+        )
+        await notification.insert()
 
     async def execute_trade_for_decision(
         self,
@@ -480,7 +718,7 @@ class AgentTaskScheduler:
 
     async def _cleanup_expired_notifications(self) -> None:
         """Clean up expired pending notifications and decisions."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Find expired decisions
         expired_decisions = await AgentDecision.find(
@@ -505,6 +743,122 @@ class AgentTaskScheduler:
         if expired_decisions:
             logger.info(f"Expired {len(expired_decisions)} pending decisions")
 
+    async def _run_subagent_analysis(self, symbol: str, task: AgentTask) -> dict:
+        """Run all 3 subagents in parallel and aggregate results."""
+        from app.agent.subagents.fundamental_analyst import FundamentalAnalyst
+        from app.agent.subagents.news_analyst import NewsAnalyst
+        from app.agent.subagents.technical_analyst import TechnicalAnalyst
+
+        tech = TechnicalAnalyst()
+        fund = FundamentalAnalyst()
+        news = NewsAnalyst()
+
+        try:
+            await asyncio.gather(tech.connect(), fund.connect(), news.connect())
+
+            # Extract base asset from trading pair (BTC-USDT -> BTC)
+            base_asset = symbol.split("-")[0]
+
+            # Run analyses in parallel
+            results = await asyncio.gather(
+                tech.analyze(symbol),
+                fund.analyze(base_asset),
+                news.analyze([base_asset]),
+                return_exceptions=True,
+            )
+
+            return {
+                "technical": (
+                    results[0]
+                    if not isinstance(results[0], Exception)
+                    else {"error": str(results[0])}
+                ),
+                "fundamental": (
+                    results[1]
+                    if not isinstance(results[1], Exception)
+                    else {"error": str(results[1])}
+                ),
+                "news": (
+                    results[2]
+                    if not isinstance(results[2], Exception)
+                    else {"error": str(results[2])}
+                ),
+            }
+        finally:
+            await asyncio.gather(
+                tech.disconnect(),
+                fund.disconnect(),
+                news.disconnect(),
+                return_exceptions=True,
+            )
+
+    def _build_enriched_prompt(
+        self,
+        symbol: str,
+        task: AgentTask,
+        subagent_results: dict,
+    ) -> str:
+        """Build a prompt enriched with subagent analysis results."""
+        risk_config = self._get_risk_config(task.risk_level)
+
+        sections = [f"Analyze {symbol} for a potential trade.\n"]
+
+        # Technical analysis section
+        tech = subagent_results.get("technical", {})
+        if "error" not in tech:
+            signal = tech.get("signal", {})
+            analysis = tech.get("analysis", "")
+            indicators = tech.get("indicators", {})
+            sections.append("== TECHNICAL ANALYSIS (from specialist) ==")
+            sections.append(f"Signal: {signal.get('action', 'N/A')}")
+            sections.append(
+                f"Key Indicators: RSI={indicators.get('rsi_14', 'N/A')}, "
+                f"Trend={indicators.get('trend', 'N/A')}"
+            )
+            sections.append(f"Analysis: {analysis[:500]}")
+            sections.append("")
+        else:
+            sections.append(f"== TECHNICAL ANALYSIS == Error: {tech['error']}\n")
+
+        # Fundamental analysis section
+        fund = subagent_results.get("fundamental", {})
+        if "error" not in fund:
+            valuation = fund.get("valuation", {})
+            analysis = fund.get("analysis", "")
+            sections.append("== FUNDAMENTAL ANALYSIS (from specialist) ==")
+            sections.append(f"Valuation: {valuation.get('assessment', 'N/A')}")
+            sections.append(f"Analysis: {analysis[:500]}")
+            sections.append("")
+        else:
+            sections.append(f"== FUNDAMENTAL ANALYSIS == Error: {fund['error']}\n")
+
+        # News analysis section
+        news_data = subagent_results.get("news", {})
+        if "error" not in news_data:
+            signal = news_data.get("signal", {})
+            analysis = news_data.get("analysis", "")
+            sections.append("== NEWS SENTIMENT (from specialist) ==")
+            sections.append(f"Signal: {signal.get('action', 'N/A')}")
+            sections.append(f"Sentiment: {signal.get('sentiment_basis', 'N/A')}")
+            sections.append(f"Analysis: {analysis[:500]}")
+            sections.append("")
+        else:
+            sections.append(f"== NEWS SENTIMENT == Error: {news_data['error']}\n")
+
+        sections.append(
+            f"Risk Parameters: Level={task.risk_level.value}, "
+            f"Max Risk={risk_config['max_risk_percent']}%, "
+            f"Max Position={task.max_position_size or 'default'}"
+        )
+        sections.append(
+            "\nBased on all specialist analyses above, provide your final recommendation."
+        )
+
+        if task.custom_instructions:
+            sections.append(f"\nAdditional instructions: {task.custom_instructions}")
+
+        return "\n".join(sections)
+
     def _build_analysis_prompt(self, symbol: str, task: AgentTask) -> str:
         """Build analysis prompt for agent."""
         prompt = f"Analyze {symbol} and provide a market analysis."
@@ -522,8 +876,8 @@ class AgentTaskScheduler:
 
 Risk Parameters:
 - Risk Level: {task.risk_level.value}
-- Max Risk per Trade: {risk_config['max_risk_percent']}%
-- Max Position Size: {task.max_position_size or 'Use default sizing'}
+- Max Risk per Trade: {risk_config["max_risk_percent"]}%
+- Max Position Size: {task.max_position_size or "Use default sizing"}
 
 Provide:
 1. Market analysis
@@ -579,9 +933,7 @@ Provide:
                 {
                     "id": job.id,
                     "name": job.name,
-                    "next_run": (
-                        job.next_run_time.isoformat() if job.next_run_time else None
-                    ),
+                    "next_run": (job.next_run_time.isoformat() if job.next_run_time else None),
                 }
             )
 

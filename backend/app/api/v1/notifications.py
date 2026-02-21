@@ -11,9 +11,7 @@ from app.api.v1.auth import get_current_active_user
 from app.db.models.notification import (
     Notification,
     NotificationAction,
-    NotificationStatus,
     NotificationType,
-    UserNotificationSettings,
 )
 from app.db.models.user import User
 from app.services.notification_service import get_notification_service
@@ -23,8 +21,6 @@ router = APIRouter()
 
 # Request/Response schemas
 class NotificationResponse(BaseModel):
-    """Notification response schema."""
-
     id: str
     title: str
     body: str
@@ -101,7 +97,6 @@ class ActionRequest(BaseModel):
 
 
 def notification_to_response(notification: Notification) -> NotificationResponse:
-    """Convert Notification document to response schema."""
     return NotificationResponse(
         id=str(notification.id),
         title=notification.title,
@@ -140,7 +135,6 @@ async def list_notifications(
         page_size=page_size,
     )
 
-    # Filter by type if specified
     if notification_type:
         notifications = [
             n for n in notifications if n.notification_type == notification_type

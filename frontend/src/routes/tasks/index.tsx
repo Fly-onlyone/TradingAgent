@@ -3,6 +3,7 @@
  */
 
 import AddIcon from "@mui/icons-material/Add";
+import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import AutoModeIcon from "@mui/icons-material/AutoMode";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
@@ -10,6 +11,7 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import PauseIcon from "@mui/icons-material/Pause";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
 import ScheduleIcon from "@mui/icons-material/Schedule";
 import {
 	Accordion,
@@ -28,12 +30,14 @@ import {
 	DialogTitle,
 	Divider,
 	FormControl,
+	FormControlLabel,
 	Grid2 as Grid,
 	IconButton,
 	InputLabel,
 	MenuItem,
 	Select,
 	Slider,
+	Switch,
 	TextField,
 	Tooltip,
 	Typography,
@@ -49,12 +53,15 @@ import { type Column, DataTable } from "@/components/data-display/DataTable";
 import type {
 	AgentMode,
 	AgentTask,
+	MonitoringCondition,
+	MonitoringConditionType,
 	RiskLevel,
 	TaskCreate,
 	TaskExecution,
 	TaskFrequency,
 	TaskType,
 } from "@/types/task";
+import { MONITORING_CONDITION_CONFIG } from "@/types/task";
 import { staggerCascade } from "@/utils/animations/variants";
 import { formatDateTime } from "@/utils/formatters";
 import { requireAuth } from "../-guards";
@@ -277,6 +284,9 @@ function TasksPage() {
 			symbols: [],
 			riskLevel: "moderate",
 			agentMode: "ask",
+			monitoringConditions: [],
+			alertCooldownMinutes: 60,
+			useSubagents: false,
 		});
 	};
 
@@ -293,6 +303,9 @@ function TasksPage() {
 			riskLevel: task.riskLevel,
 			agentMode: task.agentMode,
 			maxPositionSize: task.maxPositionSize,
+			monitoringConditions: task.monitoringConditions ?? [],
+			alertCooldownMinutes: task.alertCooldownMinutes ?? 60,
+			useSubagents: task.useSubagents ?? false,
 			customInstructions: task.customInstructions,
 		});
 		setEditingTask(task);
@@ -593,6 +606,23 @@ function TaskCard({
 					))}
 				</Box>
 
+				{task.taskType === "monitoring" &&
+					task.monitoringConditions &&
+					task.monitoringConditions.length > 0 && (
+						<Box sx={{ mb: 1 }}>
+							{task.monitoringConditions.map((c, i) => (
+								<Chip
+									key={i}
+									label={`${MONITORING_CONDITION_CONFIG[c.conditionType]?.label ?? c.conditionType}: ${c.threshold}${MONITORING_CONDITION_CONFIG[c.conditionType]?.unit ?? ""}`}
+									size="small"
+									variant="outlined"
+									color="info"
+									sx={{ mr: 0.5, mb: 0.5 }}
+								/>
+							))}
+						</Box>
+					)}
+
 				<Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
 					<ScheduleIcon fontSize="small" color="action" />
 					<Typography variant="body2" color="text.secondary">
@@ -881,6 +911,218 @@ function TaskFormDialog({
 							</MenuItem>
 						</Select>
 					</FormControl>
+
+					{(formData.taskType === "analysis" ||
+						formData.taskType === "trading") && (
+						<Tooltip title="Run specialized subagents (Technical, Fundamental, News) before main analysis. More thorough but uses more API credits.">
+							<FormControlLabel
+								control={
+									<Switch
+										checked={formData.useSubagents ?? false}
+										onChange={(e) =>
+											setFormData({
+												...formData,
+												useSubagents: e.target.checked,
+											})
+										}
+									/>
+								}
+								label="Deep Analysis (Subagents)"
+							/>
+						</Tooltip>
+					)}
+
+					{formData.taskType === "monitoring" && (
+						<>
+							<Divider>
+								<Typography variant="caption" color="text.secondary">
+									Monitoring Conditions
+								</Typography>
+							</Divider>
+
+							{(formData.monitoringConditions ?? []).map((condition, index) => (
+								<Box
+									key={index}
+									sx={{
+										display: "flex",
+										gap: 1,
+										alignItems: "flex-start",
+									}}
+								>
+									<FormControl sx={{ minWidth: 160 }}>
+										<InputLabel>Condition</InputLabel>
+										<Select
+											value={condition.conditionType}
+											label="Condition"
+											size="small"
+											onChange={(e) => {
+												const updated = [
+													...(formData.monitoringConditions ?? []),
+												];
+												updated[index] = {
+													...updated[index],
+													conditionType: e.target
+														.value as MonitoringConditionType,
+												};
+												setFormData({
+													...formData,
+													monitoringConditions: updated,
+												});
+											}}
+										>
+											{(
+												Object.keys(
+													MONITORING_CONDITION_CONFIG,
+												) as MonitoringConditionType[]
+											).map((type) => (
+												<MenuItem key={type} value={type}>
+													{MONITORING_CONDITION_CONFIG[type].label}
+												</MenuItem>
+											))}
+										</Select>
+									</FormControl>
+
+									<TextField
+										label={`Threshold (${MONITORING_CONDITION_CONFIG[condition.conditionType]?.unit || ""})`}
+										type="number"
+										size="small"
+										value={condition.threshold}
+										onChange={(e) => {
+											const updated = [
+												...(formData.monitoringConditions ?? []),
+											];
+											updated[index] = {
+												...updated[index],
+												threshold: Number(e.target.value),
+											};
+											setFormData({
+												...formData,
+												monitoringConditions: updated,
+											});
+										}}
+										sx={{ width: 140 }}
+									/>
+
+									{condition.conditionType === "custom" ? (
+										<TextField
+											label="Description"
+											size="small"
+											value={condition.description ?? ""}
+											onChange={(e) => {
+												const updated = [
+													...(formData.monitoringConditions ?? []),
+												];
+												updated[index] = {
+													...updated[index],
+													description: e.target.value,
+												};
+												setFormData({
+													...formData,
+													monitoringConditions: updated,
+												});
+											}}
+											sx={{ flex: 1 }}
+										/>
+									) : (
+										<FormControl size="small" sx={{ minWidth: 90 }}>
+											<InputLabel>Timeframe</InputLabel>
+											<Select
+												value={condition.timeframe ?? ""}
+												label="Timeframe"
+												onChange={(e) => {
+													const updated = [
+														...(formData.monitoringConditions ?? []),
+													];
+													updated[index] = {
+														...updated[index],
+														timeframe: e.target.value || undefined,
+													};
+													setFormData({
+														...formData,
+														monitoringConditions: updated,
+													});
+												}}
+											>
+												<MenuItem value="">-</MenuItem>
+												<MenuItem value="1H">1H</MenuItem>
+												<MenuItem value="4H">4H</MenuItem>
+												<MenuItem value="1D">1D</MenuItem>
+											</Select>
+										</FormControl>
+									)}
+
+									<IconButton
+										size="small"
+										color="error"
+										onClick={() => {
+											const updated = (
+												formData.monitoringConditions ?? []
+											).filter((_, i) => i !== index);
+											setFormData({
+												...formData,
+												monitoringConditions: updated,
+											});
+										}}
+									>
+										<RemoveCircleOutlineIcon />
+									</IconButton>
+								</Box>
+							))}
+
+							<Button
+								size="small"
+								startIcon={<AddCircleOutlineIcon />}
+								onClick={() => {
+									const newCondition: MonitoringCondition = {
+										conditionType: "price_above",
+										threshold: 0,
+									};
+									setFormData({
+										...formData,
+										monitoringConditions: [
+											...(formData.monitoringConditions ?? []),
+											newCondition,
+										],
+									});
+								}}
+							>
+								Add Condition
+							</Button>
+
+							<Box sx={{ px: 1 }}>
+								<Typography gutterBottom variant="body2">
+									Alert Cooldown: {formData.alertCooldownMinutes ?? 60} minutes
+								</Typography>
+								<Slider
+									value={formData.alertCooldownMinutes ?? 60}
+									onChange={(_, value) =>
+										setFormData({
+											...formData,
+											alertCooldownMinutes: value as number,
+										})
+									}
+									min={5}
+									max={1440}
+									step={5}
+									marks={[
+										{ value: 15, label: "15m" },
+										{ value: 60, label: "1h" },
+										{ value: 360, label: "6h" },
+										{ value: 1440, label: "24h" },
+									]}
+									valueLabelDisplay="auto"
+									valueLabelFormat={(v) =>
+										v >= 60
+											? `${Math.floor(v / 60)}h${v % 60 ? ` ${v % 60}m` : ""}`
+											: `${v}m`
+									}
+									sx={{
+										"& .MuiSlider-markLabel": { fontSize: "0.7rem" },
+									}}
+								/>
+							</Box>
+						</>
+					)}
 
 					<TextField
 						label="Max Position Size (USDT)"

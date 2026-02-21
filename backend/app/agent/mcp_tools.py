@@ -14,9 +14,7 @@ from claude_agent_sdk import create_sdk_mcp_server, tool
 # ============================================================
 
 
-@tool(
-    "get_ticker", "Get current ticker/price data for a trading symbol", {"symbol": str}
-)
+@tool("get_ticker", "Get current ticker/price data for a trading symbol", {"symbol": str})
 async def mcp_get_ticker(args: dict[str, Any]) -> dict[str, Any]:
     from app.agent.tools.market_tools import get_ticker
 
@@ -415,6 +413,87 @@ async def mcp_cancel_order(args: dict[str, Any]) -> dict[str, Any]:
 
 
 # ============================================================
+# Structured Recommendation Output
+# ============================================================
+
+# Module-level store for structured recommendations keyed by request ID.
+# The trading agent sets a request ID before calling chat(), and the
+# submit_recommendation tool writes the structured data here.
+_pending_recommendations: dict[str, dict[str, Any]] = {}
+
+
+@tool(
+    "submit_recommendation",
+    "Submit your final trading recommendation. You MUST call this tool at the end of every analysis with your structured recommendation.",
+    {
+        "type": "object",
+        "properties": {
+            "action": {
+                "type": "string",
+                "enum": ["buy", "sell", "hold", "wait"],
+                "description": "Recommended action",
+            },
+            "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100,
+                "description": "Confidence level (0-100%)",
+            },
+            "entry_price": {
+                "type": "number",
+                "description": "Suggested entry price",
+            },
+            "stop_loss": {
+                "type": "number",
+                "description": "Suggested stop loss price",
+            },
+            "take_profit": {
+                "type": "number",
+                "description": "Suggested take profit price",
+            },
+            "position_size": {
+                "type": "number",
+                "description": "Suggested position size in base currency",
+            },
+            "summary": {
+                "type": "string",
+                "description": "1-2 sentence summary of the recommendation",
+            },
+            "key_factors": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Key factors driving this recommendation",
+            },
+        },
+        "required": ["action", "confidence", "summary"],
+    },
+)
+async def mcp_submit_recommendation(args: dict[str, Any]) -> dict[str, Any]:
+    request_id = args.pop("_request_id", None)
+    if request_id:
+        _pending_recommendations[request_id] = args
+    else:
+        # Store under a fallback key so the latest call is always available
+        _pending_recommendations["__latest__"] = args
+
+    return {
+        "content": [
+            {
+                "type": "text",
+                "text": json.dumps({"status": "ok", "message": "Recommendation recorded."}),
+            }
+        ]
+    }
+
+
+def get_pending_recommendation(request_id: str) -> dict[str, Any] | None:
+    """Retrieve and remove a pending recommendation by request ID."""
+    return _pending_recommendations.pop(
+        request_id, _pending_recommendations.pop("__latest__", None)
+    )
+
+
+# ============================================================
 # MCP Server Factory
 # ============================================================
 
@@ -440,6 +519,8 @@ ALL_TRADING_TOOLS = [
     mcp_get_open_orders,
     mcp_place_order,
     mcp_cancel_order,
+    # Structured output
+    mcp_submit_recommendation,
 ]
 
 ALLOWED_TOOL_NAMES = [f"mcp__trading__{t.name}" for t in ALL_TRADING_TOOLS]

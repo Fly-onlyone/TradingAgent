@@ -96,7 +96,7 @@ class OrderExecutor:
 
         normalized_idempotency_key = idempotency_key or f"exec-{uuid.uuid4().hex}"
 
-        # Return existing order for duplicate executions with the same idempotency key.
+        # Prevent duplicate exchange submissions when callers retry the same request.
         if self.user_id and normalized_idempotency_key:
             existing_order = await Order.find_one(
                 Order.user_id == self.user_id,

@@ -16,7 +16,11 @@ from claude_agent_sdk import (
     ToolUseBlock,
 )
 
-from app.agent.mcp_tools import ALLOWED_TOOL_NAMES, create_trading_mcp_server
+from app.agent.mcp_tools import (
+    ALLOWED_TOOL_NAMES,
+    create_trading_mcp_server,
+    get_pending_recommendation,
+)
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -56,7 +60,10 @@ Always provide clear, structured analysis with:
 - Risk/reward evaluation
 - Specific recommendation with confidence level (0-100%)
 
-Be concise but thorough. Explain your reasoning clearly."""
+Be concise but thorough. Explain your reasoning clearly.
+
+## IMPORTANT - Structured Output:
+After completing your analysis, you MUST call the `submit_recommendation` tool with your structured recommendation. This tool accepts: action (buy/sell/hold/wait), confidence (0-100), summary, and optional entry_price, stop_loss, take_profit, position_size, key_factors. Always call this tool as the final step of your analysis."""
 
 
 class TradingAgent:
@@ -239,13 +246,43 @@ class TradingAgent:
         )
         return float(match.group(1)) if match else None
 
-    async def analyze(
-        self, user_message: str, user_id: str | None = None
-    ) -> dict[str, Any]:
-        """Analyze market/trading prompt and normalize output for task scheduler."""
+    async def analyze(self, user_message: str, user_id: str | None = None) -> dict[str, Any]:
+        """Analyze market/trading prompt and normalize output for task scheduler.
+
+        Prefers structured data from the submit_recommendation tool.
+        Falls back to regex extraction if the tool was not called.
+        """
         _ = user_id
+        request_id = uuid.uuid4().hex
         response = await self.chat(user_message)
 
+        # Check for structured recommendation from the submit_recommendation tool
+        recommendation = get_pending_recommendation(request_id)
+
+        if recommendation:
+            logger.info("Using structured recommendation from submit_recommendation tool")
+            summary = recommendation.get("summary", "")
+            if len(summary) > 300:
+                summary = f"{summary[:297]}..."
+
+            return {
+                "summary": summary,
+                "reasoning": response,
+                "key_factors": recommendation.get("key_factors", []),
+                "confidence": recommendation.get("confidence", 50.0),
+                "action": recommendation.get("action"),
+                "suggested_entry": recommendation.get("entry_price"),
+                "suggested_stop_loss": recommendation.get("stop_loss"),
+                "suggested_take_profit": recommendation.get("take_profit"),
+                "suggested_position_size": recommendation.get("position_size"),
+                "tools_used": self.tool_calls,
+                "market_context": None,
+            }
+
+        # Fallback: regex extraction from free-form text
+        logger.warning(
+            "submit_recommendation tool was not called; falling back to regex extraction"
+        )
         action = self._extract_action(response)
         confidence = self._extract_confidence(response)
 
