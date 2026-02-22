@@ -18,6 +18,21 @@ This file provides guidance to Coding agent when working with this project.
 | Format frontend           | `cd frontend && bun run format` |
 | Check frontend            | `cd frontend && bun run check`  |
 
+## Tauri (v2) Quick Notes
+
+- Run desktop dev: `cd frontend && bun run tauri:dev` (or `npm run tauri:dev`)
+- Build desktop app: `cd frontend && bun run tauri:build` (or `npm run tauri:build`)
+- Required on Windows:
+    - Rust (`cargo`) available in PATH (`%USERPROFILE%\.cargo\bin`)
+    - Visual Studio 2022 Build Tools with C++ workload (`MSVC v143` + Windows SDK)
+- Quick checks:
+    - `cargo --version`
+    - `cmd /c "where link && where cl"`
+- Tauri v2 config note:
+    - Do not use `plugins.shell.scope` in `tauri.conf.json`
+    - Keep `plugins.shell` minimal (e.g. `open`)
+    - Put shell command permissions in `src-tauri/capabilities/default.json`
+
 ## Bug Tracker Data Fetch
 
 - **API (admin auth required)**:

@@ -6,6 +6,7 @@ import { useCallback, useRef } from "react";
 import { getAccessToken } from "@/api/client";
 import { useAgentStore } from "@/store/agentStore";
 import type { WebSocketMessage } from "@/types";
+import { getWsUrl } from "@/utils/tauriEnv";
 import { useWebSocket } from "./useWebSocket";
 
 export interface AgentMessage {
@@ -180,7 +181,7 @@ export function useAgentSocket() {
 	const token = getAccessToken();
 
 	const { isConnected, send, disconnect, reconnect } = useWebSocket({
-		url: `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws/agent/chat?token=${token}`,
+		url: `${getWsUrl("/ws/agent/chat")}?token=${token}`,
 		enabled: !!token,
 		onMessage: handleMessage,
 		onOpen: () => {

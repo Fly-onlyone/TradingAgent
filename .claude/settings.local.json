@@ -32,7 +32,9 @@
       "mcp__context7__resolve-library-id",
       "mcp__context7__query-docs",
       "Bash(git push:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(tail:*)",
+      "mcp__pycharm__get_run_configurations"
     ]
   },
   "enableAllProjectMcpServers": true,

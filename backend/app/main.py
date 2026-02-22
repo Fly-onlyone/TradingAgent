@@ -63,6 +63,8 @@ elif settings.debug:
         "http://localhost:3000",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:3000",
+        "https://tauri.localhost",
+        "http://tauri.localhost",
     ]
 else:
     _cors_origins = []
