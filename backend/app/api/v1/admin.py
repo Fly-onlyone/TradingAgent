@@ -1,15 +1,16 @@
 """Admin endpoints for database management (superuser only)."""
 
 import re
-from typing import Any, Optional
+from typing import Any
 
+import sentry_sdk
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from app.api.v1.auth import get_current_active_user
 from app.config import get_settings
 from app.db.models.user import User
 from app.db.session import get_client, get_db
-from app.api.v1.auth import get_current_active_user
 
 router = APIRouter()
 
@@ -80,6 +81,14 @@ class DocumentUpdateRequest(BaseModel):
     document: dict[str, Any]
 
 
+class SentryTestResponse(BaseModel):
+    """Response payload for manual Sentry test events."""
+
+    status: str
+    message: str
+    event_id: str | None = None
+
+
 async def get_current_superuser(
     current_user: User = Depends(get_current_active_user),
 ) -> User:
@@ -90,6 +99,19 @@ async def get_current_superuser(
             detail="Superuser privileges required",
         )
     return current_user
+
+
+@router.post("/sentry-test", response_model=SentryTestResponse)
+async def create_sentry_test_event(
+    _: User = Depends(get_current_superuser),
+) -> SentryTestResponse:
+    error = RuntimeError("Manual Sentry backend test from /api/v1/admin/sentry-test")
+    event_id = sentry_sdk.capture_exception(error)
+    return SentryTestResponse(
+        status="sent",
+        message="Backend Sentry test event was sent.",
+        event_id=event_id,
+    )
 
 
 def _sanitize_mongodb_url(url: str) -> str:
@@ -180,7 +202,7 @@ async def get_collection_documents(
     collection_name: str,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    search: Optional[str] = None,
+    search: str | None = None,
     _: User = Depends(get_current_superuser),
 ) -> dict:
     """

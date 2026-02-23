@@ -57,6 +57,13 @@ class Settings(BaseSettings):
     coingecko_api_key: str = ""
     defillama_api_url: str = "https://api.llama.fi"
 
+    # Sentry
+    sentry_dsn: str = ""
+    sentry_environment: str = ""
+    sentry_release: str = ""
+    sentry_traces_sample_rate: float = 0.1
+    sentry_profiles_sample_rate: float = 0.1
+
     # Logging
     log_level: str = "INFO"
     log_dir: str = "logs"
@@ -94,6 +101,14 @@ class Settings(BaseSettings):
                 UserWarning,
                 stacklevel=2,
             )
+
+        for field_name in (
+            "sentry_traces_sample_rate",
+            "sentry_profiles_sample_rate",
+        ):
+            value = getattr(self, field_name)
+            if not 0.0 <= value <= 1.0:
+                raise ValueError(f"{field_name} must be between 0.0 and 1.0")
 
         return self
 

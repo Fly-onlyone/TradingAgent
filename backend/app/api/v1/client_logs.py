@@ -9,7 +9,6 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field, field_validator
 
 from app.db.models.log import LogRecord
-from app.services.bug_automation_service import get_bug_automation_service
 
 router = APIRouter()
 
@@ -74,8 +73,5 @@ async def ingest_frontend_log(
     }
 
     await LogRecord(**record).insert()
-
-    service = get_bug_automation_service()
-    await service.ingest_log_records([record])
 
     return FrontendLogIngestResponse(ok=True, ingested_at=now)

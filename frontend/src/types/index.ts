@@ -4,7 +4,6 @@
 
 export * from "./admin";
 export * from "./api";
-export * from "./bug";
 export * from "./knowledge";
 export * from "./log";
 export * from "./market";

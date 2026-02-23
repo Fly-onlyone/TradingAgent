@@ -8,8 +8,6 @@ from app.api.v1 import (
     agent_sessions,
     agent_tasks,
     auth,
-    bug_automation,
-    bugs,
     client_logs,
     knowledge,
     logs,
@@ -42,10 +40,4 @@ router.include_router(
 router.include_router(settings.router, prefix="/settings", tags=["settings"])
 router.include_router(client_logs.router, prefix="/logs", tags=["logs"])
 router.include_router(logs.router, prefix="/admin/logs", tags=["logs"])
-router.include_router(
-    bug_automation.router,
-    prefix="/admin/bug-automation",
-    tags=["bug-automation"],
-)
-router.include_router(bugs.router, prefix="/admin/bugs", tags=["bugs"])
 router.include_router(admin.router, prefix="/admin", tags=["admin"])

@@ -11,7 +11,6 @@ export {
 	useAgentStore,
 } from "./agentStore";
 export { default as authStore, useAuthStore } from "./authStore";
-export { default as bugStore, useBugStore } from "./bugStore";
 export { default as logStore, useLogStore } from "./logStore";
 export {
 	default as marketStore,

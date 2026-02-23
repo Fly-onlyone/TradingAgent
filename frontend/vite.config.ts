@@ -1,5 +1,6 @@
 import type { Duplex } from "node:stream";
 import { fileURLToPath, URL } from "node:url";
+import { sentryVitePlugin } from "@sentry/vite-plugin";
 import { devtools } from "@tanstack/devtools-vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import viteReact from "@vitejs/plugin-react";
@@ -131,7 +132,24 @@ export default defineConfig({
 				]
 			: []),
 		viteReact(),
+
+		// Sentry source map upload — only during builds with auth token
+		...(process.env.SENTRY_AUTH_TOKEN
+			? [
+					sentryVitePlugin({
+						org: "fly-theonlyone",
+						project: "trading-agent",
+						authToken: process.env.SENTRY_AUTH_TOKEN,
+						sourcemaps: {
+							filesToDeleteAfterUpload: ["./dist/**/*.map"],
+						},
+					}),
+				]
+			: []),
 	],
+	build: {
+		sourcemap: "hidden",
+	},
 	resolve: {
 		alias: {
 			"@": fileURLToPath(new URL("./src", import.meta.url)),

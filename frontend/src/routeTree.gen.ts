@@ -21,9 +21,9 @@ import { Route as StrategiesIndexRouteImport } from './routes/strategies/index'
 import { Route as KnowledgeIndexRouteImport } from './routes/knowledge/index'
 import { Route as AuthRegisterRouteImport } from './routes/auth/register'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
+import { Route as AdminSentryRouteImport } from './routes/admin/sentry'
 import { Route as AdminLogsRouteImport } from './routes/admin/logs'
 import { Route as AdminDatabaseRouteImport } from './routes/admin/database'
-import { Route as AdminBugsRouteImport } from './routes/admin/bugs'
 
 const TradingRoute = TradingRouteImport.update({
   id: '/trading',
@@ -85,6 +85,11 @@ const AuthLoginRoute = AuthLoginRouteImport.update({
   path: '/auth/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminSentryRoute = AdminSentryRouteImport.update({
+  id: '/admin/sentry',
+  path: '/admin/sentry',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminLogsRoute = AdminLogsRouteImport.update({
   id: '/admin/logs',
   path: '/admin/logs',
@@ -95,11 +100,6 @@ const AdminDatabaseRoute = AdminDatabaseRouteImport.update({
   path: '/admin/database',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminBugsRoute = AdminBugsRouteImport.update({
-  id: '/admin/bugs',
-  path: '/admin/bugs',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -108,9 +108,9 @@ export interface FileRoutesByFullPath {
   '/orders': typeof OrdersRoute
   '/settings': typeof SettingsRoute
   '/trading': typeof TradingRoute
-  '/admin/bugs': typeof AdminBugsRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/logs': typeof AdminLogsRoute
+  '/admin/sentry': typeof AdminSentryRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
   '/knowledge/': typeof KnowledgeIndexRoute
@@ -125,9 +125,9 @@ export interface FileRoutesByTo {
   '/orders': typeof OrdersRoute
   '/settings': typeof SettingsRoute
   '/trading': typeof TradingRoute
-  '/admin/bugs': typeof AdminBugsRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/logs': typeof AdminLogsRoute
+  '/admin/sentry': typeof AdminSentryRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
   '/knowledge': typeof KnowledgeIndexRoute
@@ -143,9 +143,9 @@ export interface FileRoutesById {
   '/orders': typeof OrdersRoute
   '/settings': typeof SettingsRoute
   '/trading': typeof TradingRoute
-  '/admin/bugs': typeof AdminBugsRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/logs': typeof AdminLogsRoute
+  '/admin/sentry': typeof AdminSentryRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
   '/knowledge/': typeof KnowledgeIndexRoute
@@ -162,9 +162,9 @@ export interface FileRouteTypes {
     | '/orders'
     | '/settings'
     | '/trading'
-    | '/admin/bugs'
     | '/admin/database'
     | '/admin/logs'
+    | '/admin/sentry'
     | '/auth/login'
     | '/auth/register'
     | '/knowledge/'
@@ -179,9 +179,9 @@ export interface FileRouteTypes {
     | '/orders'
     | '/settings'
     | '/trading'
-    | '/admin/bugs'
     | '/admin/database'
     | '/admin/logs'
+    | '/admin/sentry'
     | '/auth/login'
     | '/auth/register'
     | '/knowledge'
@@ -196,9 +196,9 @@ export interface FileRouteTypes {
     | '/orders'
     | '/settings'
     | '/trading'
-    | '/admin/bugs'
     | '/admin/database'
     | '/admin/logs'
+    | '/admin/sentry'
     | '/auth/login'
     | '/auth/register'
     | '/knowledge/'
@@ -214,9 +214,9 @@ export interface RootRouteChildren {
   OrdersRoute: typeof OrdersRoute
   SettingsRoute: typeof SettingsRoute
   TradingRoute: typeof TradingRoute
-  AdminBugsRoute: typeof AdminBugsRoute
   AdminDatabaseRoute: typeof AdminDatabaseRoute
   AdminLogsRoute: typeof AdminLogsRoute
+  AdminSentryRoute: typeof AdminSentryRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthRegisterRoute: typeof AuthRegisterRoute
   KnowledgeIndexRoute: typeof KnowledgeIndexRoute
@@ -311,6 +311,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/sentry': {
+      id: '/admin/sentry'
+      path: '/admin/sentry'
+      fullPath: '/admin/sentry'
+      preLoaderRoute: typeof AdminSentryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/logs': {
       id: '/admin/logs'
       path: '/admin/logs'
@@ -325,13 +332,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminDatabaseRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/bugs': {
-      id: '/admin/bugs'
-      path: '/admin/bugs'
-      fullPath: '/admin/bugs'
-      preLoaderRoute: typeof AdminBugsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -342,9 +342,9 @@ const rootRouteChildren: RootRouteChildren = {
   OrdersRoute: OrdersRoute,
   SettingsRoute: SettingsRoute,
   TradingRoute: TradingRoute,
-  AdminBugsRoute: AdminBugsRoute,
   AdminDatabaseRoute: AdminDatabaseRoute,
   AdminLogsRoute: AdminLogsRoute,
+  AdminSentryRoute: AdminSentryRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthRegisterRoute: AuthRegisterRoute,
   KnowledgeIndexRoute: KnowledgeIndexRoute,

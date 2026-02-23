@@ -1,44 +1,17 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { adminApi } from "@/api/endpoints/admin";
-import { bugsApi } from "@/api/endpoints/bugs";
 import { logsApi } from "@/api/endpoints/logs";
 import type { AdminDocumentFilter } from "@/types";
-import type { BugsFilter } from "@/types/bug";
 import type { LogsFilter } from "@/types/log";
 
 const ADMIN_STALE_TIME = 60_000;
 const ADMIN_GC_TIME = 10 * 60_000;
 
-export const defaultAdminBugFilters: BugsFilter = {
-	page: 1,
-	pageSize: 50,
-};
-
 export const defaultAdminLogFilters: LogsFilter = {
 	page: 1,
 	pageSize: 50,
 };
-
-export function adminBugsQueryOptions(filters: BugsFilter) {
-	return queryOptions({
-		queryKey: ["admin-bugs", filters] as const,
-		queryFn: () => bugsApi.getBugs(filters),
-		staleTime: ADMIN_STALE_TIME,
-		gcTime: ADMIN_GC_TIME,
-		refetchOnMount: false,
-	});
-}
-
-export function adminBugStatsQueryOptions() {
-	return queryOptions({
-		queryKey: ["admin-bugs-stats"] as const,
-		queryFn: () => bugsApi.getBugStats(),
-		staleTime: ADMIN_STALE_TIME,
-		gcTime: ADMIN_GC_TIME,
-		refetchOnMount: false,
-	});
-}
 
 export function adminLogsQueryOptions(filters: LogsFilter) {
 	return queryOptions({

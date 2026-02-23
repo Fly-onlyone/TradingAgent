@@ -23,12 +23,4 @@
 - **Python**: Google-style docstrings. Omit obvious Args/Returns sections.
 - **TypeScript**: TSDoc (`/** */`). Keep `@param`/`@returns` only when non-obvious.
 
-## Anti-Patterns
 
-- Commented-out code (use git history)
-- Comments that restate the code: `# increment counter` above `counter += 1`
-- Filler words: "basically", "simply", "obviously", "etc."
-
-## Section Separators
-
-`# ============ Section Name ============`

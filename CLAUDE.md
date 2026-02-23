@@ -33,32 +33,18 @@ This file provides guidance to Coding agent when working with this project.
     - Keep `plugins.shell` minimal (e.g. `open`)
     - Put shell command permissions in `src-tauri/capabilities/default.json`
 
-## Bug Tracker Data Fetch
+## Sentry
 
-- **API (admin auth required)**:
-    - List bugs: `GET /api/v1/bugs`
-    - Bug stats: `GET /api/v1/bugs/stats`
-    - Example filter: `GET /api/v1/bugs?status=open&page=1&page_size=50`
-- **Direct DB check (local dev, PowerShell)**:
-    - Use this command to print total/open counts and latest 20 bug records:
-
-```powershell
-$env:PYTHONIOENCODING='utf-8'; @'
-import asyncio
-from app.db.session import init_db
-from app.db.models.bug import Bug
-
-async def main():
-    await init_db()
-    print('total=', await Bug.find_all().count())
-    print('open=', await Bug.find(Bug.status == 'open').count())
-    bugs = await Bug.find_all().sort('-created_at').limit(20).to_list()
-    for b in bugs:
-        print(b.id, b.status, b.severity, b.title)
-
-asyncio.run(main())
-'@ | uv run python -
-```
+- **Backend**: `sentry-sdk[fastapi]` — conditional init when `SENTRY_DSN` is set
+  - FastAPI auto-integration (transactions, error capture), `LoggingIntegration` (ERROR+ as events, INFO+ as breadcrumbs)
+  - Config: `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`, `SENTRY_TRACES_SAMPLE_RATE`, `SENTRY_PROFILES_SAMPLE_RATE`
+  - Test endpoint: `POST /api/v1/admin/sentry-test` (superuser)
+- **Frontend**: `@sentry/react` — conditional init when `VITE_SENTRY_DSN` is set
+  - `Sentry.ErrorBoundary` wraps the React tree in `main.tsx`
+  - Browser tracing + profiling integrations
+  - Source maps uploaded via `@sentry/vite-plugin` when `SENTRY_AUTH_TOKEN` is set at build time
+  - Config: `VITE_SENTRY_DSN`, `VITE_SENTRY_ENVIRONMENT`, `VITE_SENTRY_RELEASE`, `VITE_SENTRY_TRACES_SAMPLE_RATE`, `VITE_SENTRY_PROFILE_SESSION_SAMPLE_RATE`, `VITE_SENTRY_PROFILE_LIFECYCLE`
+- **Admin page**: `/admin/sentry` — status, captured items, test events, dashboard links
 
 ## Project Overview
 
@@ -83,12 +69,11 @@ asyncio.run(main())
 
 - **Backend port**: **7000**
 - **Dev entry**: `python run.py` starts both frontend + backend with watchfiles reload
-- **Auth**: JWT-based. Superuser check via `get_current_superuser` dependency (defined in `logs.py`, reused by
-  `bugs.py`)
+- **Auth**: JWT-based. Superuser check via `get_current_superuser` dependency (defined in auth dependency files)
 
 ## Key Patterns
 
-- **Backend model**: Beanie `Document` with `class Settings` for collection name + indexes. See `log.py`, `bug.py`
+- **Backend model**: Beanie `Document` with `class Settings` for collection name + indexes. See `log.py`
 - **Backend API**: Router with Pydantic request/response schemas. Aggregation uses `get_pymongo_collection()` (not the
   deprecated `get_motor_collection`)
 - **DB session**: All models must be registered in `backend/app/db/session.py` `document_models` list
@@ -109,15 +94,10 @@ asyncio.run(main())
 - **Biome**: Enforces tabs (not spaces), double quotes, sorted imports. PyCharm reformatter uses spaces — always run
   `biome check --write` AFTER `reformat_file` to reconcile
 - **Skeleton keys**: `noArrayIndexKey` warnings on skeleton loaders are pre-existing false positives (static
-  placeholders) — same pattern in `logs.tsx`, `bugs.tsx`
+  placeholders) — same pattern in `logs.tsx`
 - **Hook ordering**: Biome enforces `useHookAtTopLevel` — early returns (like auth guards) must come AFTER all hooks,
   not before
-- **Pre-existing errors**: ~581 ruff errors and ~237 biome errors across the codebase — only verify new/modified files
-
-## Seed Scripts
-
-- Seed functions go in `backend/app/db/seed_*.py`, called from `init_db()` in `session.py`
-- Must be idempotent (check `count > 0` before inserting)
+- **Pre-existing errors**: ~554 ruff errors and ~177 biome errors across the codebase — only verify new/modified files
 
 ## Context7 IDs
 

@@ -12,22 +12,42 @@ from contextlib import asynccontextmanager
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
+import sentry_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sentry_sdk.integrations.logging import LoggingIntegration
 
-from app.config import get_settings
-from app.db.session import init_db, close_db
-from app.logging_config import setup_logging
 from app.agent.task_scheduler import get_scheduler
 from app.api.v1 import router as api_v1_router
 from app.api.websocket import router as ws_router
+from app.config import get_settings
+from app.db.session import close_db, init_db
+from app.logging_config import setup_logging
+from app.middleware.request_logging import RequestLoggingMiddleware
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
+if settings.sentry_dsn:
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        traces_sample_rate=settings.sentry_traces_sample_rate,
+        profiles_sample_rate=settings.sentry_profiles_sample_rate,
+        environment=settings.sentry_environment
+        or ("development" if settings.debug else "production"),
+        release=settings.sentry_release or None,
+        send_default_pii=False,
+        integrations=[
+            LoggingIntegration(
+                level=logging.INFO,  # Breadcrumbs from INFO+
+                event_level=logging.ERROR,  # Events from ERROR+
+            ),
+        ],
+    )
+
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan manager."""
     # Startup
     mongo_handler = setup_logging()
@@ -82,8 +102,6 @@ app.add_middleware(
 )
 
 # Request logging middleware
-from app.middleware.request_logging import RequestLoggingMiddleware
-
 app.add_middleware(RequestLoggingMiddleware)
 
 # Skip auth in debug mode — all endpoints use a mock superuser

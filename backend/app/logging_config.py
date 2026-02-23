@@ -7,15 +7,14 @@ import os
 import sys
 import traceback
 from contextvars import ContextVar
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from logging.handlers import RotatingFileHandler
-from typing import Optional
 
 from app.config import get_settings
 
 # Context variable for request-scoped data
-request_id_var: ContextVar[Optional[str]] = ContextVar("request_id", default=None)
-user_id_var: ContextVar[Optional[str]] = ContextVar("user_id", default=None)
+request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
+user_id_var: ContextVar[str | None] = ContextVar("user_id", default=None)
 
 
 # ============================================================
@@ -29,7 +28,7 @@ class JSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         entry = {
             "timestamp": datetime.fromtimestamp(
-                record.created, tz=timezone.utc
+                record.created, tz=UTC
             ).isoformat(),
             "level": record.levelname,
             "logger": record.name,
@@ -74,7 +73,7 @@ class ColoredFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         color = LEVEL_COLORS.get(record.levelname, "")
         level = f"{color}{record.levelname:<8}{RESET}"
-        ts = datetime.fromtimestamp(record.created, tz=timezone.utc).strftime(
+        ts = datetime.fromtimestamp(record.created, tz=UTC).strftime(
             "%H:%M:%S"
         )
         name = record.name.replace("app.", "")
@@ -107,8 +106,8 @@ class MongoDBHandler(logging.Handler):
         self._buffer: list[dict] = []
         self._buffer_size = buffer_size
         self._flush_interval = flush_interval
-        self._flush_task: Optional[asyncio.Task] = None
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._flush_task: asyncio.Task | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     def start(self) -> None:
         """Start the periodic flush task. Call after event loop is running."""
@@ -130,7 +129,7 @@ class MongoDBHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         entry = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc),
+            "timestamp": datetime.fromtimestamp(record.created, tz=UTC),
             "level": record.levelname,
             "logger_name": record.name,
             "message": record.getMessage(),
@@ -176,24 +175,17 @@ class MongoDBHandler(logging.Handler):
             )
             return
 
-        try:
-            from app.services.bug_automation_service import get_bug_automation_service
 
-            service = get_bug_automation_service()
-            await service.ingest_log_records(records)
-        except Exception as exc:
-            # Avoid recursion — don't log failures from the log handler
-            sys.stderr.write(f"Failed to process bug automation records: {exc}\n")
 
 
 # ============================================================
 # Module-level singleton
 # ============================================================
 
-_mongo_handler: Optional[MongoDBHandler] = None
+_mongo_handler: MongoDBHandler | None = None
 
 
-def get_mongo_handler() -> Optional[MongoDBHandler]:
+def get_mongo_handler() -> MongoDBHandler | None:
     return _mongo_handler
 
 

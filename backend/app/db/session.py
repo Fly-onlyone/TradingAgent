@@ -112,7 +112,6 @@ async def init_db() -> None:
     from app.db.models.agent_session import AgentSession
     from app.db.models.agent_task import AgentTask
     from app.db.models.app_settings import AppSettings
-    from app.db.models.bug import Bug
     from app.db.models.knowledge import StrategyKnowledge, TradeLesson, TradingPattern
     from app.db.models.log import LogRecord
     from app.db.models.market import MarketData, Trade
@@ -145,8 +144,6 @@ async def init_db() -> None:
         AppSettings,
         # Logs
         LogRecord,
-        # Bugs
-        Bug,
     ]
 
     # Initialize Beanie with all document models.
@@ -195,10 +192,6 @@ async def init_db() -> None:
         )
 
     await _validate_app_settings_secret_encryption()
-
-    from app.db.seed_bugs import seed_bugs
-
-    await seed_bugs()
 
 
 async def close_db() -> None:
