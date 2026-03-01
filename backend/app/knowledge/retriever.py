@@ -180,9 +180,7 @@ class KnowledgeRetriever:
         Returns:
             Formatted context string for the agent
         """
-        results = await self.search_all(
-            query, limit_per_type=max_results // 3, min_similarity=0.5
-        )
+        results = await self.search_all(query, limit_per_type=max_results // 3, min_similarity=0.5)
 
         context_parts = []
 
@@ -190,22 +188,14 @@ class KnowledgeRetriever:
         if results["strategies"]:
             context_parts.append("## Relevant Strategies")
             for strategy in results["strategies"]:
-                desc = (
-                    strategy.description[:200]
-                    if strategy.description
-                    else "No description"
-                )
+                desc = strategy.description[:200] if strategy.description else "No description"
                 context_parts.append(f"- **{strategy.name}**: {desc}")
 
         # Add relevant lessons
         if results["lessons"]:
             context_parts.append("\n## Relevant Trade Lessons")
             for lesson in results["lessons"]:
-                summary = (
-                    lesson.lesson_summary[:200]
-                    if lesson.lesson_summary
-                    else "No summary"
-                )
+                summary = lesson.lesson_summary[:200] if lesson.lesson_summary else "No summary"
                 context_parts.append(
                     f"- **{lesson.symbol} {lesson.side}** ({lesson.outcome}, {lesson.profit_pct}%): {summary}"
                 )
@@ -214,11 +204,7 @@ class KnowledgeRetriever:
         if results["patterns"]:
             context_parts.append("\n## Relevant Patterns")
             for pattern in results["patterns"]:
-                desc = (
-                    pattern.description[:200]
-                    if pattern.description
-                    else "No description"
-                )
+                desc = pattern.description[:200] if pattern.description else "No description"
                 context_parts.append(
                     f"- **{pattern.pattern_name}** ({pattern.pattern_type}, "
                     f"success: {pattern.success_rate}%): {desc}"

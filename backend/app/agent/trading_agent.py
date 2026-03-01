@@ -1,5 +1,6 @@
 """Main Trading Agent using Claude Agent SDK with MCP tools."""
 
+import asyncio
 import logging
 import re
 import uuid
@@ -88,7 +89,10 @@ class TradingAgent:
         from app.db.models.app_settings import AppSettings
 
         server = create_trading_mcp_server()
-        app_settings = await AppSettings.get_instance()
+        app_settings, api_key = await asyncio.gather(
+            AppSettings.get_instance(),
+            resolve_anthropic_api_key(),
+        )
 
         # Use thinking budget from DB settings (0 = disabled)
         thinking_tokens = app_settings.agent_max_thinking_tokens or None
@@ -103,8 +107,6 @@ class TradingAgent:
             max_thinking_tokens=thinking_tokens,
         )
 
-        # Resolve API key: DB → env var → empty (CLI credentials)
-        api_key = await resolve_anthropic_api_key()
         if api_key:
             options.env["ANTHROPIC_API_KEY"] = api_key
 

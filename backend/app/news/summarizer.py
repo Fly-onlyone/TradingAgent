@@ -35,15 +35,13 @@ Content:
 Summary:"""
 
         response = self.client.messages.create(
-            model="claude-sonnet-4-5",
+            model="claude-sonnet-4-6",
             max_tokens=500,
             messages=[{"role": "user", "content": prompt}],
         )
 
         summary = response.content[0].text.strip()
-        return (
-            summary[: max_length - 3] + "..." if len(summary) > max_length else summary
-        )
+        return summary[: max_length - 3] + "..." if len(summary) > max_length else summary
 
     async def analyze_sentiment(
         self,
@@ -70,7 +68,7 @@ Provide your analysis in the following format:
 Response:"""
 
         response = self.client.messages.create(
-            model="claude-sonnet-4-5",
+            model="claude-sonnet-4-6",
             max_tokens=500,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -130,9 +128,7 @@ Response:"""
         """Analyze how relevant an article is for trading."""
         truncated_content = content[:3000] if len(content) > 3000 else content
 
-        assets_text = (
-            f"\nSpecific assets of interest: {', '.join(assets)}" if assets else ""
-        )
+        assets_text = f"\nSpecific assets of interest: {', '.join(assets)}" if assets else ""
 
         prompt = f"""Rate the relevance of this news article for cryptocurrency trading on a scale from 0.0 to 1.0.
 
@@ -150,7 +146,7 @@ Content:
 Respond with ONLY a number between 0.0 and 1.0:"""
 
         response = self.client.messages.create(
-            model="claude-sonnet-4-5",
+            model="claude-sonnet-4-6",
             max_tokens=50,
             messages=[{"role": "user", "content": prompt}],
         )

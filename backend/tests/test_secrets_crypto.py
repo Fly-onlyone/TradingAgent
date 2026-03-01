@@ -35,6 +35,4 @@ def test_decrypt_raises_for_invalid_encrypted_value(
     monkeypatch.setattr(secrets_crypto, "get_required_encryption_keys", lambda: (key,))
 
     with pytest.raises(SecretDecryptionError):
-        secrets_crypto.decrypt_secret_value(
-            f"{secrets_crypto.SECRET_ENCRYPTION_PREFIX}invalid"
-        )
+        secrets_crypto.decrypt_secret_value(f"{secrets_crypto.SECRET_ENCRYPTION_PREFIX}invalid")

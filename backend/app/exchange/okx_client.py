@@ -1,15 +1,14 @@
 """OKX REST API client for trading operations."""
 
-import base64
-import hashlib
-import hmac
-import json
+import asyncio
 import logging
-from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-import httpx
+import okx.Account as Account
+import okx.MarketData as MarketData
+import okx.PublicData as PublicData
+import okx.Trade as Trade
 
 from app.config import get_settings
 
@@ -21,11 +20,23 @@ class OKXClient:
 
     def __init__(self) -> None:
         self.settings = get_settings()
-        self.base_url = "https://www.okx.com"
         self.api_key = self.settings.okx_api_key
         self.secret_key = self.settings.okx_secret_key
         self.passphrase = self.settings.okx_passphrase
         self.sandbox = self.settings.okx_sandbox
+        self._trade: Trade.TradeAPI | None = None
+        self._account: Account.AccountAPI | None = None
+        self._market: MarketData.MarketAPI | None = None
+        self._public: PublicData.PublicAPI | None = None
+
+    def _init_sdk_clients(self) -> None:
+        flag = "1" if self.sandbox else "0"
+        self._trade = Trade.TradeAPI(self.api_key, self.secret_key, self.passphrase, False, flag)
+        self._account = Account.AccountAPI(
+            self.api_key, self.secret_key, self.passphrase, False, flag
+        )
+        self._market = MarketData.MarketAPI(flag=flag)
+        self._public = PublicData.PublicAPI(flag=flag)
 
     @classmethod
     async def create(cls) -> "OKXClient":
@@ -51,108 +62,21 @@ class OKXClient:
                 "Failed to load OKX credentials from AppSettings — using env var fallback",
                 exc_info=True,
             )
+        instance._init_sdk_clients()
         return instance
-
-    def _get_timestamp(self) -> str:
-        """Get ISO 8601 timestamp for API requests."""
-        return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-
-    def _sign(self, timestamp: str, method: str, path: str, body: str = "") -> str:
-        """Create HMAC-SHA256 signature for authenticated requests."""
-        message = timestamp + method.upper() + path + body
-        mac = hmac.new(
-            self.secret_key.encode("utf-8"),
-            message.encode("utf-8"),
-            hashlib.sha256,
-        )
-        return base64.b64encode(mac.digest()).decode("utf-8")
-
-    def _get_headers(self, method: str, path: str, body: str = "") -> dict[str, str]:
-        """Get headers for authenticated requests."""
-        timestamp = self._get_timestamp()
-        signature = self._sign(timestamp, method, path, body)
-
-        headers = {
-            "OK-ACCESS-KEY": self.api_key,
-            "OK-ACCESS-SIGN": signature,
-            "OK-ACCESS-TIMESTAMP": timestamp,
-            "OK-ACCESS-PASSPHRASE": self.passphrase,
-            "Content-Type": "application/json",
-        }
-
-        if self.sandbox:
-            headers["x-simulated-trading"] = "1"
-
-        return headers
-
-    async def _request(
-        self,
-        method: str,
-        path: str,
-        params: dict[str, Any] | None = None,
-        body: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """Make authenticated request to OKX API."""
-        url = self.base_url + path
-
-        body_str = ""
-        if body:
-            body_str = json.dumps(body)
-
-        if params:
-            query_string = "&".join(f"{k}={v}" for k, v in params.items())
-            path = f"{path}?{query_string}"
-
-        headers = self._get_headers(method, path, body_str)
-
-        async with httpx.AsyncClient() as client:
-            if method.upper() == "GET":
-                response = await client.get(url, params=params, headers=headers)
-            elif method.upper() == "POST":
-                response = await client.post(url, content=body_str, headers=headers)
-            else:
-                raise ValueError(f"Unsupported HTTP method: {method}")
-
-            try:
-                payload = response.json()
-            except ValueError:
-                payload = None
-
-            if response.is_error:
-                if isinstance(payload, dict):
-                    payload.setdefault("code", str(response.status_code))
-                    payload.setdefault(
-                        "msg", response.text.strip() or response.reason_phrase
-                    )
-                    return payload
-                return {
-                    "code": str(response.status_code),
-                    "msg": response.text.strip() or response.reason_phrase,
-                }
-
-            if isinstance(payload, dict):
-                return payload
-            return {"code": "0", "data": payload}
 
     # Account Endpoints
     async def get_account_balance(self) -> dict[str, Any]:
         """Get account balance information."""
-        result = await self._request("GET", "/api/v5/account/balance")
-        return result
+        return await asyncio.to_thread(self._account.get_account_balance)
 
     async def get_positions(self, inst_type: str = "SPOT") -> dict[str, Any]:
         """Get current positions."""
-        result = await self._request(
-            "GET",
-            "/api/v5/account/positions",
-            params={"instType": inst_type},
-        )
-        return result
+        return await asyncio.to_thread(self._account.get_positions, instType=inst_type)
 
     async def get_account_config(self) -> dict[str, Any]:
         """Get account configuration."""
-        result = await self._request("GET", "/api/v5/account/config")
-        return result
+        return await asyncio.to_thread(self._account.get_account_config)
 
     # Trading Endpoints
     async def place_order(
@@ -176,23 +100,17 @@ class OKXClient:
             client_order_id: Custom order ID
             reduce_only: Whether to reduce position only
         """
-        body: dict[str, Any] = {
-            "instId": inst_id,
-            "tdMode": "cash",  # cash for spot, cross/isolated for margin
-            "side": side,
-            "ordType": order_type,
-            "sz": str(size),
-        }
-
-        if price is not None:
-            body["px"] = str(price)
-        if client_order_id:
-            body["clOrdId"] = client_order_id
-        if reduce_only:
-            body["reduceOnly"] = True
-
-        result = await self._request("POST", "/api/v5/trade/order", body=body)
-        return result
+        return await asyncio.to_thread(
+            self._trade.place_order,
+            instId=inst_id,
+            tdMode="cash",
+            side=side,
+            ordType=order_type,
+            sz=str(size),
+            px=str(price) if price is not None else "",
+            clOrdId=client_order_id or "",
+            reduceOnly=reduce_only,
+        )
 
     async def cancel_order(
         self,
@@ -201,17 +119,14 @@ class OKXClient:
         client_order_id: str | None = None,
     ) -> dict[str, Any]:
         """Cancel an order by order ID or client order ID."""
-        body: dict[str, Any] = {"instId": inst_id}
-
-        if order_id:
-            body["ordId"] = order_id
-        elif client_order_id:
-            body["clOrdId"] = client_order_id
-        else:
+        if not order_id and not client_order_id:
             raise ValueError("Either order_id or client_order_id must be provided")
-
-        result = await self._request("POST", "/api/v5/trade/cancel-order", body=body)
-        return result
+        return await asyncio.to_thread(
+            self._trade.cancel_order,
+            instId=inst_id,
+            ordId=order_id or "",
+            clOrdId=client_order_id or "",
+        )
 
     async def get_order(
         self,
@@ -220,15 +135,12 @@ class OKXClient:
         client_order_id: str | None = None,
     ) -> dict[str, Any]:
         """Get order details."""
-        params: dict[str, Any] = {"instId": inst_id}
-
-        if order_id:
-            params["ordId"] = order_id
-        elif client_order_id:
-            params["clOrdId"] = client_order_id
-
-        result = await self._request("GET", "/api/v5/trade/order", params=params)
-        return result
+        return await asyncio.to_thread(
+            self._trade.get_order,
+            instId=inst_id,
+            ordId=order_id or "",
+            clOrdId=client_order_id or "",
+        )
 
     async def get_open_orders(
         self,
@@ -236,14 +148,11 @@ class OKXClient:
         inst_id: str | None = None,
     ) -> dict[str, Any]:
         """Get list of open orders."""
-        params: dict[str, Any] = {"instType": inst_type}
-        if inst_id:
-            params["instId"] = inst_id
-
-        result = await self._request(
-            "GET", "/api/v5/trade/orders-pending", params=params
+        return await asyncio.to_thread(
+            self._trade.get_order_list,
+            instType=inst_type,
+            instId=inst_id or "",
         )
-        return result
 
     async def get_order_history(
         self,
@@ -252,45 +161,25 @@ class OKXClient:
         limit: int = 100,
     ) -> dict[str, Any]:
         """Get order history."""
-        params: dict[str, Any] = {"instType": inst_type, "limit": str(limit)}
-        if inst_id:
-            params["instId"] = inst_id
-
-        result = await self._request(
-            "GET", "/api/v5/trade/orders-history", params=params
+        return await asyncio.to_thread(
+            self._trade.get_orders_history,
+            instType=inst_type,
+            instId=inst_id or "",
+            limit=str(limit),
         )
-        return result
 
     # Market Data Endpoints (Public - no auth needed)
     async def get_ticker(self, inst_id: str) -> dict[str, Any]:
         """Get ticker information for an instrument."""
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{self.base_url}/api/v5/market/ticker",
-                params={"instId": inst_id},
-            )
-            response.raise_for_status()
-            return response.json()
+        return await asyncio.to_thread(self._market.get_ticker, instId=inst_id)
 
     async def get_tickers(self, inst_type: str = "SPOT") -> dict[str, Any]:
         """Get all tickers for an instrument type."""
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{self.base_url}/api/v5/market/tickers",
-                params={"instType": inst_type},
-            )
-            response.raise_for_status()
-            return response.json()
+        return await asyncio.to_thread(self._market.get_tickers, instType=inst_type)
 
     async def get_orderbook(self, inst_id: str, depth: int = 20) -> dict[str, Any]:
         """Get orderbook for an instrument."""
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{self.base_url}/api/v5/market/books",
-                params={"instId": inst_id, "sz": str(depth)},
-            )
-            response.raise_for_status()
-            return response.json()
+        return await asyncio.to_thread(self._market.get_orderbook, instId=inst_id, sz=str(depth))
 
     async def get_candlesticks(
         self,
@@ -309,26 +198,15 @@ class OKXClient:
             before: Pagination - timestamp before
             after: Pagination - timestamp after
         """
-        params: dict[str, Any] = {"instId": inst_id, "bar": bar, "limit": str(limit)}
-        if before:
-            params["before"] = before
-        if after:
-            params["after"] = after
-
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{self.base_url}/api/v5/market/candles",
-                params=params,
-            )
-            response.raise_for_status()
-            return response.json()
+        return await asyncio.to_thread(
+            self._market.get_candlesticks,
+            instId=inst_id,
+            bar=bar,
+            limit=str(limit),
+            before=before or "",
+            after=after or "",
+        )
 
     async def get_instruments(self, inst_type: str = "SPOT") -> dict[str, Any]:
         """Get available trading instruments."""
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{self.base_url}/api/v5/public/instruments",
-                params={"instType": inst_type},
-            )
-            response.raise_for_status()
-            return response.json()
+        return await asyncio.to_thread(self._public.get_instruments, instType=inst_type)

@@ -1,6 +1,6 @@
 """Agent decision endpoints for viewing decision history."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Optional
 
 from beanie import PydanticObjectId
@@ -193,9 +193,7 @@ def decision_to_detail(decision: AgentDecision) -> DecisionDetailResponse:
         execution_error_message=decision.execution_error_message,
         tools_used=[tool.model_dump(mode="json") for tool in decision.tools_used],
         market_context=(
-            decision.market_context.model_dump(mode="json")
-            if decision.market_context
-            else None
+            decision.market_context.model_dump(mode="json") if decision.market_context else None
         ),
         model_used=decision.model_used,
         user_feedback=decision.user_feedback,
@@ -241,10 +239,7 @@ async def list_decisions(
     total = await query.count()
 
     decisions = (
-        await query.sort("-created_at")
-        .skip((page - 1) * page_size)
-        .limit(page_size)
-        .to_list()
+        await query.sort("-created_at").skip((page - 1) * page_size).limit(page_size).to_list()
     )
 
     return {
@@ -262,7 +257,7 @@ async def list_pending_decisions(
     current_user: User = Depends(get_current_active_user),
 ) -> dict:
     """List pending decisions awaiting user confirmation."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     query = AgentDecision.find(
         AgentDecision.user_id == current_user.id,
@@ -275,10 +270,7 @@ async def list_pending_decisions(
     total = await query.count()
 
     decisions = (
-        await query.sort("-created_at")
-        .skip((page - 1) * page_size)
-        .limit(page_size)
-        .to_list()
+        await query.sort("-created_at").skip((page - 1) * page_size).limit(page_size).to_list()
     )
 
     return {
@@ -297,7 +289,7 @@ async def get_decision_stats(
     """Get decision statistics for the specified period."""
     from datetime import timedelta
 
-    start_date = datetime.now(timezone.utc) - timedelta(days=days)
+    start_date = datetime.now(UTC) - timedelta(days=days)
 
     decisions = await AgentDecision.find(
         AgentDecision.user_id == current_user.id,
@@ -340,9 +332,7 @@ async def get_decision_stats(
         if d.status == DecisionStatus.PENDING:
             pending_count += 1
 
-    avg_confidence = (
-        total_confidence / confidence_count if confidence_count > 0 else None
-    )
+    avg_confidence = total_confidence / confidence_count if confidence_count > 0 else None
 
     return {
         "total_decisions": len(decisions),

@@ -140,9 +140,7 @@ class StrategyEmbeddingGenerator:
 
         return "; ".join(parts)
 
-    async def generate_strategy_embedding(
-        self, strategy: dict[str, Any]
-    ) -> list[float]:
+    async def generate_strategy_embedding(self, strategy: dict[str, Any]) -> list[float]:
         """Generate embedding for a trading strategy."""
         text = self.format_strategy_text(strategy)
         return await self.embedding_service.generate_embedding(text)
@@ -158,9 +156,7 @@ class TradeLessonEmbeddingGenerator:
         """Format trade lesson data into text for embedding."""
         parts = []
 
-        parts.append(
-            f"Trade: {lesson.get('symbol', 'Unknown')} {lesson.get('side', 'Unknown')}"
-        )
+        parts.append(f"Trade: {lesson.get('symbol', 'Unknown')} {lesson.get('side', 'Unknown')}")
         parts.append(f"Outcome: {lesson.get('outcome', 'Unknown')}")
         parts.append(f"Profit: {lesson.get('profit_pct', 0)}%")
 

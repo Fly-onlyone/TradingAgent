@@ -1,6 +1,6 @@
 """Trading strategy model for MongoDB."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Optional
 
 from beanie import Document, Indexed, PydanticObjectId
@@ -29,8 +29,8 @@ class Strategy(Document):
     live_performance: Optional[dict] = None
 
     # Timestamps
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     last_executed_at: Optional[datetime] = None
 
     class Settings:
@@ -39,4 +39,4 @@ class Strategy(Document):
 
     def update_timestamp(self) -> None:
         """Update the updated_at timestamp."""
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)

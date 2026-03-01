@@ -7,7 +7,7 @@ import sentry_sdk
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from app.api.v1.auth import get_current_active_user
+from app.api.deps import get_current_superuser
 from app.config import get_settings
 from app.db.models.user import User
 from app.db.session import get_client, get_db
@@ -89,18 +89,6 @@ class SentryTestResponse(BaseModel):
     event_id: str | None = None
 
 
-async def get_current_superuser(
-    current_user: User = Depends(get_current_active_user),
-) -> User:
-    """Ensure current user is a superuser."""
-    if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=403,
-            detail="Superuser privileges required",
-        )
-    return current_user
-
-
 @router.post("/sentry-test", response_model=SentryTestResponse)
 async def create_sentry_test_event(
     _: User = Depends(get_current_superuser),
@@ -167,9 +155,7 @@ async def list_collections(
             continue
 
         count = await db[name].count_documents({})
-        display_name = COLLECTION_DISPLAY_NAMES.get(
-            name, name.replace("_", " ").title()
-        )
+        display_name = COLLECTION_DISPLAY_NAMES.get(name, name.replace("_", " ").title())
 
         # Get per-collection stats
         storage_size = 0
@@ -249,12 +235,7 @@ async def get_collection_documents(
     total = await collection.count_documents(query)
 
     # Get paginated documents
-    cursor = (
-        collection.find(query)
-        .sort("_id", -1)
-        .skip((page - 1) * page_size)
-        .limit(page_size)
-    )
+    cursor = collection.find(query).sort("_id", -1).skip((page - 1) * page_size).limit(page_size)
 
     documents = []
     async for doc in cursor:
@@ -366,9 +347,7 @@ async def update_document(
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields to update")
 
-    result = await db[collection_name].update_one(
-        {"_id": obj_id}, {"$set": update_data}
-    )
+    result = await db[collection_name].update_one({"_id": obj_id}, {"$set": update_data})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -398,7 +377,9 @@ def _serialize_document(doc: dict) -> dict:
                     else (
                         str(item)
                         if isinstance(item, ObjectId)
-                        else item.isoformat() if isinstance(item, datetime) else item
+                        else item.isoformat()
+                        if isinstance(item, datetime)
+                        else item
                     )
                 )
                 for item in value

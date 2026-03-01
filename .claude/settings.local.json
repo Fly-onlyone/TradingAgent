@@ -38,7 +38,9 @@
       "mcp__sentry__find_organizations",
       "mcp__sentry__find_teams",
       "mcp__sentry__create_project",
-      "Skill(commit)"
+      "Skill(commit)",
+      "Bash(bunx biome:*)",
+      "Bash(bun run:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

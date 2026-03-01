@@ -1,6 +1,6 @@
 """Knowledge base models for RAG and trade learning (MongoDB/Beanie)."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Optional
 
@@ -50,8 +50,8 @@ class StrategyKnowledge(Document):
     # Embedding for semantic search (1024-dim BGE-M3 vector stored inline)
     embedding: Optional[list[float]] = None
 
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     class Settings:
         name = "strategy_knowledge"
@@ -65,7 +65,7 @@ class StrategyKnowledge(Document):
 
     def update_timestamp(self) -> None:
         """Update the updated_at timestamp."""
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
 
 
 class TradeLesson(Document):
@@ -95,7 +95,7 @@ class TradeLesson(Document):
     # Embedding for semantic search (1024-dim BGE-M3 vector)
     embedding: Optional[list[float]] = None
 
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @field_validator("outcome", mode="before")
     @classmethod
@@ -160,7 +160,7 @@ class TradingPattern(Document):
     # Embedding for semantic search (1024-dim BGE-M3 vector)
     embedding: Optional[list[float]] = None
 
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     last_validated: Optional[datetime] = None
 
     class Settings:

@@ -102,9 +102,7 @@ class RiskManager:
             "current_price": round(current_price, 2),
             "position_size": round(position_size, 8),
             "position_value_usd": round(position_value, 2),
-            "position_pct_of_portfolio": round(
-                (position_value / total_equity) * 100, 2
-            ),
+            "position_pct_of_portfolio": round((position_value / total_equity) * 100, 2),
             "risk_amount_usd": round(risk_amount, 2),
             "risk_pct": risk_pct,
             "stop_loss_price": round(stop_loss_price, 2),
@@ -153,9 +151,7 @@ class RiskManager:
 
         # Calculate position value
         position_value = quantity * current_price
-        position_pct = (
-            (position_value / total_equity) * 100 if total_equity > 0 else 100
-        )
+        position_pct = (position_value / total_equity) * 100 if total_equity > 0 else 100
 
         # Check position size
         if position_pct > self.max_position_pct:
@@ -186,9 +182,7 @@ class RiskManager:
         bb_pos = ind_data.get("bb_position")
         if bb_pos:
             if side == "buy" and bb_pos > 0.9:
-                warnings.append(
-                    "Price near upper Bollinger Band - potential resistance"
-                )
+                warnings.append("Price near upper Bollinger Band - potential resistance")
                 risk_score += 15
             elif side == "sell" and bb_pos < 0.1:
                 warnings.append("Price near lower Bollinger Band - potential support")
@@ -199,9 +193,7 @@ class RiskManager:
         if atr and current_price:
             atr_pct = (atr / current_price) * 100
             if atr_pct > 5:
-                warnings.append(
-                    f"High volatility (ATR {atr_pct:.1f}%) - increased risk"
-                )
+                warnings.append(f"High volatility (ATR {atr_pct:.1f}%) - increased risk")
                 risk_score += 20
 
         # Check trend alignment
@@ -244,9 +236,7 @@ class RiskManager:
                 "trend": trend,
                 "bb_position": bb_pos,
                 "atr_pct": (
-                    round((atr / current_price) * 100, 2)
-                    if atr and current_price
-                    else None
+                    round((atr / current_price) * 100, 2) if atr and current_price else None
                 ),
             },
         }
@@ -291,7 +281,5 @@ class RiskManager:
             "asset_count": len(asset_values),
             "top_holdings": asset_values[:5],
             "concentration_warnings": warnings,
-            "max_new_position_usd": round(
-                total_equity * (self.max_position_pct / 100), 2
-            ),
+            "max_new_position_usd": round(total_equity * (self.max_position_pct / 100), 2),
         }

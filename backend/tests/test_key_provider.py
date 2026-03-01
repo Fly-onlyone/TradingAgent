@@ -11,9 +11,7 @@ from app.security.key_provider import SecretKeyProviderError
 
 
 def _settings(keys: str = "", ref: str = "") -> SimpleNamespace:
-    return SimpleNamespace(
-        secrets_encryption_keys=keys, secrets_encryption_keys_ref=ref
-    )
+    return SimpleNamespace(secrets_encryption_keys=keys, secrets_encryption_keys_ref=ref)
 
 
 def test_load_encryption_keys_from_direct_config(

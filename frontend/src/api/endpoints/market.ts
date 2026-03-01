@@ -11,6 +11,7 @@ import type {
 	Ticker,
 	Timeframe,
 } from "@/types";
+import { toNumber, toTimestamp } from "@/utils/transformers";
 import apiClient from "../client";
 
 export interface CandlesParams {
@@ -19,29 +20,6 @@ export interface CandlesParams {
 	limit?: number;
 	startTime?: number;
 	endTime?: number;
-}
-
-function toNumber(value: unknown, fallback = 0): number {
-	const parsed =
-		typeof value === "number"
-			? value
-			: typeof value === "string"
-				? Number(value)
-				: Number.NaN;
-	return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function toTimestamp(value: unknown): number {
-	if (typeof value === "number" && Number.isFinite(value)) {
-		return value;
-	}
-	if (typeof value === "string") {
-		const parsed = Date.parse(value);
-		if (Number.isFinite(parsed)) {
-			return parsed;
-		}
-	}
-	return Date.now();
 }
 
 function transformTicker(data: Record<string, unknown>): Ticker {

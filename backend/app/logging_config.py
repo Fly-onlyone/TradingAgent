@@ -27,9 +27,7 @@ class JSONFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         entry = {
-            "timestamp": datetime.fromtimestamp(
-                record.created, tz=UTC
-            ).isoformat(),
+            "timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -73,9 +71,7 @@ class ColoredFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         color = LEVEL_COLORS.get(record.levelname, "")
         level = f"{color}{record.levelname:<8}{RESET}"
-        ts = datetime.fromtimestamp(record.created, tz=UTC).strftime(
-            "%H:%M:%S"
-        )
+        ts = datetime.fromtimestamp(record.created, tz=UTC).strftime("%H:%M:%S")
         name = record.name.replace("app.", "")
 
         req_id = request_id_var.get(None)
@@ -170,12 +166,8 @@ class MongoDBHandler(logging.Handler):
             await LogRecord.insert_many(docs)
         except Exception as exc:
             # Avoid recursion — don't log failures from the log handler
-            sys.stderr.write(
-                f"Failed to flush {len(records)} log records to MongoDB: {exc}\n"
-            )
+            sys.stderr.write(f"Failed to flush {len(records)} log records to MongoDB: {exc}\n")
             return
-
-
 
 
 # ============================================================

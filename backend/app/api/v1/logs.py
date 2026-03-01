@@ -1,26 +1,16 @@
 """Log viewer endpoints (admin-only)."""
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
-from app.api.v1.auth import get_current_active_user
+from app.api.deps import get_current_superuser
 from app.db.models.log import LogRecord
 from app.db.models.user import User
 
 router = APIRouter()
-
-
-async def get_current_superuser(
-    current_user: User = Depends(get_current_active_user),
-) -> User:
-    from fastapi import HTTPException
-
-    if not current_user.is_superuser:
-        raise HTTPException(status_code=403, detail="Superuser privileges required")
-    return current_user
 
 
 # ── Response schemas ────────────────────────────────────────────
@@ -32,13 +22,13 @@ class LogEntryResponse(BaseModel):
     level: str
     logger_name: str
     message: str
-    module: Optional[str] = None
-    function: Optional[str] = None
-    line: Optional[int] = None
-    request_id: Optional[str] = None
-    user_id: Optional[str] = None
-    extra: Optional[dict] = None
-    traceback: Optional[str] = None
+    module: str | None = None
+    function: str | None = None
+    line: int | None = None
+    request_id: str | None = None
+    user_id: str | None = None
+    extra: dict | None = None
+    traceback: str | None = None
 
 
 class LogListResponse(BaseModel):
@@ -79,13 +69,11 @@ def _log_to_response(log: LogRecord) -> LogEntryResponse:
 
 @router.get("", response_model=LogListResponse)
 async def list_logs(
-    level: Optional[str] = Query(
-        None, description="Filter by level (INFO, WARNING, ERROR, CRITICAL)"
-    ),
-    search: Optional[str] = Query(None, description="Search in message text"),
-    module: Optional[str] = Query(None, description="Filter by logger module"),
-    start_date: Optional[datetime] = Query(None, description="Start of date range"),
-    end_date: Optional[datetime] = Query(None, description="End of date range"),
+    level: str | None = Query(None, description="Filter by level (INFO, WARNING, ERROR, CRITICAL)"),
+    search: str | None = Query(None, description="Search in message text"),
+    module: str | None = Query(None, description="Filter by logger module"),
+    start_date: datetime | None = Query(None, description="Start of date range"),
+    end_date: datetime | None = Query(None, description="End of date range"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     _: User = Depends(get_current_superuser),

@@ -2,10 +2,10 @@
  * Agent Components Exports
  */
 
-export { ChatMessage, default as ChatMessageDefault } from './ChatMessage';
-export { ChatInput, default as ChatInputDefault } from './ChatInput';
-export { AgentStatusBadge, OnlineIndicator, default as AgentStatusBadgeDefault } from './AgentStatusBadge';
-export { DecisionCard, default as DecisionCardDefault } from './DecisionCard';
-export { SessionList, default as SessionListDefault } from './SessionList';
-export { DecisionHistoryPanel, default as DecisionHistoryPanelDefault } from './DecisionHistoryPanel';
-export { ThinkingIndicator, default as ThinkingIndicatorDefault } from './ThinkingIndicator';
+export { AgentStatusBadge, OnlineIndicator } from "./AgentStatusBadge";
+export { ChatInput } from "./ChatInput";
+export { ChatMessage } from "./ChatMessage";
+export { DecisionCard } from "./DecisionCard";
+export { DecisionHistoryPanel } from "./DecisionHistoryPanel";
+export { SessionList } from "./SessionList";
+export { ThinkingIndicator } from "./ThinkingIndicator";

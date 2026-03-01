@@ -1,6 +1,6 @@
 """Agent session model for chat history persistence."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Optional
 
@@ -22,7 +22,7 @@ class SessionMessage(BaseModel):
 
     role: MessageRole
     content: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # Optional references
     decision_id: Optional[PydanticObjectId] = None  # If message includes a decision
@@ -60,7 +60,7 @@ class AgentSession(Document):
     is_active: bool = True
 
     # Timestamps
-    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     ended_at: Optional[datetime] = None
     last_message_at: Optional[Indexed(datetime)] = None  # type: ignore[valid-type]
 
@@ -116,7 +116,7 @@ class AgentSession(Document):
 
         self.messages.append(message)
         self.total_messages += 1
-        self.last_message_at = datetime.now(timezone.utc)
+        self.last_message_at = datetime.now(UTC)
         self.total_tokens += tokens
 
         if role_enum == MessageRole.USER:
@@ -142,7 +142,7 @@ class AgentSession(Document):
     def end_session(self) -> None:
         """End the session."""
         self.is_active = False
-        self.ended_at = datetime.now(timezone.utc)
+        self.ended_at = datetime.now(UTC)
 
     def generate_title(self) -> str:
         """Generate a title from the first user message."""

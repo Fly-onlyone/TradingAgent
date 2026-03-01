@@ -40,24 +40,16 @@ async def get_technical_indicators(
 
     # Trend Indicators
     # Moving Averages
-    indicators["sma_20"] = round(
-        ta.trend.sma_indicator(df["close"], window=20).iloc[-1], 2
-    )
-    indicators["sma_50"] = round(
-        ta.trend.sma_indicator(df["close"], window=50).iloc[-1], 2
-    )
+    indicators["sma_20"] = round(ta.trend.sma_indicator(df["close"], window=20).iloc[-1], 2)
+    indicators["sma_50"] = round(ta.trend.sma_indicator(df["close"], window=50).iloc[-1], 2)
     indicators["sma_200"] = (
         round(ta.trend.sma_indicator(df["close"], window=200).iloc[-1], 2)
         if len(df) >= 200
         else None
     )
 
-    indicators["ema_12"] = round(
-        ta.trend.ema_indicator(df["close"], window=12).iloc[-1], 2
-    )
-    indicators["ema_26"] = round(
-        ta.trend.ema_indicator(df["close"], window=26).iloc[-1], 2
-    )
+    indicators["ema_12"] = round(ta.trend.ema_indicator(df["close"], window=12).iloc[-1], 2)
+    indicators["ema_26"] = round(ta.trend.ema_indicator(df["close"], window=26).iloc[-1], 2)
 
     # MACD
     macd = ta.trend.MACD(df["close"])
@@ -119,9 +111,7 @@ async def get_technical_indicators(
     bb_upper = indicators["bollinger_bands"]["upper"]
     bb_lower = indicators["bollinger_bands"]["lower"]
     bb_position = (
-        (current_price - bb_lower) / (bb_upper - bb_lower)
-        if (bb_upper - bb_lower) > 0
-        else 0.5
+        (current_price - bb_lower) / (bb_upper - bb_lower) if (bb_upper - bb_lower) > 0 else 0.5
     )
     indicators["bb_position"] = round(bb_position, 2)
 
@@ -129,9 +119,7 @@ async def get_technical_indicators(
     # OBV
     obv = ta.volume.on_balance_volume(df["close"], df["volume"])
     obv_sma = obv.rolling(window=20).mean()
-    indicators["obv_trend"] = (
-        "bullish" if obv.iloc[-1] > obv_sma.iloc[-1] else "bearish"
-    )
+    indicators["obv_trend"] = "bullish" if obv.iloc[-1] > obv_sma.iloc[-1] else "bearish"
 
     # Volume SMA
     vol_sma = df["volume"].rolling(window=20).mean().iloc[-1]

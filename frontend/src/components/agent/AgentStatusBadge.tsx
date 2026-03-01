@@ -8,14 +8,7 @@ import SyncIcon from "@mui/icons-material/Sync";
 import WifiOffIcon from "@mui/icons-material/WifiOff";
 import { Box, Chip } from "@mui/material";
 import { AnimatePresence, motion } from "framer-motion";
-
-type AgentStatus =
-	| "disconnected"
-	| "connected"
-	| "thinking"
-	| "analyzing"
-	| "error"
-	| "auth_required";
+import type { AgentStatus } from "@/types/session";
 
 interface AgentStatusBadgeProps {
 	status: AgentStatus;

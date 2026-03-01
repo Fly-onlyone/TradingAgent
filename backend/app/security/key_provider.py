@@ -28,9 +28,7 @@ def _parse_keys(raw: str) -> tuple[str, ...]:
 
 
 def _resolve_with_pass_cli(reference: str) -> str:
-    cli_binary = next(
-        (name for name in _PASS_CLI_CANDIDATES if shutil.which(name)), None
-    )
+    cli_binary = next((name for name in _PASS_CLI_CANDIDATES if shutil.which(name)), None)
     if not cli_binary:
         raise SecretKeyProviderError(
             "Proton Pass CLI not found. Install `pass-cli` and authenticate first."
@@ -59,9 +57,7 @@ def _resolve_with_pass_cli(reference: str) -> str:
     )
 
     if completed.returncode != 0:
-        error_output = (
-            completed.stderr.strip() or completed.stdout.strip() or "unknown error"
-        )
+        error_output = completed.stderr.strip() or completed.stdout.strip() or "unknown error"
         raise SecretKeyProviderError(
             "Failed to resolve Proton Pass reference via CLI. "
             f"Reference={reference!r}; error={error_output}"

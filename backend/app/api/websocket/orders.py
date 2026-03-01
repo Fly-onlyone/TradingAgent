@@ -13,9 +13,7 @@ settings = get_settings()
 async def get_user_id_from_token(token: str) -> int | None:
     """Extract user ID from JWT token."""
     try:
-        payload = jwt.decode(
-            token, settings.secret_key, algorithms=[settings.algorithm]
-        )
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         # In a real implementation, you'd look up the user by email
         # For now, we'll use a simplified approach
         email = payload.get("sub")

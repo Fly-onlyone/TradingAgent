@@ -1,5 +1,6 @@
 """Settings endpoints for agent configuration (superuser only)."""
 
+import asyncio
 import logging
 import os
 import shutil
@@ -11,7 +12,7 @@ from typing import Any, Literal, get_args, get_origin
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from app.api.v1.auth import get_current_active_user
+from app.api.deps import get_current_superuser
 from app.config import get_settings
 from app.db.models.app_settings import AgentAuthMode, AppSettings
 from app.db.models.user import User
@@ -19,14 +20,6 @@ from app.db.models.user import User
 router = APIRouter()
 logger = logging.getLogger(__name__)
 settings = get_settings()
-
-
-async def get_current_superuser(
-    current_user: User = Depends(get_current_active_user),
-) -> User:
-    if not current_user.is_superuser:
-        raise HTTPException(status_code=403, detail="Superuser privileges required")
-    return current_user
 
 
 # ── Response / Request schemas ──────────────────────────────────
@@ -144,14 +137,15 @@ def _find_pass_cli() -> str | None:
     return None
 
 
-def _check_proton_pass_login() -> tuple[bool, str, bool]:
+async def _check_proton_pass_login() -> tuple[bool, str, bool]:
     """Return login status and availability for Proton Pass CLI."""
     cli_path = _find_pass_cli()
     if not cli_path:
         return False, "Proton Pass CLI not found (`pass-cli`)", False
 
     try:
-        result = subprocess.run(
+        result = await asyncio.to_thread(
+            subprocess.run,
             [cli_path, "test"],
             capture_output=True,
             text=True,
@@ -163,9 +157,7 @@ def _check_proton_pass_login() -> tuple[bool, str, bool]:
     if result.returncode == 0:
         return True, "Proton Pass CLI is authenticated", True
 
-    error_message = (
-        result.stderr.strip() or result.stdout.strip() or "Not authenticated"
-    )
+    error_message = result.stderr.strip() or result.stdout.strip() or "Not authenticated"
     return False, error_message, True
 
 
@@ -195,11 +187,7 @@ def _get_agent_sdk_model_aliases() -> list[str]:
     if annotation is None:
         return []
 
-    aliases = [
-        value
-        for value in _collect_literal_model_aliases(annotation)
-        if value != "inherit"
-    ]
+    aliases = [value for value in _collect_literal_model_aliases(annotation) if value != "inherit"]
 
     deduplicated: list[str] = []
     seen: set[str] = set()
@@ -212,7 +200,7 @@ def _get_agent_sdk_model_aliases() -> list[str]:
 
 
 DEFAULT_MODEL_BY_FAMILY = {
-    "sonnet": "claude-sonnet-4-5-20250929",
+    "sonnet": "claude-sonnet-4-6",
     "opus": "claude-opus-4-6",
     "haiku": "claude-haiku-4-5-20251001",
 }
@@ -228,13 +216,14 @@ MODEL_ALIAS_TO_FAMILY = {
     "opus": "opus",
     "haiku": "haiku",
     "claude-sonnet-4-5": "sonnet",
+    "claude-sonnet-4-6": "sonnet",
     "claude-opus-4-5": "opus",
     "claude-opus-4-6": "opus",
     "claude-haiku-4-5": "haiku",
 }
 
 FAMILY_TO_API_MODEL = {
-    "sonnet": "claude-sonnet-4-5",
+    "sonnet": "claude-sonnet-4-6",
     "opus": "claude-opus-4-6",
     "haiku": "claude-haiku-4-5",
 }
@@ -379,9 +368,7 @@ async def update_agent_config(
         app_settings.agent_max_thinking_tokens = body.max_thinking_tokens
 
     await app_settings.save_with_timestamp()
-    logger.info(
-        "Agent config updated: auth_mode=%s", app_settings.agent_auth_mode.value
-    )
+    logger.info("Agent config updated: auth_mode=%s", app_settings.agent_auth_mode.value)
 
     effective_key = _resolve_api_key(app_settings)
     cli_logged_in = _check_cli_login()
@@ -412,10 +399,10 @@ async def test_agent_connection(
         try:
             import anthropic
 
-            client = anthropic.Anthropic(api_key=effective_key)
+            client = anthropic.AsyncAnthropic(api_key=effective_key)
             family = _normalize_to_family(app_settings.agent_model)
             api_model = FAMILY_TO_API_MODEL.get(family, family)
-            client.messages.create(
+            await client.messages.create(
                 model=api_model,
                 max_tokens=10,
                 messages=[{"role": "user", "content": "ping"}],
@@ -472,8 +459,7 @@ async def start_cli_login(
         return {
             "success": False,
             "message": (
-                "Claude CLI not found. Install it first: "
-                "npm install -g @anthropic-ai/claude-code"
+                "Claude CLI not found. Install it first: npm install -g @anthropic-ai/claude-code"
             ),
         }
 
@@ -527,7 +513,7 @@ async def get_proton_pass_status(
     _: User = Depends(get_current_superuser),
 ) -> dict:
     """Get Proton Pass CLI availability/authentication status."""
-    logged_in, message, available = _check_proton_pass_login()
+    logged_in, message, available = await _check_proton_pass_login()
     using_reference = bool(settings.secrets_encryption_keys_ref)
     configured = using_reference or bool(settings.secrets_encryption_keys)
 
@@ -552,7 +538,7 @@ async def start_proton_pass_login(
             "message": "Proton Pass CLI not found. Install `pass-cli` first.",
         }
 
-    logged_in, _, _ = _check_proton_pass_login()
+    logged_in, _, _ = await _check_proton_pass_login()
     if logged_in:
         return {"success": True, "message": "Proton Pass CLI is already authenticated"}
 
@@ -583,7 +569,8 @@ async def proton_pass_logout(
         }
 
     try:
-        result = subprocess.run(
+        result = await asyncio.to_thread(
+            subprocess.run,
             [cli_path, "logout"],
             capture_output=True,
             text=True,

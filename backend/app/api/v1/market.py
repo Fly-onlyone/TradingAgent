@@ -10,6 +10,8 @@ from app.api.v1.auth import get_current_active_user
 from app.db.models.market import MarketData
 from app.db.models.user import User
 from app.exchange.okx_client import OKXClient
+from app.utils.converters import to_float as _to_float
+from app.utils.converters import to_optional_float as _to_optional_float
 
 logger = logging.getLogger(__name__)
 
@@ -88,36 +90,6 @@ def ohlcv_to_response(data: MarketData) -> OHLCVResponse:
         volume=data.volume,
         quote_volume=data.quote_volume,
     )
-
-
-def _to_float(value: object, default: float = 0.0) -> float:
-    """Convert numeric-like OKX values to float, tolerating empty strings."""
-    if value is None:
-        return default
-    if isinstance(value, str):
-        cleaned = value.strip()
-        if not cleaned:
-            return default
-        value = cleaned
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _to_optional_float(value: object) -> float | None:
-    """Convert numeric-like OKX values to float or return None when blank."""
-    if value is None:
-        return None
-    if isinstance(value, str):
-        cleaned = value.strip()
-        if not cleaned:
-            return None
-        value = cleaned
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
 
 
 @router.get("/ohlcv/{symbol}", response_model=list[OHLCVResponse])
@@ -339,9 +311,7 @@ async def get_market_overview(
                     )
                 )
 
-            top_gainers = sorted(tickers, key=lambda t: t.change_pct_24h, reverse=True)[
-                :5
-            ]
+            top_gainers = sorted(tickers, key=lambda t: t.change_pct_24h, reverse=True)[:5]
             top_losers = sorted(tickers, key=lambda t: t.change_pct_24h)[:5]
             most_traded = sorted(tickers, key=lambda t: t.volume_24h, reverse=True)[:5]
 

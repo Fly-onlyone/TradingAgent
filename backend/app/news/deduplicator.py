@@ -34,9 +34,7 @@ class NewsDeduplicator:
         parsed = urlparse(url)
 
         params = parse_qs(parsed.query)
-        clean_params = {
-            k: v for k, v in params.items() if k.lower() not in self.SKIP_PARAMS
-        }
+        clean_params = {k: v for k, v in params.items() if k.lower() not in self.SKIP_PARAMS}
 
         clean_query = urlencode(clean_params, doseq=True) if clean_params else ""
         clean_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"

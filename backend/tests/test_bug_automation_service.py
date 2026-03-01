@@ -134,12 +134,8 @@ async def test_fingerprint_normalizes_dynamic_values(
     fake_collection: FakeCollection,
 ) -> None:
     service = BugAutomationService()
-    first = _base_record(
-        message="Order 1234567890 failed with id 507f1f77bcf86cd799439011"
-    )
-    second = _base_record(
-        message="Order 9988776655 failed with id 507f1f77bcf86cd799439012"
-    )
+    first = _base_record(message="Order 1234567890 failed with id 507f1f77bcf86cd799439011")
+    second = _base_record(message="Order 9988776655 failed with id 507f1f77bcf86cd799439012")
 
     await service.ingest_log_records([first])
     await service.ingest_log_records([second])

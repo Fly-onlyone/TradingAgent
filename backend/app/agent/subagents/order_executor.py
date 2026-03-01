@@ -387,9 +387,7 @@ class OrderExecutor:
                 "quantity": float(data.get("sz", 0)),
                 "filled_quantity": float(data.get("accFillSz", 0)),
                 "price": float(data.get("px")) if data.get("px") else None,
-                "avg_fill_price": (
-                    float(data.get("avgPx")) if data.get("avgPx") else None
-                ),
+                "avg_fill_price": (float(data.get("avgPx")) if data.get("avgPx") else None),
                 "created_at": data.get("cTime"),
                 "updated_at": data.get("uTime"),
             }

@@ -1,6 +1,6 @@
 """Order model for MongoDB."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Optional
 
@@ -92,8 +92,8 @@ class Order(Document):
     strategy_id: Optional[PydanticObjectId] = None
 
     # Timestamps
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     filled_at: Optional[datetime] = None
 
     class Settings:
@@ -143,7 +143,7 @@ class Order(Document):
 
     def update_timestamp(self) -> None:
         """Update the updated_at timestamp."""
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
 
     def calculate_pnl(self, exit_price: float, fees: float = 0.0) -> None:
         """Calculate P&L when closing a position."""
@@ -174,5 +174,5 @@ class Order(Document):
 
         # Mark as closed
         self.trade_status = TradeStatus.CLOSED
-        self.closed_at = datetime.now(timezone.utc)
+        self.closed_at = datetime.now(UTC)
         self.update_timestamp()

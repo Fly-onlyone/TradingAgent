@@ -47,7 +47,7 @@ async def ingest_frontend_log(
     body: FrontendLogIngestRequest,
     request: Request,
 ) -> FrontendLogIngestResponse:
-    """Persist a frontend log record and feed bug automation for error levels."""
+    """Persist a frontend log record."""
     now = datetime.now(UTC)
 
     extra = dict(body.extra or {})

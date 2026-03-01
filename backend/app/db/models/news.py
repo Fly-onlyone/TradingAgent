@@ -1,6 +1,6 @@
 """News intelligence models (MongoDB/Beanie)."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Optional
 
@@ -41,8 +41,8 @@ class NewsSource(Document):
     last_crawled: Optional[datetime] = None
     last_error: Optional[str] = None
 
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @field_validator("source_type", mode="before")
     @classmethod
@@ -82,7 +82,7 @@ class NewsSource(Document):
 
     def update_timestamp(self) -> None:
         """Update the updated_at timestamp."""
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
 
 
 class NewsArticle(Document):
@@ -114,8 +114,8 @@ class NewsArticle(Document):
 
     # Timestamps
     published_at: Optional[datetime] = None
-    fetched_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    fetched_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     class Settings:
         name = "news_articles"
@@ -157,7 +157,7 @@ class CredibilityEvent(Document):
     symbol: Optional[str] = None
     timeframe_hours: Optional[int] = None
 
-    evaluated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    evaluated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     class Settings:
         name = "credibility_events"

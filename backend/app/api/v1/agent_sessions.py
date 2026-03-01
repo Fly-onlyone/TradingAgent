@@ -251,9 +251,7 @@ async def list_sessions_grouped(
 
     return {
         "groups": [
-            SessionsByDateGroup(
-                date=g["date"], label=g["label"], sessions=g["sessions"]
-            )
+            SessionsByDateGroup(date=g["date"], label=g["label"], sessions=g["sessions"])
             for g in sorted_groups
         ],
         "total": len(sessions),

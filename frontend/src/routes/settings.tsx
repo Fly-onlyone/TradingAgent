@@ -19,28 +19,25 @@ import {
 	Divider,
 	FormControlLabel,
 	Grid2 as Grid,
-	MenuItem,
 	Switch,
 	TextField,
-	ToggleButton,
-	ToggleButtonGroup,
 	Typography,
 } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import type {
-	AgentConfigUpdate,
-	ExchangeConfigUpdate,
-} from "@/api/endpoints/settings";
+import type { ExchangeConfigUpdate } from "@/api/endpoints/settings";
 import { settingsApi } from "@/api/endpoints/settings";
+import { AgentConfigPanel } from "@/components/agent/AgentConfigPanel";
 import { PageTransition } from "@/components/common/PageTransition";
 import { useAuth } from "@/hooks/useAuth";
+import { usePollingLogin } from "@/hooks/usePollingLogin";
 import { useAuthStore } from "@/store/authStore";
 import { notify } from "@/store/uiStore";
 import { spring } from "@/utils/animations/variants";
+import { getErrorMessage } from "@/utils/errors";
 import { type SettingsInput, settingsSchema } from "@/utils/validators";
 import { requireAuth } from "./-guards";
 
@@ -49,416 +46,10 @@ export const Route = createFileRoute("/settings")({
 	component: SettingsPage,
 });
 
-function getApiErrorMessage(error: unknown, fallback: string): string {
-	if (error && typeof error === "object" && "detail" in error) {
-		const detail = (error as { detail?: unknown }).detail;
-		if (typeof detail === "string" && detail.trim()) {
-			return detail;
-		}
-	}
-
-	if (error instanceof Error && error.message.trim()) {
-		return error.message;
-	}
-
-	return fallback;
-}
-
-function AgentConfigCard() {
-	const { user } = useAuthStore();
-	const isSuperuser = user?.isSuperuser ?? false;
-	const queryClient = useQueryClient();
-	const [apiKeyInput, setApiKeyInput] = useState("");
-	const [testResult, setTestResult] = useState<{
-		success: boolean;
-		message: string;
-	} | null>(null);
-	const [loginResult, setLoginResult] = useState<{
-		success: boolean;
-		message: string;
-	} | null>(null);
-
-	const configQuery = useQuery({
-		queryKey: ["agent-config"],
-		queryFn: () => settingsApi.getAgentConfig(),
-		enabled: isSuperuser || import.meta.env.DEV,
-		staleTime: 60_000,
-	});
-
-	const modelOptionsQuery = useQuery({
-		queryKey: ["agent-model-options"],
-		queryFn: () => settingsApi.getAgentModels(),
-		enabled: (isSuperuser || import.meta.env.DEV) && configQuery.isSuccess,
-		staleTime: 300_000,
-	});
-
-	const updateMutation = useMutation({
-		mutationFn: (update: AgentConfigUpdate) =>
-			settingsApi.updateAgentConfig(update),
-		onSuccess: (_, variables) => {
-			queryClient.invalidateQueries({ queryKey: ["agent-config"] });
-			notify.success("Agent configuration updated");
-			setTestResult(null);
-
-			if (variables.apiKey !== undefined) {
-				setApiKeyInput("");
-			}
-		},
-		onError: (error) => {
-			notify.error(
-				"Failed to update agent configuration",
-				getApiErrorMessage(error, "Request failed"),
-			);
-		},
-	});
-
-	const testMutation = useMutation({
-		mutationFn: () => settingsApi.testConnection(),
-		onSuccess: (result) => {
-			setTestResult(result);
-			if (result.success) {
-				notify.success(result.message);
-			} else {
-				notify.error(result.message);
-			}
-		},
-		onError: () => {
-			setTestResult({ success: false, message: "Test request failed" });
-		},
-	});
-
-	const [isPollingLogin, setIsPollingLogin] = useState(false);
-
-	const loginMutation = useMutation({
-		mutationFn: () => settingsApi.startCLILogin(),
-		onSuccess: (result) => {
-			setLoginResult(result);
-			if (result.success) {
-				setIsPollingLogin(true);
-			} else {
-				notify.error(result.message);
-			}
-		},
-		onError: () => {
-			setLoginResult({ success: false, message: "Login request failed" });
-		},
-	});
-
-	// Poll for CLI login status after browser opens
-	useEffect(() => {
-		if (!isPollingLogin) return;
-		const interval = setInterval(async () => {
-			try {
-				const fresh = await settingsApi.getAgentConfig();
-				if (fresh.cliLoggedIn) {
-					setIsPollingLogin(false);
-					setLoginResult({
-						success: true,
-						message: "Successfully logged in to Claude",
-					});
-					notify.success("Successfully logged in to Claude");
-					queryClient.invalidateQueries({ queryKey: ["agent-config"] });
-				}
-			} catch {
-				/* ignore poll errors */
-			}
-		}, 4000);
-		const timeout = setTimeout(() => {
-			setIsPollingLogin(false);
-			setLoginResult({
-				success: false,
-				message: "Login timed out. Please try again.",
-			});
-		}, 120_000);
-		return () => {
-			clearInterval(interval);
-			clearTimeout(timeout);
-		};
-	}, [isPollingLogin, queryClient]);
-
-	const logoutMutation = useMutation({
-		mutationFn: () => settingsApi.cliLogout(),
-		onSuccess: (result) => {
-			queryClient.invalidateQueries({ queryKey: ["agent-config"] });
-			if (result.success) notify.success(result.message);
-			else notify.error(result.message);
-			setLoginResult(null);
-		},
-	});
-
-	if (!isSuperuser && !import.meta.env.DEV) return null;
-
-	const config = configQuery.data;
-	const resolvedModelOptions = config
-		? (() => {
-				const fetched = modelOptionsQuery.data ?? [];
-				if (fetched.some((option) => option.value === config.model)) {
-					return fetched;
-				}
-				return [{ value: config.model, label: config.model }, ...fetched];
-			})()
-		: [];
-
-	const handleAuthModeChange = (
-		_: React.MouseEvent<HTMLElement>,
-		newMode: string | null,
-	) => {
-		if (newMode) {
-			updateMutation.mutate({ authMode: newMode });
-		}
-	};
-
-	const handleModelChange = (model: string) => {
-		updateMutation.mutate({ model });
-	};
-
-	const handleSaveApiKey = () => {
-		if (apiKeyInput.trim()) {
-			updateMutation.mutate({ apiKey: apiKeyInput.trim() });
-		}
-	};
-
-	const handleClearApiKey = () => {
-		updateMutation.mutate({ apiKey: "" });
-	};
-
-	return (
-		<Card sx={{ mb: 3 }}>
-			<CardContent>
-				<Typography variant="h6" gutterBottom>
-					AI Agent Configuration
-				</Typography>
-
-				{configQuery.isLoading ? (
-					<Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
-						<CircularProgress size={24} />
-					</Box>
-				) : configQuery.error ? (
-					<Alert severity="error">Failed to load agent configuration</Alert>
-				) : config ? (
-					<Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-						{/* Auth Mode Toggle */}
-						<Box>
-							<Typography variant="subtitle2" gutterBottom>
-								Authentication Mode
-							</Typography>
-							<ToggleButtonGroup
-								value={config.authMode}
-								exclusive
-								onChange={handleAuthModeChange}
-								size="small"
-								disabled={updateMutation.isPending}
-							>
-								<ToggleButton value="subscription">
-									Claude Subscription
-								</ToggleButton>
-								<ToggleButton value="api_key">API Key</ToggleButton>
-							</ToggleButtonGroup>
-							<Typography
-								variant="body2"
-								color="text.secondary"
-								sx={{ mt: 0.5 }}
-							>
-								{config.authMode === "subscription"
-									? "Uses Claude Pro/Max subscription via CLI login (free with plan)"
-									: "Uses a direct Anthropic API key (pay-per-use billing)"}
-							</Typography>
-						</Box>
-
-						{/* Subscription mode: CLI login */}
-						{config.authMode === "subscription" && (
-							<Box>
-								<Box
-									sx={{
-										display: "flex",
-										alignItems: "center",
-										gap: 1.5,
-										mb: 1.5,
-									}}
-								>
-									<Typography variant="subtitle2">CLI Login Status</Typography>
-									<Chip
-										icon={
-											config.cliLoggedIn ? <CheckCircleIcon /> : <ErrorIcon />
-										}
-										label={config.cliLoggedIn ? "Logged In" : "Not Logged In"}
-										color={config.cliLoggedIn ? "success" : "warning"}
-										size="small"
-										variant="outlined"
-									/>
-								</Box>
-								{config.cliLoggedIn ? (
-									<Button
-										variant="outlined"
-										color="error"
-										size="small"
-										startIcon={
-											logoutMutation.isPending ? (
-												<CircularProgress size={14} />
-											) : (
-												<LogoutIcon />
-											)
-										}
-										onClick={() => logoutMutation.mutate()}
-										disabled={logoutMutation.isPending}
-									>
-										Logout
-									</Button>
-								) : (
-									<Box
-										sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}
-									>
-										<Button
-											variant="contained"
-											startIcon={
-												loginMutation.isPending || isPollingLogin ? (
-													<CircularProgress size={16} color="inherit" />
-												) : (
-													<LoginIcon />
-												)
-											}
-											onClick={() => loginMutation.mutate()}
-											disabled={loginMutation.isPending || isPollingLogin}
-										>
-											{isPollingLogin
-												? "Waiting for login..."
-												: loginMutation.isPending
-													? "Opening browser..."
-													: "Login with Claude"}
-										</Button>
-										{isPollingLogin && (
-											<Alert severity="info">
-												Complete the login in your browser. This page will
-												update automatically.
-											</Alert>
-										)}
-										{loginResult && (
-											<Alert
-												severity={loginResult.success ? "success" : "error"}
-											>
-												{loginResult.message}
-											</Alert>
-										)}
-									</Box>
-								)}
-							</Box>
-						)}
-
-						{/* API Key mode: key input */}
-						{config.authMode === "api_key" && (
-							<Box>
-								<Typography variant="subtitle2" gutterBottom>
-									Anthropic API Key
-								</Typography>
-								{config.hasApiKey && (
-									<Box
-										sx={{
-											display: "flex",
-											alignItems: "center",
-											gap: 1,
-											mb: 1.5,
-										}}
-									>
-										<Typography
-											variant="body2"
-											fontFamily="monospace"
-											color="text.secondary"
-										>
-											{config.maskedApiKey}
-										</Typography>
-										<Chip
-											label="Configured"
-											color="success"
-											size="small"
-											variant="outlined"
-										/>
-										<Button
-											size="small"
-											color="error"
-											onClick={handleClearApiKey}
-										>
-											Clear
-										</Button>
-									</Box>
-								)}
-								<Box sx={{ display: "flex", gap: 1 }}>
-									<TextField
-										size="small"
-										type="password"
-										placeholder="sk-ant-..."
-										value={apiKeyInput}
-										onChange={(e) => setApiKeyInput(e.target.value)}
-										sx={{ flex: 1 }}
-									/>
-									<Button
-										variant="outlined"
-										onClick={handleSaveApiKey}
-										disabled={!apiKeyInput.trim() || updateMutation.isPending}
-									>
-										{config.hasApiKey ? "Update" : "Save"}
-									</Button>
-								</Box>
-							</Box>
-						)}
-
-						{/* Model Selector */}
-						<Box>
-							<Typography variant="subtitle2" gutterBottom>
-								Model
-							</Typography>
-							<TextField
-								select
-								size="small"
-								value={config.model}
-								onChange={(e) => handleModelChange(e.target.value)}
-								disabled={updateMutation.isPending}
-								sx={{ minWidth: 280 }}
-							>
-								{resolvedModelOptions.map((opt) => (
-									<MenuItem key={opt.value} value={opt.value}>
-										{opt.label}
-									</MenuItem>
-								))}
-							</TextField>
-						</Box>
-
-						{/* Test Connection */}
-						<Box>
-							<Button
-								variant="outlined"
-								startIcon={
-									testMutation.isPending ? (
-										<CircularProgress size={16} />
-									) : (
-										<PlayArrowIcon />
-									)
-								}
-								onClick={() => testMutation.mutate()}
-								disabled={testMutation.isPending}
-							>
-								Test Connection
-							</Button>
-							{testResult && (
-								<Alert
-									severity={testResult.success ? "success" : "error"}
-									sx={{ mt: 1 }}
-								>
-									{testResult.message}
-								</Alert>
-							)}
-						</Box>
-					</Box>
-				) : null}
-			</CardContent>
-		</Card>
-	);
-}
-
 function ProtonPassAuthCard() {
 	const { user } = useAuthStore();
 	const isSuperuser = user?.isSuperuser ?? false;
 	const queryClient = useQueryClient();
-	const [isPollingLogin, setIsPollingLogin] = useState(false);
 	const [loginResult, setLoginResult] = useState<{
 		success: boolean;
 		message: string;
@@ -471,12 +62,33 @@ function ProtonPassAuthCard() {
 		staleTime: 30_000,
 	});
 
+	const { isPolling: isPollingLogin, startPolling } = usePollingLogin({
+		pollFn: useCallback(async () => {
+			const fresh = await settingsApi.getProtonPassStatus();
+			return fresh.loggedIn;
+		}, []),
+		onSuccess: useCallback(() => {
+			setLoginResult({
+				success: true,
+				message: "Successfully logged in to Proton Pass",
+			});
+			notify.success("Successfully logged in to Proton Pass");
+			queryClient.invalidateQueries({ queryKey: ["proton-pass-status"] });
+		}, [queryClient]),
+		onTimeout: useCallback(() => {
+			setLoginResult({
+				success: false,
+				message: "Login timed out. Please try again.",
+			});
+		}, []),
+	});
+
 	const loginMutation = useMutation({
 		mutationFn: () => settingsApi.startProtonPassLogin(),
 		onSuccess: (result) => {
 			setLoginResult(result);
 			if (result.success) {
-				setIsPollingLogin(true);
+				startPolling();
 			} else {
 				notify.error(result.message);
 			}
@@ -498,39 +110,6 @@ function ProtonPassAuthCard() {
 			setLoginResult({ success: false, message: "Logout request failed" });
 		},
 	});
-
-	useEffect(() => {
-		if (!isPollingLogin) return;
-		const interval = setInterval(async () => {
-			try {
-				const fresh = await settingsApi.getProtonPassStatus();
-				if (fresh.loggedIn) {
-					setIsPollingLogin(false);
-					setLoginResult({
-						success: true,
-						message: "Successfully logged in to Proton Pass",
-					});
-					notify.success("Successfully logged in to Proton Pass");
-					queryClient.invalidateQueries({ queryKey: ["proton-pass-status"] });
-				}
-			} catch {
-				/* ignore poll errors */
-			}
-		}, 4000);
-
-		const timeout = setTimeout(() => {
-			setIsPollingLogin(false);
-			setLoginResult({
-				success: false,
-				message: "Login timed out. Please try again.",
-			});
-		}, 120_000);
-
-		return () => {
-			clearInterval(interval);
-			clearTimeout(timeout);
-		};
-	}, [isPollingLogin, queryClient]);
 
 	if (!isSuperuser && !import.meta.env.DEV) {
 		return (
@@ -696,7 +275,7 @@ function ExchangeConfigCard() {
 		onError: (error) => {
 			notify.error(
 				"Failed to update exchange configuration",
-				getApiErrorMessage(error, "Request failed"),
+				getErrorMessage(error),
 			);
 		},
 	});
@@ -1147,7 +726,7 @@ function SettingsPage() {
 					</Card>
 
 					{/* AI Agent Configuration (superuser only) */}
-					<AgentConfigCard />
+					<AgentConfigPanel variant="card" />
 
 					{/* Proton Pass Authentication (superuser only) */}
 					<ProtonPassAuthCard />

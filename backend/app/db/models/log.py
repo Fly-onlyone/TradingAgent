@@ -1,6 +1,6 @@
 """Log record model for persistent log storage in MongoDB."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Optional
 
 from beanie import Document
@@ -11,7 +11,7 @@ from pydantic import Field
 class LogRecord(Document):
     """Persisted log entry."""
 
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     level: str  # INFO, WARNING, ERROR, CRITICAL
     logger_name: str  # e.g. "app.agent.trading_agent"
     message: str

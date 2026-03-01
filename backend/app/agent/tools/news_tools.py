@@ -1,6 +1,6 @@
 """News analysis tools for the trading agent."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Any, Optional
 
 from app.db.models.news import NewsArticle, NewsSource
@@ -58,9 +58,7 @@ async def get_latest_news(
         valid_sentiments = [
             n["sentiment_score"] for n in news_items if n["sentiment_score"] is not None
         ]
-        avg_sentiment = (
-            sum(valid_sentiments) / len(valid_sentiments) if valid_sentiments else 0
-        )
+        avg_sentiment = sum(valid_sentiments) / len(valid_sentiments) if valid_sentiments else 0
     else:
         avg_sentiment = 0
 
@@ -85,7 +83,7 @@ async def get_news_sentiment(
     Returns:
         Aggregated sentiment analysis
     """
-    cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
+    cutoff_time = datetime.now(UTC) - timedelta(hours=hours)
 
     query = NewsArticle.find(NewsArticle.published_at >= cutoff_time)
 
@@ -219,10 +217,7 @@ async def search_news(
         search_filter["mentioned_assets"] = {"$in": normalized_assets}
 
     articles = (
-        await NewsArticle.find(search_filter)
-        .sort(-NewsArticle.published_at)
-        .limit(limit)
-        .to_list()
+        await NewsArticle.find(search_filter).sort(-NewsArticle.published_at).limit(limit).to_list()
     )
 
     news_items = []

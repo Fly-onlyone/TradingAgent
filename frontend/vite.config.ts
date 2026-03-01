@@ -1,17 +1,11 @@
 import type { Duplex } from "node:stream";
 import { fileURLToPath, URL } from "node:url";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
-import { devtools } from "@tanstack/devtools-vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
-const devtoolsEventBusPort = Number(
-	process.env.TANSTACK_DEVTOOLS_PORT ?? "42070",
-);
-const isDevtoolsEventBusEnabled =
-	process.env.TANSTACK_DEVTOOLS_EVENT_BUS === "1";
 // Service workers conflict with Tauri's custom protocol — skip PWA in Tauri builds
 const isTauriBuild = Boolean(process.env.TAURI_ENV_PLATFORM);
 
@@ -58,14 +52,6 @@ function suppressWsProxyErrors(): Plugin {
 export default defineConfig({
 	plugins: [
 		suppressWsProxyErrors(),
-		devtools({
-			eventBusConfig: {
-				enabled: isDevtoolsEventBusEnabled,
-				port: Number.isFinite(devtoolsEventBusPort)
-					? devtoolsEventBusPort
-					: 42070,
-			},
-		}),
 		tanstackRouter({
 			target: "react",
 			autoCodeSplitting: true,

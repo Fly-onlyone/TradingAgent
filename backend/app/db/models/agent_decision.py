@@ -1,6 +1,6 @@
 """Agent decision model for persisting AI trading decisions."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Optional
 
@@ -110,14 +110,14 @@ class AgentDecision(Document):
     # Tool and context tracking
     tools_used: list[ToolUsage] = Field(default_factory=list)
     market_context: Optional[MarketContext] = None
-    model_used: str = "claude-sonnet-4-5"
+    model_used: str = "claude-sonnet-4-6"
 
     # User feedback (for learning)
     user_feedback: Optional[str] = None  # thumbs_up, thumbs_down, neutral
     feedback_comment: Optional[str] = None
 
     # Timestamps
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     confirmed_at: Optional[datetime] = None
     executed_at: Optional[datetime] = None
     expires_at: Optional[datetime] = None  # For ASK mode confirmations
@@ -167,7 +167,7 @@ class AgentDecision(Document):
     def confirm(self) -> None:
         """User confirmed the decision."""
         self.status = DecisionStatus.CONFIRMED
-        self.confirmed_at = datetime.now(timezone.utc)
+        self.confirmed_at = datetime.now(UTC)
 
     def reject(self) -> None:
         """User rejected the decision."""
@@ -181,7 +181,7 @@ class AgentDecision(Document):
         self.execution_status = ExecutionStatus.FILLED
         self.execution_error_code = None
         self.execution_error_message = None
-        self.executed_at = datetime.now(timezone.utc)
+        self.executed_at = datetime.now(UTC)
 
     def mark_execution_failed(
         self, error_message: str, error_code: str = "execution_failed"

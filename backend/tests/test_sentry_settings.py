@@ -5,7 +5,7 @@ from app.config import Settings
 
 
 def test_sentry_settings_defaults() -> None:
-    settings = Settings(debug=True, secret_key="test-secret")
+    settings = Settings(_env_file=None, debug=True, secret_key="test-secret")
 
     assert settings.sentry_environment == ""
     assert settings.sentry_release == ""

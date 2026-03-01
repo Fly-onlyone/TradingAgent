@@ -1,6 +1,6 @@
 """Source credibility scoring system using MongoDB."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Any
 
 from beanie import PydanticObjectId
@@ -36,11 +36,9 @@ class CredibilityScorer:
         final_score = base_score + accuracy_adjustment + reputation_bonus
         return max(0.0, min(1.0, final_score))
 
-    async def _calculate_accuracy_adjustment(
-        self, source_id: PydanticObjectId
-    ) -> float:
+    async def _calculate_accuracy_adjustment(self, source_id: PydanticObjectId) -> float:
         """Calculate score adjustment based on prediction accuracy."""
-        cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+        cutoff = datetime.now(UTC) - timedelta(days=90)
 
         events = await CredibilityEvent.find(
             CredibilityEvent.source_id == source_id,
@@ -54,9 +52,7 @@ class CredibilityScorer:
         accuracy_rate = accurate_count / len(events)
 
         adjustment = (accuracy_rate - 0.5) * 0.3
-        return max(
-            -self.MAX_ACCURACY_ADJUSTMENT, min(self.MAX_ACCURACY_ADJUSTMENT, adjustment)
-        )
+        return max(-self.MAX_ACCURACY_ADJUSTMENT, min(self.MAX_ACCURACY_ADJUSTMENT, adjustment))
 
     def _calculate_reputation_bonus(self, created_at: datetime) -> float:
         """Calculate reputation bonus based on source age."""
@@ -64,9 +60,9 @@ class CredibilityScorer:
             return 0.0
 
         if created_at.tzinfo is None:
-            created_at = created_at.replace(tzinfo=timezone.utc)
+            created_at = created_at.replace(tzinfo=UTC)
 
-        days_tracked = (datetime.now(timezone.utc) - created_at).days
+        days_tracked = (datetime.now(UTC) - created_at).days
         bonus_ratio = min(days_tracked / 365, 1.0)
         return bonus_ratio * self.MAX_REPUTATION_BONUS
 
@@ -153,21 +149,17 @@ class CredibilityScorer:
         if not source:
             return {}
 
-        events = await CredibilityEvent.find(
-            CredibilityEvent.source_id == source_id
-        ).to_list()
+        events = await CredibilityEvent.find(CredibilityEvent.source_id == source_id).to_list()
 
         accurate_count = sum(1 for e in events if e.was_accurate)
-        article_count = await NewsArticle.find(
-            NewsArticle.source_id == source_id
-        ).count()
+        article_count = await NewsArticle.find(NewsArticle.source_id == source_id).count()
 
         days_tracked = 0
         if source.created_at:
             created = source.created_at
             if created.tzinfo is None:
-                created = created.replace(tzinfo=timezone.utc)
-            days_tracked = (datetime.now(timezone.utc) - created).days
+                created = created.replace(tzinfo=UTC)
+            days_tracked = (datetime.now(UTC) - created).days
 
         return {
             "source_id": str(source_id),
@@ -182,15 +174,10 @@ class CredibilityScorer:
             "days_tracked": days_tracked,
         }
 
-    async def get_top_sources(
-        self, limit: int = 10, min_evaluations: int = 5
-    ) -> list[dict]:
+    async def get_top_sources(self, limit: int = 10, min_evaluations: int = 5) -> list[dict]:
         """Get top credible sources."""
         sources = (
-            await NewsSource.find()
-            .sort(-NewsSource.credibility_score)
-            .limit(limit * 2)
-            .to_list()
+            await NewsSource.find().sort(-NewsSource.credibility_score).limit(limit * 2).to_list()
         )
 
         top_sources = []

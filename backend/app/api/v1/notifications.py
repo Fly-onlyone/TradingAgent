@@ -1,7 +1,6 @@
 """Notification management endpoints."""
 
-from datetime import datetime
-from typing import Optional
+from datetime import UTC, datetime
 
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -25,16 +24,16 @@ class NotificationResponse(BaseModel):
     title: str
     body: str
     notification_type: str
-    decision_id: Optional[str]
-    task_id: Optional[str]
-    order_id: Optional[str]
+    decision_id: str | None
+    task_id: str | None
+    order_id: str | None
     data: dict
     status: str
-    read_at: Optional[datetime]
-    action_taken: Optional[str]
-    action_taken_at: Optional[datetime]
+    read_at: datetime | None
+    action_taken: str | None
+    action_taken_at: datetime | None
     created_at: datetime
-    expires_at: Optional[datetime]
+    expires_at: datetime | None
 
     class Config:
         from_attributes = True
@@ -62,24 +61,24 @@ class NotificationSettingsResponse(BaseModel):
     price_alerts: bool
     analysis_ready: bool
     quiet_hours_enabled: bool
-    quiet_hours_start: Optional[str]
-    quiet_hours_end: Optional[str]
+    quiet_hours_start: str | None
+    quiet_hours_end: str | None
     quiet_hours_timezone: str
 
 
 class NotificationSettingsUpdate(BaseModel):
     """Update notification settings."""
 
-    trade_confirmations: Optional[bool] = None
-    trade_executions: Optional[bool] = None
-    risk_alerts: Optional[bool] = None
-    task_completions: Optional[bool] = None
-    price_alerts: Optional[bool] = None
-    analysis_ready: Optional[bool] = None
-    quiet_hours_enabled: Optional[bool] = None
-    quiet_hours_start: Optional[str] = None
-    quiet_hours_end: Optional[str] = None
-    quiet_hours_timezone: Optional[str] = None
+    trade_confirmations: bool | None = None
+    trade_executions: bool | None = None
+    risk_alerts: bool | None = None
+    task_completions: bool | None = None
+    price_alerts: bool | None = None
+    analysis_ready: bool | None = None
+    quiet_hours_enabled: bool | None = None
+    quiet_hours_start: str | None = None
+    quiet_hours_end: str | None = None
+    quiet_hours_timezone: str | None = None
 
 
 class WebPushSubscription(BaseModel):
@@ -93,7 +92,7 @@ class ActionRequest(BaseModel):
     """Action on notification."""
 
     action: NotificationAction
-    comment: Optional[str] = None
+    comment: str | None = None
 
 
 def notification_to_response(notification: Notification) -> NotificationResponse:
@@ -108,9 +107,7 @@ def notification_to_response(notification: Notification) -> NotificationResponse
         data=notification.data,
         status=notification.status.value,
         read_at=notification.read_at,
-        action_taken=(
-            notification.action_taken.value if notification.action_taken else None
-        ),
+        action_taken=(notification.action_taken.value if notification.action_taken else None),
         action_taken_at=notification.action_taken_at,
         created_at=notification.created_at,
         expires_at=notification.expires_at,
@@ -120,7 +117,7 @@ def notification_to_response(notification: Notification) -> NotificationResponse
 @router.get("", response_model=NotificationListResponse)
 async def list_notifications(
     unread_only: bool = False,
-    notification_type: Optional[NotificationType] = None,
+    notification_type: NotificationType | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_active_user),
@@ -136,9 +133,7 @@ async def list_notifications(
     )
 
     if notification_type:
-        notifications = [
-            n for n in notifications if n.notification_type == notification_type
-        ]
+        notifications = [n for n in notifications if n.notification_type == notification_type]
 
     unread_count = await service.get_unread_count(current_user.id)
 
@@ -240,7 +235,7 @@ async def update_settings(
     for field, value in update_data.items():
         setattr(settings, field, value)
 
-    settings.updated_at = datetime.now()
+    settings.updated_at = datetime.now(UTC)
     await settings.save()
 
     return NotificationSettingsResponse(

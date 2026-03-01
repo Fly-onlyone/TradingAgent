@@ -112,7 +112,7 @@ class NewsAnalyst:
 
         # Build context for Claude
         context = f"""
-Assets of Interest: {', '.join(assets) if assets else 'All major crypto'}
+Assets of Interest: {", ".join(assets) if assets else "All major crypto"}
 Time Window: Last {hours} hours
 
 ## Latest News:
@@ -172,7 +172,7 @@ Based on this news data, provide your analysis and trading implications.
         # Build context
         context = f"""
 Search Query: "{query}"
-Assets: {', '.join(assets) if assets else 'All'}
+Assets: {", ".join(assets) if assets else "All"}
 
 ## Relevant News Found:
 {self._format_news(news)}

@@ -136,9 +136,7 @@ async def create_news_source(
     """Add a new news source."""
     existing = await NewsSource.find_one(NewsSource.domain == data.domain)
     if existing:
-        raise HTTPException(
-            status_code=400, detail="News source with this domain already exists"
-        )
+        raise HTTPException(status_code=400, detail="News source with this domain already exists")
 
     source = NewsSource(
         name=data.name,

@@ -1,6 +1,6 @@
 """Shared service for confirming and executing agent trade decisions."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 from beanie import PydanticObjectId
 
@@ -32,11 +32,9 @@ class AgentExecutionService:
             raise ValueError("Decision not found")
 
         if decision.status != DecisionStatus.PENDING:
-            raise RuntimeError(
-                f"Decision is not pending (current status: {decision.status.value})"
-            )
+            raise RuntimeError(f"Decision is not pending (current status: {decision.status.value})")
 
-        if decision.expires_at and datetime.now(timezone.utc) > decision.expires_at:
+        if decision.expires_at and datetime.now(UTC) > decision.expires_at:
             decision.expire()
             await decision.save()
             raise TimeoutError("Decision has expired")

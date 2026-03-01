@@ -66,9 +66,7 @@ async def get_open_orders(symbol: Optional[str] = None) -> dict[str, Any]:
                 "symbol": order_data.get("instId"),
                 "side": order_data.get("side"),
                 "order_type": order_data.get("ordType"),
-                "price": (
-                    float(order_data.get("px", 0)) if order_data.get("px") else None
-                ),
+                "price": (float(order_data.get("px", 0)) if order_data.get("px") else None),
                 "quantity": float(order_data.get("sz", 0)),
                 "filled_quantity": float(order_data.get("accFillSz", 0)),
                 "status": order_data.get("state"),

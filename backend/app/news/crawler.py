@@ -1,7 +1,7 @@
 """News crawler for fetching articles from various sources."""
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Optional
 
 import feedparser
@@ -24,9 +24,7 @@ class NewsCrawler:
         self.embedding_service = EmbeddingService()
         self.client = httpx.AsyncClient(
             timeout=30.0,
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            },
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
         )
 
     async def close(self) -> None:
@@ -52,7 +50,7 @@ class NewsCrawler:
                     articles.append(article)
 
             # Update last crawled
-            source.last_crawled = datetime.now(timezone.utc)
+            source.last_crawled = datetime.now(UTC)
             source.last_error = None
             await source.save()
 
@@ -101,9 +99,9 @@ class NewsCrawler:
         # Get published date
         published_at = None
         if hasattr(entry, "published_parsed") and entry.published_parsed:
-            published_at = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
+            published_at = datetime(*entry.published_parsed[:6], tzinfo=UTC)
         elif hasattr(entry, "updated_parsed") and entry.updated_parsed:
-            published_at = datetime(*entry.updated_parsed[:6], tzinfo=timezone.utc)
+            published_at = datetime(*entry.updated_parsed[:6], tzinfo=UTC)
 
         # Create article
         article = NewsArticle(
@@ -120,9 +118,7 @@ class NewsCrawler:
 
         # Generate embedding
         embedding_text = f"{article.title} {article.content}"
-        article.embedding = await self.embedding_service.generate_embedding(
-            embedding_text[:8000]
-        )
+        article.embedding = await self.embedding_service.generate_embedding(embedding_text[:8000])
 
         await article.insert()
         return article

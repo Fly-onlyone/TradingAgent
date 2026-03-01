@@ -54,27 +54,17 @@ async def get_onchain_metrics(symbol: str) -> dict[str, Any]:
                         # Market metrics (from CoinGecko)
                         "market_cap": market_data.get("market_cap", {}).get("usd"),
                         "market_cap_rank": data.get("market_cap_rank"),
-                        "total_volume_24h": market_data.get("total_volume", {}).get(
-                            "usd"
-                        ),
-                        "price_change_24h_pct": market_data.get(
-                            "price_change_percentage_24h"
-                        ),
-                        "price_change_7d_pct": market_data.get(
-                            "price_change_percentage_7d"
-                        ),
-                        "price_change_30d_pct": market_data.get(
-                            "price_change_percentage_30d"
-                        ),
+                        "total_volume_24h": market_data.get("total_volume", {}).get("usd"),
+                        "price_change_24h_pct": market_data.get("price_change_percentage_24h"),
+                        "price_change_7d_pct": market_data.get("price_change_percentage_7d"),
+                        "price_change_30d_pct": market_data.get("price_change_percentage_30d"),
                         # Supply metrics
                         "circulating_supply": market_data.get("circulating_supply"),
                         "total_supply": market_data.get("total_supply"),
                         "max_supply": market_data.get("max_supply"),
                         # ATH/ATL
                         "ath": market_data.get("ath", {}).get("usd"),
-                        "ath_change_pct": market_data.get(
-                            "ath_change_percentage", {}
-                        ).get("usd"),
+                        "ath_change_pct": market_data.get("ath_change_percentage", {}).get("usd"),
                         "atl": market_data.get("atl", {}).get("usd"),
                         # Development activity
                         "github_forks": data.get("developer_data", {}).get("forks"),
@@ -151,9 +141,9 @@ async def get_project_fundamentals(symbol: str) -> dict[str, Any]:
 
                 fundamentals["tokenomics"] = {
                     "market_cap": market_data.get("market_cap", {}).get("usd"),
-                    "fully_diluted_valuation": market_data.get(
-                        "fully_diluted_valuation", {}
-                    ).get("usd"),
+                    "fully_diluted_valuation": market_data.get("fully_diluted_valuation", {}).get(
+                        "usd"
+                    ),
                     "circulating_supply": market_data.get("circulating_supply"),
                     "max_supply": market_data.get("max_supply"),
                     "total_supply": market_data.get("total_supply"),
@@ -168,9 +158,7 @@ async def get_project_fundamentals(symbol: str) -> dict[str, Any]:
                         else None
                     ),
                     "homepage": data.get("links", {}).get("homepage", [None])[0],
-                    "github": data.get("links", {})
-                    .get("repos_url", {})
-                    .get("github", []),
+                    "github": data.get("links", {}).get("repos_url", {}).get("github", []),
                 }
     except Exception:
         pass
@@ -226,9 +214,7 @@ async def get_macro_indicators() -> dict[str, Any]:
                     "total_volume_24h_usd": data.get("total_volume", {}).get("usd"),
                     "btc_dominance": data.get("market_cap_percentage", {}).get("btc"),
                     "eth_dominance": data.get("market_cap_percentage", {}).get("eth"),
-                    "market_cap_change_24h_pct": data.get(
-                        "market_cap_change_percentage_24h_usd"
-                    ),
+                    "market_cap_change_24h_pct": data.get("market_cap_change_percentage_24h_usd"),
                     "active_cryptocurrencies": data.get("active_cryptocurrencies"),
                 }
     except Exception:

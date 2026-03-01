@@ -37,6 +37,7 @@ if settings.sentry_dsn:
         or ("development" if settings.debug else "production"),
         release=settings.sentry_release or None,
         send_default_pii=False,
+        enable_logs=settings.sentry_enable_logs,
         integrations=[
             LoggingIntegration(
                 level=logging.INFO,  # Breadcrumbs from INFO+

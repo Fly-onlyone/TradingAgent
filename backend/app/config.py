@@ -63,6 +63,7 @@ class Settings(BaseSettings):
     sentry_release: str = ""
     sentry_traces_sample_rate: float = 0.1
     sentry_profiles_sample_rate: float = 0.1
+    sentry_enable_logs: bool = True
 
     # Logging
     log_level: str = "INFO"
@@ -90,11 +91,7 @@ class Settings(BaseSettings):
                 stacklevel=2,
             )
 
-        if (
-            not self.debug
-            and "localhost" in self.mongodb_url
-            and "@" not in self.mongodb_url
-        ):
+        if not self.debug and "localhost" in self.mongodb_url and "@" not in self.mongodb_url:
             warnings.warn(
                 "MongoDB connection has no authentication credentials. "
                 "Configure a URI with username:password@ for production.",

@@ -1,6 +1,6 @@
 """Pattern miner for discovering trading patterns from historical data."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Any, Optional
 
 from app.db.models.market import MarketData
@@ -33,7 +33,7 @@ class PatternMiner:
         Returns:
             List of discovered patterns with statistics
         """
-        start_time = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+        start_time = datetime.now(UTC) - timedelta(days=lookback_days)
 
         candles = (
             await MarketData.find(
@@ -246,9 +246,7 @@ class PatternMiner:
     ) -> TradingPattern:
         """Save a discovered pattern to the database."""
         # Generate embedding
-        embedding = await self.pattern_generator.generate_pattern_embedding(
-            pattern_data
-        )
+        embedding = await self.pattern_generator.generate_pattern_embedding(pattern_data)
 
         pattern = TradingPattern(
             pattern_name=pattern_data["pattern_name"],
@@ -261,7 +259,7 @@ class PatternMiner:
             symbols=[symbol] if symbol else None,
             timeframes=timeframes,
             embedding=embedding,
-            last_validated=datetime.now(timezone.utc),
+            last_validated=datetime.now(UTC),
         )
 
         await pattern.insert()
@@ -279,7 +277,7 @@ class PatternMiner:
         if not pattern:
             raise ValueError(f"Pattern {pattern_id} not found")
 
-        start_time = datetime.now(timezone.utc) - timedelta(days=recent_days)
+        start_time = datetime.now(UTC) - timedelta(days=recent_days)
 
         recent_lessons = (
             await TradeLesson.find(TradeLesson.created_at >= start_time)
@@ -298,7 +296,7 @@ class PatternMiner:
 
         recent_success_rate = (successes / matches * 100) if matches > 0 else 0
 
-        pattern.last_validated = datetime.now(timezone.utc)
+        pattern.last_validated = datetime.now(UTC)
         await pattern.save()
 
         return {
@@ -326,10 +324,7 @@ class PatternMiner:
             lesson_rsi = lesson.market_context.get("rsi")
             if lesson_rsi is None:
                 return False
-            if (
-                conditions.get("type") == "bullish"
-                and lesson_rsi > conditions["rsi_threshold"]
-            ):
+            if conditions.get("type") == "bullish" and lesson_rsi > conditions["rsi_threshold"]:
                 return False
 
         if "volume_multiplier" in conditions:

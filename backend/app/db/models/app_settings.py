@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Any, ClassVar
 
@@ -57,7 +57,7 @@ class AppSettings(Document):
     okx_passphrase: str = ""
     okx_sandbox: bool = True
 
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     class Settings:
         name = "app_settings"
@@ -74,7 +74,7 @@ class AppSettings(Document):
     def _instance_sort_key(cls, instance: "AppSettings") -> tuple[datetime, str]:
         updated = instance.updated_at
         if updated.tzinfo is None or updated.utcoffset() is None:
-            updated = updated.replace(tzinfo=timezone.utc)
+            updated = updated.replace(tzinfo=UTC)
         return updated, str(instance.id)
 
     @classmethod
@@ -83,14 +83,12 @@ class AppSettings(Document):
         canonical_id: Any,
         instance: "AppSettings",
     ) -> None:
-        archive_collection = cls.get_pymongo_collection().database[
-            "app_settings_conflicts"
-        ]
+        archive_collection = cls.get_pymongo_collection().database["app_settings_conflicts"]
         archived_doc = instance.model_dump(mode="python")
         archived_doc.pop("id", None)
         archived_doc["original_id"] = instance.id
         archived_doc["canonical_id"] = canonical_id
-        archived_doc["archived_at"] = datetime.now(timezone.utc)
+        archived_doc["archived_at"] = datetime.now(UTC)
         await archive_collection.insert_one(archived_doc)
 
     @classmethod
@@ -147,15 +145,13 @@ class AppSettings(Document):
 
         migrated = await instance.migrate_plaintext_secrets_if_needed()
         if migrated:
-            logger.info(
-                "Migrated legacy plaintext app settings secrets to encrypted format"
-            )
+            logger.info("Migrated legacy plaintext app settings secrets to encrypted format")
 
         return instance
 
     async def save_with_timestamp(self) -> None:
         """Persist settings and refresh updated_at."""
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         await self.save()
 
     def _get_secret_value(self, field_name: str) -> str:
@@ -204,9 +200,7 @@ class AppSettings(Document):
 
     def has_persisted_secret_values(self) -> bool:
         """Return True when any secret field has a non-empty stored value."""
-        return any(
-            bool(getattr(self, field_name)) for field_name in self.SECRET_FIELD_NAMES
-        )
+        return any(bool(getattr(self, field_name)) for field_name in self.SECRET_FIELD_NAMES)
 
     def has_encrypted_secret_values(self) -> bool:
         """Return True when at least one stored secret uses encrypted marker format."""
@@ -240,6 +234,5 @@ class AppSettings(Document):
                 decrypt_secret_value(value)
             except SecretDecryptionError as exc:
                 raise RuntimeError(
-                    "Encrypted app settings secret cannot be decrypted: "
-                    f"field={field_name}."
+                    f"Encrypted app settings secret cannot be decrypted: field={field_name}."
                 ) from exc

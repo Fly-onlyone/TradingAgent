@@ -49,9 +49,7 @@ async def search_strategies(
     except Exception as e:
         # Fallback to simple text search if vector search fails
         strategies = (
-            await StrategyKnowledge.find({"$text": {"$search": query}})
-            .limit(limit)
-            .to_list()
+            await StrategyKnowledge.find({"$text": {"$search": query}}).limit(limit).to_list()
         )
 
         if not strategies:

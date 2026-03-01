@@ -44,9 +44,7 @@ class NotificationService:
         """Get the VAPID public key for client subscription."""
         return self._vapid_public_key
 
-    async def get_user_settings(
-        self, user_id: PydanticObjectId
-    ) -> UserNotificationSettings:
+    async def get_user_settings(self, user_id: PydanticObjectId) -> UserNotificationSettings:
         """Get or create user notification settings."""
         settings = await UserNotificationSettings.find_one(
             UserNotificationSettings.user_id == user_id
@@ -106,9 +104,7 @@ class NotificationService:
             expires_at=expires_at,
         )
         await notification.insert()
-        logger.info(
-            f"Created {notification_type.value} notification for user {user_id}"
-        )
+        logger.info(f"Created {notification_type.value} notification for user {user_id}")
 
         # Try to send Web Push
         await self._send_web_push(user_id, notification)
@@ -147,9 +143,7 @@ class NotificationService:
                     "data": {
                         "notificationId": str(notification.id),
                         "decisionId": (
-                            str(notification.decision_id)
-                            if notification.decision_id
-                            else None
+                            str(notification.decision_id) if notification.decision_id else None
                         ),
                         **notification.data,
                     },
@@ -195,10 +189,7 @@ class NotificationService:
         total = await query.count()
 
         notifications = (
-            await query.sort("-created_at")
-            .skip((page - 1) * page_size)
-            .limit(page_size)
-            .to_list()
+            await query.sort("-created_at").skip((page - 1) * page_size).limit(page_size).to_list()
         )
 
         return notifications, total
@@ -266,9 +257,7 @@ class NotificationService:
                     source="notification",
                 )
             except Exception as exc:
-                logger.error(
-                    "Failed to confirm and execute decision %s: %s", decision.id, exc
-                )
+                logger.error("Failed to confirm and execute decision %s: %s", decision.id, exc)
 
         elif action == NotificationAction.REJECTED:
             decision.reject()

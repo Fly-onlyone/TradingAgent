@@ -67,9 +67,7 @@ class TradeLearner:
             duration_minutes = int(duration.total_seconds() / 60)
 
         # Generate AI analysis
-        analysis = await self._generate_ai_analysis(
-            order, market_context, outcome, profit_pct
-        )
+        analysis = await self._generate_ai_analysis(order, market_context, outcome, profit_pct)
 
         # Create lesson
         lesson = TradeLesson(
@@ -77,9 +75,7 @@ class TradeLearner:
             outcome=outcome,
             profit_pct=profit_pct,
             profit_amount=(
-                order.quantity * (profit_pct / 100) * entry_price
-                if order.quantity
-                else None
+                order.quantity * (profit_pct / 100) * entry_price if order.quantity else None
             ),
             lesson_summary=analysis["summary"],
             market_context=market_context,
@@ -104,9 +100,7 @@ class TradeLearner:
             "mistakes": lesson.mistakes,
             "successes": lesson.successes,
         }
-        lesson.embedding = await self.lesson_generator.generate_lesson_embedding(
-            lesson_data
-        )
+        lesson.embedding = await self.lesson_generator.generate_lesson_embedding(lesson_data)
 
         await lesson.insert()
         return lesson
@@ -143,7 +137,7 @@ Format your response as JSON with keys: summary, successes (list), mistakes (lis
 
         try:
             response = self.client.messages.create(
-                model="claude-sonnet-4-5",
+                model="claude-sonnet-4-6",
                 max_tokens=500,
                 messages=[{"role": "user", "content": prompt}],
             )
@@ -203,9 +197,7 @@ Format your response as JSON with keys: summary, successes (list), mistakes (lis
         # Check trend alignment
         trend = market_context.get("trend")
         if trend:
-            if (side == "buy" and trend == "bearish") or (
-                side == "sell" and trend == "bullish"
-            ):
+            if (side == "buy" and trend == "bearish") or (side == "sell" and trend == "bullish"):
                 analysis["mistakes"].append(f"Traded against the {trend} trend")
                 analysis["recommendations"].append("Consider trading with the trend")
 
@@ -254,16 +246,12 @@ Format your response as JSON with keys: summary, successes (list), mistakes (lis
                 for mistake in lesson.mistakes:
                     mistake_counts[mistake] = mistake_counts.get(mistake, 0) + 1
 
-        sorted_mistakes = sorted(
-            mistake_counts.items(), key=lambda x: x[1], reverse=True
-        )
+        sorted_mistakes = sorted(mistake_counts.items(), key=lambda x: x[1], reverse=True)
 
         return {
             "total_losses_analyzed": len(losses),
             "common_mistakes": sorted_mistakes[:5],
-            "avg_loss_pct": (
-                sum(l.profit_pct for l in losses) / len(losses) if losses else 0
-            ),
+            "avg_loss_pct": (sum(l.profit_pct for l in losses) / len(losses) if losses else 0),
         }
 
     async def get_success_patterns(self, limit: int = 20) -> dict[str, Any]:
@@ -281,14 +269,10 @@ Format your response as JSON with keys: summary, successes (list), mistakes (lis
                 for success in lesson.successes:
                     success_counts[success] = success_counts.get(success, 0) + 1
 
-        sorted_successes = sorted(
-            success_counts.items(), key=lambda x: x[1], reverse=True
-        )
+        sorted_successes = sorted(success_counts.items(), key=lambda x: x[1], reverse=True)
 
         return {
             "total_wins_analyzed": len(wins),
             "common_success_factors": sorted_successes[:5],
-            "avg_profit_pct": (
-                sum(l.profit_pct for l in wins) / len(wins) if wins else 0
-            ),
+            "avg_profit_pct": (sum(l.profit_pct for l in wins) / len(wins) if wins else 0),
         }

@@ -42,9 +42,7 @@ async def get_user_from_token(token: str) -> User | None:
         )
 
     try:
-        payload = jwt.decode(
-            token, settings.secret_key, algorithms=[settings.algorithm]
-        )
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         email = payload.get("sub")
         if email:
             return await User.find_one(User.email == email)

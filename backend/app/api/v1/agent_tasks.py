@@ -231,10 +231,7 @@ async def create_task(
         )
 
     # Validate monitoring tasks require conditions
-    if (
-        task_data.task_type == TaskType.MONITORING
-        and not task_data.monitoring_conditions
-    ):
+    if task_data.task_type == TaskType.MONITORING and not task_data.monitoring_conditions:
         raise HTTPException(
             status_code=400,
             detail="Monitoring tasks require at least one monitoring condition",

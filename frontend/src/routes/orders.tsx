@@ -28,8 +28,9 @@ import { PageTransition } from "@/components/common/PageTransition";
 import { type Column, DataTable } from "@/components/data-display/DataTable";
 import { PositionCard } from "@/components/trading/PositionCard";
 import { useOrderStore } from "@/store/orderStore";
-import type { ApiError, OkxOrder } from "@/types";
+import type { OkxOrder } from "@/types";
 import { ORDER_STATUSES } from "@/utils/constants";
+import { getErrorMessage } from "@/utils/errors";
 import { formatDateTime, formatPrice } from "@/utils/formatters";
 import { requireAuth } from "./-guards";
 
@@ -37,23 +38,6 @@ export const Route = createFileRoute("/orders")({
 	beforeLoad: requireAuth,
 	component: OrdersPage,
 });
-
-function getErrorMessage(error: unknown): string {
-	if (error && typeof error === "object") {
-		const apiError = error as Partial<ApiError>;
-		if (typeof apiError.detail === "string" && apiError.detail) {
-			return apiError.detail;
-		}
-		if (
-			"message" in error &&
-			typeof error.message === "string" &&
-			error.message
-		) {
-			return error.message;
-		}
-	}
-	return "Unable to fetch OKX orders.";
-}
 
 function formatTimestamp(ms: number): string {
 	if (!Number.isFinite(ms) || ms <= 0) {

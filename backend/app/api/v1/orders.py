@@ -1,7 +1,7 @@
 """Order management endpoints using Beanie ODM."""
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from beanie import PydanticObjectId
@@ -23,6 +23,8 @@ from app.services.pnl_calculator import (
     get_trades_by_symbol,
     get_trades_summary,
 )
+from app.utils.converters import to_float as _to_float
+from app.utils.converters import to_optional_float as _to_optional_float
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -139,36 +141,6 @@ class OKXCancelOrderResponse(BaseModel):
     error: str | None = None
 
 
-def _to_float(value: object, default: float = 0.0) -> float:
-    """Convert OKX numeric-like values to float while tolerating blanks."""
-    if value is None:
-        return default
-    if isinstance(value, str):
-        cleaned = value.strip()
-        if not cleaned:
-            return default
-        value = cleaned
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _to_optional_float(value: object) -> float | None:
-    """Convert OKX numeric-like values to float or None when blank."""
-    if value is None:
-        return None
-    if isinstance(value, str):
-        cleaned = value.strip()
-        if not cleaned:
-            return None
-        value = cleaned
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
 def _to_timestamp_ms(value: object) -> int:
     """Convert OKX timestamps to milliseconds since epoch."""
     if isinstance(value, (int, float)):
@@ -176,12 +148,12 @@ def _to_timestamp_ms(value: object) -> int:
     if isinstance(value, str):
         cleaned = value.strip()
         if not cleaned:
-            return int(datetime.now().timestamp() * 1000)
+            return int(datetime.now(UTC).timestamp() * 1000)
         try:
             return int(float(cleaned))
         except ValueError:
-            return int(datetime.now().timestamp() * 1000)
-    return int(datetime.now().timestamp() * 1000)
+            return int(datetime.now(UTC).timestamp() * 1000)
+    return int(datetime.now(UTC).timestamp() * 1000)
 
 
 def _normalize_okx_state(raw_state: object) -> str:
@@ -204,9 +176,7 @@ def _normalize_okx_order(order_data: dict[str, Any]) -> OKXOrderResponse:
     return OKXOrderResponse(
         order_id=str(order_data.get("ordId", "")),
         client_order_id=(
-            str(order_data.get("clOrdId")).strip()
-            if order_data.get("clOrdId")
-            else None
+            str(order_data.get("clOrdId")).strip() if order_data.get("clOrdId") else None
         ),
         symbol=str(order_data.get("instId", "")),
         side=str(order_data.get("side", "")),
@@ -328,12 +298,7 @@ async def list_orders(
     total = await query.count()
 
     # Get paginated results
-    orders = (
-        await query.sort("-created_at")
-        .skip((page - 1) * page_size)
-        .limit(page_size)
-        .to_list()
-    )
+    orders = await query.sort("-created_at").skip((page - 1) * page_size).limit(page_size).to_list()
 
     return {
         "orders": [order_to_response(o) for o in orders],
@@ -631,8 +596,6 @@ async def cancel_order(
         Order.user_id == current_user.id,
     )
     if not refreshed:
-        raise HTTPException(
-            status_code=404, detail="Order not found after cancellation"
-        )
+        raise HTTPException(status_code=404, detail="Order not found after cancellation")
 
     return order_to_response(refreshed)

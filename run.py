@@ -12,8 +12,10 @@ the entire process on code changes. Each restart is a fresh `python run.py
 
 import asyncio
 import os
+import socket
 import subprocess
 import sys
+import time
 
 # ── ProactorEventLoop on Windows ──────────────────────────────────────
 # MUST be set at module level, before any asyncio.run() / event loop creation.
@@ -23,6 +25,27 @@ if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+BACKEND_HOST = "127.0.0.1"
+BACKEND_PORT = 7000
+
+
+def _is_port_free(host: str, port: int) -> bool:
+    """Return True when nothing is listening on host:port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(0.2)
+        return sock.connect_ex((host, port)) != 0
+
+
+def _wait_for_port_free(
+    host: str, port: int, timeout_seconds: float = 5.0, poll_seconds: float = 0.1
+) -> bool:
+    """Wait until host:port is free, or timeout."""
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        if _is_port_free(host, port):
+            return True
+        time.sleep(poll_seconds)
+    return _is_port_free(host, port)
 
 
 def _terminate_process(proc: subprocess.Popen | None) -> None:
@@ -46,16 +69,24 @@ def _terminate_process(proc: subprocess.Popen | None) -> None:
         proc.kill()
 
 
-def _run_server() -> None:
+def _run_server() -> int:
     """Start uvicorn directly — no reload, no multiprocessing subprocess."""
     import uvicorn
+
+    if not _wait_for_port_free(BACKEND_HOST, BACKEND_PORT, timeout_seconds=2.5):
+        print(
+            f"[serve] Port {BACKEND_PORT} is already in use. "
+            "If another backend is running, stop it first."
+        )
+        return 1
 
     uvicorn.run(
         "backend.app.main:app",
         host="0.0.0.0",
-        port=7000,
+        port=BACKEND_PORT,
         loop="none",  # Don't let uvicorn override our ProactorEventLoopPolicy
     )
+    return 0
 
 
 if __name__ == "__main__":
@@ -63,7 +94,7 @@ if __name__ == "__main__":
         # ── Direct mode: called by the file watcher or by user ─────────
         # ProactorEventLoopPolicy is already set above (module-level).
         # uvicorn runs without reload → no multiprocessing → no policy override.
-        _run_server()
+        sys.exit(_run_server())
     else:
         # ── Dev mode: start frontend + backend with auto-reload ────────
         frontend_dir = os.path.join(PROJECT_DIR, "frontend")
@@ -73,6 +104,11 @@ if __name__ == "__main__":
 
         def start_backend() -> subprocess.Popen:
             """Spawn a fresh backend subprocess with ProactorEventLoop."""
+            if not _wait_for_port_free(BACKEND_HOST, BACKEND_PORT, timeout_seconds=8.0):
+                raise RuntimeError(
+                    f"[dev] Port {BACKEND_PORT} is still in use. "
+                    "Stop the conflicting process and rerun `python run.py`."
+                )
             return subprocess.Popen(
                 [sys.executable, os.path.join(PROJECT_DIR, "run.py"), "--serve"],
                 cwd=PROJECT_DIR,
@@ -84,16 +120,23 @@ if __name__ == "__main__":
             # Watch backend/ for Python file changes and restart on change
             from watchfiles import watch
 
-            print("[dev] Watching backend/ for changes...")
+            print("[dev] Watching backend/ for changes (polling mode)...")
             for changes in watch(
                 os.path.join(PROJECT_DIR, "backend"),
                 watch_filter=lambda _, path: path.endswith(".py"),
+                force_polling=True,
+                poll_delay_ms=500,
             ):
                 changed_files = [os.path.basename(p) for _, p in changes]
                 print(f"[dev] Reloading — changed: {', '.join(changed_files)}")
                 _terminate_process(backend_proc)
                 backend_proc = start_backend()
 
+        except RuntimeError as exc:
+            print(exc)
+            _terminate_process(backend_proc)
+            _terminate_process(frontend_proc)
+            sys.exit(1)
         except KeyboardInterrupt:
             pass
         finally:

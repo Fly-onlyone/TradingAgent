@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -73,11 +73,9 @@ class NewsScheduler:
             if source.last_crawled:
                 last_crawled = source.last_crawled
                 if last_crawled.tzinfo is None:
-                    last_crawled = last_crawled.replace(tzinfo=timezone.utc)
+                    last_crawled = last_crawled.replace(tzinfo=UTC)
 
-                hours_since = (
-                    datetime.now(timezone.utc) - last_crawled
-                ).total_seconds() / 3600
+                hours_since = (datetime.now(UTC) - last_crawled).total_seconds() / 3600
                 if hours_since < source.crawl_interval_hours:
                     continue
 
@@ -157,9 +155,7 @@ class NewsScheduler:
                 {
                     "id": job.id,
                     "name": job.name,
-                    "next_run": (
-                        job.next_run_time.isoformat() if job.next_run_time else None
-                    ),
+                    "next_run": (job.next_run_time.isoformat() if job.next_run_time else None),
                 }
             )
 

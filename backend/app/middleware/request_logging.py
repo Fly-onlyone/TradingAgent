@@ -19,9 +19,7 @@ SKIP_PATHS = {"/health", "/docs", "/openapi.json", "/redoc"}
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Attach a unique request_id and log every HTTP request/response."""
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         # Skip noisy endpoints
         if request.url.path in SKIP_PATHS:
             return await call_next(request)

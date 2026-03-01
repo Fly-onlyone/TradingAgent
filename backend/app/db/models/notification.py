@@ -1,6 +1,6 @@
 """Notification models for push notifications and user preferences."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Optional
 
@@ -78,7 +78,7 @@ class Notification(Document):
     push_endpoint: Optional[str] = None  # Which subscription received it
 
     # Timestamps
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     expires_at: Optional[datetime] = None  # For confirmations
 
     class Settings:
@@ -112,22 +112,20 @@ class Notification(Document):
     def mark_delivered(self) -> None:
         """Mark notification as delivered."""
         self.status = NotificationStatus.DELIVERED
-        self.delivered_at = datetime.now(timezone.utc)
+        self.delivered_at = datetime.now(UTC)
         self.push_sent = True
 
     def mark_read(self) -> None:
         """Mark notification as read."""
         if self.status == NotificationStatus.DELIVERED:
             self.status = NotificationStatus.READ
-        self.read_at = datetime.now(timezone.utc)
+        self.read_at = datetime.now(UTC)
 
-    def take_action(
-        self, action: NotificationAction, comment: Optional[str] = None
-    ) -> None:
+    def take_action(self, action: NotificationAction, comment: Optional[str] = None) -> None:
         """Record user action on notification."""
         self.status = NotificationStatus.ACTIONED
         self.action_taken = action
-        self.action_taken_at = datetime.now(timezone.utc)
+        self.action_taken_at = datetime.now(UTC)
         self.action_comment = comment
 
     def mark_expired(self) -> None:
@@ -165,8 +163,8 @@ class UserNotificationSettings(Document):
     quiet_hours_timezone: str = "UTC"
 
     # Timestamps
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     class Settings:
         name = "user_notification_settings"
@@ -176,13 +174,13 @@ class UserNotificationSettings(Document):
         """Update Web Push subscription."""
         self.web_push_subscription = subscription
         self.web_push_enabled = True
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
 
     def remove_subscription(self) -> None:
         """Remove Web Push subscription."""
         self.web_push_subscription = None
         self.web_push_enabled = False
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
 
     def should_notify(self, notification_type: NotificationType) -> bool:
         """Check if user should receive this notification type."""
