@@ -13,6 +13,7 @@ import {
 	Box,
 	Card,
 	CardContent,
+	Chip,
 	Divider,
 	Drawer,
 	IconButton,
@@ -30,7 +31,7 @@ import {
 	useQueryClient,
 } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { decisionsApi } from "@/api/endpoints/decisions";
 import { sessionsApi } from "@/api/endpoints/sessions";
@@ -46,7 +47,7 @@ import { AgentConfigPanel } from "@/components/agent/AgentConfigPanel";
 import { AgentStatusBadge } from "@/components/agent/AgentStatusBadge";
 import { ChatInput } from "@/components/agent/ChatInput";
 import { ChatMessage } from "@/components/agent/ChatMessage";
-import { DecisionCard } from "@/components/agent/DecisionCard";
+
 import { DecisionHistoryPanel } from "@/components/agent/DecisionHistoryPanel";
 import { SessionList } from "@/components/agent/SessionList";
 import { ThinkingIndicator } from "@/components/agent/ThinkingIndicator";
@@ -67,7 +68,6 @@ type SidebarTab = "sessions" | "decisions";
 function AgentPage() {
 	const theme = useTheme();
 	const isMobile = useMediaQuery(theme.breakpoints.down("md"));
-	const isLargeScreen = useMediaQuery(theme.breakpoints.up("lg"));
 
 	const messagesEndRef = useRef<HTMLDivElement>(null);
 	const lastSessionInvalidateMessageRef = useRef<string | null>(null);
@@ -78,7 +78,6 @@ function AgentPage() {
 		messages,
 		status,
 		isThinking,
-		lastDecision,
 		currentSessionId,
 		sessionGroups,
 		isLoadingSessions,
@@ -117,13 +116,8 @@ function AgentPage() {
 	const isDecisionsTabActive = sidebarTab === "decisions";
 
 	// WebSocket connection
-	const {
-		isConnected,
-		sendMessage,
-		requestAnalysis,
-		requestRecommendation,
-		executeDecision,
-	} = useAgentSocket();
+	const { isConnected, sendMessage, requestAnalysis, requestRecommendation } =
+		useAgentSocket();
 
 	// Fetch sessions grouped by date
 	const { data: sessionsData, isLoading: sessionsLoading } = useQuery(
@@ -480,7 +474,7 @@ function AgentPage() {
 						anchor="left"
 						open={mobileDrawerOpen}
 						onClose={() => setMobileDrawerOpen(false)}
-						slotProps={{ paper: { sx: { width: 300 } } }}
+						slotProps={{ paper: { sx: { width: 280 } } }}
 					>
 						{sidebarContent}
 					</Drawer>
@@ -488,7 +482,7 @@ function AgentPage() {
 
 				{/* Desktop Left Sidebar - Session History */}
 				{!isMobile && (
-					<Card sx={{ width: 300, display: "flex", flexDirection: "column" }}>
+					<Card sx={{ width: 280, display: "flex", flexDirection: "column" }}>
 						{sidebarContent}
 					</Card>
 				)}
@@ -628,10 +622,49 @@ function AgentPage() {
 
 					<Divider />
 
+					{/* Quick Prompts */}
+					<Box
+						sx={{
+							px: 2,
+							pt: 1.5,
+							display: "flex",
+							flexWrap: "wrap",
+							gap: 0.75,
+						}}
+					>
+						{[
+							"Analyze BTC/USDT market",
+							"Current market sentiment?",
+							"Buy or sell ETH now?",
+							"Support & resistance levels",
+							"Today's market news",
+						].map((prompt) => (
+							<Chip
+								key={prompt}
+								label={prompt}
+								size="small"
+								variant="outlined"
+								onClick={() => sendMessage(prompt)}
+								sx={{
+									cursor: "pointer",
+									borderColor: "rgba(249,115,22,0.3)",
+									color: "text.secondary",
+									fontSize: "0.7rem",
+									"&:hover": {
+										borderColor: "primary.main",
+										color: "primary.main",
+										bgcolor: "rgba(249,115,22,0.08)",
+									},
+								}}
+							/>
+						))}
+					</Box>
+
 					{/* Input */}
 					<Box
 						sx={{
 							p: 2,
+							pt: 1,
 							"& .MuiOutlinedInput-root:focus-within": {
 								boxShadow: "0 0 0 3px rgba(249, 115, 22, 0.15)",
 								borderRadius: 1,
@@ -647,74 +680,6 @@ function AgentPage() {
 						/>
 					</Box>
 				</Card>
-
-				{/* Desktop Right Sidebar - Latest Decision & Quick Prompts */}
-				{isLargeScreen && (
-					<Box
-						sx={{
-							width: 320,
-							display: "flex",
-							flexDirection: "column",
-							gap: 2,
-						}}
-					>
-						{/* Latest Decision */}
-						<Card sx={{ p: 2 }}>
-							<Typography variant="subtitle1" fontWeight={600} gutterBottom>
-								Latest Decision
-							</Typography>
-							{lastDecision ? (
-								<DecisionCard
-									decision={lastDecision}
-									onExecute={() => executeDecision(lastDecision)}
-								/>
-							) : (
-								<Typography
-									variant="body2"
-									color="text.secondary"
-									textAlign="center"
-								>
-									No recent decisions. Ask the agent for a recommendation.
-								</Typography>
-							)}
-						</Card>
-
-						{/* Quick Prompts */}
-						<Card sx={{ p: 2, flex: 1, overflow: "auto" }}>
-							<Typography variant="subtitle1" fontWeight={600} gutterBottom>
-								Quick Prompts
-							</Typography>
-							<Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-								{[
-									"Analyze BTC/USDT market conditions",
-									"What is the current market sentiment?",
-									"Should I buy or sell ETH right now?",
-									"What are the key support and resistance levels?",
-									"Summarize today's market news",
-								].map((prompt) => (
-									<Card
-										key={prompt}
-										component={motion.div}
-										whileHover={{ x: 8 }}
-										whileTap={{ scale: 0.98 }}
-										onClick={() => sendMessage(prompt)}
-										sx={{
-											p: 1.5,
-											cursor: "pointer",
-											transition: "border-color 0.2s",
-											"&:hover": {
-												bgcolor: "action.hover",
-												borderColor: "primary.main",
-											},
-										}}
-									>
-										<Typography variant="body2">{prompt}</Typography>
-									</Card>
-								))}
-							</Box>
-						</Card>
-					</Box>
-				)}
 			</Box>
 		</PageTransition>
 	);

@@ -31,7 +31,6 @@ import { PageTransition } from "@/components/common/PageTransition";
 import { StatCard } from "@/components/data-display/StatCard";
 import {
 	MarketOverviewPanel,
-	OrderForm,
 	PositionCard,
 	RecentOrderActivity,
 	TickerCard,
@@ -177,15 +176,7 @@ function TradingPage() {
 				) : null}
 
 				<Grid container spacing={2}>
-					<Grid size={{ xs: 12, lg: 4 }}>
-						<OrderForm
-							symbol={selectedSymbol}
-							currentPrice={currentPrice || 0}
-							balance={accountQuery.data?.availableBalance ?? 0}
-						/>
-					</Grid>
-
-					<Grid size={{ xs: 12, lg: 8 }}>
+					<Grid size={{ xs: 12 }}>
 						<Grid container spacing={2}>
 							<Grid size={{ xs: 12, sm: 6, md: 4 }}>
 								<StatCard

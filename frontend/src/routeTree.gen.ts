@@ -21,7 +21,6 @@ import { Route as StrategiesIndexRouteImport } from './routes/strategies/index'
 import { Route as KnowledgeIndexRouteImport } from './routes/knowledge/index'
 import { Route as AuthRegisterRouteImport } from './routes/auth/register'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
-import { Route as AdminSentryRouteImport } from './routes/admin/sentry'
 import { Route as AdminLogsRouteImport } from './routes/admin/logs'
 import { Route as AdminDatabaseRouteImport } from './routes/admin/database'
 
@@ -85,11 +84,6 @@ const AuthLoginRoute = AuthLoginRouteImport.update({
   path: '/auth/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminSentryRoute = AdminSentryRouteImport.update({
-  id: '/admin/sentry',
-  path: '/admin/sentry',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AdminLogsRoute = AdminLogsRouteImport.update({
   id: '/admin/logs',
   path: '/admin/logs',
@@ -110,7 +104,6 @@ export interface FileRoutesByFullPath {
   '/trading': typeof TradingRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/logs': typeof AdminLogsRoute
-  '/admin/sentry': typeof AdminSentryRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
   '/knowledge/': typeof KnowledgeIndexRoute
@@ -127,7 +120,6 @@ export interface FileRoutesByTo {
   '/trading': typeof TradingRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/logs': typeof AdminLogsRoute
-  '/admin/sentry': typeof AdminSentryRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
   '/knowledge': typeof KnowledgeIndexRoute
@@ -145,7 +137,6 @@ export interface FileRoutesById {
   '/trading': typeof TradingRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/logs': typeof AdminLogsRoute
-  '/admin/sentry': typeof AdminSentryRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
   '/knowledge/': typeof KnowledgeIndexRoute
@@ -164,7 +155,6 @@ export interface FileRouteTypes {
     | '/trading'
     | '/admin/database'
     | '/admin/logs'
-    | '/admin/sentry'
     | '/auth/login'
     | '/auth/register'
     | '/knowledge/'
@@ -181,7 +171,6 @@ export interface FileRouteTypes {
     | '/trading'
     | '/admin/database'
     | '/admin/logs'
-    | '/admin/sentry'
     | '/auth/login'
     | '/auth/register'
     | '/knowledge'
@@ -198,7 +187,6 @@ export interface FileRouteTypes {
     | '/trading'
     | '/admin/database'
     | '/admin/logs'
-    | '/admin/sentry'
     | '/auth/login'
     | '/auth/register'
     | '/knowledge/'
@@ -216,7 +204,6 @@ export interface RootRouteChildren {
   TradingRoute: typeof TradingRoute
   AdminDatabaseRoute: typeof AdminDatabaseRoute
   AdminLogsRoute: typeof AdminLogsRoute
-  AdminSentryRoute: typeof AdminSentryRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthRegisterRoute: typeof AuthRegisterRoute
   KnowledgeIndexRoute: typeof KnowledgeIndexRoute
@@ -311,13 +298,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/sentry': {
-      id: '/admin/sentry'
-      path: '/admin/sentry'
-      fullPath: '/admin/sentry'
-      preLoaderRoute: typeof AdminSentryRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/admin/logs': {
       id: '/admin/logs'
       path: '/admin/logs'
@@ -344,7 +324,6 @@ const rootRouteChildren: RootRouteChildren = {
   TradingRoute: TradingRoute,
   AdminDatabaseRoute: AdminDatabaseRoute,
   AdminLogsRoute: AdminLogsRoute,
-  AdminSentryRoute: AdminSentryRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthRegisterRoute: AuthRegisterRoute,
   KnowledgeIndexRoute: KnowledgeIndexRoute,

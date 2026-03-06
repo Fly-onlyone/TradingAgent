@@ -7,8 +7,6 @@ import type {
 	OkxCancelOrderResponse,
 	OkxOrder,
 	OkxOrderListResponse,
-	Order,
-	OrderCreate,
 } from "@/types";
 import { toNumber, toOptionalNumber, toTimestamp } from "@/utils/transformers";
 import apiClient from "../client";
@@ -39,14 +37,6 @@ function transformOkxOrder(order: Record<string, unknown>): OkxOrder {
 }
 
 export const ordersApi = {
-	/**
-	 * Create a new order
-	 */
-	async createOrder(data: OrderCreate): Promise<Order> {
-		const response = await apiClient.post<Order>("/orders", data);
-		return response.data;
-	},
-
 	/**
 	 * Get open orders directly from OKX
 	 */

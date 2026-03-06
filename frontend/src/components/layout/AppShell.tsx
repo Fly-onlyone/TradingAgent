@@ -67,7 +67,7 @@ export function AppShell({ children }: AppShellProps) {
 				<Box
 					sx={{
 						p: showLayout ? 3 : 0,
-						height: showLayout ? "calc(100vh - 64px)" : "100vh",
+						height: showLayout ? "calc(100vh - 48px)" : "100vh",
 						overflow: "auto",
 					}}
 				>
