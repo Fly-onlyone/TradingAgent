@@ -29,7 +29,6 @@ venv/
 logs/
 
 # IDE
-.idea/
 .vscode/
 *.swp
 *.swo
