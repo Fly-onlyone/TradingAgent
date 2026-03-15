@@ -10,6 +10,13 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="\.claude\skills\ui-ux-pro-max\data\colors.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
         <entry key="\.claude\skills\ui-ux-pro-max\data\icons.csv">
           <value>
             <Attribute>
@@ -31,6 +38,27 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="\.claude\skills\ui-ux-pro-max\data\stacks\flutter.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="\.claude\skills\ui-ux-pro-max\data\stacks\html-tailwind.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="\.claude\skills\ui-ux-pro-max\data\stacks\jetpack-compose.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
         <entry key="\.claude\skills\ui-ux-pro-max\data\stacks\nextjs.csv">
           <value>
             <Attribute>
@@ -46,6 +74,20 @@
           </value>
         </entry>
         <entry key="\.claude\skills\ui-ux-pro-max\data\stacks\nuxtjs.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="\.claude\skills\ui-ux-pro-max\data\stacks\react-native.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="\.claude\skills\ui-ux-pro-max\data\stacks\react.csv">
           <value>
             <Attribute>
               <option name="separator" value="," />

@@ -1,0 +1,8 @@
+<component name="ProjectRunConfigurationManager">
+    <configuration default="false" name="Tauri With Backend" type="CompoundRunConfigurationType"
+                   factoryName="Compound Run Configuration">
+        <toRun name="Backend Only" type="PythonConfigurationType"/>
+        <toRun name="Tauri Dev" type="js.build_tools.npm"/>
+        <method v="2"/>
+    </configuration>
+</component>

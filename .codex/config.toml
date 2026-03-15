@@ -1,11 +1,8 @@
 [mcp_servers.pycharm]
-command = "C:\\Program Files\\JetBrains\\PyCharm 2025.2.1\\jbr\\bin\\java"
+command = 'C:\Program Files\JetBrains\PyCharm 2024.3.1.1\jbr\bin\java'
 args = [
     "-classpath",
-    "C:\\Program Files\\JetBrains\\PyCharm 2025.2.1\\plugins\\mcpserver\\lib\\mcpserver-frontend.jar;C:\\Program Files\\JetBrains\\PyCharm 2025.2.1\\lib\\util-8.jar;C:\\Program Files\\JetBrains\\PyCharm 2025.2.1\\lib\\module-intellij.libraries.ktor.client.cio.jar;C:\\Program Files\\JetBrains\\PyCharm 2025.2.1\\lib\\module-intellij.libraries.ktor.client.jar;C:\\Program Files\\JetBrains\\PyCharm 2025.2.1\\lib\\module-intellij.libraries.ktor.network.tls.jar;C:\\Program Files\\JetBrains\\PyCharm 2025.2.1\\lib\\module-intellij.libraries.ktor.io.jar;C:\\Program Files\\JetBrains\\PyCharm 2025.2.1\\lib\\module-intellij.libraries.ktor.utils.jar;C:\\Program Files\\JetBrains\\PyCharm 2025.2.1\\lib\\module-intellij.libraries.kotlinx.io.jar;C:\\Program Files\\JetBrains\\PyCharm 2025.2.1\\lib\\module-intellij.libraries.kotlinx.serialization.core.jar;C:\\Program Files\\JetBrains\\PyCharm 2025.2.1\\lib\\module-intellij.libraries.kotlinx.serialization.json.jar",
+    'C:\Program Files\JetBrains\PyCharm 2024.3.1.1\plugins\mcpserver\lib\mcpserver-frontend.jar;C:\Program Files\JetBrains\PyCharm 2024.3.1.1\lib\util-8.jar;C:\Program Files\JetBrains\PyCharm 2024.3.1.1\lib\module-intellij.libraries.ktor.client.cio.jar;C:\Program Files\JetBrains\PyCharm 2024.3.1.1\lib\module-intellij.libraries.ktor.client.jar;C:\Program Files\JetBrains\PyCharm 2024.3.1.1\lib\module-intellij.libraries.ktor.network.tls.jar;C:\Program Files\JetBrains\PyCharm 2024.3.1.1\lib\module-intellij.libraries.ktor.io.jar;C:\Program Files\JetBrains\PyCharm 2024.3.1.1\lib\module-intellij.libraries.ktor.utils.jar;C:\Program Files\JetBrains\PyCharm 2024.3.1.1\lib\module-intellij.libraries.kotlinx.io.jar;C:\Program Files\JetBrains\PyCharm 2024.3.1.1\lib\module-intellij.libraries.kotlinx.serialization.core.jar;C:\Program Files\JetBrains\PyCharm 2024.3.1.1\lib\module-intellij.libraries.kotlinx.serialization.json.jar',
     "com.intellij.mcpserver.stdio.McpStdioRunnerKt"
 ]
-
-[mcp_servers.pycharm.env]
-IJ_MCP_SERVER_PORT = "64342"
-
+env = { IJ_MCP_SERVER_PORT = "64567" }

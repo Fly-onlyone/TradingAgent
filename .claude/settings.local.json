@@ -46,7 +46,8 @@
       "mcp__plugin_figma_figma__whoami",
       "mcp__plugin_figma_figma__get_metadata",
       "mcp__plugin_figma_figma__get_screenshot",
-      "mcp__pycharm__execute_terminal_command"
+      "mcp__pycharm__execute_terminal_command",
+      "Bash(cd:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

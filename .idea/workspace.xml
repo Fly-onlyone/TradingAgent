@@ -4,7 +4,32 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="20de595b-f3db-4eff-b14b-0a6962df6b68" name="Changes" comment="" />
+    <list default="true" id="20de595b-f3db-4eff-b14b-0a6962df6b68" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.claude/commands/commit.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.claude/settings.local.json" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/settings.local.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.codex/config.toml" beforeDir="false" afterPath="$PROJECT_DIR$/.codex/config.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.codex/skills/git-commit/SKILL.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/csv-editor.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/csv-editor.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.mcp.json" beforeDir="false" afterPath="$PROJECT_DIR$/.mcp.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/api/v1/auth.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/api/v1/auth.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/bun.lock" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/bun.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src-tauri/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src-tauri/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src-tauri/tauri.conf.json" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src-tauri/tauri.conf.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/api/endpoints/auth.ts" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/api/endpoints/auth.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/components/data-display/StatCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/data-display/StatCard.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/components/layout/AppShell.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/layout/AppShell.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/hooks/useAuth.ts" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/hooks/useAuth.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/routes/auth/login.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/routes/auth/login.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/routes/index.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/routes/index.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/store/uiStore.ts" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/store/uiStore.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/theme/components.ts" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/theme/components.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/theme/palette.ts" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/theme/palette.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/utils/animations/variants.ts" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/utils/animations/variants.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/utils/tauriEnv.ts" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/utils/tauriEnv.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/opencode.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/screenshot/img.png" beforeDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -24,7 +49,7 @@
     </selectedModels>
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="351" />
+    <option name="cachedIndexableFilesCount" value="350" />
     <option name="fileBasedEmbeddingIndicesEnabled" value="true" />
   </component>
   <component name="FlaskConsoleOptions" custom-start-script="import sys; print('Python %s on %s' % (sys.version, sys.platform)); sys.path.extend([WORKING_DIR_AND_PYTHON_PATHS])&#10;from flask.cli import ScriptInfo, NoAppException&#10;for module in [&quot;main.py&quot;, &quot;wsgi.py&quot;, &quot;app.py&quot;]:&#10;    try: locals().update(ScriptInfo(app_import_path=module, create_app=None).load_app().make_shell_context()); print(&quot;\nFlask App: %s&quot; % app.import_name); break&#10;    except NoAppException: pass">
@@ -79,48 +104,48 @@
     <option name="showLibraryContents" value="true" />
     <option name="showVisibilityIcons" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;Python.Backend (FastAPI).executor&quot;: &quot;Run&quot;,
-    &quot;Python.Fullstack.executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
-    &quot;ai.playground.ignore.import.keys.banner.in.settings&quot;: &quot;true&quot;,
-    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
-    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
-    &quot;javascript.preferred.runtime.type.id&quot;: &quot;node&quot;,
-    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;C:/Users/Fly/Documents/Trading agent/.claude&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;npm.Frontend (Vite).executor&quot;: &quot;Run&quot;,
-    &quot;npm.Tauri Dev.executor&quot;: &quot;Run&quot;,
-    &quot;run.code.analysis.last.selected.profile&quot;: &quot;pProject Default&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;reference.settingsdialog.IDE.editor.colors.Console Font&quot;,
-    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;,
-    &quot;ts.external.directory.path&quot;: &quot;C:\\Users\\Fly\\Documents\\Trading agent\\frontend\\node_modules\\typescript\\lib&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Python.Backend (FastAPI).executor": "Run",
+    "Python.Fullstack.executor": "Run",
+    "RunOnceActivity.MCP Project settings loaded": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "ai.playground.ignore.import.keys.banner.in.settings": "true",
+    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
+    "git-widget-placeholder": "master",
+    "ignore.virus.scanning.warn.message": "true",
+    "javascript.preferred.runtime.type.id": "node",
+    "junie.onboarding.icon.badge.shown": "true",
+    "last_opened_file_path": "C:/Users/Fly/Documents/Trading agent/.claude",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "npm.Frontend (Vite).executor": "Run",
+    "npm.Tauri Dev.executor": "Run",
+    "run.code.analysis.last.selected.profile": "pProject Default",
+    "settings.editor.selected.configurable": "com.intellij.mcpserver.settings",
+    "to.speed.mode.migration.done": "true",
+    "ts.external.directory.path": "C:\\Users\\Fly\\Documents\\Trading agent\\frontend\\node_modules\\typescript\\lib",
+    "vue.rearranger.settings.migration": "true"
   },
-  &quot;keyToStringList&quot;: {
-    &quot;DatabaseDriversLRU&quot;: [
-      &quot;mongo&quot;
+  "keyToStringList": {
+    "DatabaseDriversLRU": [
+      "mongo"
     ]
   }
-}</component>
+}]]></component>
   <component name="RecapSpentCounter">
-    <option name="endsOfQuotaMs" value="1769918493672" />
-    <option name="spentUsd" value="0.09457785" />
+    <option name="endsOfQuotaMs" value="1775102491433" />
+    <option name="spentUsd" value="0.0108115" />
   </component>
   <component name="RecapUselessUpdatesCounter">
-    <option name="suspendCountdown" value="0" />
+    <option name="suspendCountdown" value="-1" />
   </component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
@@ -282,6 +307,7 @@
       <workItem from="1772772883754" duration="2752000" />
       <workItem from="1772788515678" duration="2259000" />
       <workItem from="1772790887825" duration="39000" />
+      <workItem from="1773563932458" duration="2769000" />
     </task>
     <servers />
   </component>
