@@ -3,6 +3,7 @@
  * Uses CSS @property animation (compositor thread — zero JS cost).
  */
 
+import { useTheme } from "@mui/material/styles";
 import { useReducedMotion } from "framer-motion";
 import type { ReactNode } from "react";
 
@@ -19,12 +20,20 @@ export function AnimatedGradientBorder({
 	children,
 	borderWidth = 1,
 	borderRadius = 12,
-	colors = ["#F97316", "#8B5CF6", "#3B82F6", "#F97316"],
+	colors,
 	animationDuration = "3s",
 	disabled = false,
 }: AnimatedGradientBorderProps) {
 	const prefersReduced = useReducedMotion();
 	const isStatic = disabled || prefersReduced;
+	const theme = useTheme();
+
+	const resolvedColors = colors ?? [
+		theme.palette.primary.main,
+		theme.palette.primary.light,
+		theme.palette.primary.dark,
+		theme.palette.primary.main,
+	];
 
 	return (
 		<div
@@ -33,8 +42,8 @@ export function AnimatedGradientBorder({
 				borderRadius,
 				padding: borderWidth,
 				background: isStatic
-					? colors[0]
-					: `conic-gradient(from var(--gradient-angle), ${colors.join(", ")})`,
+					? resolvedColors[0]
+					: `conic-gradient(from var(--gradient-angle), ${resolvedColors.join(", ")})`,
 				animation: isStatic
 					? undefined
 					: `gradientBorderSpin ${animationDuration} linear infinite`,

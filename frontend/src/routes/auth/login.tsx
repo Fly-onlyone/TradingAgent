@@ -159,9 +159,9 @@ function LoginPage() {
 
                             <Typography variant="body2" color="text.secondary" align="center">
                                 Don't have an account?{" "}
-                                <Link to="/auth/register" style={{color: "#F97316"}}>
+                                <Box component={Link} to="/auth/register" sx={{color: "primary.main"}}>
                                     Sign up
-                                </Link>
+                                </Box>
                             </Typography>
                         </form>
                     </CardContent>

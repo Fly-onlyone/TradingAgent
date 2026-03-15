@@ -1,42 +1,71 @@
 /**
  * Morphing gradient blob backgrounds with staggered infinite animations.
+ * Blob count and cycle duration are driven by the active theme preset.
  */
 
+import { useTheme } from "@mui/material/styles";
 import { motion, useReducedMotion } from "framer-motion";
+import { useMemo } from "react";
 
-const blobs = [
+// Waypoint patterns — cycled by blob index
+const waypoints = [
 	{
-		color: "rgba(249, 115, 22, 0.25)",
-		size: 700,
 		x: ["20%", "60%", "30%", "20%"],
 		y: ["10%", "50%", "80%", "10%"],
-		duration: 20,
 	},
 	{
-		color: "rgba(139, 92, 246, 0.2)",
-		size: 600,
 		x: ["70%", "30%", "80%", "70%"],
 		y: ["60%", "20%", "40%", "60%"],
-		duration: 25,
 	},
 	{
-		color: "rgba(59, 130, 246, 0.15)",
-		size: 650,
 		x: ["40%", "80%", "20%", "40%"],
 		y: ["80%", "30%", "60%", "80%"],
-		duration: 18,
 	},
 	{
-		color: "rgba(16, 185, 129, 0.12)",
-		size: 550,
 		x: ["60%", "20%", "70%", "60%"],
 		y: ["30%", "70%", "20%", "30%"],
-		duration: 22,
+	},
+	{
+		x: ["50%", "10%", "60%", "50%"],
+		y: ["20%", "60%", "40%", "20%"],
 	},
 ];
 
+const sizes = [700, 600, 650, 550, 620];
+const alphas = [0.4, 0.25, 0.2, 0.18, 0.22];
+
 export function MeshBlobs() {
 	const prefersReduced = useReducedMotion();
+	const theme = useTheme();
+	const { meshBlobCount, meshBlobCycleMin, meshBlobCycleMax } =
+		theme.trading.animations;
+	const primaryMain = theme.palette.primary.main;
+
+	// Convert hex to RGB for rgba()
+	const hexToRgb = (hex: string) => {
+		const r = Number.parseInt(hex.slice(1, 3), 16);
+		const g = Number.parseInt(hex.slice(3, 5), 16);
+		const b = Number.parseInt(hex.slice(5, 7), 16);
+		return `${r}, ${g}, ${b}`;
+	};
+
+	const blobs = useMemo(() => {
+		const rgb = hexToRgb(primaryMain);
+		return Array.from({ length: meshBlobCount }, (_, i) => {
+			const wp = waypoints[i % waypoints.length];
+			const frac = meshBlobCount > 1 ? i / (meshBlobCount - 1) : 0;
+			const duration =
+				meshBlobCycleMin +
+				frac * (meshBlobCycleMax - meshBlobCycleMin);
+			return {
+				color: `rgba(${rgb}, ${alphas[i % alphas.length]})`,
+				size: sizes[i % sizes.length],
+				x: wp.x,
+				y: wp.y,
+				duration,
+			};
+		});
+	}, [meshBlobCount, meshBlobCycleMin, meshBlobCycleMax, primaryMain]);
 
 	return (
 		<div

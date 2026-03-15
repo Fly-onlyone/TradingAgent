@@ -5,10 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import ReactDOM from "react-dom/client";
+import { useAppTheme } from "./hooks/useAppTheme";
 // Import the generated route tree
 import { routeTree } from "./routeTree.gen";
-// Import theme
-import { theme } from "./theme";
 import { initializeFrontendLogging } from "./utils/frontendLogger";
 import { createFrontendSentryInitOptions } from "./utils/sentryConfig";
 
@@ -52,6 +51,16 @@ declare module "@tanstack/react-router" {
 
 initializeFrontendLogging();
 
+function App() {
+	const theme = useAppTheme();
+	return (
+		<ThemeProvider theme={theme}>
+			<CssBaseline />
+			<RouterProvider router={router} />
+		</ThemeProvider>
+	);
+}
+
 // Render the app
 const rootElement = document.getElementById("app");
 if (rootElement && !rootElement.innerHTML) {
@@ -60,10 +69,7 @@ if (rootElement && !rootElement.innerHTML) {
 		<StrictMode>
 			<Sentry.ErrorBoundary fallback={<p>Something went wrong</p>}>
 				<QueryClientProvider client={queryClient}>
-					<ThemeProvider theme={theme}>
-						<CssBaseline />
-						<RouterProvider router={router} />
-					</ThemeProvider>
+					<App />
 				</QueryClientProvider>
 			</Sentry.ErrorBoundary>
 		</StrictMode>,

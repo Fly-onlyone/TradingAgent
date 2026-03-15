@@ -4,6 +4,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { ThemeId } from "@/theme/presets";
 import { sendNativeNotification } from "@/utils/nativeNotifications";
 
 type SidebarState = "expanded" | "collapsed" | "hidden";
@@ -32,6 +33,7 @@ interface UIState {
 	sidebarWidth: number;
 
 	// Theme
+	themeId: ThemeId;
 	reducedMotion: boolean;
 	effectsEnabled: boolean;
 
@@ -49,6 +51,7 @@ interface UIState {
 	setSidebarState: (state: SidebarState) => void;
 	toggleSidebar: () => void;
 	setSidebarWidth: (width: number) => void;
+	setThemeId: (id: ThemeId) => void;
 	setReducedMotion: (reduced: boolean) => void;
 	setEffectsEnabled: (enabled: boolean) => void;
 
@@ -67,6 +70,7 @@ export const useUIStore = create<UIState>()(
 		(set, get) => ({
 			sidebarState: "expanded",
 			sidebarWidth: 240,
+			themeId: "solar" as ThemeId,
 			reducedMotion: false,
 			effectsEnabled: true,
 			notifications: [],
@@ -84,6 +88,7 @@ export const useUIStore = create<UIState>()(
 
 			setSidebarWidth: (sidebarWidth) => set({ sidebarWidth }),
 
+			setThemeId: (themeId) => set({ themeId }),
 			setReducedMotion: (reducedMotion) => set({ reducedMotion }),
 			setEffectsEnabled: (effectsEnabled) => set({ effectsEnabled }),
 
@@ -146,6 +151,7 @@ export const useUIStore = create<UIState>()(
 			partialize: (state) => ({
 				sidebarState: state.sidebarState,
 				sidebarWidth: state.sidebarWidth,
+				themeId: state.themeId,
 				reducedMotion: state.reducedMotion,
 				effectsEnabled: state.effectsEnabled,
 			}),

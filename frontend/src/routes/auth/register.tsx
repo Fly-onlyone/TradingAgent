@@ -224,9 +224,9 @@ function RegisterPage() {
 
 							<Typography variant="body2" color="text.secondary" align="center">
 								Already have an account?{" "}
-								<Link to="/auth/login" style={{ color: "#F97316" }}>
+								<Box component={Link} to="/auth/login" sx={{ color: "primary.main" }}>
 									Sign in
-								</Link>
+								</Box>
 							</Typography>
 						</form>
 					</CardContent>

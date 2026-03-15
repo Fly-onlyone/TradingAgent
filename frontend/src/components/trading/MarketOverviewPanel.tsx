@@ -100,7 +100,8 @@ export function MarketOverviewPanel({
             sx={{
                 height: "100%",
                 borderTop: "2px solid",
-                borderImage: "linear-gradient(135deg, #F97316 0%, #8B5CF6 100%) 1",
+                borderImage: (theme: any) =>
+                    `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%) 1`,
             }}
         >
             <CardContent>

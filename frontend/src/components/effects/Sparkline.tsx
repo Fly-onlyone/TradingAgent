@@ -2,6 +2,7 @@
  * Mini SVG sparkline chart with draw-in animation.
  */
 
+import { useTheme } from "@mui/material/styles";
 import { motion, useReducedMotion } from "framer-motion";
 import { useId } from "react";
 
@@ -17,9 +18,12 @@ export function Sparkline({
 	data,
 	width = 120,
 	height = 32,
-	strokeColor = "#F97316",
-	fillColor = "rgba(249, 115, 22, 0.15)",
+	strokeColor,
+	fillColor,
 }: SparklineProps) {
+	const theme = useTheme();
+	const resolvedStroke = strokeColor ?? theme.palette.primary.main;
+	const resolvedFill = fillColor ?? `rgba(${theme.trading.primaryRgb}, 0.15)`;
 	const prefersReduced = useReducedMotion();
 	const gradientId = useId();
 
@@ -56,7 +60,7 @@ export function Sparkline({
 			{/* Gradient fill */}
 			<defs>
 				<linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-					<stop offset="0%" stopColor={fillColor} />
+					<stop offset="0%" stopColor={resolvedFill} />
 					<stop offset="100%" stopColor="transparent" />
 				</linearGradient>
 			</defs>
@@ -66,7 +70,7 @@ export function Sparkline({
 			<motion.path
 				d={linePath}
 				fill="none"
-				stroke={strokeColor}
+				stroke={resolvedStroke}
 				strokeWidth={1.5}
 				strokeLinecap="round"
 				strokeLinejoin="round"

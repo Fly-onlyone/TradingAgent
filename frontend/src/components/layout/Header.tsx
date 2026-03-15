@@ -21,6 +21,7 @@ import {
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { useState } from "react";
+import { ThemeSelector } from "@/components/common/ThemeSelector";
 import { useAuth } from "@/hooks/useAuth";
 import { useUIStore } from "@/store/uiStore";
 
@@ -49,7 +50,11 @@ export function Header() {
 			position="fixed"
 			sx={{
 				zIndex: (theme) => theme.zIndex.drawer + 1,
-				background: "rgba(10,14,23,0.85)",
+				background: (theme) =>
+					theme.trading.glass.header.background.replace(
+						/[\d.]+\)$/,
+						"0.85)",
+					),
 				backdropFilter: "blur(20px)",
 				borderBottom: "none",
 				"&::after": {
@@ -59,7 +64,8 @@ export function Header() {
 					left: 0,
 					right: 0,
 					height: "1px",
-					background: "linear-gradient(90deg, #F97316, #8B5CF6, #F97316)",
+					background: (theme) =>
+						`linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.primary.light}, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`,
 					backgroundSize: "200% 100%",
 					animation: "gradientSlide 4s linear infinite",
 				},
@@ -74,6 +80,9 @@ export function Header() {
 
 				{/* Actions */}
 				<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+					{/* Theme Selector */}
+					<ThemeSelector />
+
 					{/* Notifications */}
 					<Tooltip title="Notifications">
 						<IconButton
@@ -89,7 +98,9 @@ export function Header() {
 							<Badge badgeContent={unreadCount} color="error">
 								{unreadCount > 0 ? (
 									<motion.div
-										animate={{ rotate: [0, 15, -15, 10, -10, 0] }}
+										animate={{
+											rotate: [0, 15, -15, 10, -10, 0],
+										}}
 										transition={{
 											duration: 0.5,
 											delay: 1,
@@ -123,7 +134,8 @@ export function Header() {
 										position: "absolute",
 										inset: -2,
 										borderRadius: "50%",
-										background: "linear-gradient(135deg, #F97316, #8B5CF6)",
+										background: (theme) =>
+											`linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.light})`,
 										opacity: 0,
 										transition: "opacity 0.3s ease",
 										zIndex: -1,
@@ -155,13 +167,19 @@ export function Header() {
 						}}
 					>
 						<Box sx={{ px: 2, py: 1 }}>
-							<Typography variant="subtitle2">{user?.email}</Typography>
+							<Typography variant="subtitle2">
+								{user?.email}
+							</Typography>
 							<Typography variant="caption" color="text.secondary">
 								{user?.username || "Trader"}
 							</Typography>
 						</Box>
 						<Divider />
-						<MenuItem component={Link} to="/settings" onClick={handleClose}>
+						<MenuItem
+							component={Link}
+							to="/settings"
+							onClick={handleClose}
+						>
 							<SettingsIcon sx={{ mr: 1.5, fontSize: 20 }} />
 							Settings
 						</MenuItem>

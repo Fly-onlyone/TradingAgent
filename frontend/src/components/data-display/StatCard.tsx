@@ -5,7 +5,7 @@
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import TrendingFlatIcon from "@mui/icons-material/TrendingFlat";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
-import { Box, Card, CardContent, Typography } from "@mui/material";
+import { Box, Card, CardContent, Typography, useTheme } from "@mui/material";
 import { motion, useReducedMotion } from "framer-motion";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
@@ -13,7 +13,6 @@ import { ShimmerSkeleton } from "@/components/common/ShimmerSkeleton";
 import { RollingDigits } from "@/components/effects/RollingDigits";
 import { Sparkline } from "@/components/effects/Sparkline";
 import { useTilt } from "@/hooks/useTilt";
-import { glowEffects } from "@/theme/shadows";
 import { staggerCascade } from "@/utils/animations/variants";
 
 interface StatCardProps {
@@ -43,6 +42,9 @@ export function StatCard({
 	sparklineData,
 	useRolling = false,
 }: StatCardProps) {
+	const theme = useTheme();
+	const primaryRgb = theme.trading.primaryRgb;
+
 	// Determine trend from change if not provided
 	const effectiveTrend =
 		trend ||
@@ -62,7 +64,9 @@ export function StatCard({
 	useEffect(() => {
 		if (prevValueRef.current !== value && !loading) {
 			const prev =
-				typeof prevValueRef.current === "number" ? prevValueRef.current : 0;
+				typeof prevValueRef.current === "number"
+					? prevValueRef.current
+					: 0;
 			const curr = typeof value === "number" ? value : 0;
 			setFlashTrend(curr >= prev ? "up" : "down");
 			setFlashKey((k) => k + 1);
@@ -102,28 +106,12 @@ export function StatCard({
 				? TrendingDownIcon
 				: TrendingFlatIcon;
 
-	const cardAccent = {
-		up: {
-			borderColor: "rgba(16,185,129,0.25)",
-			leftColor: "#10B981",
-			hoverBorder: "rgba(16,185,129,0.6)",
-			hoverGlow: `0 0 0 1px rgba(16,185,129,0.35), ${glowEffects.success}`,
-		},
-		down: {
-			borderColor: "rgba(239,68,68,0.25)",
-			leftColor: "#EF4444",
-			hoverBorder: "rgba(239,68,68,0.6)",
-			hoverGlow: `0 0 0 1px rgba(239,68,68,0.35), ${glowEffects.error}`,
-		},
-		neutral: {
-			borderColor: "rgba(249,115,22,0.2)",
-			leftColor: "#F97316",
-			hoverBorder: "rgba(249,115,22,0.7)",
-			hoverGlow: `0 0 0 1px rgba(249,115,22,0.4), ${glowEffects.primary}`,
-		},
+	const accent = {
+		borderColor: `rgba(${primaryRgb},0.2)`,
+		leftColor: theme.palette.primary.main,
+		hoverBorder: `rgba(${primaryRgb},0.7)`,
+		hoverGlow: `0 0 0 1px rgba(${primaryRgb},0.4), ${theme.trading.glow.primary}`,
 	};
-
-	const accent = cardAccent[effectiveTrend ?? "neutral"];
 	const tiltRef = useRef<HTMLDivElement>(null);
 	const prefersReduced = useReducedMotion();
 	const {
@@ -135,7 +123,10 @@ export function StatCard({
 	return (
 		<motion.div
 			ref={tiltRef}
-			style={prefersReduced ? undefined : tiltStyle}
+			style={{
+				height: "100%",
+				...(prefersReduced ? undefined : tiltStyle),
+			}}
 			onMouseMove={prefersReduced ? undefined : onTiltMove}
 			onMouseLeave={prefersReduced ? undefined : onTiltLeave}
 		>
@@ -146,7 +137,7 @@ export function StatCard({
 				animate={flashKey > 0 ? flashColors : undefined}
 				sx={{
 					height: "100%",
-					background: (theme) => theme.trading.glass.card.background,
+					background: (t) => t.trading.glass.card.background,
 					backdropFilter: "blur(12px)",
 					border: `1px solid ${accent.borderColor}`,
 					borderLeft: `3px solid ${accent.leftColor}`,
@@ -166,13 +157,18 @@ export function StatCard({
 							mb: 2,
 						}}
 					>
-						<Typography variant="body2" color="text.secondary" fontWeight={500}>
+						<Typography
+							variant="body2"
+							color="text.secondary"
+							fontWeight={500}
+						>
 							{title}
 						</Typography>
 						{icon && (
 							<motion.div
 								animate={
-									effectiveTrend === "up" || effectiveTrend === "down"
+									effectiveTrend === "up" ||
+									effectiveTrend === "down"
 										? {
 												scale: [1, 1.1, 1],
 												transition: {
@@ -195,10 +191,13 @@ export function StatCard({
 										justifyContent: "center",
 										background:
 											effectiveTrend === "up"
-												? "linear-gradient(135deg, #10B981, #34D399)"
+												? (t) =>
+														`linear-gradient(135deg, ${t.palette.success.main}, ${t.palette.success.light})`
 												: effectiveTrend === "down"
-													? "linear-gradient(135deg, #EF4444, #F87171)"
-													: "linear-gradient(135deg, #F97316, #FB923C)",
+													? (t) =>
+															`linear-gradient(135deg, ${t.palette.error.main}, ${t.palette.error.light})`
+													: (t) =>
+															`linear-gradient(135deg, ${t.palette.primary.main}, ${t.palette.primary.light})`,
 										"& svg": { fontSize: 20 },
 									}}
 								>
@@ -210,8 +209,16 @@ export function StatCard({
 
 					{loading ? (
 						<>
-							<ShimmerSkeleton variant="text" width="60%" height={40} />
-							<ShimmerSkeleton variant="text" width="40%" height={24} />
+							<ShimmerSkeleton
+								variant="text"
+								width="60%"
+								height={40}
+							/>
+							<ShimmerSkeleton
+								variant="text"
+								width="40%"
+								height={24}
+							/>
 						</>
 					) : (
 						<>
@@ -220,7 +227,7 @@ export function StatCard({
 								fontWeight={700}
 								component="div"
 								sx={{
-									fontFamily: (theme) => theme.trading.mono,
+									fontFamily: (t) => t.trading.mono,
 									mb: 1,
 								}}
 							>
@@ -245,22 +252,31 @@ export function StatCard({
 										data={sparklineData}
 										strokeColor={
 											effectiveTrend === "up"
-												? "#10B981"
+												? theme.palette.success.main
 												: effectiveTrend === "down"
-													? "#EF4444"
-													: "#F97316"
+													? theme.palette.error.main
+													: theme.palette.primary
+															.main
 										}
 									/>
 								</Box>
 							)}
 
 							{(change !== undefined || changeLabel) && (
-								<Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+								<Box
+									sx={{
+										display: "flex",
+										alignItems: "center",
+										gap: 0.5,
+									}}
+								>
 									{effectiveTrend && (
 										<TrendIcon
 											sx={{
 												fontSize: 18,
-												color: trendColors[effectiveTrend],
+												color: trendColors[
+													effectiveTrend
+												],
 											}}
 										/>
 									)}
@@ -268,7 +284,9 @@ export function StatCard({
 										<Typography
 											variant="body2"
 											sx={{
-												color: trendColors[effectiveTrend || "neutral"],
+												color: trendColors[
+													effectiveTrend || "neutral"
+												],
 												fontWeight: 500,
 											}}
 										>
@@ -277,7 +295,10 @@ export function StatCard({
 										</Typography>
 									)}
 									{changeLabel && (
-										<Typography variant="body2" color="text.secondary">
+										<Typography
+											variant="body2"
+											color="text.secondary"
+										>
 											{changeLabel}
 										</Typography>
 									)}

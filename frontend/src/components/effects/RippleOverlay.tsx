@@ -41,8 +41,9 @@ interface RippleContainerProps {
 
 export function RippleContainer({
 	ripples,
-	color = "rgba(249, 115, 22, 0.2)",
+	color,
 }: RippleContainerProps) {
+	const resolvedColor = color ?? "rgba(var(--ripple-rgb, 249, 115, 22), 0.2)";
 	return (
 		<AnimatePresence>
 			{ripples.map((ripple) => (
@@ -65,7 +66,7 @@ export function RippleContainer({
 						width: 60,
 						height: 60,
 						borderRadius: "50%",
-						background: color,
+						background: resolvedColor,
 						pointerEvents: "none",
 						transform: "translate(-50%, -50%)",
 						zIndex: 10,

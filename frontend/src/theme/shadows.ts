@@ -4,8 +4,8 @@
  */
 
 import type { Shadows } from "@mui/material/styles";
+import type { ThemePreset } from "./presets";
 
-// Custom shadow definitions for dark mode
 const shadowColor = "0, 0, 0";
 
 export const shadows: Shadows = [
@@ -36,26 +36,24 @@ export const shadows: Shadows = [
 	`0 64px 90px -24px rgba(${shadowColor}, 0.7)`,
 ];
 
-// Glow effects for interactive elements
-export const glowEffects = {
-	primary: "0 0 20px rgba(249, 115, 22, 0.3)",
-	primaryIntense:
-		"0 0 30px rgba(249, 115, 22, 0.5), 0 0 60px rgba(249, 115, 22, 0.2)",
-	secondary: "0 0 20px rgba(139, 92, 246, 0.3)",
-	secondaryIntense:
-		"0 0 30px rgba(139, 92, 246, 0.5), 0 0 60px rgba(139, 92, 246, 0.2)",
-	success: "0 0 20px rgba(16, 185, 129, 0.3)",
-	successPulse:
-		"0 0 20px rgba(16, 185, 129, 0.4), 0 0 40px rgba(16, 185, 129, 0.15)",
-	error: "0 0 20px rgba(239, 68, 68, 0.3)",
-	errorPulse:
-		"0 0 20px rgba(239, 68, 68, 0.4), 0 0 40px rgba(239, 68, 68, 0.15)",
-	info: "0 0 20px rgba(59, 130, 246, 0.3)",
-	warning: "0 0 20px rgba(251, 191, 36, 0.3)",
-	cardHover:
-		"0 20px 40px rgba(0, 0, 0, 0.35), 0 0 20px rgba(249, 115, 22, 0.15)",
-	cardActive:
-		"0 0 24px rgba(249, 115, 22, 0.3), 0 12px 40px rgba(0, 0, 0, 0.3)",
-};
+export function createGlowEffects(preset: ThemePreset) {
+	const { primaryRgb, secondaryRgb } = preset;
+	return {
+		primary: `0 0 20px rgba(${primaryRgb}, 0.3)`,
+		primaryIntense: `0 0 30px rgba(${primaryRgb}, 0.5), 0 0 60px rgba(${primaryRgb}, 0.2)`,
+		secondary: `0 0 20px rgba(${secondaryRgb}, 0.3)`,
+		secondaryIntense: `0 0 30px rgba(${secondaryRgb}, 0.5), 0 0 60px rgba(${secondaryRgb}, 0.2)`,
+		success: "0 0 20px rgba(16, 185, 129, 0.3)",
+		successPulse:
+			"0 0 20px rgba(16, 185, 129, 0.4), 0 0 40px rgba(16, 185, 129, 0.15)",
+		error: "0 0 20px rgba(239, 68, 68, 0.3)",
+		errorPulse:
+			"0 0 20px rgba(239, 68, 68, 0.4), 0 0 40px rgba(239, 68, 68, 0.15)",
+		info: "0 0 20px rgba(59, 130, 246, 0.3)",
+		warning: "0 0 20px rgba(251, 191, 36, 0.3)",
+		cardHover: `0 20px 40px rgba(0, 0, 0, 0.35), 0 0 20px rgba(${primaryRgb}, 0.15)`,
+		cardActive: `0 0 24px rgba(${primaryRgb}, 0.3), 0 12px 40px rgba(0, 0, 0, 0.3)`,
+	};
+}
 
 export const glowTransition = "box-shadow 0.3s ease";

@@ -99,7 +99,7 @@ export const scaleIn: Variants = {
 
 // ============ Card Hover ============
 
-export const cardHover = {
+export const createCardHover = (primaryRgb = "249, 115, 22") => ({
 	rest: {
 		y: 0,
 		scale: 1,
@@ -108,15 +108,17 @@ export const cardHover = {
 	hover: {
 		y: -8,
 		scale: 1.03,
-		boxShadow:
-			"0 20px 40px rgba(0, 0, 0, 0.35), 0 0 20px rgba(249, 115, 22, 0.15)",
+		boxShadow: `0 20px 40px rgba(0, 0, 0, 0.35), 0 0 20px rgba(${primaryRgb}, 0.15)`,
 		transition: { type: "spring", stiffness: 400, damping: 30 },
 	},
 	tap: {
 		scale: 0.98,
 		transition: { type: "spring", stiffness: 400, damping: 30 },
 	},
-};
+});
+
+/** @deprecated Use createCardHover() for theme-aware glow */
+export const cardHover = createCardHover();
 
 // ============ List Stagger (table rows) ============
 

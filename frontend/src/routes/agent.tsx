@@ -647,13 +647,13 @@ function AgentPage() {
 								onClick={() => sendMessage(prompt)}
 								sx={{
 									cursor: "pointer",
-									borderColor: "rgba(249,115,22,0.3)",
+									borderColor: "divider",
 									color: "text.secondary",
 									fontSize: "0.7rem",
 									"&:hover": {
 										borderColor: "primary.main",
 										color: "primary.main",
-										bgcolor: "rgba(249,115,22,0.08)",
+										bgcolor: "action.hover",
 									},
 								}}
 							/>
@@ -666,7 +666,8 @@ function AgentPage() {
 							p: 2,
 							pt: 1,
 							"& .MuiOutlinedInput-root:focus-within": {
-								boxShadow: "0 0 0 3px rgba(249, 115, 22, 0.15)",
+								boxShadow: (t: any) =>
+									`0 0 0 3px rgba(${t.trading.primaryRgb}, 0.15)`,
 								borderRadius: 1,
 							},
 						}}

@@ -22,6 +22,7 @@ import {
 	ListItemIcon,
 	ListItemText,
 	Typography,
+	useTheme,
 } from "@mui/material";
 import { Link, useLocation } from "@tanstack/react-router";
 import { LayoutGroup, motion } from "framer-motion";
@@ -64,6 +65,9 @@ function MenuSection({
 	currentPath: string;
 	onNavigate: (path: string) => void;
 }) {
+	const theme = useTheme();
+	const primaryRgb = theme.trading.primaryRgb;
+
 	return (
 		<>
 			{items.map((item) => {
@@ -71,7 +75,11 @@ function MenuSection({
 				const Icon = item.icon;
 
 				return (
-					<ListItem key={item.path} disablePadding sx={{ display: "block" }}>
+					<ListItem
+						key={item.path}
+						disablePadding
+						sx={{ display: "block" }}
+					>
 						<ListItemButton
 							component={Link}
 							to={item.path}
@@ -79,14 +87,18 @@ function MenuSection({
 							onClick={() => onNavigate(item.path)}
 							sx={{
 								minHeight: 44,
-								justifyContent: isExpanded ? "initial" : "center",
+								justifyContent: isExpanded
+									? "initial"
+									: "center",
 								px: isExpanded ? 2 : 1.5,
-								bgcolor: isActive ? "rgba(249, 115, 22, 0.1)" : "transparent",
+								bgcolor: isActive
+									? `rgba(${primaryRgb}, 0.1)`
+									: "transparent",
 								transition:
 									"transform 0.2s ease-out, background-color 0.2s ease",
 								"&:hover": {
 									bgcolor: isActive
-										? "rgba(249, 115, 22, 0.15)"
+										? `rgba(${primaryRgb}, 0.15)`
 										: "rgba(255, 255, 255, 0.05)",
 									transform: "translateX(4px)",
 									"& .nav-icon": {
@@ -102,8 +114,11 @@ function MenuSection({
 									minWidth: 0,
 									mr: isExpanded ? 2 : "auto",
 									justifyContent: "center",
-									color: isActive ? "primary.main" : "text.secondary",
-									transition: "color 0.2s ease, transform 0.2s ease",
+									color: isActive
+										? "primary.main"
+										: "text.secondary",
+									transition:
+										"color 0.2s ease, transform 0.2s ease",
 								}}
 							>
 								<Icon fontSize="small" />
@@ -119,10 +134,8 @@ function MenuSection({
 										width: 3,
 										height: 24,
 										borderRadius: "0 4px 4px 0",
-										background:
-											"radial-gradient(ellipse at left, rgba(249,115,22,0.6) 0%, transparent 70%), #F97316",
-										boxShadow:
-											"0 0 16px rgba(249,115,22,0.7), 0 0 6px rgba(249,115,22,0.5), 0 0 30px rgba(249,115,22,0.2)",
+										background: `radial-gradient(ellipse at left, rgba(${primaryRgb},0.6) 0%, transparent 70%), ${theme.palette.primary.main}`,
+										boxShadow: `0 0 16px rgba(${primaryRgb},0.7), 0 0 6px rgba(${primaryRgb},0.5), 0 0 30px rgba(${primaryRgb},0.2)`,
 									}}
 									transition={spring.snappy}
 								/>
@@ -134,7 +147,9 @@ function MenuSection({
 										primary: {
 											fontSize: "0.875rem",
 											fontWeight: isActive ? 600 : 400,
-											color: isActive ? "primary.main" : "text.primary",
+											color: isActive
+												? "primary.main"
+												: "text.primary",
 										},
 									}}
 								/>
@@ -154,10 +169,13 @@ export function Sidebar() {
 	const [isHovered, setIsHovered] = useState(false);
 	const isHidden = sidebarState === "hidden";
 	const isSuperuser = user?.isSuperuser ?? false;
+	const theme = useTheme();
 
 	const isPinned = sidebarState === "expanded";
 	const isExpanded = isPinned || isHovered;
 	const drawerWidth = isExpanded ? DRAWER_WIDTH : COLLAPSED_WIDTH;
+
+	const primaryRgb = theme.trading.primaryRgb;
 
 	const handleNavigate = useCallback(
 		(to: string) => {
@@ -204,7 +222,7 @@ export function Sidebar() {
 							color: "primary.main",
 							fontSize: 22,
 							flexShrink: 0,
-							filter: "drop-shadow(0 0 6px rgba(249,115,22,0.4))",
+							filter: `drop-shadow(0 0 6px rgba(${primaryRgb},0.4))`,
 						}}
 					/>
 					{isExpanded && (
@@ -215,17 +233,24 @@ export function Sidebar() {
 								noWrap
 								sx={{
 									ml: 1.5,
-									background:
-										"linear-gradient(135deg, #F97316 0%, #8B5CF6 100%)",
+									background: (t) =>
+										`linear-gradient(135deg, ${t.palette.primary.main} 0%, ${t.palette.primary.light} 100%)`,
 									backgroundSize: "200% 100%",
 									backgroundClip: "text",
 									WebkitBackgroundClip: "text",
 									WebkitTextFillColor: "transparent",
-									animation: "brandShine 3.5s linear infinite",
+									animation:
+										"brandShine 3.5s linear infinite",
 									"@keyframes brandShine": {
-										"0%": { backgroundPosition: "0% 50%" },
-										"50%": { backgroundPosition: "100% 50%" },
-										"100%": { backgroundPosition: "0% 50%" },
+										"0%": {
+											backgroundPosition: "0% 50%",
+										},
+										"50%": {
+											backgroundPosition: "100% 50%",
+										},
+										"100%": {
+											backgroundPosition: "0% 50%",
+										},
 									},
 								}}
 							>
@@ -236,7 +261,9 @@ export function Sidebar() {
 								onClick={toggleSidebar}
 								sx={{
 									ml: "auto",
-									color: isPinned ? "primary.main" : "text.secondary",
+									color: isPinned
+										? "primary.main"
+										: "text.secondary",
 									"&:hover": { color: "primary.main" },
 								}}
 							>

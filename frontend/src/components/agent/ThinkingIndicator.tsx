@@ -129,8 +129,8 @@ export function ThinkingIndicator({
 								height: 2,
 								borderRadius: 1,
 								mb: thinkingContent || toolCalls.length > 0 ? 1 : 0,
-								background:
-									"linear-gradient(90deg, transparent 0%, rgba(249,115,22,0.4) 50%, transparent 100%)",
+								background: (theme: any) =>
+									`linear-gradient(90deg, transparent 0%, ${theme.palette.primary.main}66 50%, transparent 100%)`,
 								backgroundSize: "200% 100%",
 								animation: "shimmerSlide 1.5s ease-in-out infinite",
 								"@keyframes shimmerSlide": {
