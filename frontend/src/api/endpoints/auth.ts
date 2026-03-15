@@ -24,8 +24,9 @@ export const authApi = {
      * Login with email and password
      */
     async login(credentials: UserLogin): Promise<AuthTokens> {
+        const normalizedEmail = credentials.email.trim().toLowerCase();
         const formData = new URLSearchParams();
-        formData.append("username", credentials.email);
+        formData.append("username", normalizedEmail);
         formData.append("password", credentials.password);
 
         const response = await apiClient.post<AuthTokens>("/auth/token", formData, {
@@ -40,9 +41,13 @@ export const authApi = {
      * Register new user
      */
     async register(data: UserCreate): Promise<User> {
+        const normalizedData = {
+            ...data,
+            email: data.email.trim().toLowerCase(),
+        };
         const response = await apiClient.post<Record<string, unknown>>(
             "/auth/register",
-            data,
+            normalizedData,
         );
         return transformUser(response.data);
     },

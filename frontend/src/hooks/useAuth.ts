@@ -8,6 +8,7 @@ import {useAuthStore} from '@/store/authStore';
 import {authApi} from '@/api/endpoints/auth';
 import {notify} from '@/store/uiStore';
 import type {UserLogin, UserCreate} from '@/types';
+import {getErrorMessage} from '@/utils/errors';
 
 export function useAuth() {
     const navigate = useNavigate();
@@ -21,9 +22,9 @@ export function useAuth() {
                 const userData = await authApi.getMe();
                 login(userData, tokens.access_token);
                 notify.success('Welcome back!', `Logged in as ${userData.email}`);
-                navigate({to: '/'});
+                void navigate({to: '/'});
             } catch (error) {
-                notify.error('Login failed', (error as Error).message);
+                notify.error('Login failed', getErrorMessage(error, 'Login failed'));
                 throw error;
             } finally {
                 setLoading(false);
@@ -38,9 +39,9 @@ export function useAuth() {
                 setLoading(true);
                 await authApi.register(data);
                 notify.success('Account created', 'Please log in with your credentials');
-                navigate({to: '/auth/login'});
+                void navigate({to: '/auth/login'});
             } catch (error) {
-                notify.error('Registration failed', (error as Error).message);
+                notify.error('Registration failed', getErrorMessage(error, 'Registration failed'));
                 throw error;
             } finally {
                 setLoading(false);
@@ -53,7 +54,7 @@ export function useAuth() {
         authApi.logout();
         logout();
         notify.info('Logged out', 'You have been logged out');
-        navigate({to: '/auth/login'});
+        void navigate({to: '/auth/login'});
     }, [logout, navigate]);
 
     return {
@@ -73,7 +74,7 @@ export function useRequireAuth() {
 
     useEffect(() => {
         if (!isLoading && !isAuthenticated) {
-            navigate({to: '/auth/login'});
+            void navigate({to: '/auth/login'});
         }
     }, [isAuthenticated, isLoading, navigate]);
 
