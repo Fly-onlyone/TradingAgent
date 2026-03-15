@@ -13,17 +13,12 @@ export const components: Components<Theme> = {
 				scrollbarColor: "#334155 #0a0e17",
 				scrollBehavior: "smooth",
 				background: "#0a0e17",
-				backgroundImage:
-					"radial-gradient(at 20% 80%, rgba(249,115,22,0.12) 0%, transparent 50%), radial-gradient(at 80% 20%, rgba(139,92,246,0.10) 0%, transparent 50%), radial-gradient(at 50% 50%, rgba(59,130,246,0.06) 0%, transparent 60%)",
-				backgroundSize: "200% 200%",
-				backgroundAttachment: "fixed",
-				animation: "meshDrift 20s ease infinite",
 				"&::-webkit-scrollbar, & *::-webkit-scrollbar": {
 					width: 8,
 					height: 8,
 				},
 				"&::-webkit-scrollbar-track, & *::-webkit-scrollbar-track": {
-					background: "#0a0e17",
+					background: "transparent",
 				},
 				"&::-webkit-scrollbar-thumb, & *::-webkit-scrollbar-thumb": {
 					background: "#334155",
@@ -37,6 +32,15 @@ export const components: Components<Theme> = {
 			"@keyframes shimmer": {
 				"0%": { backgroundPosition: "-200% 0" },
 				"100%": { backgroundPosition: "200% 0" },
+			},
+			"@property --gradient-angle": {
+				syntax: "'<angle>'",
+				initialValue: "0deg",
+				inherits: "false",
+			},
+			"@keyframes gradientBorderSpin": {
+				"0%": { "--gradient-angle": "0deg" },
+				"100%": { "--gradient-angle": "360deg" },
 			},
 			"@keyframes meshDrift": {
 				"0%": { backgroundPosition: "0% 0%" },
@@ -87,12 +91,13 @@ export const components: Components<Theme> = {
 		styleOverrides: {
 			root: {
 				...glassStyles.card,
-				boxShadow: "0 4px 20px rgba(0, 0, 0, 0.25)",
-				transition: "border-color 0.2s ease, box-shadow 0.2s ease",
+				boxShadow: "0 4px 20px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05)",
+				transition: "border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease",
 				"&:hover": {
-					borderColor: "rgba(255, 255, 255, 0.35)",
+					borderColor: "rgba(255, 255, 255, 0.15)",
+					background: "rgba(30, 41, 59, 0.65)",
 					boxShadow:
-						"0 4px 20px rgba(0, 0, 0, 0.25), 0 0 16px rgba(255, 255, 255, 0.06)",
+						"0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08)",
 				},
 			},
 		},
@@ -101,6 +106,9 @@ export const components: Components<Theme> = {
 		styleOverrides: {
 			root: {
 				backgroundImage: "none",
+				backgroundColor: "rgba(30, 41, 59, 0.6)",
+				backdropFilter: "blur(16px)",
+				WebkitBackdropFilter: "blur(16px)",
 			},
 			elevation1: {
 				boxShadow: "0 1px 3px rgba(0, 0, 0, 0.2)",
@@ -152,13 +160,16 @@ export const components: Components<Theme> = {
 	MuiTooltip: {
 		styleOverrides: {
 			tooltip: {
-				backgroundColor: "#334155",
+				backgroundColor: "rgba(51, 65, 85, 0.8)",
+				backdropFilter: "blur(12px)",
+				WebkitBackdropFilter: "blur(12px)",
 				fontSize: "0.75rem",
 				borderRadius: 6,
 				padding: "6px 12px",
+				border: "1px solid rgba(255, 255, 255, 0.06)",
 			},
 			arrow: {
-				color: "#334155",
+				color: "rgba(51, 65, 85, 0.8)",
 			},
 		},
 	},
@@ -166,7 +177,7 @@ export const components: Components<Theme> = {
 		styleOverrides: {
 			paper: {
 				...glassStyles.card,
-				boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5)",
+				boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(249, 115, 22, 0.05)",
 				animation: "dialogScaleIn 0.2s cubic-bezier(0.34,1.56,0.64,1)",
 				"@keyframes dialogScaleIn": {
 					"0%": { opacity: 0, transform: "scale(0.92)" },
@@ -178,17 +189,14 @@ export const components: Components<Theme> = {
 	MuiDrawer: {
 		styleOverrides: {
 			paper: {
-				backgroundColor: "#1E293B",
-				borderRight: "1px solid rgba(51, 65, 85, 0.5)",
+				...glassStyles.sidebar,
 			},
 		},
 	},
 	MuiAppBar: {
 		styleOverrides: {
 			root: {
-				backgroundColor: "rgba(15, 23, 42, 0.8)",
-				backdropFilter: "blur(12px)",
-				borderBottom: "1px solid rgba(51, 65, 85, 0.5)",
+				...glassStyles.header,
 				boxShadow: "none",
 			},
 		},
@@ -217,7 +225,7 @@ export const components: Components<Theme> = {
 			},
 			head: {
 				fontWeight: 600,
-				backgroundColor: "rgba(15, 23, 42, 0.5)",
+				backgroundColor: "rgba(15, 23, 42, 0.3)",
 			},
 		},
 	},
@@ -270,6 +278,8 @@ export const components: Components<Theme> = {
 		styleOverrides: {
 			root: {
 				borderRadius: 8,
+				backdropFilter: "blur(12px)",
+				WebkitBackdropFilter: "blur(12px)",
 			},
 			standardSuccess: {
 				backgroundColor: "rgba(16, 185, 129, 0.15)",
@@ -302,8 +312,9 @@ export const components: Components<Theme> = {
 	MuiBackdrop: {
 		styleOverrides: {
 			root: {
-				backgroundColor: "rgba(15, 23, 42, 0.8)",
-				backdropFilter: "blur(4px)",
+				backgroundColor: "rgba(10, 14, 23, 0.6)",
+				backdropFilter: "blur(8px)",
+				WebkitBackdropFilter: "blur(8px)",
 			},
 		},
 	},

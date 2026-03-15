@@ -7,6 +7,9 @@ import { useRouterState } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
+import { CursorGlow } from "@/components/effects/CursorGlow";
+import { MeshBlobs } from "@/components/effects/MeshBlobs";
+import { ParticleGrid } from "@/components/effects/ParticleGrid";
 import { useUIStore } from "@/store/uiStore";
 import {
 	markNavEnd,
@@ -20,7 +23,7 @@ interface AppShellProps {
 }
 
 export function AppShell({ children }: AppShellProps) {
-	const { notifications, removeNotification } = useUIStore();
+	const { notifications, removeNotification, effectsEnabled } = useUIStore();
 	const currentPath = useRouterState({
 		select: (state) => state.location.pathname,
 	});
@@ -35,8 +38,19 @@ export function AppShell({ children }: AppShellProps) {
 
 	const showLayout = !isAuthPage;
 
+	const showEffects = showLayout && effectsEnabled;
+
 	return (
 		<Box sx={{ display: "flex", minHeight: "100vh" }}>
+			{/* Background Effects Layer */}
+			{showEffects && (
+				<>
+					<MeshBlobs />
+					<ParticleGrid />
+					<CursorGlow />
+				</>
+			)}
+
 			{/* Header - only show when authenticated */}
 			{showLayout && <Header />}
 
@@ -48,11 +62,9 @@ export function AppShell({ children }: AppShellProps) {
 				component="main"
 				sx={{
 					flexGrow: 1,
-					bgcolor: "background.default",
 					minHeight: "100vh",
-					backgroundImage:
-						"radial-gradient(at 20% 80%, rgba(249,115,22,0.05) 0%, transparent 50%), radial-gradient(at 80% 20%, rgba(139,92,246,0.04) 0%, transparent 50%)",
-					backgroundAttachment: "fixed",
+					position: "relative",
+					zIndex: 1,
 					transition: (theme) =>
 						theme.transitions.create("width", {
 							easing: theme.transitions.easing.sharp,

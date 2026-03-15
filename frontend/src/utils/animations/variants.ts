@@ -190,6 +190,63 @@ export const glowPulse = (color = "249, 115, 22"): Variants => ({
 	},
 });
 
+// ============ Scroll Reveal (directional) ============
+
+export const scrollReveal = {
+	up: {
+		hidden: { opacity: 0, y: 40 },
+		visible: {
+			opacity: 1,
+			y: 0,
+			transition: { type: "spring", stiffness: 300, damping: 30 },
+		},
+	} as Variants,
+	down: {
+		hidden: { opacity: 0, y: -40 },
+		visible: {
+			opacity: 1,
+			y: 0,
+			transition: { type: "spring", stiffness: 300, damping: 30 },
+		},
+	} as Variants,
+	left: {
+		hidden: { opacity: 0, x: -40 },
+		visible: {
+			opacity: 1,
+			x: 0,
+			transition: { type: "spring", stiffness: 300, damping: 30 },
+		},
+	} as Variants,
+	right: {
+		hidden: { opacity: 0, x: 40 },
+		visible: {
+			opacity: 1,
+			x: 0,
+			transition: { type: "spring", stiffness: 300, damping: 30 },
+		},
+	} as Variants,
+};
+
+// ============ Magnetic Return ============
+
+export const magneticReturn: Variants = {
+	rest: { x: 0, y: 0 },
+	hover: {
+		transition: { type: "spring", stiffness: 200, damping: 20 },
+	},
+};
+
+// ============ Ripple Expand ============
+
+export const rippleExpand: Variants = {
+	initial: { scale: 0, opacity: 0.3 },
+	animate: {
+		scale: 4,
+		opacity: 0,
+		transition: { duration: 0.6, ease: "easeOut" },
+	},
+};
+
 // ============ Reduced motion variants ============
 
 export const reducedMotionPage: Variants = {

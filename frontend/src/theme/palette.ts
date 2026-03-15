@@ -65,26 +65,31 @@ export const tradingColors = {
 // Glassmorphism styles
 export const glassStyles = {
 	card: {
-		background: "rgba(30, 41, 59, 0.8)",
-		backdropFilter: "blur(12px)",
-		border: "1px solid rgba(255, 255, 255, 0.1)",
+		background: "rgba(30, 41, 59, 0.55)",
+		backdropFilter: "blur(16px)",
+		WebkitBackdropFilter: "blur(16px)",
+		border: "1px solid rgba(255, 255, 255, 0.08)",
 		borderRadius: "12px",
 	},
 	elevated: {
-		background: "rgba(51, 65, 85, 0.6)",
-		backdropFilter: "blur(8px)",
+		background: "rgba(51, 65, 85, 0.45)",
+		backdropFilter: "blur(12px)",
+		WebkitBackdropFilter: "blur(12px)",
 		border: "1px solid rgba(255, 255, 255, 0.08)",
 		borderRadius: "8px",
 	},
 	sidebar: {
-		background: "rgba(15,23,42,0.95)",
-		backdropFilter: "blur(20px)",
-		border: "1px solid rgba(255,255,255,0.06)",
+		background: "rgba(15, 23, 42, 0.7)",
+		backdropFilter: "blur(24px)",
+		WebkitBackdropFilter: "blur(24px)",
+		border: "none",
+		borderRight: "1px solid rgba(255, 255, 255, 0.06)",
 	},
 	header: {
-		background: "rgba(15,23,42,0.85)",
-		backdropFilter: "blur(20px)",
-		borderBottom: "1px solid rgba(255,255,255,0.06)",
+		background: "rgba(15, 23, 42, 0.6)",
+		backdropFilter: "blur(24px)",
+		WebkitBackdropFilter: "blur(24px)",
+		borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
 	},
 };
 

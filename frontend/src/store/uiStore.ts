@@ -33,6 +33,7 @@ interface UIState {
 
 	// Theme
 	reducedMotion: boolean;
+	effectsEnabled: boolean;
 
 	// Notifications
 	notifications: NotificationConfig[];
@@ -49,6 +50,7 @@ interface UIState {
 	toggleSidebar: () => void;
 	setSidebarWidth: (width: number) => void;
 	setReducedMotion: (reduced: boolean) => void;
+	setEffectsEnabled: (enabled: boolean) => void;
 
 	addNotification: (notification: Omit<NotificationConfig, "id">) => string;
 	removeNotification: (id: string) => void;
@@ -66,6 +68,7 @@ export const useUIStore = create<UIState>()(
 			sidebarState: "expanded",
 			sidebarWidth: 240,
 			reducedMotion: false,
+			effectsEnabled: true,
 			notifications: [],
 			modals: {},
 			globalLoading: false,
@@ -82,6 +85,7 @@ export const useUIStore = create<UIState>()(
 			setSidebarWidth: (sidebarWidth) => set({ sidebarWidth }),
 
 			setReducedMotion: (reducedMotion) => set({ reducedMotion }),
+			setEffectsEnabled: (effectsEnabled) => set({ effectsEnabled }),
 
 			addNotification: (notification) => {
 				const id = crypto.randomUUID();
@@ -143,6 +147,7 @@ export const useUIStore = create<UIState>()(
 				sidebarState: state.sidebarState,
 				sidebarWidth: state.sidebarWidth,
 				reducedMotion: state.reducedMotion,
+				effectsEnabled: state.effectsEnabled,
 			}),
 		},
 	),
