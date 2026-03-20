@@ -140,8 +140,10 @@ function PositionsDecisionsSection({
                     <Card
                         sx={{
                             height: "100%",
-                            borderTop: "2px solid",
-                            borderTopColor: "primary.main",
+                            "&::before": {
+                                height: 2,
+                                opacity: 1,
+                            },
                         }}
                     >
                         <CardContent>
@@ -255,8 +257,10 @@ function PositionsDecisionsSection({
                     <Card
                         sx={{
                             height: "100%",
-                            borderTop: "2px solid",
-                            borderTopColor: "primary.main",
+                            "&::before": {
+                                height: 2,
+                                opacity: 1,
+                            },
                         }}
                     >
                         <CardContent>
@@ -311,10 +315,10 @@ function PositionsDecisionsSection({
                                             sx={{
                                                 p: 1.5,
                                                 borderRadius: 2,
-                                                border: "1px solid rgba(255,255,255,0.06)",
-                                                background: "rgba(255,255,255,0.02)",
+                                                border: (theme) => `1px solid ${theme.trading.border.subtle}`,
+                                                background: (theme) => theme.trading.cardTint,
                                                 "&:hover": {
-                                                    background: "rgba(139,92,246,0.06)",
+                                                    background: (theme) => `rgba(${theme.trading.primaryRgb}, 0.06)`,
                                                 },
                                                 transition: "background 0.2s ease",
                                             }}

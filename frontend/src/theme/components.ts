@@ -69,6 +69,11 @@ export function createComponents(
                         boxShadow: `0 0 25px rgba(${primaryRgb}, 0.5), 0 0 50px rgba(${primaryRgb}, 0.2)`,
                     },
                 },
+                "@keyframes gradientFlow": {
+                    "0%": {backgroundPosition: "0% 50%"},
+                    "50%": {backgroundPosition: "100% 50%"},
+                    "100%": {backgroundPosition: "0% 50%"},
+                },
             },
         },
         MuiButton: {
@@ -82,7 +87,7 @@ export function createComponents(
                     boxShadow: "none",
                     transition: "transform 0.15s ease, box-shadow 0.15s ease",
                     "&:hover": {
-                        boxShadow: `0 4px 12px rgba(${primaryRgb}, 0.3)`,
+                        boxShadow: `0 4px 12px rgba(${primaryRgb}, 0.4)`,
                         transform: "translateY(-2px)",
                     },
                     "&:active": {
@@ -104,15 +109,27 @@ export function createComponents(
             styleOverrides: {
                 root: {
                     ...glassStyles.card,
-                    boxShadow:
-                        "0 4px 20px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05)",
+                    position: "relative" as const,
+                    background: `linear-gradient(${preset.cardTint}, ${preset.cardTint}), rgba(${surface.glass}, ${glass.cardOpacity})`,
+                    boxShadow: `0 4px 20px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05), inset 0 0 30px ${preset.sectionGlow}`,
                     transition:
                         "border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease",
+                    "&::before": {
+                        content: '""',
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: 1.5,
+                        background: preset.gradientAccent,
+                        backgroundSize: "200% 100%",
+                        borderRadius: `${br + 4}px ${br + 4}px 0 0`,
+                        animation: "gradientFlow 6s ease infinite",
+                    },
                     "&:hover": {
-                        borderColor: `rgba(${primaryRgb}, 0.35)`,
-                        background: `rgba(${surface.hoverCard}, 0.75)`,
-                        boxShadow:
-                            "0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08)",
+                        borderColor: preset.border.strong,
+                        background: `linear-gradient(${preset.cardTint}, ${preset.cardTint}), rgba(${surface.hoverCard}, 0.75)`,
+                        boxShadow: `0 0 20px ${preset.sectionGlow}, 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08)`,
                     },
                 },
             },
@@ -120,8 +137,7 @@ export function createComponents(
         MuiPaper: {
             styleOverrides: {
                 root: {
-                    backgroundImage: "none",
-                    backgroundColor: `rgba(${surface.glass}, 0.7)`,
+                    background: `linear-gradient(${preset.cardTint}, ${preset.cardTint}), rgba(${surface.glass}, 0.7)`,
                     backdropFilter: `blur(${glass.cardBlur}px)`,
                     WebkitBackdropFilter: `blur(${glass.cardBlur}px)`,
                 },
@@ -168,6 +184,7 @@ export function createComponents(
                     color: primary.light,
                     "&:hover": {
                         backgroundColor: `rgba(${primaryRgb}, 0.25)`,
+                        boxShadow: `0 0 8px rgba(${primaryRgb}, 0.2)`,
                     },
                 },
             },
@@ -280,7 +297,12 @@ export function createComponents(
         MuiDivider: {
             styleOverrides: {
                 root: {
-                    borderColor: `rgba(${surface.muted}, 0.5)`,
+                    border: "none",
+                    height: 1,
+                    background: preset.gradientAccent,
+                    backgroundSize: "200% 100%",
+                    opacity: 0.5,
+                    animation: "gradientFlow 8s ease infinite",
                 },
             },
         },
@@ -305,19 +327,19 @@ export function createComponents(
                     WebkitBackdropFilter: "blur(12px)",
                 },
                 standardSuccess: {
-                    backgroundColor: `rgba(${preset.semantics.success.main === "#22C55E" ? "34, 197, 94" : "16, 185, 129"}, 0.15)`,
+                    backgroundColor: `rgba(${preset.semanticRgb.success}, 0.15)`,
                     color: preset.semantics.success.light,
                 },
                 standardError: {
-                    backgroundColor: `rgba(${preset.semantics.error.main === "#F43F5E" ? "244, 63, 94" : "239, 68, 68"}, 0.15)`,
+                    backgroundColor: `rgba(${preset.semanticRgb.error}, 0.15)`,
                     color: preset.semantics.error.light,
                 },
                 standardWarning: {
-                    backgroundColor: `rgba(${preset.semantics.warning.main === "#EAB308" ? "234, 179, 8" : preset.semantics.warning.main === "#FBBF24" ? "251, 191, 36" : "245, 158, 11"}, 0.15)`,
+                    backgroundColor: `rgba(${preset.semanticRgb.warning}, 0.15)`,
                     color: preset.semantics.warning.light,
                 },
                 standardInfo: {
-                    backgroundColor: `rgba(${preset.semantics.info.main === "#06B6D4" ? "6, 182, 212" : preset.semantics.info.main === "#6366F1" ? "99, 102, 241" : "59, 130, 246"}, 0.15)`,
+                    backgroundColor: `rgba(${preset.semanticRgb.info}, 0.15)`,
                     color: preset.semantics.info.light,
                 },
             },

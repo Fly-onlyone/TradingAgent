@@ -12,314 +12,314 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import StorageIcon from "@mui/icons-material/Storage";
 import {
-	Box,
-	Divider,
-	Drawer,
-	IconButton,
-	List,
-	ListItem,
-	ListItemButton,
-	ListItemIcon,
-	ListItemText,
-	Typography,
-	useTheme,
+    Box,
+    Divider,
+    Drawer,
+    IconButton,
+    List,
+    ListItem,
+    ListItemButton,
+    ListItemIcon,
+    ListItemText,
+    Typography,
+    useTheme,
 } from "@mui/material";
-import { Link, useLocation } from "@tanstack/react-router";
-import { LayoutGroup, motion } from "framer-motion";
-import { useCallback, useState } from "react";
-import { useAuthStore } from "@/store/authStore";
-import { useUIStore } from "@/store/uiStore";
-import { spring } from "@/utils/animations/variants";
-import { markNavStart } from "@/utils/performance/navigationMetrics";
+import {Link, useLocation} from "@tanstack/react-router";
+import {LayoutGroup, motion} from "framer-motion";
+import {useCallback, useState} from "react";
+import {useAuthStore} from "@/store/authStore";
+import {useUIStore} from "@/store/uiStore";
+import {spring} from "@/utils/animations/variants";
+import {markNavStart} from "@/utils/performance/navigationMetrics";
 
 const DRAWER_WIDTH = 220;
 const COLLAPSED_WIDTH = 56;
 
 // Main navigation items (agent-focused)
 const menuItems = [
-	{ path: "/", label: "Dashboard", icon: DashboardIcon },
-	{ path: "/agent", label: "Agent", icon: SmartToyIcon },
-	{ path: "/strategies", label: "Strategies", icon: AccountBalanceIcon },
-	{ path: "/tasks", label: "Tasks", icon: ScheduleIcon },
-	{ path: "/news", label: "News", icon: NewspaperIcon },
+    {path: "/", label: "Dashboard", icon: DashboardIcon},
+    {path: "/agent", label: "Agent", icon: SmartToyIcon},
+    {path: "/strategies", label: "Strategies", icon: AccountBalanceIcon},
+    {path: "/tasks", label: "Tasks", icon: ScheduleIcon},
+    {path: "/news", label: "News", icon: NewspaperIcon},
 ];
 
 // Admin section (only for superusers)
 const adminMenuItems = [
-	{ path: "/admin/database", label: "Database", icon: StorageIcon },
-	{ path: "/admin/logs", label: "Logs", icon: ArticleIcon },
+    {path: "/admin/database", label: "Database", icon: StorageIcon},
+    {path: "/admin/logs", label: "Logs", icon: ArticleIcon},
 ];
 
 const bottomMenuItems = [
-	{ path: "/settings", label: "Settings", icon: SettingsIcon },
+    {path: "/settings", label: "Settings", icon: SettingsIcon},
 ];
 
 function MenuSection({
-	items,
-	isExpanded,
-	currentPath,
-	onNavigate,
-}: {
-	items: typeof menuItems;
-	isExpanded: boolean;
-	currentPath: string;
-	onNavigate: (path: string) => void;
+                         items,
+                         isExpanded,
+                         currentPath,
+                         onNavigate,
+                     }: {
+    items: typeof menuItems;
+    isExpanded: boolean;
+    currentPath: string;
+    onNavigate: (path: string) => void;
 }) {
-	const theme = useTheme();
-	const primaryRgb = theme.trading.primaryRgb;
+    const theme = useTheme();
+    const primaryRgb = theme.trading.primaryRgb;
 
-	return (
-		<>
-			{items.map((item) => {
-				const isActive = currentPath === item.path;
-				const Icon = item.icon;
+    return (
+        <>
+            {items.map((item) => {
+                const isActive = currentPath === item.path;
+                const Icon = item.icon;
 
-				return (
-					<ListItem
-						key={item.path}
-						disablePadding
-						sx={{ display: "block" }}
-					>
-						<ListItemButton
-							component={Link}
-							to={item.path}
-							preload={false}
-							onClick={() => onNavigate(item.path)}
-							sx={{
-								minHeight: 44,
-								justifyContent: isExpanded
-									? "initial"
-									: "center",
-								px: isExpanded ? 2 : 1.5,
-								bgcolor: isActive
-									? `rgba(${primaryRgb}, 0.1)`
-									: "transparent",
-								transition:
-									"transform 0.2s ease-out, background-color 0.2s ease",
-								"&:hover": {
-									bgcolor: isActive
-										? `rgba(${primaryRgb}, 0.15)`
-										: "rgba(255, 255, 255, 0.05)",
-									transform: "translateX(4px)",
-									"& .nav-icon": {
-										color: "primary.main",
-										transform: "scale(1.15)",
-									},
-								},
-							}}
-						>
-							<ListItemIcon
-								className="nav-icon"
-								sx={{
-									minWidth: 0,
-									mr: isExpanded ? 2 : "auto",
-									justifyContent: "center",
-									color: isActive
-										? "primary.main"
-										: "text.secondary",
-									transition:
-										"color 0.2s ease, transform 0.2s ease",
-								}}
-							>
-								<Icon fontSize="small" />
-							</ListItemIcon>
-							{isActive && (
-								<motion.div
-									layoutId="sidebar-indicator"
-									style={{
-										position: "absolute",
-										left: 0,
-										top: "50%",
-										transform: "translateY(-50%)",
-										width: 3,
-										height: 24,
-										borderRadius: "0 4px 4px 0",
-										background: `radial-gradient(ellipse at left, rgba(${primaryRgb},0.6) 0%, transparent 70%), ${theme.palette.primary.main}`,
-										boxShadow: `0 0 16px rgba(${primaryRgb},0.7), 0 0 6px rgba(${primaryRgb},0.5), 0 0 30px rgba(${primaryRgb},0.2)`,
-									}}
-									transition={spring.snappy}
-								/>
-							)}
-							{isExpanded && (
-								<ListItemText
-									primary={item.label}
-									slotProps={{
-										primary: {
-											fontSize: "0.875rem",
-											fontWeight: isActive ? 600 : 400,
-											color: isActive
-												? "primary.main"
-												: "text.primary",
-										},
-									}}
-								/>
-							)}
-						</ListItemButton>
-					</ListItem>
-				);
-			})}
-		</>
-	);
+                return (
+                    <ListItem
+                        key={item.path}
+                        disablePadding
+                        sx={{display: "block"}}
+                    >
+                        <ListItemButton
+                            component={Link}
+                            to={item.path}
+                            preload={false}
+                            onClick={() => onNavigate(item.path)}
+                            sx={{
+                                minHeight: 44,
+                                justifyContent: isExpanded
+                                    ? "initial"
+                                    : "center",
+                                px: isExpanded ? 2 : 1.5,
+                                bgcolor: isActive
+                                    ? `rgba(${primaryRgb}, 0.1)`
+                                    : "transparent",
+                                transition:
+                                    "transform 0.2s ease-out, background-color 0.2s ease",
+                                "&:hover": {
+                                    bgcolor: isActive
+                                        ? `rgba(${primaryRgb}, 0.15)`
+                                        : `rgba(${primaryRgb}, 0.08)`,
+                                    transform: "translateX(4px)",
+                                    "& .nav-icon": {
+                                        color: "primary.main",
+                                        transform: "scale(1.15)",
+                                    },
+                                },
+                            }}
+                        >
+                            <ListItemIcon
+                                className="nav-icon"
+                                sx={{
+                                    minWidth: 0,
+                                    mr: isExpanded ? 2 : "auto",
+                                    justifyContent: "center",
+                                    color: isActive
+                                        ? "primary.main"
+                                        : "text.secondary",
+                                    transition:
+                                        "color 0.2s ease, transform 0.2s ease",
+                                }}
+                            >
+                                <Icon fontSize="small"/>
+                            </ListItemIcon>
+                            {isActive && (
+                                <motion.div
+                                    layoutId="sidebar-indicator"
+                                    style={{
+                                        position: "absolute",
+                                        left: 0,
+                                        top: "50%",
+                                        transform: "translateY(-50%)",
+                                        width: 3,
+                                        height: 24,
+                                        borderRadius: "0 4px 4px 0",
+                                        background: `radial-gradient(ellipse at left, rgba(${primaryRgb},0.6) 0%, transparent 70%), ${theme.palette.primary.main}`,
+                                        boxShadow: `0 0 16px rgba(${primaryRgb},0.7), 0 0 6px rgba(${primaryRgb},0.5), 0 0 30px rgba(${primaryRgb},0.2)`,
+                                    }}
+                                    transition={spring.snappy}
+                                />
+                            )}
+                            {isExpanded && (
+                                <ListItemText
+                                    primary={item.label}
+                                    slotProps={{
+                                        primary: {
+                                            fontSize: "0.875rem",
+                                            fontWeight: isActive ? 600 : 400,
+                                            color: isActive
+                                                ? "primary.main"
+                                                : "text.primary",
+                                        },
+                                    }}
+                                />
+                            )}
+                        </ListItemButton>
+                    </ListItem>
+                );
+            })}
+        </>
+    );
 }
 
 export function Sidebar() {
-	const location = useLocation();
-	const { sidebarState, toggleSidebar } = useUIStore();
-	const { user } = useAuthStore();
-	const [isHovered, setIsHovered] = useState(false);
-	const isHidden = sidebarState === "hidden";
-	const isSuperuser = user?.isSuperuser ?? false;
-	const theme = useTheme();
+    const location = useLocation();
+    const {sidebarState, toggleSidebar} = useUIStore();
+    const {user} = useAuthStore();
+    const [isHovered, setIsHovered] = useState(false);
+    const isHidden = sidebarState === "hidden";
+    const isSuperuser = user?.isSuperuser ?? false;
+    const theme = useTheme();
 
-	const isPinned = sidebarState === "expanded";
-	const isExpanded = isPinned || isHovered;
-	const drawerWidth = isExpanded ? DRAWER_WIDTH : COLLAPSED_WIDTH;
+    const isPinned = sidebarState === "expanded";
+    const isExpanded = isPinned || isHovered;
+    const drawerWidth = isExpanded ? DRAWER_WIDTH : COLLAPSED_WIDTH;
 
-	const primaryRgb = theme.trading.primaryRgb;
+    const primaryRgb = theme.trading.primaryRgb;
 
-	const handleNavigate = useCallback(
-		(to: string) => {
-			if (location.pathname !== to) {
-				markNavStart(to);
-			}
-		},
-		[location.pathname],
-	);
+    const handleNavigate = useCallback(
+        (to: string) => {
+            if (location.pathname !== to) {
+                markNavStart(to);
+            }
+        },
+        [location.pathname],
+    );
 
-	if (isHidden) return null;
+    if (isHidden) return null;
 
-	return (
-		<Drawer
-			variant="permanent"
-			onMouseEnter={() => setIsHovered(true)}
-			onMouseLeave={() => setIsHovered(false)}
-			sx={{
-				width: drawerWidth,
-				flexShrink: 0,
-				"& .MuiDrawer-paper": {
-					width: drawerWidth,
-					boxSizing: "border-box",
-					transition: "width 0.22s cubic-bezier(0.4,0,0.2,1)",
-					overflowX: "hidden",
-				},
-			}}
-		>
-			<LayoutGroup>
-				{/* Logo / Brand */}
-				<Box
-					sx={{
-						display: "flex",
-						alignItems: "center",
-						justifyContent: isExpanded ? "flex-start" : "center",
-						px: isExpanded ? 2 : 1,
-						py: 1.25,
-						minHeight: 48,
-						overflow: "hidden",
-					}}
-				>
-					<SmartToyIcon
-						sx={{
-							color: "primary.main",
-							fontSize: 22,
-							flexShrink: 0,
-							filter: `drop-shadow(0 0 6px rgba(${primaryRgb},0.4))`,
-						}}
-					/>
-					{isExpanded && (
-						<>
-							<Typography
-								variant="subtitle1"
-								fontWeight={700}
-								noWrap
-								sx={{
-									ml: 1.5,
-									background: (t) =>
-										`linear-gradient(135deg, ${t.palette.primary.main} 0%, ${t.palette.primary.light} 100%)`,
-									backgroundSize: "200% 100%",
-									backgroundClip: "text",
-									WebkitBackgroundClip: "text",
-									WebkitTextFillColor: "transparent",
-									animation:
-										"brandShine 3.5s linear infinite",
-									"@keyframes brandShine": {
-										"0%": {
-											backgroundPosition: "0% 50%",
-										},
-										"50%": {
-											backgroundPosition: "100% 50%",
-										},
-										"100%": {
-											backgroundPosition: "0% 50%",
-										},
-									},
-								}}
-							>
-								TradingBot
-							</Typography>
-							<IconButton
-								size="small"
-								onClick={toggleSidebar}
-								sx={{
-									ml: "auto",
-									color: isPinned
-										? "primary.main"
-										: "text.secondary",
-									"&:hover": { color: "primary.main" },
-								}}
-							>
-								<motion.div
-									animate={{ rotate: isPinned ? 0 : 45 }}
-									transition={spring.snappy}
-									style={{ display: "flex" }}
-								>
-									<PushPinIcon sx={{ fontSize: 16 }} />
-								</motion.div>
-							</IconButton>
-						</>
-					)}
-				</Box>
+    return (
+        <Drawer
+            variant="permanent"
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            sx={{
+                width: drawerWidth,
+                flexShrink: 0,
+                "& .MuiDrawer-paper": {
+                    width: drawerWidth,
+                    boxSizing: "border-box",
+                    transition: "width 0.22s cubic-bezier(0.4,0,0.2,1)",
+                    overflowX: "hidden",
+                },
+            }}
+        >
+            <LayoutGroup>
+                {/* Logo / Brand */}
+                <Box
+                    sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: isExpanded ? "flex-start" : "center",
+                        px: isExpanded ? 2 : 1,
+                        py: 1.25,
+                        minHeight: 48,
+                        overflow: "hidden",
+                    }}
+                >
+                    <SmartToyIcon
+                        sx={{
+                            color: "primary.main",
+                            fontSize: 22,
+                            flexShrink: 0,
+                            filter: `drop-shadow(0 0 6px rgba(${primaryRgb},0.4))`,
+                        }}
+                    />
+                    {isExpanded && (
+                        <>
+                            <Typography
+                                variant="subtitle1"
+                                fontWeight={700}
+                                noWrap
+                                sx={{
+                                    ml: 1.5,
+                                    background: (t) =>
+                                        `linear-gradient(135deg, ${t.palette.primary.main} 0%, ${t.palette.primary.light} 100%)`,
+                                    backgroundSize: "200% 100%",
+                                    backgroundClip: "text",
+                                    WebkitBackgroundClip: "text",
+                                    WebkitTextFillColor: "transparent",
+                                    animation:
+                                        "brandShine 3.5s linear infinite",
+                                    "@keyframes brandShine": {
+                                        "0%": {
+                                            backgroundPosition: "0% 50%",
+                                        },
+                                        "50%": {
+                                            backgroundPosition: "100% 50%",
+                                        },
+                                        "100%": {
+                                            backgroundPosition: "0% 50%",
+                                        },
+                                    },
+                                }}
+                            >
+                                TradingBot
+                            </Typography>
+                            <IconButton
+                                size="small"
+                                onClick={toggleSidebar}
+                                sx={{
+                                    ml: "auto",
+                                    color: isPinned
+                                        ? "primary.main"
+                                        : "text.secondary",
+                                    "&:hover": {color: "primary.main"},
+                                }}
+                            >
+                                <motion.div
+                                    animate={{rotate: isPinned ? 0 : 45}}
+                                    transition={spring.snappy}
+                                    style={{display: "flex"}}
+                                >
+                                    <PushPinIcon sx={{fontSize: 16}}/>
+                                </motion.div>
+                            </IconButton>
+                        </>
+                    )}
+                </Box>
 
-				<Divider />
+                <Divider/>
 
-				{/* Main Menu */}
-				<List sx={{ py: 1, flex: 1 }}>
-					<MenuSection
-						items={menuItems}
-						isExpanded={isExpanded}
-						currentPath={location.pathname}
-						onNavigate={handleNavigate}
-					/>
-				</List>
+                {/* Main Menu */}
+                <List sx={{py: 1, flex: 1}}>
+                    <MenuSection
+                        items={menuItems}
+                        isExpanded={isExpanded}
+                        currentPath={location.pathname}
+                        onNavigate={handleNavigate}
+                    />
+                </List>
 
-				{/* Admin Section (superusers only) */}
-				{(isSuperuser || import.meta.env.DEV) && (
-					<>
-						<Divider />
-						<List sx={{ py: 1 }}>
-							<MenuSection
-								items={adminMenuItems}
-								isExpanded={isExpanded}
-								currentPath={location.pathname}
-								onNavigate={handleNavigate}
-							/>
-						</List>
-					</>
-				)}
+                {/* Admin Section (superusers only) */}
+                {(isSuperuser || import.meta.env.DEV) && (
+                    <>
+                        <Divider/>
+                        <List sx={{py: 1}}>
+                            <MenuSection
+                                items={adminMenuItems}
+                                isExpanded={isExpanded}
+                                currentPath={location.pathname}
+                                onNavigate={handleNavigate}
+                            />
+                        </List>
+                    </>
+                )}
 
-				<Divider />
+                <Divider/>
 
-				{/* Bottom Menu */}
-				<List sx={{ py: 1 }}>
-					<MenuSection
-						items={bottomMenuItems}
-						isExpanded={isExpanded}
-						currentPath={location.pathname}
-						onNavigate={handleNavigate}
-					/>
-				</List>
-			</LayoutGroup>
-		</Drawer>
-	);
+                {/* Bottom Menu */}
+                <List sx={{py: 1}}>
+                    <MenuSection
+                        items={bottomMenuItems}
+                        isExpanded={isExpanded}
+                        currentPath={location.pathname}
+                        onNavigate={handleNavigate}
+                    />
+                </List>
+            </LayoutGroup>
+        </Drawer>
+    );
 }
 
 export default Sidebar;

@@ -84,10 +84,12 @@ export function ChatMessage({message, showThinkingContent = true}: ChatMessagePr
                             bgcolor: isUser
                                 ? 'primary.main'
                                 : isSystem
-                                    ? 'rgba(251, 191, 36, 0.1)'
+                                    ? (theme) => `rgba(${theme.trading.semanticRgb.warning}, 0.1)`
                                     : 'background.paper',
                             color: isUser ? 'white' : 'text.primary',
                             borderRadius: 2,
+                            borderLeft: isUser ? 'none' : isSystem ? 'none' : '2px solid',
+                            borderLeftColor: isUser ? undefined : isSystem ? undefined : 'secondary.main',
                             borderTopLeftRadius: isUser ? 16 : 4,
                             borderTopRightRadius: isUser ? 4 : 16,
                         }}
