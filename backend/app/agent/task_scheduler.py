@@ -25,8 +25,8 @@ from app.db.models.agent_task import (
     MonitoringConditionType,
     RiskLevel,
     TaskFrequency,
+    TaskSchedule,
     TaskStatus,
-    TaskType,
 )
 from app.db.models.notification import Notification, NotificationType
 
@@ -120,77 +120,100 @@ class AgentTaskScheduler:
                 logger.error(f"Error scheduling task {task.id}: {e}")
 
     async def schedule_task(self, task: AgentTask) -> None:
-        """Schedule a task for execution."""
-        job_id = f"task_{task.id}"
+        """Schedule a task for execution (one job per schedule entry)."""
+        # Remove all existing jobs for this task
+        self._remove_task_jobs(str(task.id))
 
-        # Remove existing job if any
-        existing_job = self.scheduler.get_job(job_id)
-        if existing_job:
-            self.scheduler.remove_job(job_id)
-
-        # Determine trigger based on frequency
-        trigger = self._create_trigger(task)
-        if trigger is None:
-            logger.warning(f"Could not create trigger for task {task.id}")
+        if not task.schedules:
+            logger.warning(f"Task {task.id} has no schedules")
             return
 
-        # Schedule the job
-        self.scheduler.add_job(
-            self._execute_task,
-            trigger,
-            args=[str(task.id)],
-            id=job_id,
-            name=task.name,
-            replace_existing=True,
-        )
+        earliest_next_run: datetime | None = None
+        now = datetime.now(UTC)
 
-        # Calculate and store next run time
-        if task.frequency != TaskFrequency.ONCE:
-            now = datetime.now(UTC)
-            next_run = trigger.get_next_fire_time(now, now)
-            task.next_run_at = next_run
+        for idx, schedule in enumerate(task.schedules):
+            if not schedule.enabled:
+                continue
+            job_id = f"task_{task.id}_sched_{idx}"
+            trigger = self._create_trigger_from_schedule(schedule, task.timezone)
+            if trigger is None:
+                logger.warning(
+                    f"Could not create trigger for task {task.id} schedule {idx}"
+                )
+                continue
+
+            self.scheduler.add_job(
+                self._execute_task,
+                trigger,
+                args=[str(task.id)],
+                id=job_id,
+                name=f"{task.name} [sched {idx}]",
+                replace_existing=True,
+            )
+
+            # Track earliest next fire time
+            if schedule.frequency != TaskFrequency.ONCE:
+                next_fire = trigger.get_next_fire_time(now, now)
+                if next_fire and (
+                    earliest_next_run is None or next_fire < earliest_next_run
+                ):
+                    earliest_next_run = next_fire
+
+        if earliest_next_run:
+            task.next_run_at = earliest_next_run
             await task.save()
 
-        logger.info(f"Scheduled task {task.name} ({task.id})")
+        logger.info(
+            f"Scheduled task {task.name} ({task.id}) with {len(task.schedules)} schedule(s)"
+        )
 
-    def _create_trigger(self, task: AgentTask):
-        """Create APScheduler trigger from task configuration."""
-        if task.frequency == TaskFrequency.ONCE:
-            # Run once at next_run_at or immediately
-            run_at = task.next_run_at or datetime.now(UTC) + timedelta(seconds=5)
+    def _remove_task_jobs(self, task_id: str) -> None:
+        """Remove all scheduler jobs for a task."""
+        prefix = f"task_{task_id}"
+        for job in self.scheduler.get_jobs():
+            if job.id == prefix or job.id.startswith(f"{prefix}_sched_"):
+                self.scheduler.remove_job(job.id)
+
+    def _create_trigger_from_schedule(self, schedule: TaskSchedule, timezone: str):
+        """Create APScheduler trigger from a TaskSchedule."""
+        if schedule.frequency == TaskFrequency.ONCE:
+            run_at = datetime.now(UTC) + timedelta(seconds=5)
             return DateTrigger(run_date=run_at)
 
-        elif task.frequency == TaskFrequency.HOURLY:
+        elif schedule.frequency == TaskFrequency.HOURLY:
             return IntervalTrigger(hours=1)
 
-        elif task.frequency == TaskFrequency.DAILY:
-            # Parse scheduled_time (HH:MM)
-            if task.scheduled_time:
-                hour, minute = map(int, task.scheduled_time.split(":"))
-            else:
-                hour, minute = 9, 0  # Default to 9:00 AM
-
-            return CronTrigger(hour=hour, minute=minute, timezone=task.timezone)
-
-        elif task.frequency == TaskFrequency.WEEKLY:
-            if task.scheduled_time:
-                hour, minute = map(int, task.scheduled_time.split(":"))
+        elif schedule.frequency == TaskFrequency.DAILY:
+            if schedule.scheduled_time:
+                hour, minute = map(int, schedule.scheduled_time.split(":"))
             else:
                 hour, minute = 9, 0
 
-            day_of_week = task.day_of_week if task.day_of_week is not None else 0
+            return CronTrigger(hour=hour, minute=minute, timezone=timezone)
+
+        elif schedule.frequency == TaskFrequency.WEEKLY:
+            if schedule.scheduled_time:
+                hour, minute = map(int, schedule.scheduled_time.split(":"))
+            else:
+                hour, minute = 9, 0
+
+            day_of_week = (
+                schedule.day_of_week if schedule.day_of_week is not None else 0
+            )
             return CronTrigger(
                 day_of_week=day_of_week,
                 hour=hour,
                 minute=minute,
-                timezone=task.timezone,
+                timezone=timezone,
             )
 
-        elif task.frequency == TaskFrequency.CUSTOM:
-            if task.cron_expression:
-                return CronTrigger.from_crontab(task.cron_expression, timezone=task.timezone)
+        elif schedule.frequency == TaskFrequency.CUSTOM:
+            if schedule.cron_expression:
+                return CronTrigger.from_crontab(
+                    schedule.cron_expression, timezone=timezone
+                )
             else:
-                logger.error(f"Custom frequency task {task.id} missing cron_expression")
+                logger.error("Custom frequency schedule missing cron_expression")
                 return None
 
         return None
@@ -209,20 +232,21 @@ class AgentTaskScheduler:
                 logger.info(f"Task {task_id} is not active, skipping")
                 return
 
-            # Execute based on task type
-            if task.task_type == TaskType.ANALYSIS:
-                await self._execute_analysis_task(task)
-            elif task.task_type == TaskType.TRADING:
+            # Execute based on capability toggles (analysis is always the base)
+            if task.trading_enabled:
                 await self._execute_trading_task(task)
-            elif task.task_type == TaskType.MONITORING:
+            else:
+                await self._execute_analysis_task(task)
+
+            if task.monitoring_enabled:
                 await self._execute_monitoring_task(task)
 
-            # Mark as completed if one-time task
-            if task.frequency == TaskFrequency.ONCE:
+            # Mark as completed if all schedules are one-time
+            all_once = all(s.frequency == TaskFrequency.ONCE for s in task.schedules)
+            if all_once:
                 task.complete()
                 await task.save()
-                # Remove from scheduler
-                self.scheduler.remove_job(f"task_{task.id}")
+                self._remove_task_jobs(str(task.id))
 
         except Exception as e:
             logger.error(f"Error executing task {task_id}: {e}")
@@ -342,9 +366,7 @@ class AgentTaskScheduler:
                     should_trade = False
                     decision.execution_status = ExecutionStatus.FAILED
                     decision.execution_error_code = "confidence_below_threshold"
-                    decision.execution_error_message = (
-                        f"Confidence {confidence:.1f}% is below minimum {min_confidence:.1f}%"
-                    )
+                    decision.execution_error_message = f"Confidence {confidence:.1f}% is below minimum {min_confidence:.1f}%"
 
                 if should_trade and task.max_daily_trades is not None:
                     trade_count_today = await self._get_today_trade_count(task.id)
@@ -372,7 +394,9 @@ class AgentTaskScheduler:
                         decision.status = DecisionStatus.PENDING
                         decision.expires_at = datetime.now(UTC) + timedelta(hours=1)
                         await decision.insert()
-                        await self._create_trade_confirmation_notification(task, decision)
+                        await self._create_trade_confirmation_notification(
+                            task, decision
+                        )
                 else:
                     decision.status = DecisionStatus.EXECUTED
                     await decision.insert()
@@ -407,7 +431,9 @@ class AgentTaskScheduler:
 
         # Check cooldown
         if task.last_alert_at:
-            cooldown_until = task.last_alert_at + timedelta(minutes=task.alert_cooldown_minutes)
+            cooldown_until = task.last_alert_at + timedelta(
+                minutes=task.alert_cooldown_minutes
+            )
             if datetime.now(UTC) < cooldown_until:
                 logger.info("Monitoring task %s in cooldown, skipping", task.id)
                 task.record_execution(success=True)
@@ -500,7 +526,9 @@ class AgentTaskScheduler:
                                 {
                                     "condition": ct.value,
                                     "threshold": threshold,
-                                    "current": (volume_24h / avg_volume if avg_volume else 0),
+                                    "current": (
+                                        volume_24h / avg_volume if avg_volume else 0
+                                    ),
                                 }
                             )
                     elif ct == MonitoringConditionType.CUSTOM:
@@ -514,7 +542,10 @@ class AgentTaskScheduler:
                         )
                         try:
                             ai_response = await agent.chat(prompt)
-                            if "triggered" in ai_response.lower().split("not_triggered")[0]:
+                            if (
+                                "triggered"
+                                in ai_response.lower().split("not_triggered")[0]
+                            ):
                                 triggered.append(
                                     {
                                         "condition": ct.value,
@@ -523,11 +554,15 @@ class AgentTaskScheduler:
                                     }
                                 )
                         except Exception as ai_err:
-                            logger.warning("Custom condition AI evaluation failed: %s", ai_err)
+                            logger.warning(
+                                "Custom condition AI evaluation failed: %s", ai_err
+                            )
 
                 if triggered:
                     # Create monitoring alert decision
-                    triggered_summary = ", ".join(t.get("condition", "unknown") for t in triggered)
+                    triggered_summary = ", ".join(
+                        t.get("condition", "unknown") for t in triggered
+                    )
                     decision = AgentDecision(
                         user_id=task.user_id,
                         task_id=task.id,
@@ -557,7 +592,9 @@ class AgentTaskScheduler:
                     task.last_alert_at = datetime.now(UTC)
                     task.last_decision_id = decision.id
 
-                    logger.info("Monitoring alert for %s: %s", symbol, triggered_summary)
+                    logger.info(
+                        "Monitoring alert for %s: %s", symbol, triggered_summary
+                    )
 
             except Exception as e:
                 logger.error(f"Error monitoring {symbol}: {e}")
@@ -915,11 +952,9 @@ Provide:
         return action_map.get(action_str.lower())
 
     async def unschedule_task(self, task_id: str) -> None:
-        """Remove a task from the scheduler."""
-        job_id = f"task_{task_id}"
-        if self.scheduler.get_job(job_id):
-            self.scheduler.remove_job(job_id)
-            logger.info(f"Unscheduled task {task_id}")
+        """Remove all jobs for a task from the scheduler."""
+        self._remove_task_jobs(task_id)
+        logger.info(f"Unscheduled task {task_id}")
 
     async def run_task_now(self, task_id: str) -> None:
         """Execute a task immediately."""
@@ -933,7 +968,9 @@ Provide:
                 {
                     "id": job.id,
                     "name": job.name,
-                    "next_run": (job.next_run_time.isoformat() if job.next_run_time else None),
+                    "next_run": (
+                        job.next_run_time.isoformat() if job.next_run_time else None
+                    ),
                 }
             )
 

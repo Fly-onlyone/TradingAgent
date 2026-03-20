@@ -2,9 +2,10 @@
 
 from datetime import UTC, datetime
 from enum import Enum
+from typing import Any
 
 from beanie import Document, Indexed, PydanticObjectId
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from pymongo import ASCENDING, DESCENDING, IndexModel
 
 
@@ -42,14 +43,6 @@ class AgentMode(str, Enum):
     ASK = "ask"  # Notify user and wait for confirmation
 
 
-class TaskType(str, Enum):
-    """Type of task to execute."""
-
-    ANALYSIS = "analysis"  # Analysis only, no trading
-    TRADING = "trading"  # Analysis + trading execution
-    MONITORING = "monitoring"  # Price/condition monitoring
-
-
 class MonitoringConditionType(str, Enum):
     """Type of monitoring condition to evaluate."""
 
@@ -71,6 +64,16 @@ class MonitoringCondition(BaseModel):
     description: str | None = None  # Human-readable or custom AI prompt
 
 
+class TaskSchedule(BaseModel):
+    """A single schedule entry for a task."""
+
+    frequency: TaskFrequency
+    cron_expression: str | None = None  # For custom frequency
+    scheduled_time: str | None = None  # HH:MM format for daily/weekly
+    day_of_week: int | None = None  # 0-6 for weekly (Monday=0)
+    enabled: bool = True  # Toggle individual schedules on/off
+
+
 class AgentTask(Document):
     """Scheduled agent task document."""
 
@@ -79,13 +82,13 @@ class AgentTask(Document):
     # Task identification
     name: str
     description: str | None = None
-    task_type: TaskType = TaskType.ANALYSIS
 
-    # Schedule configuration
-    frequency: TaskFrequency
-    cron_expression: str | None = None  # For custom frequency
-    scheduled_time: str | None = None  # HH:MM format for daily/weekly
-    day_of_week: int | None = None  # 0-6 for weekly (Monday=0)
+    # Capability toggles (analysis is always on)
+    trading_enabled: bool = False
+    monitoring_enabled: bool = False
+
+    # Schedule configuration — multiple schedules per task
+    schedules: list[TaskSchedule] = Field(default_factory=list)
     timezone: str = "UTC"
 
     # Next/last execution tracking
@@ -127,6 +130,46 @@ class AgentTask(Document):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_legacy_fields(cls, data: Any) -> Any:
+        """Convert legacy single-schedule / task_type documents to new format."""
+        if not isinstance(data, dict):
+            return data
+
+        # Migrate task_type → capability toggles
+        task_type = data.pop("task_type", None)
+        if task_type is not None:
+            if "trading_enabled" not in data:
+                data["trading_enabled"] = task_type == "trading"
+            if "monitoring_enabled" not in data:
+                data["monitoring_enabled"] = task_type == "monitoring"
+
+        # Migrate single schedule fields → schedules list
+        if "schedules" not in data and "frequency" in data:
+            schedule: dict[str, Any] = {"frequency": data.pop("frequency")}
+            cron = data.pop("cron_expression", None)
+            if cron is not None:
+                schedule["cron_expression"] = cron
+            stime = data.pop("scheduled_time", None)
+            if stime is not None:
+                schedule["scheduled_time"] = stime
+            dow = data.pop("day_of_week", None)
+            if dow is not None:
+                schedule["day_of_week"] = dow
+            data["schedules"] = [schedule]
+        else:
+            # Clean up stale fields that might coexist with schedules
+            for key in (
+                "frequency",
+                "cron_expression",
+                "scheduled_time",
+                "day_of_week",
+            ):
+                data.pop(key, None)
+
+        return data
+
     class Settings:
         name = "agent_tasks"
         use_state_management = True
@@ -142,14 +185,6 @@ class AgentTask(Document):
                     ("created_at", DESCENDING),
                 ],
                 name="tasks_user_status_created_desc",
-            ),
-            IndexModel(
-                [
-                    ("user_id", ASCENDING),
-                    ("task_type", ASCENDING),
-                    ("created_at", DESCENDING),
-                ],
-                name="tasks_user_type_created_desc",
             ),
             IndexModel(
                 [("status", ASCENDING), ("next_run_at", ASCENDING)],

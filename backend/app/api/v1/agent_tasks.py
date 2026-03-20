@@ -15,8 +15,8 @@ from app.db.models.agent_task import (
     MonitoringConditionType,
     RiskLevel,
     TaskFrequency,
+    TaskSchedule,
     TaskStatus,
-    TaskType,
 )
 from app.db.models.user import User
 
@@ -33,16 +33,26 @@ class MonitoringConditionSchema(BaseModel):
     description: str | None = None
 
 
-class TaskCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=100)
-    description: str | None = None
-    task_type: TaskType = TaskType.ANALYSIS
+class TaskScheduleSchema(BaseModel):
+    """Schema for a single schedule entry."""
 
-    # Schedule
     frequency: TaskFrequency
     cron_expression: str | None = None
     scheduled_time: str | None = None  # HH:MM
     day_of_week: int | None = Field(None, ge=0, le=6)
+    enabled: bool = True
+
+
+class TaskCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    description: str | None = None
+
+    # Capability toggles
+    trading_enabled: bool = False
+    monitoring_enabled: bool = False
+
+    # Schedules
+    schedules: list[TaskScheduleSchema] = Field(..., min_length=1)
     timezone: str = "UTC"
 
     # Trading parameters
@@ -66,13 +76,13 @@ class TaskCreate(BaseModel):
 class TaskUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=100)
     description: str | None = None
-    task_type: TaskType | None = None
 
-    # Schedule
-    frequency: TaskFrequency | None = None
-    cron_expression: str | None = None
-    scheduled_time: str | None = None
-    day_of_week: int | None = Field(None, ge=0, le=6)
+    # Capability toggles
+    trading_enabled: bool | None = None
+    monitoring_enabled: bool | None = None
+
+    # Schedules
+    schedules: list[TaskScheduleSchema] | None = None
     timezone: str | None = None
 
     # Trading parameters
@@ -97,13 +107,13 @@ class TaskResponse(BaseModel):
     id: str
     name: str
     description: str | None
-    task_type: str
+
+    # Capability toggles
+    trading_enabled: bool
+    monitoring_enabled: bool
 
     # Schedule
-    frequency: str
-    cron_expression: str | None
-    scheduled_time: str | None
-    day_of_week: int | None
+    schedules: list[TaskScheduleSchema]
     timezone: str
     next_run_at: datetime | None
     last_run_at: datetime | None
@@ -175,11 +185,18 @@ def task_to_response(task: AgentTask) -> TaskResponse:
         id=str(task.id),
         name=task.name,
         description=task.description,
-        task_type=task.task_type.value,
-        frequency=task.frequency.value,
-        cron_expression=task.cron_expression,
-        scheduled_time=task.scheduled_time,
-        day_of_week=task.day_of_week,
+        trading_enabled=task.trading_enabled,
+        monitoring_enabled=task.monitoring_enabled,
+        schedules=[
+            TaskScheduleSchema(
+                frequency=s.frequency,
+                cron_expression=s.cron_expression,
+                scheduled_time=s.scheduled_time,
+                day_of_week=s.day_of_week,
+                enabled=s.enabled,
+            )
+            for s in task.schedules
+        ],
         timezone=task.timezone,
         next_run_at=task.next_run_at,
         last_run_at=task.last_run_at,
@@ -216,12 +233,13 @@ async def create_task(
     current_user: User = Depends(get_current_active_user),
 ) -> TaskResponse:
     """Create a new scheduled task."""
-    # Validate cron expression for custom frequency
-    if task_data.frequency == TaskFrequency.CUSTOM and not task_data.cron_expression:
-        raise HTTPException(
-            status_code=400,
-            detail="cron_expression is required for custom frequency",
-        )
+    # Validate each schedule
+    for schedule in task_data.schedules:
+        if schedule.frequency == TaskFrequency.CUSTOM and not schedule.cron_expression:
+            raise HTTPException(
+                status_code=400,
+                detail="cron_expression is required for custom frequency",
+            )
 
     # Validate symbols
     if not task_data.symbols:
@@ -230,22 +248,29 @@ async def create_task(
             detail="At least one symbol is required",
         )
 
-    # Validate monitoring tasks require conditions
-    if task_data.task_type == TaskType.MONITORING and not task_data.monitoring_conditions:
+    # Validate monitoring requires conditions
+    if task_data.monitoring_enabled and not task_data.monitoring_conditions:
         raise HTTPException(
             status_code=400,
-            detail="Monitoring tasks require at least one monitoring condition",
+            detail="Monitoring requires at least one monitoring condition",
         )
 
     task = AgentTask(
         user_id=current_user.id,
         name=task_data.name,
         description=task_data.description,
-        task_type=task_data.task_type,
-        frequency=task_data.frequency,
-        cron_expression=task_data.cron_expression,
-        scheduled_time=task_data.scheduled_time,
-        day_of_week=task_data.day_of_week,
+        trading_enabled=task_data.trading_enabled,
+        monitoring_enabled=task_data.monitoring_enabled,
+        schedules=[
+            TaskSchedule(
+                frequency=s.frequency,
+                cron_expression=s.cron_expression,
+                scheduled_time=s.scheduled_time,
+                day_of_week=s.day_of_week,
+                enabled=s.enabled,
+            )
+            for s in task_data.schedules
+        ],
         timezone=task_data.timezone,
         symbols=task_data.symbols,
         risk_level=task_data.risk_level,
@@ -279,7 +304,6 @@ async def create_task(
 @router.get("", response_model=TaskListResponse)
 async def list_tasks(
     status: TaskStatus | None = None,
-    task_type: TaskType | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_active_user),
@@ -289,8 +313,6 @@ async def list_tasks(
 
     if status:
         query = query.find(AgentTask.status == status)
-    if task_type:
-        query = query.find(AgentTask.task_type == task_type)
 
     total = await query.count()
 
@@ -340,15 +362,51 @@ async def update_task(
 
     # Update fields
     update_data = task_data.model_dump(exclude_unset=True)
+
+    # Convert schedule schemas to model instances
+    if "schedules" in update_data:
+        update_data["schedules"] = [TaskSchedule(**s) for s in update_data["schedules"]]
+    if "monitoring_conditions" in update_data:
+        update_data["monitoring_conditions"] = [
+            MonitoringCondition(**c) for c in update_data["monitoring_conditions"]
+        ]
+
+    # Validate monitoring requires conditions
+    monitoring_on = update_data.get("monitoring_enabled", task.monitoring_enabled)
+    conditions = update_data.get("monitoring_conditions", task.monitoring_conditions)
+    if monitoring_on and not conditions:
+        raise HTTPException(
+            status_code=400,
+            detail="Monitoring requires at least one monitoring condition",
+        )
+
+    # Validate each schedule
+    schedules_data = update_data.get("schedules", task.schedules)
+    for schedule in schedules_data:
+        freq = (
+            schedule.frequency
+            if isinstance(schedule, TaskSchedule)
+            else schedule.get("frequency")
+        )
+        cron = (
+            schedule.cron_expression
+            if isinstance(schedule, TaskSchedule)
+            else schedule.get("cron_expression")
+        )
+        if freq == TaskFrequency.CUSTOM and not cron:
+            raise HTTPException(
+                status_code=400,
+                detail="cron_expression is required for custom frequency",
+            )
+
     for field, value in update_data.items():
         setattr(task, field, value)
 
     task.update_timestamp()
     await task.save()
 
-    # Reschedule if schedule-related fields changed
-    schedule_fields = {"frequency", "cron_expression", "scheduled_time", "day_of_week"}
-    if schedule_fields & update_data.keys():
+    # Reschedule if schedules changed
+    if "schedules" in update_data:
         from app.agent.task_scheduler import get_scheduler
 
         scheduler = get_scheduler()
