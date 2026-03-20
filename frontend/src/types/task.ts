@@ -6,7 +6,6 @@ export type TaskFrequency = "once" | "hourly" | "daily" | "weekly" | "custom";
 export type TaskStatus = "active" | "paused" | "completed" | "failed";
 export type RiskLevel = "conservative" | "moderate" | "aggressive";
 export type AgentMode = "auto" | "ask";
-export type TaskType = "analysis" | "trading" | "monitoring";
 
 export type MonitoringConditionType =
 	| "price_above"
@@ -24,17 +23,25 @@ export interface MonitoringCondition {
 	description?: string;
 }
 
-export interface AgentTask {
-	id: string;
-	name: string;
-	description?: string;
-	taskType: TaskType;
-
-	// Schedule
+export interface TaskSchedule {
 	frequency: TaskFrequency;
 	cronExpression?: string;
 	scheduledTime?: string; // HH:MM
 	dayOfWeek?: number; // 0-6
+	enabled?: boolean;
+}
+
+export interface AgentTask {
+	id: string;
+	name: string;
+	description?: string;
+
+	// Capability toggles
+	tradingEnabled: boolean;
+	monitoringEnabled: boolean;
+
+	// Schedule
+	schedules: TaskSchedule[];
 	timezone: string;
 	nextRunAt?: string;
 	lastRunAt?: string;
@@ -69,11 +76,9 @@ export interface AgentTask {
 export interface TaskCreate {
 	name: string;
 	description?: string;
-	taskType: TaskType;
-	frequency: TaskFrequency;
-	cronExpression?: string;
-	scheduledTime?: string;
-	dayOfWeek?: number;
+	tradingEnabled: boolean;
+	monitoringEnabled: boolean;
+	schedules: TaskSchedule[];
 	timezone?: string;
 	symbols: string[];
 	riskLevel: RiskLevel;
@@ -89,11 +94,9 @@ export interface TaskCreate {
 export interface TaskUpdate {
 	name?: string;
 	description?: string;
-	taskType?: TaskType;
-	frequency?: TaskFrequency;
-	cronExpression?: string;
-	scheduledTime?: string;
-	dayOfWeek?: number;
+	tradingEnabled?: boolean;
+	monitoringEnabled?: boolean;
+	schedules?: TaskSchedule[];
 	timezone?: string;
 	symbols?: string[];
 	riskLevel?: RiskLevel;
