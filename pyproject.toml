@@ -43,6 +43,9 @@ dependencies = [
     "watchfiles>=0.20.0",
     "black>=26.1.0",
     "pandas-stubs~=3.0.0",
+    # Strategy import (PDF + YAML parsing)
+    "pymupdf>=1.24.0",
+    "pyyaml>=6.0.0",
 ]
 
 [dependency-groups]

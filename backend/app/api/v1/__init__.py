@@ -17,12 +17,14 @@ from app.api.v1 import (
     orders,
     settings,
     strategies,
+    strategy_import,
 )
 
 router = APIRouter()
 
 router.include_router(auth.router, prefix="/auth", tags=["auth"])
 router.include_router(orders.router, prefix="/orders", tags=["orders"])
+router.include_router(strategy_import.router, prefix="/strategies/import", tags=["strategy-import"])
 router.include_router(strategies.router, prefix="/strategies", tags=["strategies"])
 router.include_router(knowledge.router, prefix="/knowledge", tags=["knowledge"])
 router.include_router(news.router, prefix="/news", tags=["news"])
