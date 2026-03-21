@@ -28,7 +28,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { useCallback, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import type { ExchangeConfigUpdate } from "@/api/endpoints/settings";
+import AddIcon from "@mui/icons-material/Add";
+import type {
+	EmbeddingConfigUpdate,
+	ExchangeConfigUpdate,
+} from "@/api/endpoints/settings";
 import { settingsApi } from "@/api/endpoints/settings";
 import { AgentConfigPanel } from "@/components/agent/AgentConfigPanel";
 import { PageTransition } from "@/components/common/PageTransition";
@@ -227,6 +231,188 @@ function ProtonPassAuthCard() {
 							<Alert severity={loginResult.success ? "success" : "error"}>
 								{loginResult.message}
 							</Alert>
+						)}
+					</Box>
+				) : null}
+			</CardContent>
+		</Card>
+	);
+}
+
+function EmbeddingConfigCard() {
+	const { user } = useAuthStore();
+	const isSuperuser = user?.isSuperuser ?? false;
+	const queryClient = useQueryClient();
+	const [newProcess, setNewProcess] = useState("");
+
+	const configQuery = useQuery({
+		queryKey: ["embedding-config"],
+		queryFn: () => settingsApi.getEmbeddingConfig(),
+		enabled: isSuperuser || import.meta.env.DEV,
+		staleTime: 60_000,
+	});
+
+	const updateMutation = useMutation({
+		mutationFn: (update: EmbeddingConfigUpdate) =>
+			settingsApi.updateEmbeddingConfig(update),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["embedding-config"] });
+			notify.success("Embedding configuration updated");
+		},
+		onError: (error) => {
+			notify.error(
+				"Failed to update embedding configuration",
+				getErrorMessage(error),
+			);
+		},
+	});
+
+	if (!isSuperuser && !import.meta.env.DEV) return null;
+
+	const config = configQuery.data;
+
+	const handleAddProcess = () => {
+		const trimmed = newProcess.trim();
+		if (!trimmed || !config) return;
+		const updated = [...config.gamingProcessList, trimmed];
+		updateMutation.mutate({ gamingProcessList: updated });
+		setNewProcess("");
+	};
+
+	const handleRemoveProcess = (process: string) => {
+		if (!config) return;
+		const updated = config.gamingProcessList.filter((p) => p !== process);
+		updateMutation.mutate({ gamingProcessList: updated });
+	};
+
+	return (
+		<Card sx={{ mb: 3 }}>
+			<CardContent>
+				<Typography variant="h6" gutterBottom>
+					Embedding Configuration
+				</Typography>
+
+				{configQuery.isLoading ? (
+					<Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
+						<CircularProgress size={24} />
+					</Box>
+				) : configQuery.error ? (
+					<Alert severity="error">
+						Failed to load embedding configuration
+					</Alert>
+				) : config ? (
+					<Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+						<FormControlLabel
+							control={
+								<Switch
+									checked={config.deferEmbeddingWhenGaming}
+									onChange={(_, checked) =>
+										updateMutation.mutate({
+											deferEmbeddingWhenGaming: checked,
+										})
+									}
+									disabled={updateMutation.isPending}
+								/>
+							}
+							label="Defer embedding tasks when gaming"
+						/>
+						<Typography variant="body2" color="text.secondary" sx={{ mt: -1 }}>
+							Pauses CPU-heavy embedding generation while a game is running,
+							then resumes automatically when the game exits.
+						</Typography>
+
+						{config.deferEmbeddingWhenGaming && (
+							<>
+								<Divider />
+
+								<Box>
+									<Typography variant="subtitle2" gutterBottom>
+										Game Processes
+									</Typography>
+									<Box
+										sx={{
+											display: "flex",
+											flexWrap: "wrap",
+											gap: 0.5,
+											mb: 1,
+										}}
+									>
+										{config.gamingProcessList.length === 0 ? (
+											<Typography
+												variant="body2"
+												color="text.secondary"
+												sx={{ fontStyle: "italic" }}
+											>
+												No processes configured
+											</Typography>
+										) : (
+											config.gamingProcessList.map((process) => (
+												<Chip
+													key={process}
+													label={process}
+													onDelete={() => handleRemoveProcess(process)}
+													size="small"
+													variant="outlined"
+												/>
+											))
+										)}
+									</Box>
+									<Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+										<TextField
+											size="small"
+											placeholder="e.g. cs2.exe"
+											value={newProcess}
+											onChange={(e) => setNewProcess(e.target.value)}
+											onKeyDown={(e) => {
+												if (e.key === "Enter") {
+													e.preventDefault();
+													handleAddProcess();
+												}
+											}}
+											sx={{ width: 200 }}
+										/>
+										<Button
+											size="small"
+											variant="outlined"
+											startIcon={<AddIcon />}
+											onClick={handleAddProcess}
+											disabled={
+												!newProcess.trim() || updateMutation.isPending
+											}
+										>
+											Add
+										</Button>
+									</Box>
+								</Box>
+
+								<Box>
+									<Typography variant="subtitle2" gutterBottom>
+										Check Interval (minutes)
+									</Typography>
+									<TextField
+										size="small"
+										type="number"
+										value={config.gamingCheckIntervalMinutes}
+										onChange={(e) => {
+											const val = Number.parseInt(e.target.value, 10);
+											if (val >= 1) {
+												updateMutation.mutate({
+													gamingCheckIntervalMinutes: val,
+												});
+											}
+										}}
+										slotProps={{ htmlInput: { min: 1, max: 60 } }}
+										sx={{ width: 120 }}
+									/>
+									<Typography
+										variant="body2"
+										color="text.secondary"
+										sx={{ mt: 0.5 }}
+									>
+										How often to check if the game has exited
+									</Typography>
+								</Box>
+							</>
 						)}
 					</Box>
 				) : null}
@@ -727,6 +913,9 @@ function SettingsPage() {
 
 					{/* AI Agent Configuration (superuser only) */}
 					<AgentConfigPanel variant="card" />
+
+					{/* Embedding Configuration (superuser only) */}
+					<EmbeddingConfigCard />
 
 					{/* Proton Pass Authentication (superuser only) */}
 					<ProtonPassAuthCard />

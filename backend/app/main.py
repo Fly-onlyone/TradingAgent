@@ -22,6 +22,7 @@ from app.api.v1 import router as api_v1_router
 from app.api.websocket import router as ws_router
 from app.config import get_settings
 from app.db.session import close_db, init_db
+from app.knowledge.embeddings import preload_model as preload_embedding_model
 from app.logging_config import setup_logging
 from app.middleware.request_logging import RequestLoggingMiddleware
 
@@ -56,6 +57,9 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
 
     scheduler = get_scheduler()
     await scheduler.start()
+
+    # Preload local embedding model to avoid cold-start latency on first request
+    await preload_embedding_model()
 
     mongo_handler.start()
     logger.info("Application started")

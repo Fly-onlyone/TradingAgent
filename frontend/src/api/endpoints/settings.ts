@@ -64,6 +64,18 @@ export interface ExchangeConfigUpdate {
 	sandbox?: boolean;
 }
 
+export interface EmbeddingConfig {
+	deferEmbeddingWhenGaming: boolean;
+	gamingProcessList: string[];
+	gamingCheckIntervalMinutes: number;
+}
+
+export interface EmbeddingConfigUpdate {
+	deferEmbeddingWhenGaming?: boolean;
+	gamingProcessList?: string[];
+	gamingCheckIntervalMinutes?: number;
+}
+
 function transformAgentConfig(data: Record<string, unknown>): AgentConfig {
 	return {
 		authMode: data.auth_mode as string,
@@ -72,6 +84,16 @@ function transformAgentConfig(data: Record<string, unknown>): AgentConfig {
 		model: data.model as string,
 		maxThinkingTokens: data.max_thinking_tokens as number,
 		cliLoggedIn: data.cli_logged_in as boolean,
+	};
+}
+
+function transformEmbeddingConfig(
+	data: Record<string, unknown>,
+): EmbeddingConfig {
+	return {
+		deferEmbeddingWhenGaming: data.defer_embedding_when_gaming as boolean,
+		gamingProcessList: data.gaming_process_list as string[],
+		gamingCheckIntervalMinutes: data.gaming_check_interval_minutes as number,
 	};
 }
 
@@ -191,6 +213,31 @@ export const settingsApi = {
 			success: response.data.success as boolean,
 			message: response.data.message as string,
 		};
+	},
+
+	async getEmbeddingConfig(): Promise<EmbeddingConfig> {
+		const response =
+			await apiClient.get<Record<string, unknown>>("/settings/embedding");
+		return transformEmbeddingConfig(response.data);
+	},
+
+	async updateEmbeddingConfig(
+		update: EmbeddingConfigUpdate,
+	): Promise<EmbeddingConfig> {
+		const payload: Record<string, unknown> = {};
+		if (update.deferEmbeddingWhenGaming !== undefined)
+			payload.defer_embedding_when_gaming = update.deferEmbeddingWhenGaming;
+		if (update.gamingProcessList !== undefined)
+			payload.gaming_process_list = update.gamingProcessList;
+		if (update.gamingCheckIntervalMinutes !== undefined)
+			payload.gaming_check_interval_minutes =
+				update.gamingCheckIntervalMinutes;
+
+		const response = await apiClient.put<Record<string, unknown>>(
+			"/settings/embedding",
+			payload,
+		);
+		return transformEmbeddingConfig(response.data);
 	},
 
 	async getExchangeConfig(): Promise<ExchangeConfig> {

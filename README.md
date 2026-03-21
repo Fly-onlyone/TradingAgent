@@ -17,18 +17,7 @@ Trading Agent (Claude SDK)
   ├── RiskManager         — position sizing, drawdown limits
   └── OrderExecutor       — OKX exchange execution with idempotency
   ↕
-External: OKX Exchange │ News APIs │ OpenAI Embeddings │ MongoDB Atlas Vector Search
-```
-
-## Quick Start
-
-```bash
-# Backend
-uv sync
-uv run python run.py        # starts both backend (port 7000) + frontend dev server
-
-# Frontend (standalone)
-cd frontend && bun install && bun run dev
+External: OKX Exchange │ News APIs │ Local Embeddings (nomic) │ MongoDB
 ```
 
 ## Automatic Task Workflow
@@ -54,7 +43,10 @@ Users create tasks via the frontend (`/tasks`) or API (`POST /api/v1/agent/tasks
   "taskType": "trading",
   "frequency": "daily",
   "scheduledTime": "09:00",
-  "symbols": ["BTC-USDT", "ETH-USDT"],
+  "symbols": [
+    "BTC-USDT",
+    "ETH-USDT"
+  ],
   "riskLevel": "moderate",
   "agentMode": "ask",
   "useSubagents": false,
@@ -146,12 +138,12 @@ providing structured data:
 
 ```python
 {
-    "action": "buy",           # buy | sell | hold | wait
-    "confidence": 78.5,        # 0-100
-    "entry_price": 98500.0,    # optional
-    "stop_loss": 96200.0,      # optional
-    "take_profit": 104000.0,   # optional
-    "position_size": 0.05,     # optional
+    "action": "buy",  # buy | sell | hold | wait
+    "confidence": 78.5,  # 0-100
+    "entry_price": 98500.0,  # optional
+    "stop_loss": 96200.0,  # optional
+    "take_profit": 104000.0,  # optional
+    "position_size": 0.05,  # optional
     "summary": "BTC showing strong breakout above key resistance...",
     "key_factors": ["RSI divergence", "Volume confirmation", "News catalyst"]
 }
@@ -221,6 +213,46 @@ All task outcomes produce notifications stored in MongoDB and delivered to the f
 
 Expired confirmations are cleaned up every 5 minutes by the scheduler.
 
+## Embeddings (Knowledge RAG)
+
+The knowledge system uses local embeddings for semantic search across trading strategies, trade lessons, trading patterns,
+and news articles.
+
+### Model
+
+- **Model**: [`nomic-ai/nomic-embed-text-v1.5`](https://huggingface.co/nomic-ai/nomic-embed-text-v1.5) — 768 dimensions, 270 MB
+- **Runtime**: `sentence-transformers` with ONNX backend (2-3x faster than PyTorch on CPU)
+- **Inference**: Runs locally on CPU, no API key required. ~30-50ms per embedding.
+- **Task prefixes**: Documents use `"search_document: "`, queries use `"search_query: "` (required by nomic)
+
+### How It Works
+
+1. **Document embedding**: When strategies, lessons, patterns, or articles are created, their text is formatted by
+   specialized generators (`StrategyEmbeddingGenerator`, `TradeLessonEmbeddingGenerator`, `PatternEmbeddingGenerator`)
+   and embedded as 768-dim vectors stored inline on the MongoDB document.
+2. **Query embedding**: When the agent or user searches, the query is embedded with the `search_query:` prefix.
+3. **Retrieval**: `KnowledgeRetriever` computes cosine similarity between the query vector and all stored document
+   vectors, filtering by a minimum similarity threshold (default 0.7).
+
+### Gaming Deferral
+
+Document embedding tasks can be deferred while a game is running to avoid CPU contention:
+
+- **Settings**: `GET/PUT /api/v1/settings/embedding` — toggle, process list, check interval
+- **Detection**: `psutil` scans running processes against a user-configured list (e.g. `["cs2.exe", "valorant.exe"]`)
+- **Behavior**: When a game is detected, document embeddings wait (polling every N minutes) until the game exits, then
+  resume automatically. Query embeddings (search) are never deferred.
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `backend/app/knowledge/embeddings.py` | `EmbeddingService` singleton, specialized generators, cosine similarity |
+| `backend/app/knowledge/retriever.py` | `KnowledgeRetriever` — semantic search across all knowledge types |
+| `backend/app/knowledge/game_detector.py` | `psutil`-based game process detection |
+| `backend/app/knowledge/trade_learner.py` | Extracts lessons from completed trades + generates embeddings |
+| `backend/app/knowledge/pattern_miner.py` | Discovers technical patterns + generates embeddings |
+
 ## API Reference
 
 ### Task Endpoints (`/api/v1/agent/tasks`)
@@ -243,7 +275,7 @@ Expired confirmations are cleaned up every 5 minutes by the scheduler.
 |--------------|--------------------------------------------------------------------------------|
 | Frontend     | React 19, TypeScript 5.7, MUI 6, TanStack Router/Query, Zustand, Framer Motion |
 | Backend      | Python 3.11+, FastAPI, Beanie (MongoDB ODM), APScheduler                       |
-| AI           | Claude SDK (Anthropic), OpenAI Embeddings                                      |
+| AI           | Claude SDK (Anthropic), nomic-embed-text-v1.5 (local, ONNX)                    |
 | Exchange     | OKX REST API                                                                   |
-| Database     | MongoDB (+ Atlas Vector Search for RAG)                                        |
+| Database     | MongoDB (Beanie ODM)                                                           |
 | Package Mgmt | uv (Python), Bun (Node)                                                        |

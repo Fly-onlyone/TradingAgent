@@ -47,7 +47,7 @@ class StrategyKnowledge(Document):
     asset_classes: Optional[list[str]] = None  # Suitable assets
     timeframes: Optional[list[str]] = None  # Suitable timeframes
 
-    # Embedding for semantic search (1024-dim BGE-M3 vector stored inline)
+    # Embedding for semantic search (768-dim nomic-embed-text-v1.5 vector stored inline)
     embedding: Optional[list[float]] = None
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -92,7 +92,7 @@ class TradeLesson(Document):
     exit_price: float
     duration_minutes: Optional[int] = None
 
-    # Embedding for semantic search (1024-dim BGE-M3 vector)
+    # Embedding for semantic search (768-dim nomic-embed-text-v1.5 vector)
     embedding: Optional[list[float]] = None
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -157,7 +157,7 @@ class TradingPattern(Document):
     timeframes: Optional[list[str]] = None  # Best timeframes
     market_conditions: Optional[list[str]] = None  # Best conditions
 
-    # Embedding for semantic search (1024-dim BGE-M3 vector)
+    # Embedding for semantic search (768-dim nomic-embed-text-v1.5 vector)
     embedding: Optional[list[float]] = None
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

@@ -1,22 +1,22 @@
 """Knowledge retriever for RAG-based strategy and lesson search using MongoDB."""
 
-from typing import Optional
 
 from app.db.models.knowledge import StrategyKnowledge, TradeLesson, TradingPattern
-from app.knowledge.embeddings import EmbeddingService
+from app.knowledge.embeddings import EmbeddingService, get_embedding_service
 
 
 class KnowledgeRetriever:
     """RAG retriever for finding relevant trading knowledge."""
 
     def __init__(self) -> None:
-        self.embedding_service = EmbeddingService()
+        self.embedding_service: EmbeddingService = get_embedding_service()
 
     async def search_strategies(
         self,
         query: str,
         limit: int = 5,
         min_similarity: float = 0.7,
+        query_embedding: list[float] | None = None,
     ) -> list[StrategyKnowledge]:
         """Search for strategies similar to the query.
 
@@ -24,19 +24,17 @@ class KnowledgeRetriever:
             query: Natural language query
             limit: Maximum number of results
             min_similarity: Minimum cosine similarity threshold
-
-        Returns:
-            List of strategies sorted by relevance
+            query_embedding: Pre-computed query embedding (avoids redundant API calls)
         """
-        # Generate query embedding
-        query_embedding = await self.embedding_service.generate_embedding(query)
+        if query_embedding is None:
+            query_embedding = await self.embedding_service.generate_query_embedding(query)
+        if query_embedding is None:
+            return []
 
-        # Get all strategies with embeddings
         strategies = await StrategyKnowledge.find(
             {"embedding": {"$exists": True, "$ne": None}}
         ).to_list()
 
-        # Calculate similarities and filter
         scored = []
         for strategy in strategies:
             if strategy.embedding:
@@ -53,9 +51,10 @@ class KnowledgeRetriever:
     async def search_lessons(
         self,
         query: str,
-        symbol: Optional[str] = None,
+        symbol: str | None = None,
         limit: int = 5,
         min_similarity: float = 0.7,
+        query_embedding: list[float] | None = None,
     ) -> list[TradeLesson]:
         """Search for trade lessons similar to the query.
 
@@ -64,20 +63,19 @@ class KnowledgeRetriever:
             symbol: Optional symbol filter
             limit: Maximum number of results
             min_similarity: Minimum cosine similarity threshold
-
-        Returns:
-            List of lessons sorted by relevance
+            query_embedding: Pre-computed query embedding (avoids redundant API calls)
         """
-        query_embedding = await self.embedding_service.generate_embedding(query)
+        if query_embedding is None:
+            query_embedding = await self.embedding_service.generate_query_embedding(query)
+        if query_embedding is None:
+            return []
 
-        # Build filter
-        filter_query = {"embedding": {"$exists": True, "$ne": None}}
+        filter_query: dict = {"embedding": {"$exists": True, "$ne": None}}
         if symbol:
             filter_query["symbol"] = symbol.upper()
 
         lessons = await TradeLesson.find(filter_query).to_list()
 
-        # Calculate similarities
         scored = []
         for lesson in lessons:
             if lesson.embedding:
@@ -89,15 +87,16 @@ class KnowledgeRetriever:
 
         scored.sort(key=lambda x: x[1], reverse=True)
 
-        return [l[0] for l in scored[:limit]]
+        return [item[0] for item in scored[:limit]]
 
     async def search_patterns(
         self,
         query: str,
-        pattern_type: Optional[str] = None,
-        min_success_rate: Optional[float] = None,
+        pattern_type: str | None = None,
+        min_success_rate: float | None = None,
         limit: int = 5,
         min_similarity: float = 0.7,
+        query_embedding: list[float] | None = None,
     ) -> list[TradingPattern]:
         """Search for trading patterns similar to the query.
 
@@ -107,13 +106,13 @@ class KnowledgeRetriever:
             min_success_rate: Minimum success rate threshold
             limit: Maximum number of results
             min_similarity: Minimum cosine similarity threshold
-
-        Returns:
-            List of patterns sorted by relevance
+            query_embedding: Pre-computed query embedding (avoids redundant API calls)
         """
-        query_embedding = await self.embedding_service.generate_embedding(query)
+        if query_embedding is None:
+            query_embedding = await self.embedding_service.generate_query_embedding(query)
+        if query_embedding is None:
+            return []
 
-        # Build filter
         filter_query: dict = {"embedding": {"$exists": True, "$ne": None}}
         if pattern_type:
             filter_query["pattern_type"] = pattern_type
@@ -122,7 +121,6 @@ class KnowledgeRetriever:
 
         patterns = await TradingPattern.find(filter_query).to_list()
 
-        # Calculate similarities
         scored = []
         for pattern in patterns:
             if pattern.embedding:
@@ -144,20 +142,22 @@ class KnowledgeRetriever:
     ) -> dict[str, list]:
         """Search across all knowledge types.
 
-        Args:
-            query: Natural language query
-            limit_per_type: Maximum results per knowledge type
-            min_similarity: Minimum cosine similarity threshold
-
-        Returns:
-            Dictionary with strategies, lessons, and patterns
+        Generates the query embedding once and reuses it for all three searches.
         """
-        strategies = await self.search_strategies(query, limit_per_type, min_similarity)
+        query_embedding = await self.embedding_service.generate_query_embedding(query)
+        if query_embedding is None:
+            return {"strategies": [], "lessons": [], "patterns": []}
+
+        strategies = await self.search_strategies(
+            query, limit_per_type, min_similarity, query_embedding=query_embedding
+        )
         lessons = await self.search_lessons(
-            query, limit=limit_per_type, min_similarity=min_similarity
+            query, limit=limit_per_type, min_similarity=min_similarity,
+            query_embedding=query_embedding,
         )
         patterns = await self.search_patterns(
-            query, limit=limit_per_type, min_similarity=min_similarity
+            query, limit=limit_per_type, min_similarity=min_similarity,
+            query_embedding=query_embedding,
         )
 
         return {
@@ -171,27 +171,17 @@ class KnowledgeRetriever:
         query: str,
         max_results: int = 6,
     ) -> str:
-        """Get relevant knowledge formatted as context for the agent.
-
-        Args:
-            query: User query or trading context
-            max_results: Maximum total results
-
-        Returns:
-            Formatted context string for the agent
-        """
+        """Get relevant knowledge formatted as context for the agent."""
         results = await self.search_all(query, limit_per_type=max_results // 3, min_similarity=0.5)
 
         context_parts = []
 
-        # Add relevant strategies
         if results["strategies"]:
             context_parts.append("## Relevant Strategies")
             for strategy in results["strategies"]:
                 desc = strategy.description[:200] if strategy.description else "No description"
                 context_parts.append(f"- **{strategy.name}**: {desc}")
 
-        # Add relevant lessons
         if results["lessons"]:
             context_parts.append("\n## Relevant Trade Lessons")
             for lesson in results["lessons"]:
@@ -200,7 +190,6 @@ class KnowledgeRetriever:
                     f"- **{lesson.symbol} {lesson.side}** ({lesson.outcome}, {lesson.profit_pct}%): {summary}"
                 )
 
-        # Add relevant patterns
         if results["patterns"]:
             context_parts.append("\n## Relevant Patterns")
             for pattern in results["patterns"]:
@@ -215,14 +204,14 @@ class KnowledgeRetriever:
 
         return "\n".join(context_parts)
 
-    async def get_strategy_by_name(self, name: str) -> Optional[StrategyKnowledge]:
+    async def get_strategy_by_name(self, name: str) -> StrategyKnowledge | None:
         """Get a strategy by exact name match."""
         return await StrategyKnowledge.find_one(StrategyKnowledge.name == name)
 
     async def get_lessons_by_symbol(
         self,
         symbol: str,
-        outcome: Optional[str] = None,
+        outcome: str | None = None,
         limit: int = 10,
     ) -> list[TradeLesson]:
         """Get lessons for a specific symbol."""
@@ -247,3 +236,16 @@ class KnowledgeRetriever:
             .limit(limit)
             .to_list()
         )
+
+
+# ── Singleton instance ──
+
+_retriever: KnowledgeRetriever | None = None
+
+
+def get_retriever() -> KnowledgeRetriever:
+    """Get the singleton KnowledgeRetriever instance."""
+    global _retriever
+    if _retriever is None:
+        _retriever = KnowledgeRetriever()
+    return _retriever

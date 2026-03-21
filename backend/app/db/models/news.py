@@ -109,7 +109,7 @@ class NewsArticle(Document):
     actual_impact: Optional[str] = None
     prediction_verified: bool = False
 
-    # Embedding for semantic search (1024-dim BGE-M3 vector)
+    # Embedding for semantic search (768-dim nomic-embed-text-v1.5 vector)
     embedding: Optional[list[float]] = None
 
     # Timestamps

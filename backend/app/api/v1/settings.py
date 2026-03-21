@@ -587,6 +587,63 @@ async def proton_pass_logout(
     return {"success": False, "message": error_message}
 
 
+# ── Embedding / Task Configuration ──────────────────────────────
+
+
+class EmbeddingConfigResponse(BaseModel):
+    defer_embedding_when_gaming: bool
+    gaming_process_list: list[str]
+    gaming_check_interval_minutes: int
+
+
+class EmbeddingConfigUpdate(BaseModel):
+    defer_embedding_when_gaming: bool | None = None
+    gaming_process_list: list[str] | None = None
+    gaming_check_interval_minutes: int | None = None
+
+
+@router.get("/embedding", response_model=EmbeddingConfigResponse)
+async def get_embedding_config(
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Get current embedding task configuration."""
+    app_settings = await AppSettings.get_instance()
+    return {
+        "defer_embedding_when_gaming": app_settings.defer_embedding_when_gaming,
+        "gaming_process_list": app_settings.gaming_process_list,
+        "gaming_check_interval_minutes": app_settings.gaming_check_interval_minutes,
+    }
+
+
+@router.put("/embedding", response_model=EmbeddingConfigResponse)
+async def update_embedding_config(
+    body: EmbeddingConfigUpdate,
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Update embedding task configuration."""
+    app_settings = await AppSettings.get_instance()
+
+    if body.defer_embedding_when_gaming is not None:
+        app_settings.defer_embedding_when_gaming = body.defer_embedding_when_gaming
+    if body.gaming_process_list is not None:
+        app_settings.gaming_process_list = body.gaming_process_list
+    if body.gaming_check_interval_minutes is not None:
+        app_settings.gaming_check_interval_minutes = max(1, body.gaming_check_interval_minutes)
+
+    await app_settings.save_with_timestamp()
+    logger.info(
+        "Embedding config updated: defer_gaming=%s, processes=%s",
+        app_settings.defer_embedding_when_gaming,
+        app_settings.gaming_process_list,
+    )
+
+    return {
+        "defer_embedding_when_gaming": app_settings.defer_embedding_when_gaming,
+        "gaming_process_list": app_settings.gaming_process_list,
+        "gaming_check_interval_minutes": app_settings.gaming_check_interval_minutes,
+    }
+
+
 # ── Exchange (OKX) Configuration ────────────────────────────────
 
 

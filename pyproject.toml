@@ -12,8 +12,10 @@ dependencies = [
     # MongoDB
     "motor>=3.6.0",
     "beanie>=1.26.0",
-    # Embeddings
-    "openai>=1.50.0",
+    # Embeddings (local model)
+    "sentence-transformers[onnx]>=5.0.0",
+    # Process monitoring (game detection for embedding deferral)
+    "psutil>=5.9.0",
     # Core
     "pydantic[email]>=2.0.0",
     "pydantic-settings>=2.0.0",

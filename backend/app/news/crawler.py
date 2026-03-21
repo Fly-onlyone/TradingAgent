@@ -11,7 +11,7 @@ import trafilatura
 
 from app.db.models.news import NewsSource, NewsArticle
 from app.news.deduplicator import NewsDeduplicator
-from app.knowledge.embeddings import EmbeddingService
+from app.knowledge.embeddings import get_embedding_service
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class NewsCrawler:
 
     def __init__(self) -> None:
         self.deduplicator = NewsDeduplicator()
-        self.embedding_service = EmbeddingService()
+        self.embedding_service = get_embedding_service()
         self.client = httpx.AsyncClient(
             timeout=30.0,
             headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},

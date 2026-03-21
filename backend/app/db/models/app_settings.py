@@ -57,6 +57,11 @@ class AppSettings(Document):
     okx_passphrase: str = ""
     okx_sandbox: bool = True
 
+    # Embedding task deferral — pause CPU-heavy embedding when gaming
+    defer_embedding_when_gaming: bool = False
+    gaming_process_list: list[str] = []  # e.g. ["cs2.exe", "valorant.exe"]
+    gaming_check_interval_minutes: int = 3
+
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     class Settings:

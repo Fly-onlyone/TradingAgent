@@ -1,73 +1,160 @@
-"""Embedding generation service using OpenAI API."""
+"""Local embedding service using nomic-embed-text-v1.5 via sentence-transformers (ONNX)."""
 
+import asyncio
 import hashlib
+import logging
+import os
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from openai import AsyncOpenAI
+import numpy as np
 
-from app.config import get_settings
+# Prevent thread over-subscription when multiple requests run concurrently
+os.environ.setdefault("OMP_NUM_THREADS", "1")
 
-settings = get_settings()
+from sentence_transformers import SentenceTransformer  # noqa: E402
+
+logger = logging.getLogger(__name__)
+
+_model: SentenceTransformer | None = None
+_executor = ThreadPoolExecutor(max_workers=2)
+
+MODEL_NAME = "nomic-ai/nomic-embed-text-v1.5"
+DIMENSION = 768
+
+
+def _get_model() -> SentenceTransformer:
+    """Lazy-load the sentence-transformers model (singleton)."""
+    global _model
+    if _model is None:
+        logger.info("Loading embedding model: %s (ONNX backend)", MODEL_NAME)
+        _model = SentenceTransformer(
+            MODEL_NAME,
+            backend="onnx",
+            model_kwargs={"provider": "CPUExecutionProvider"},
+            trust_remote_code=True,
+        )
+        logger.info("Embedding model loaded successfully (dim=%d)", DIMENSION)
+    return _model
+
+
+async def preload_model() -> None:
+    """Preload the model during app startup to avoid cold-start latency."""
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(_executor, _get_model)
+
+
+def _encode_sync(texts: list[str], *, normalize: bool = True) -> np.ndarray:
+    """Run synchronous encoding in the thread pool."""
+    model = _get_model()
+    return model.encode(texts, normalize_embeddings=normalize, show_progress_bar=False)
 
 
 class EmbeddingService:
-    """Service for generating text embeddings for semantic search."""
+    """Service for generating text embeddings using a local nomic model.
 
-    def __init__(self) -> None:
-        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
-        self.model = "text-embedding-3-small"  # 1536 dimensions, efficient
-        self.dimension = 1536
+    Uses singleton model — safe to instantiate multiple times.
+    """
 
-    async def generate_embedding(self, text: str) -> list[float]:
-        """Generate embedding for a single text.
+    dimension = DIMENSION
 
-        Args:
-            text: Input text to embed
+    async def generate_document_embedding(
+        self, text: str, *, defer_if_gaming: bool = True,
+    ) -> list[float] | None:
+        """Generate embedding for a document (strategy, lesson, pattern, article).
 
-        Returns:
-            List of floats representing the embedding vector
+        Prepends 'search_document: ' prefix as required by nomic models.
+        If defer_if_gaming is True and the setting is enabled, waits for games to exit.
         """
         if not text or not text.strip():
-            return [0.0] * self.dimension
+            return None
 
-        # Truncate if too long (model max is ~8191 tokens)
-        if len(text) > 30000:
-            text = text[:30000]
+        if defer_if_gaming:
+            await self._wait_if_gaming()
 
-        try:
-            response = await self.client.embeddings.create(
-                model=self.model,
-                input=text,
-            )
-            return response.data[0].embedding
-        except Exception as e:
-            return [0.0] * self.dimension
+        prefixed = f"search_document: {text[:30000]}"
+        return await self._encode_single(prefixed)
 
-    async def generate_embeddings(self, texts: list[str]) -> list[list[float]]:
-        """Generate embeddings for multiple texts.
+    async def generate_query_embedding(self, text: str) -> list[float] | None:
+        """Generate embedding for a search query.
 
-        Args:
-            texts: List of input texts
-
-        Returns:
-            List of embedding vectors
+        Prepends 'search_query: ' prefix as required by nomic models.
         """
+        if not text or not text.strip():
+            return None
+
+        prefixed = f"search_query: {text[:30000]}"
+        return await self._encode_single(prefixed)
+
+    async def generate_document_embeddings(
+        self, texts: list[str], *, defer_if_gaming: bool = True,
+    ) -> list[list[float] | None]:
+        """Generate embeddings for multiple documents."""
         if not texts:
             return []
 
-        # Truncate texts if needed
-        processed_texts = [t[:30000] if len(t) > 30000 else t for t in texts]
-        processed_texts = [t if t.strip() else "empty" for t in processed_texts]
+        if defer_if_gaming:
+            await self._wait_if_gaming()
 
+        prefixed = [f"search_document: {t[:30000]}" if t.strip() else "" for t in texts]
         try:
-            response = await self.client.embeddings.create(
-                model=self.model,
-                input=processed_texts,
+            loop = asyncio.get_running_loop()
+            non_empty = [(i, t) for i, t in enumerate(prefixed) if t]
+            if not non_empty:
+                return [None] * len(texts)
+
+            indices, batch_texts = zip(*non_empty)
+            embeddings = await loop.run_in_executor(
+                _executor, _encode_sync, list(batch_texts)
             )
-            sorted_data = sorted(response.data, key=lambda x: x.index)
-            return [d.embedding for d in sorted_data]
+
+            results: list[list[float] | None] = [None] * len(texts)
+            for idx, emb in zip(indices, embeddings):
+                results[idx] = emb.tolist()
+            return results
         except Exception:
-            return [[0.0] * self.dimension for _ in texts]
+            logger.exception("Batch embedding generation failed")
+            return [None] * len(texts)
+
+    async def _encode_single(self, prefixed_text: str) -> list[float] | None:
+        """Encode a single text string."""
+        try:
+            loop = asyncio.get_running_loop()
+            embeddings = await loop.run_in_executor(
+                _executor, _encode_sync, [prefixed_text]
+            )
+            return embeddings[0].tolist()
+        except Exception:
+            logger.exception("Embedding generation failed")
+            return None
+
+    async def _wait_if_gaming(self) -> None:
+        """If gaming deferral is enabled and a game is running, wait until it exits."""
+        try:
+            from app.db.models.app_settings import AppSettings
+            from app.knowledge.game_detector import is_game_running, wait_for_game_exit
+
+            settings = await AppSettings.get_instance()
+            if (
+                not settings.defer_embedding_when_gaming
+                or not settings.gaming_process_list
+            ):
+                return
+
+            if await is_game_running(settings.gaming_process_list):
+                logger.info("Game detected — deferring embedding task")
+                await wait_for_game_exit(
+                    settings.gaming_process_list,
+                    settings.gaming_check_interval_minutes,
+                )
+        except Exception:
+            logger.debug("Game detection check failed, proceeding with embedding", exc_info=True)
+
+    # ── Legacy compatibility alias ──
+
+    async def generate_embedding(self, text: str) -> list[float] | None:
+        """Generate embedding (document mode). Prefer generate_document_embedding."""
+        return await self.generate_document_embedding(text)
 
     @staticmethod
     def compute_content_hash(content: str) -> str:
@@ -77,25 +164,39 @@ class EmbeddingService:
 
     @staticmethod
     def cosine_similarity(vec1: list[float], vec2: list[float]) -> float:
-        """Calculate cosine similarity between two vectors."""
+        """Calculate cosine similarity between two vectors using numpy."""
         if len(vec1) != len(vec2):
             return 0.0
 
-        dot_product = sum(a * b for a, b in zip(vec1, vec2))
-        norm1 = sum(a * a for a in vec1) ** 0.5
-        norm2 = sum(b * b for b in vec2) ** 0.5
+        a = np.array(vec1)
+        b = np.array(vec2)
+        norm_a = np.linalg.norm(a)
+        norm_b = np.linalg.norm(b)
 
-        if norm1 == 0 or norm2 == 0:
+        if norm_a == 0 or norm_b == 0:
             return 0.0
 
-        return dot_product / (norm1 * norm2)
+        return float(np.dot(a, b) / (norm_a * norm_b))
+
+
+# ── Singleton instance ──
+
+_embedding_service: EmbeddingService | None = None
+
+
+def get_embedding_service() -> EmbeddingService:
+    """Get the singleton EmbeddingService instance."""
+    global _embedding_service
+    if _embedding_service is None:
+        _embedding_service = EmbeddingService()
+    return _embedding_service
+
+
+# ── Specialized generators ──
 
 
 class StrategyEmbeddingGenerator:
     """Generate embeddings specifically for trading strategies."""
-
-    def __init__(self) -> None:
-        self.embedding_service = EmbeddingService()
 
     def format_strategy_text(self, strategy: dict[str, Any]) -> str:
         """Format strategy data into text for embedding."""
@@ -140,17 +241,14 @@ class StrategyEmbeddingGenerator:
 
         return "; ".join(parts)
 
-    async def generate_strategy_embedding(self, strategy: dict[str, Any]) -> list[float]:
+    async def generate_strategy_embedding(self, strategy: dict[str, Any]) -> list[float] | None:
         """Generate embedding for a trading strategy."""
         text = self.format_strategy_text(strategy)
-        return await self.embedding_service.generate_embedding(text)
+        return await get_embedding_service().generate_document_embedding(text)
 
 
 class TradeLessonEmbeddingGenerator:
     """Generate embeddings specifically for trade lessons."""
-
-    def __init__(self) -> None:
-        self.embedding_service = EmbeddingService()
 
     def format_lesson_text(self, lesson: dict[str, Any]) -> str:
         """Format trade lesson data into text for embedding."""
@@ -180,17 +278,14 @@ class TradeLessonEmbeddingGenerator:
             return "Not specified"
         return ", ".join(f"{k}={v}" for k, v in context.items())
 
-    async def generate_lesson_embedding(self, lesson: dict[str, Any]) -> list[float]:
+    async def generate_lesson_embedding(self, lesson: dict[str, Any]) -> list[float] | None:
         """Generate embedding for a trade lesson."""
         text = self.format_lesson_text(lesson)
-        return await self.embedding_service.generate_embedding(text)
+        return await get_embedding_service().generate_document_embedding(text)
 
 
 class PatternEmbeddingGenerator:
     """Generate embeddings specifically for trading patterns."""
-
-    def __init__(self) -> None:
-        self.embedding_service = EmbeddingService()
 
     def format_pattern_text(self, pattern: dict[str, Any]) -> str:
         """Format trading pattern data into text for embedding."""
@@ -221,7 +316,7 @@ class PatternEmbeddingGenerator:
             return "Not specified"
         return ", ".join(f"{k}={v}" for k, v in conditions.items())
 
-    async def generate_pattern_embedding(self, pattern: dict[str, Any]) -> list[float]:
+    async def generate_pattern_embedding(self, pattern: dict[str, Any]) -> list[float] | None:
         """Generate embedding for a trading pattern."""
         text = self.format_pattern_text(pattern)
-        return await self.embedding_service.generate_embedding(text)
+        return await get_embedding_service().generate_document_embedding(text)

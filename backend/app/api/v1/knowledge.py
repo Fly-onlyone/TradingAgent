@@ -1,15 +1,19 @@
 """Knowledge base endpoints for RAG and trade learning using Beanie ODM."""
 
+import logging
 from datetime import datetime
-from typing import Optional
 
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from app.db.models.user import User
-from app.db.models.knowledge import StrategyKnowledge, TradeLesson, TradingPattern
 from app.api.v1.auth import get_current_active_user
+from app.db.models.knowledge import StrategyKnowledge, TradeLesson, TradingPattern
+from app.db.models.user import User
+from app.knowledge.embeddings import StrategyEmbeddingGenerator
+from app.knowledge.retriever import get_retriever
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -21,9 +25,9 @@ class StrategyKnowledgeCreate(BaseModel):
     entry_rules: dict
     exit_rules: dict
     risk_params: dict
-    market_conditions: Optional[list[str]] = None
-    asset_classes: Optional[list[str]] = None
-    timeframes: Optional[list[str]] = None
+    market_conditions: list[str] | None = None
+    asset_classes: list[str] | None = None
+    timeframes: list[str] | None = None
 
 
 class StrategyKnowledgeResponse(BaseModel):
@@ -33,14 +37,14 @@ class StrategyKnowledgeResponse(BaseModel):
     entry_rules: dict
     exit_rules: dict
     risk_params: dict
-    backtest_results: Optional[dict]
-    win_rate: Optional[float]
-    avg_return: Optional[float]
-    max_drawdown: Optional[float]
-    sharpe_ratio: Optional[float]
-    market_conditions: Optional[list]
-    asset_classes: Optional[list]
-    timeframes: Optional[list]
+    backtest_results: dict | None
+    win_rate: float | None
+    avg_return: float | None
+    max_drawdown: float | None
+    sharpe_ratio: float | None
+    market_conditions: list | None
+    asset_classes: list | None
+    timeframes: list | None
     created_at: datetime
     updated_at: datetime
 
@@ -51,20 +55,20 @@ class StrategyKnowledgeResponse(BaseModel):
 # Trade Lesson Schemas
 class TradeLessonResponse(BaseModel):
     id: str
-    order_id: Optional[str]
+    order_id: str | None
     outcome: str
     profit_pct: float
-    profit_amount: Optional[float]
+    profit_amount: float | None
     lesson_summary: str
     market_context: dict
-    mistakes: Optional[list]
-    successes: Optional[list]
-    recommendations: Optional[list]
+    mistakes: list | None
+    successes: list | None
+    recommendations: list | None
     symbol: str
     side: str
     entry_price: float
     exit_price: float
-    duration_minutes: Optional[int]
+    duration_minutes: int | None
     created_at: datetime
 
     class Config:
@@ -81,12 +85,12 @@ class TradingPatternResponse(BaseModel):
     success_rate: float
     sample_count: int
     avg_return: float
-    avg_duration_hours: Optional[int]
-    symbols: Optional[list]
-    timeframes: Optional[list]
-    market_conditions: Optional[list]
+    avg_duration_hours: int | None
+    symbols: list | None
+    timeframes: list | None
+    market_conditions: list | None
     created_at: datetime
-    last_validated: Optional[datetime]
+    last_validated: datetime | None
 
     class Config:
         from_attributes = True
@@ -185,17 +189,23 @@ async def create_strategy_knowledge(
     )
     await strategy.insert()
 
-    # TODO: Generate and store embedding for the strategy
-    # Planned for Phase 3 (Knowledge Database).
+    # Generate and store embedding for semantic search
+    try:
+        generator = StrategyEmbeddingGenerator()
+        strategy.embedding = await generator.generate_strategy_embedding(data.model_dump())
+        if strategy.embedding is not None:
+            await strategy.save()
+    except Exception:
+        logger.warning("Failed to generate embedding for strategy %s", strategy.id, exc_info=True)
 
     return strategy_to_response(strategy)
 
 
 @router.get("/strategies", response_model=list[StrategyKnowledgeResponse])
 async def list_strategy_knowledge(
-    market_condition: Optional[str] = None,
-    asset_class: Optional[str] = None,
-    timeframe: Optional[str] = None,
+    market_condition: str | None = None,
+    asset_class: str | None = None,
+    timeframe: str | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_active_user),
@@ -235,8 +245,8 @@ async def get_strategy_knowledge(
 # Trade Lessons Endpoints
 @router.get("/lessons", response_model=list[TradeLessonResponse])
 async def list_trade_lessons(
-    outcome: Optional[str] = None,
-    symbol: Optional[str] = None,
+    outcome: str | None = None,
+    symbol: str | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_active_user),
@@ -274,8 +284,8 @@ async def get_trade_lesson(
 # Trading Patterns Endpoints
 @router.get("/patterns", response_model=list[TradingPatternResponse])
 async def list_trading_patterns(
-    pattern_type: Optional[str] = None,
-    min_success_rate: Optional[float] = None,
+    pattern_type: str | None = None,
+    min_success_rate: float | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_active_user),
@@ -321,11 +331,14 @@ async def search_knowledge(
     This endpoint uses embeddings to find relevant strategies, lessons, and patterns
     based on the natural language query.
     """
-    # TODO: Implement vector similarity search
-    # For now, return empty results - will be implemented in Phase 3
+    retriever = get_retriever()
+    results = await retriever.search_all(
+        request.query,
+        limit_per_type=request.limit // 3 or 3,
+    )
 
     return {
-        "strategies": [],
-        "lessons": [],
-        "patterns": [],
+        "strategies": [strategy_to_response(s) for s in results["strategies"]],
+        "lessons": [lesson_to_response(lesson) for lesson in results["lessons"]],
+        "patterns": [pattern_to_response(p) for p in results["patterns"]],
     }

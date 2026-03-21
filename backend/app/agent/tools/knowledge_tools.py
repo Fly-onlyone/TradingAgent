@@ -3,7 +3,7 @@
 from typing import Any, Optional
 
 from app.db.models.knowledge import StrategyKnowledge, TradeLesson, TradingPattern
-from app.knowledge.retriever import KnowledgeRetriever
+from app.knowledge.retriever import get_retriever
 
 
 async def search_strategies(
@@ -19,7 +19,7 @@ async def search_strategies(
     Returns:
         Relevant trading strategies
     """
-    retriever = KnowledgeRetriever()
+    retriever = get_retriever()
 
     try:
         results = await retriever.search_strategies(query, limit=limit)
@@ -100,7 +100,7 @@ async def search_lessons(
     Returns:
         Relevant trade lessons
     """
-    retriever = KnowledgeRetriever()
+    retriever = get_retriever()
 
     try:
         results = await retriever.search_lessons(query, symbol=symbol, limit=limit)
@@ -176,7 +176,7 @@ async def search_patterns(
     Returns:
         Relevant trading patterns
     """
-    retriever = KnowledgeRetriever()
+    retriever = get_retriever()
 
     try:
         results = await retriever.search_patterns(

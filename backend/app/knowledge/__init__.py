@@ -2,20 +2,23 @@
 
 from app.knowledge.embeddings import (
     EmbeddingService,
+    PatternEmbeddingGenerator,
     StrategyEmbeddingGenerator,
     TradeLessonEmbeddingGenerator,
-    PatternEmbeddingGenerator,
+    get_embedding_service,
 )
-from app.knowledge.retriever import KnowledgeRetriever
-from app.knowledge.trade_learner import TradeLearner
 from app.knowledge.pattern_miner import PatternMiner
+from app.knowledge.retriever import KnowledgeRetriever, get_retriever
+from app.knowledge.trade_learner import TradeLearner
 
 __all__ = [
     "EmbeddingService",
-    "StrategyEmbeddingGenerator",
-    "TradeLessonEmbeddingGenerator",
-    "PatternEmbeddingGenerator",
     "KnowledgeRetriever",
-    "TradeLearner",
+    "PatternEmbeddingGenerator",
     "PatternMiner",
+    "StrategyEmbeddingGenerator",
+    "TradeLearner",
+    "TradeLessonEmbeddingGenerator",
+    "get_embedding_service",
+    "get_retriever",
 ]

@@ -5,14 +5,14 @@ from typing import Any, Optional
 
 from app.db.models.market import MarketData
 from app.db.models.knowledge import TradingPattern, TradeLesson
-from app.knowledge.embeddings import EmbeddingService, PatternEmbeddingGenerator
+from app.knowledge.embeddings import PatternEmbeddingGenerator, get_embedding_service
 
 
 class PatternMiner:
     """Discovers and validates trading patterns from historical data."""
 
     def __init__(self) -> None:
-        self.embedding_service = EmbeddingService()
+        self.embedding_service = get_embedding_service()
         self.pattern_generator = PatternEmbeddingGenerator()
 
     async def discover_technical_patterns(

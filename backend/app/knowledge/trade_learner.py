@@ -8,7 +8,7 @@ from anthropic import Anthropic
 from app.config import get_settings
 from app.db.models.order import Order, OrderStatus
 from app.db.models.knowledge import TradeLesson
-from app.knowledge.embeddings import EmbeddingService, TradeLessonEmbeddingGenerator
+from app.knowledge.embeddings import TradeLessonEmbeddingGenerator, get_embedding_service
 
 settings = get_settings()
 
@@ -17,7 +17,7 @@ class TradeLearner:
     """Learns from completed trades and extracts actionable lessons."""
 
     def __init__(self) -> None:
-        self.embedding_service = EmbeddingService()
+        self.embedding_service = get_embedding_service()
         self.lesson_generator = TradeLessonEmbeddingGenerator()
         self.client = Anthropic(api_key=settings.anthropic_api_key)
 
