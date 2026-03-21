@@ -37,6 +37,9 @@ interface UIState {
 	reducedMotion: boolean;
 	effectsEnabled: boolean;
 
+	// Zoom
+	uiScale: number;
+
 	// Notifications
 	notifications: NotificationConfig[];
 
@@ -54,6 +57,7 @@ interface UIState {
 	setThemeId: (id: ThemeId) => void;
 	setReducedMotion: (reduced: boolean) => void;
 	setEffectsEnabled: (enabled: boolean) => void;
+	setUIScale: (scale: number) => void;
 
 	addNotification: (notification: Omit<NotificationConfig, "id">) => string;
 	removeNotification: (id: string) => void;
@@ -73,6 +77,7 @@ export const useUIStore = create<UIState>()(
 			themeId: "solar" as ThemeId,
 			reducedMotion: false,
 			effectsEnabled: true,
+		uiScale: 1,
 			notifications: [],
 			modals: {},
 			globalLoading: false,
@@ -91,6 +96,8 @@ export const useUIStore = create<UIState>()(
 			setThemeId: (themeId) => set({ themeId }),
 			setReducedMotion: (reducedMotion) => set({ reducedMotion }),
 			setEffectsEnabled: (effectsEnabled) => set({ effectsEnabled }),
+		setUIScale: (uiScale) =>
+			set({ uiScale: Math.max(0.75, Math.min(1.5, uiScale)) }),
 
 			addNotification: (notification) => {
 				const id = crypto.randomUUID();
@@ -154,6 +161,7 @@ export const useUIStore = create<UIState>()(
 				themeId: state.themeId,
 				reducedMotion: state.reducedMotion,
 				effectsEnabled: state.effectsEnabled,
+				uiScale: state.uiScale,
 			}),
 		},
 	),
