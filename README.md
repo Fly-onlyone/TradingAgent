@@ -20,6 +20,7 @@ monitoring.
   - [Auto-Generated Knowledge](#auto-generated-knowledge)
   - [Agent Integration](#agent-integration)
 - [Strategy Import](#strategy-import)
+  - [Auto-Discovery](#auto-discovery)
 - [Automation Flow](#automation-flow)
   - [Task Types](#task-types)
   - [Lifecycle](#lifecycle)
@@ -36,6 +37,7 @@ monitoring.
 - **Order Management** — Track open orders, order history, and active positions
 - **Risk Controls** — Configurable risk levels (conservative/moderate/aggressive), position limits, stop-loss enforcement
 - **Strategy Import** — Create strategies from URLs (articles, blog posts) or file uploads (TXT, JSON, YAML, PDF) with AI-powered extraction
+- **Strategy Auto-Discovery** — Scheduled crawling of news sources with AI extraction, automatically populating the knowledge base
 - **Knowledge Base (RAG)** — Semantic search over trading strategies, lessons from past trades, and discovered patterns
 - **News & Sentiment** — Aggregated market news with credibility-weighted sentiment scoring
 - **Price Monitoring** — Condition-based alerts (price thresholds, RSI, volume spikes) with cooldowns
@@ -202,7 +204,7 @@ The agent augments its analysis with a local knowledge base using semantic searc
 
 | Type                | Source                           | Contains                                                     |
 |---------------------|----------------------------------|--------------------------------------------------------------|
-| **Strategy**        | Manual, URL import, or file upload | Entry/exit rules, risk params, win rate, Sharpe ratio        |
+| **Strategy**        | Manual, URL/file import, or auto-discovery | Entry/exit rules, risk params, win rate, Sharpe ratio        |
 | **Trade Lesson**    | Auto-extracted from filled orders | Outcome, P&L %, mistakes, successes, market context          |
 | **Trading Pattern** | Discovered by PatternMiner       | Conditions, success rate, sample count, average return       |
 
@@ -244,6 +246,16 @@ Provide URL or File → Backend extracts text → Claude AI extracts structured 
 ```
 
 The create page is at `/strategies/create` with three tabs: **Manual**, **URL Import**, and **File Upload**.
+
+### Auto-Discovery
+
+News sources can be configured to automatically extract strategies on a schedule. Enable `strategy_extraction` on a news source, then toggle auto-discovery in the Tasks page:
+
+- **Interval** — How often to crawl (1h to 24h)
+- **Min confidence** — Threshold for AI extraction quality
+- **Run Now** — Trigger an immediate discovery cycle
+
+Discovered strategies are saved to the knowledge base only (not executable). Superusers receive a notification for each new strategy found. Deduplication by strategy name prevents duplicates across runs.
 
 ## Automation Flow
 
@@ -312,4 +324,5 @@ The backend serves a REST API at `http://localhost:7000`. Interactive docs are a
 | `/api/v1/agent/decisions` | Trading decision history   |
 | `/api/v1/notifications` | Alerts and confirmations     |
 | `/api/v1/settings`    | App configuration              |
+| `/api/v1/settings/strategy-discovery` | Auto-discovery config, run-now |
 | `/api/v1/admin`       | User management, logs (superuser) |

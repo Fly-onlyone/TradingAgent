@@ -90,6 +90,10 @@ Separate Sentry projects per layer (org: `fly-theonlyone`):
 - **Strategy import**: Two-step flow — extract (URL or file upload → AI extraction → preview) then confirm (save both
   `Strategy` + `StrategyKnowledge` with embedding). Endpoints at `/api/v1/strategies/import/`. AI extraction uses
   Claude tool_use with forced `save_strategy` tool for structured output. Pattern: `backend/app/services/strategy_extractor.py`
+- **Strategy auto-discovery**: Scheduled crawling of news sources (where `strategy_extraction=True`) → AI extraction →
+  deduplicate by name → save to StrategyKnowledge (RAG only, not executable). Config in `AppSettings` singleton
+  (`auto_discover_enabled/interval_hours/min_confidence`). APScheduler integration in `task_scheduler.py`.
+  Service: `backend/app/services/strategy_discovery.py`. UI card on Tasks page.
 - **Frontend types**: snake_case from API → camelCase in TS via transform functions in endpoint files
 - **Frontend state**: Zustand stores with devtools middleware. Pattern: `store/xxxStore.ts`
 - **Query options**: Centralized in `frontend/src/api/queryOptions/admin.ts` with shared `ADMIN_STALE_TIME`/
