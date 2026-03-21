@@ -3,6 +3,141 @@
 AI-powered cryptocurrency trading platform with automated task scheduling, multi-agent analysis, and real-time
 monitoring.
 
+## Table of Contents
+
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+- [Getting Started](#getting-started)
+- [Development](#development)
+- [Environment Variables](#environment-variables)
+- [Architecture](#architecture)
+- [Agent Chat](#agent-chat)
+  - [Agent Tools](#agent-tools)
+- [Knowledge Base (RAG)](#knowledge-base-rag)
+  - [Knowledge Types](#knowledge-types)
+  - [Auto-Generated Knowledge](#auto-generated-knowledge)
+  - [Agent Integration](#agent-integration)
+- [Automation Flow](#automation-flow)
+  - [Task Types](#task-types)
+  - [Lifecycle](#lifecycle)
+  - [Subagents](#subagents)
+  - [Risk & Safeguards](#risk--safeguards)
+- [API Overview](#api-overview)
+
+## Features
+
+- **AI Trading Agent** — Chat with Claude AI via WebSocket, get structured trade recommendations with confidence scores
+- **Multi-Agent Analysis** — Parallel subagents for technical, fundamental, and news sentiment analysis
+- **Scheduled Tasks** — Cron-based automation with ASK (confirm before trading) and AUTO (immediate execution) modes
+- **Real-Time Market Data** — Live tickers, watchlists, and technical indicator charts via OKX
+- **Order Management** — Track open orders, order history, and active positions
+- **Risk Controls** — Configurable risk levels (conservative/moderate/aggressive), position limits, stop-loss enforcement
+- **Knowledge Base (RAG)** — Semantic search over trading strategies, lessons from past trades, and discovered patterns
+- **News & Sentiment** — Aggregated market news with credibility-weighted sentiment scoring
+- **Price Monitoring** — Condition-based alerts (price thresholds, RSI, volume spikes) with cooldowns
+- **Desktop & Web** — Runs as a web app or native desktop app via Tauri v2
+
+## Tech Stack
+
+| Layer        | Technology                                                                      |
+|--------------|---------------------------------------------------------------------------------|
+| Frontend     | React 19, TypeScript 5.7, MUI 6, TanStack Router/Query, Zustand, Framer Motion |
+| Backend      | Python 3.11+, FastAPI, Beanie (MongoDB ODM), APScheduler                        |
+| AI           | Claude SDK (Anthropic), nomic-embed-text-v1.5 (local, ONNX)                    |
+| Exchange     | OKX REST API                                                                    |
+| Database     | MongoDB                                                                         |
+| Desktop      | Tauri v2 (Rust)                                                                 |
+| Package Mgmt | uv (Python), Bun (Node)                                                         |
+
+## Prerequisites
+
+- **Python** 3.11+ (< 3.13)
+- **uv** — Python package manager ([install](https://docs.astral.sh/uv/getting-started/installation/))
+- **Bun** — JavaScript runtime & package manager ([install](https://bun.sh))
+- **MongoDB** — Local instance or Atlas cluster
+
+For the desktop app (optional):
+
+- **Rust** — cargo available in PATH
+- **Windows**: Visual Studio 2022 Build Tools with C++ workload (MSVC v143 + Windows SDK)
+
+## Quick Start
+
+```bash
+# Install dependencies
+uv sync
+cd frontend && bun install && cd ..
+
+# Copy environment files and fill in your values
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+
+# Start both backend (port 7000) and frontend (port 3000)
+uv run python run.py
+```
+
+Open http://localhost:3000 in your browser.
+
+## Getting Started
+
+1. **Register** at `/auth/register` with email and password
+2. **Log in** at `/auth/login` — you'll receive a JWT token (auto-managed by the frontend)
+3. **Set superuser** — the first user is _not_ automatically a superuser. Set `is_superuser: true` on your user document in MongoDB manually, or use the dev mode below
+4. **Configure exchange** (superuser) — go to Settings and enter your OKX API credentials. Toggle sandbox mode for paper trading
+5. **Configure agent** (superuser) — set the Anthropic API key and model in Settings, or use the `ANTHROPIC_API_KEY` env var
+
+**Dev mode:** When `DEBUG=true`, the app uses a pre-authenticated superuser (`dev@localhost.dev`) with no login required.
+
+**Superuser-only features:** OKX credentials, agent configuration, token expiry, embedding settings, admin logs, database explorer.
+
+**Auth details:** JWT with HS256, configurable expiry (`ACCESS_TOKEN_EXPIRE_MINUTES`), transparent refresh on 401, and token revocation on password change (all tokens issued before the change are invalidated).
+
+## Development
+
+| Task             | Command                         |
+|------------------|---------------------------------|
+| Web dev          | `uv run python run.py`          |
+| Desktop dev      | `cd frontend && bun run tauri:dev` |
+| Build desktop    | `cd frontend && bun run tauri:build` |
+| Test backend     | `uv run pytest`                 |
+| Test frontend    | `cd frontend && bun run test`   |
+| Lint backend     | `uv run ruff check`             |
+| Lint frontend    | `cd frontend && bun run lint`   |
+| Format backend   | `uv run ruff format`            |
+| Format frontend  | `cd frontend && bun run format` |
+
+> **Note:** Do not run `uv run python run.py` alongside `bun run tauri:dev` — the backend would start twice.
+
+## Environment Variables
+
+Both `.env.example` files document all available variables. The key ones:
+
+### Backend (`backend/.env`)
+
+| Variable                 | Required | Description                                      |
+|--------------------------|----------|--------------------------------------------------|
+| `SECRET_KEY`             | Prod     | JWT signing key (generate: `python -c "import secrets; print(secrets.token_urlsafe(48))"`) |
+| `MONGODB_URL`            | No       | Default: `mongodb://localhost:27017`              |
+| `MONGODB_DB_NAME`        | No       | Default: `trading_agent`                          |
+| `ANTHROPIC_API_KEY`      | No       | Falls back to Claude Code CLI credentials         |
+| `OKX_API_KEY`            | No       | Prefer Settings UI; env var as fallback           |
+| `OKX_SECRET_KEY`         | No       | Prefer Settings UI; env var as fallback           |
+| `OKX_PASSPHRASE`         | No       | Prefer Settings UI; env var as fallback           |
+| `OKX_SANDBOX`            | No       | Default: `true`                                   |
+| `SECRETS_ENCRYPTION_KEYS`| No       | Fernet keys for encrypting secrets at rest        |
+| `SENTRY_DSN`             | No       | Enables Sentry error tracking                     |
+
+### Frontend (`frontend/.env`)
+
+| Variable                 | Required | Description                                       |
+|--------------------------|----------|---------------------------------------------------|
+| `VITE_SENTRY_DSN`        | No       | Enables Sentry in the browser                     |
+| `SENTRY_AUTH_TOKEN`      | No       | Uploads source maps during build                  |
+
+See `backend/.env.example` and `frontend/.env.example` for the full list including Sentry tuning, logging, and external data API keys (Brave Search, CoinGecko, Glassnode).
+
 ## Architecture
 
 ```
@@ -20,271 +155,138 @@ Trading Agent (Claude SDK)
 External: OKX Exchange │ News APIs │ Local Embeddings (nomic) │ MongoDB
 ```
 
-## Development
+## Agent Chat
 
-- Web dev: run `uv run python run.py` from the repo root to start the backend and Vite together.
-- Desktop dev: run `cd frontend && bun run tauri:dev` to start Vite via Tauri's `beforeDevCommand` and let the Tauri app
-  spawn the backend.
-- Do not run `uv run python run.py` alongside `bun run tauri:dev`, or the backend will be launched twice.
+The primary interface is a real-time chat with Claude AI over WebSocket (`/agent` page).
 
-## Automatic Task Workflow
+**How it works:**
 
-The task system lets users create scheduled trading operations that run autonomously. Tasks go through a complete
-lifecycle: **creation → scheduling → execution → decision → (optional) trade**.
+1. Frontend opens a WebSocket connection to the backend
+2. Backend creates a `TradingAgent` instance with 20 MCP tools attached
+3. User sends a message (e.g., "Analyze BTC-USDT") — the agent streams back thinking blocks, tool calls, and a final response
+4. At the end of analysis, the agent calls `submit_recommendation` to produce a structured decision (action, confidence, entry/SL/TP, key factors)
+5. Sessions are persisted in MongoDB — messages, tool calls, and thinking content are all saved and resumable
 
-### Task Types
-
-| Type           | Purpose                              | Output                                                   |
-|----------------|--------------------------------------|----------------------------------------------------------|
-| **Analysis**   | Market analysis only                 | `AgentDecision` (type=ANALYSIS)                          |
-| **Trading**    | Analysis + potential trade execution | `AgentDecision` (type=RECOMMENDATION/TRADE_EXECUTION)    |
-| **Monitoring** | Price/condition alerts               | `AgentDecision` (type=MONITORING_ALERT) + `Notification` |
-
-### Task Creation
-
-Users create tasks via the frontend (`/tasks`) or API (`POST /api/v1/agent/tasks`):
-
-```json
-{
-  "name": "Daily BTC Analysis",
-  "taskType": "trading",
-  "frequency": "daily",
-  "scheduledTime": "09:00",
-  "symbols": [
-    "BTC-USDT",
-    "ETH-USDT"
-  ],
-  "riskLevel": "moderate",
-  "agentMode": "ask",
-  "useSubagents": false,
-  "customInstructions": "Focus on support/resistance levels"
-}
-```
-
-Key fields:
-
-- **frequency**: `once`, `hourly`, `daily`, `weekly`, `custom` (cron)
-- **riskLevel**: `conservative` (1.5% risk, 75% min confidence), `moderate` (3%, 65%), `aggressive` (7.5%, 55%)
-- **agentMode**: `ask` (notification + user confirmation) or `auto` (immediate execution)
-- **useSubagents**: When true, runs TechnicalAnalyst + FundamentalAnalyst + NewsAnalyst in parallel before the main
-  agent analysis
-
-### Scheduling (APScheduler)
-
-`AgentTaskScheduler` in `task_scheduler.py` manages the execution loop:
-
-1. On startup, loads all `ACTIVE` tasks from MongoDB
-2. Creates APScheduler triggers per task (IntervalTrigger, CronTrigger, DateTrigger)
-3. On each trigger fire, calls `_execute_task(task_id)`
-4. One-time tasks auto-complete after execution
-
-### Execution Flow
-
-#### Analysis Tasks
+**Agent decision framework** (enforced via system prompt):
 
 ```
-_execute_analysis_task(task)
-  └─ for each symbol:
-       ├─ [if use_subagents] Run 3 subagents in parallel → build enriched prompt
-       ├─ agent.analyze(prompt) → Claude processes with MCP tools
-       │    ├─ get_ticker, get_technical_indicators, get_candlesticks
-       │    ├─ get_onchain_metrics, get_macro_indicators
-       │    ├─ get_latest_news, get_news_sentiment
-       │    └─ submit_recommendation (structured output tool)
-       ├─ Store AgentDecision (type=ANALYSIS)
-       └─ record_execution(success=True)
+Historical Context → search knowledge base for past strategies, lessons, patterns
+  → Data Gathering → fetch ticker, indicators, on-chain metrics, news
+    → Technical Analysis → RSI, MACD, Bollinger, chart patterns
+      → Fundamental Analysis → on-chain flows, macro indicators
+        → Sentiment Analysis → news sentiment, web search
+          → Risk Assessment → position sizing, stop-loss placement
+            → submit_recommendation (structured output)
 ```
 
-#### Trading Tasks
+### Agent Tools
 
-```
-_execute_trading_task(task)
-  └─ for each symbol:
-       ├─ [if use_subagents] Run 3 subagents in parallel → build enriched prompt
-       ├─ agent.analyze(prompt) → structured recommendation
-       ├─ Gate checks:
-       │    ├─ confidence >= min_confidence for risk level?
-       │    └─ daily trade count < max_daily_trades?
-       ├─ Store AgentDecision (type=RECOMMENDATION)
-       │
-       ├─ [AUTO mode] → execute_trade_for_decision() immediately
-       │    ├─ OrderExecutor.execute_trade() or execute_with_risk_params()
-       │    ├─ Idempotency key: task-{task_id}-decision-{decision_id}
-       │    └─ Create TRADE_EXECUTED notification
-       │
-       └─ [ASK mode] → Create TRADE_CONFIRMATION notification
-            ├─ Decision status = PENDING, expires in 1 hour
-            └─ User confirms → execute_trade_for_decision()
-                 or rejects / expires → no trade
-```
+| Category           | Tools                                                          |
+|--------------------|----------------------------------------------------------------|
+| Market Data        | `get_ticker`, `get_orderbook`, `get_candlesticks`              |
+| Technical Analysis | `get_technical_indicators`, `detect_chart_patterns`            |
+| Fundamental        | `get_onchain_metrics`, `get_macro_indicators`                  |
+| News & Sentiment   | `get_latest_news`, `get_news_sentiment`                        |
+| Knowledge (RAG)    | `search_strategies`, `search_lessons`, `search_patterns`       |
+| Trading            | `get_account_balance`, `get_open_orders`, `place_order`, `cancel_order` |
+| Web Search         | `search_web`, `search_news`                                    |
+| Output             | `submit_recommendation`, `modify_task`                         |
 
-#### Monitoring Tasks
+## Knowledge Base (RAG)
 
-```
-_execute_monitoring_task(task)
-  └─ for each symbol:
-       ├─ Check cooldown (skip if last_alert_at + cooldown > now)
-       ├─ Fetch market data: get_ticker, get_technical_indicators
-       ├─ Evaluate each MonitoringCondition:
-       │    ├─ PRICE_ABOVE / PRICE_BELOW: compare ticker price vs threshold
-       │    ├─ PRICE_CHANGE_PCT: compare 24h % change vs threshold
-       │    ├─ RSI_ABOVE / RSI_BELOW: compare RSI(14) vs threshold
-       │    ├─ VOLUME_SPIKE: compare current volume vs avg * multiplier
-       │    └─ CUSTOM: call agent.analyze() with condition description
-       ├─ If any condition triggers:
-       │    ├─ Store AgentDecision (type=MONITORING_ALERT)
-       │    ├─ Create PRICE_ALERT notification
-       │    └─ Update task.last_alert_at (cooldown reset)
-       └─ record_execution(success=True)
-```
+The agent augments its analysis with a local knowledge base using semantic search — no external embedding API required.
 
-### Structured Tool Output (`submit_recommendation`)
+### Knowledge Types
 
-Instead of regex-parsing free-form text, the agent calls a `submit_recommendation` MCP tool at the end of analysis,
-providing structured data:
-
-```python
-{
-    "action": "buy",  # buy | sell | hold | wait
-    "confidence": 78.5,  # 0-100
-    "entry_price": 98500.0,  # optional
-    "stop_loss": 96200.0,  # optional
-    "take_profit": 104000.0,  # optional
-    "position_size": 0.05,  # optional
-    "summary": "BTC showing strong breakout above key resistance...",
-    "key_factors": ["RSI divergence", "Volume confirmation", "News catalyst"]
-}
-```
-
-The existing regex extractors remain as a fallback if the tool is not called.
-
-### Subagent Integration
-
-When `use_subagents=true`, the scheduler runs three specialist agents **in parallel** before the main analysis:
-
-| Subagent           | Input                  | Output                                       |
-|--------------------|------------------------|----------------------------------------------|
-| TechnicalAnalyst   | symbol + timeframe     | Indicators, patterns, signal (BUY/SELL/HOLD) |
-| FundamentalAnalyst | base asset (e.g., BTC) | On-chain metrics, valuation assessment       |
-| NewsAnalyst        | asset list             | Sentiment score, top news, signal            |
-
-Results are aggregated into an enriched prompt that gives the main agent pre-digested specialist context, improving
-decision quality at the cost of additional API calls.
-
-### Robustness
-
-- **Retry with backoff**: Transient errors (ConnectionError, TimeoutError) trigger up to `max_retries` retries with
-  exponential backoff (5s, 10s, 20s)
-- **Auto-pause**: After `max_consecutive_failures` (default 3) consecutive failures, the task is automatically paused
-  and a `TASK_FAILED` notification is created
-- **Idempotency**: Each trade uses a unique idempotency key to prevent duplicate orders on retry
-- **Cooldown**: Monitoring tasks respect `alert_cooldown_minutes` to avoid notification spam
-
-### ASK vs AUTO Mode
-
-| Aspect          | ASK Mode                                | AUTO Mode                       |
-|-----------------|-----------------------------------------|---------------------------------|
-| Trade execution | Requires user confirmation              | Immediate                       |
-| Notification    | `TRADE_CONFIRMATION` with accept/reject | `TRADE_EXECUTED` after the fact |
-| Expiration      | Decision expires after 1 hour           | N/A                             |
-| Use case        | Higher-risk, learning phase             | Trusted strategies, low-risk    |
-
-### Risk Management
-
-Risk levels control position sizing and minimum confidence thresholds:
-
-| Level        | Max Risk/Trade | Min Confidence | Use Case             |
-|--------------|----------------|----------------|----------------------|
-| Conservative | 1.5%           | 75%            | Capital preservation |
-| Moderate     | 3.0%           | 65%            | Balanced approach    |
-| Aggressive   | 7.5%           | 55%            | Growth-oriented      |
-
-Additional safeguards:
-
-- `max_position_size`: Hard cap on position size in quote currency
-- `max_daily_trades`: Limit number of trades per day per task
-- Stop-loss is always recommended by the agent's risk rules
-- OrderExecutor enforces position limits at execution time
-
-### Notification System
-
-All task outcomes produce notifications stored in MongoDB and delivered to the frontend:
-
-| Type                 | Trigger                        | Contains                                |
-|----------------------|--------------------------------|-----------------------------------------|
-| `TRADE_CONFIRMATION` | ASK mode recommendation        | Symbol, action, confidence, entry/SL/TP |
-| `TRADE_EXECUTED`     | Trade filled                   | Symbol, action, execution price         |
-| `PRICE_ALERT`        | Monitoring condition triggered | Symbol, condition, current value        |
-| `TASK_FAILED`        | Consecutive failure threshold  | Task name, error details                |
-| `ANALYSIS_READY`     | Analysis task completed        | Symbol, summary                         |
-
-Expired confirmations are cleaned up every 5 minutes by the scheduler.
-
-## Embeddings (Knowledge RAG)
-
-The knowledge system uses local embeddings for semantic search across trading strategies, trade lessons, trading
-patterns,
-and news articles.
-
-### Model
-
-- **Model**: [`nomic-ai/nomic-embed-text-v1.5`](https://huggingface.co/nomic-ai/nomic-embed-text-v1.5) — 768 dimensions,
-  270 MB
-- **Runtime**: `sentence-transformers` with ONNX backend (2-3x faster than PyTorch on CPU)
-- **Inference**: Runs locally on CPU, no API key required. ~30-50ms per embedding.
-- **Task prefixes**: Documents use `"search_document: "`, queries use `"search_query: "` (required by nomic)
+| Type                | Source                           | Contains                                                     |
+|---------------------|----------------------------------|--------------------------------------------------------------|
+| **Strategy**        | User-created via UI/API          | Entry/exit rules, risk params, win rate, Sharpe ratio        |
+| **Trade Lesson**    | Auto-extracted from filled orders | Outcome, P&L %, mistakes, successes, market context          |
+| **Trading Pattern** | Discovered by PatternMiner       | Conditions, success rate, sample count, average return       |
 
 ### How It Works
 
-1. **Document embedding**: When strategies, lessons, patterns, or articles are created, their text is formatted by
-   specialized generators (`StrategyEmbeddingGenerator`, `TradeLessonEmbeddingGenerator`, `PatternEmbeddingGenerator`)
-   and embedded as 768-dim vectors stored inline on the MongoDB document.
-2. **Query embedding**: When the agent or user searches, the query is embedded with the `search_query:` prefix.
-3. **Retrieval**: `KnowledgeRetriever` computes cosine similarity between the query vector and all stored document
-   vectors, filtering by a minimum similarity threshold (default 0.7).
+- **Embedding model:** `nomic-ai/nomic-embed-text-v1.5` — 768 dimensions, runs locally on CPU via ONNX (~30-50ms per embedding, no API key needed)
+- **Storage:** Vectors are stored inline on each MongoDB document
+- **Search:** Query is embedded, then dot-product similarity is computed against stored vectors. Minimum threshold: 0.7 (0.6 for cross-type search)
+- **Fallback:** If embedding fails, falls back to MongoDB `$text` search, then regex matching
 
-### Gaming Deferral
+### Auto-Generated Knowledge
 
-Document embedding tasks can be deferred while a game is running to avoid CPU contention:
+- **Trade lessons:** When an order is filled, `TradeLearner` uses Claude Sonnet to extract a lesson — what went right, what went wrong, and recommendations. Falls back to rule-based analysis (checks for missing stop-loss, trading against trend, overbought/oversold entries) if the API call fails.
+- **Trading patterns:** `PatternMiner` scans historical candles for RSI bullish divergence, volume spike breakouts, support bounces, and golden crosses. Patterns are validated against recent trade outcomes periodically.
 
-- **Settings**: `GET/PUT /api/v1/settings/embedding` — toggle, process list, check interval
-- **Detection**: `psutil` scans running processes against a user-configured list (e.g. `["cs2.exe", "valorant.exe"]`)
-- **Behavior**: When a game is detected, document embeddings wait (polling every N minutes) until the game exits, then
-  resume automatically. Query embeddings (search) are never deferred.
+### Agent Integration
 
-### Key Files
+The agent uses knowledge at two levels:
 
-| File                                     | Purpose                                                                 |
-|------------------------------------------|-------------------------------------------------------------------------|
-| `backend/app/knowledge/embeddings.py`    | `EmbeddingService` singleton, specialized generators, cosine similarity |
-| `backend/app/knowledge/retriever.py`     | `KnowledgeRetriever` — semantic search across all knowledge types       |
-| `backend/app/knowledge/game_detector.py` | `psutil`-based game process detection                                   |
-| `backend/app/knowledge/trade_learner.py` | Extracts lessons from completed trades + generates embeddings           |
-| `backend/app/knowledge/pattern_miner.py` | Discovers technical patterns + generates embeddings                     |
+1. **Interactive chat** — The system prompt instructs the agent to call `search_strategies`, `search_lessons`, and `search_patterns` before every analysis
+2. **Scheduled tasks** — The task scheduler automatically injects relevant knowledge context into the prompt before the agent runs
 
-## API Reference
+## Automation Flow
 
-### Task Endpoints (`/api/v1/agent/tasks`)
+Users create scheduled tasks via the UI (`/tasks`) or API. Each task defines a **type**, **frequency**, **risk level**, and **agent mode**.
 
-| Method | Path            | Description                             |
-|--------|-----------------|-----------------------------------------|
-| POST   | `/`             | Create task                             |
-| GET    | `/`             | List tasks (filterable by status, type) |
-| GET    | `/{id}`         | Get task details                        |
-| PUT    | `/{id}`         | Update task                             |
-| DELETE | `/{id}`         | Delete task                             |
-| POST   | `/{id}/pause`   | Pause active task                       |
-| POST   | `/{id}/resume`  | Resume paused task                      |
-| POST   | `/{id}/run-now` | Execute task immediately                |
-| GET    | `/{id}/history` | Get execution history                   |
+### Task Types
 
-## Tech Stack
+| Type           | Purpose                        | Output                                    |
+|----------------|--------------------------------|-------------------------------------------|
+| **Analysis**   | Market analysis only           | Agent decision (analysis report)          |
+| **Trading**    | Analysis + potential execution | Recommendation → trade (if gates pass)    |
+| **Monitoring** | Condition-based alerts         | Notification when threshold is breached   |
 
-| Layer        | Technology                                                                     |
-|--------------|--------------------------------------------------------------------------------|
-| Frontend     | React 19, TypeScript 5.7, MUI 6, TanStack Router/Query, Zustand, Framer Motion |
-| Backend      | Python 3.11+, FastAPI, Beanie (MongoDB ODM), APScheduler                       |
-| AI           | Claude SDK (Anthropic), nomic-embed-text-v1.5 (local, ONNX)                    |
-| Exchange     | OKX REST API                                                                   |
-| Database     | MongoDB (Beanie ODM)                                                           |
-| Package Mgmt | uv (Python), Bun (Node)                                                        |
+### Lifecycle
+
+```
+Task Created → APScheduler trigger (once / hourly / daily / weekly / cron)
+  │
+  ├─ Analysis: agent analyzes each symbol with MCP tools → stores decision
+  │
+  ├─ Trading: agent analyzes → gate checks (confidence ≥ threshold? daily limit?)
+  │    ├─ AUTO mode → execute trade immediately via OKX
+  │    └─ ASK mode  → send confirmation notification → user accepts/rejects → execute or discard
+  │
+  └─ Monitoring: evaluate conditions (price, RSI, volume) per symbol
+       └─ condition triggered → alert notification (respects cooldown)
+```
+
+### Subagents
+
+When enabled, three specialist agents run **in parallel** before the main analysis:
+
+| Subagent           | Focus                                              |
+|--------------------|----------------------------------------------------|
+| TechnicalAnalyst   | Indicators, chart patterns, BUY/SELL/HOLD signal   |
+| FundamentalAnalyst | On-chain metrics, tokenomics, valuation             |
+| NewsAnalyst        | Sentiment score, top stories, directional signal    |
+
+Their results are aggregated into an enriched prompt for the main agent, improving decision quality at the cost of additional API calls.
+
+### Risk & Safeguards
+
+| Level        | Max Risk / Trade | Min Confidence | Use Case             |
+|--------------|------------------|----------------|----------------------|
+| Conservative | 1.5%             | 75%            | Capital preservation |
+| Moderate     | 3.0%             | 65%            | Balanced approach    |
+| Aggressive   | 7.5%             | 55%            | Growth-oriented      |
+
+Additional safeguards: max position size cap, daily trade limit per task, mandatory stop-loss recommendation, idempotent order execution (no duplicate trades on retry), auto-pause after consecutive failures.
+
+## API Overview
+
+The backend serves a REST API at `http://localhost:7000`. Interactive docs are available at `/docs` (Swagger) and `/redoc`.
+
+| Prefix                | Description                    |
+|-----------------------|--------------------------------|
+| `/auth`               | Login, token refresh, password |
+| `/api/v1/market`      | Tickers, indicators, candles   |
+| `/api/v1/orders`      | Order history and positions    |
+| `/api/v1/strategies`  | Strategy CRUD                  |
+| `/api/v1/knowledge`   | Knowledge base (RAG) search    |
+| `/api/v1/news`        | News feed and sentiment        |
+| `/api/v1/agent/tasks` | Scheduled task management      |
+| `/api/v1/agent/sessions` | Agent WebSocket sessions    |
+| `/api/v1/agent/decisions` | Trading decision history   |
+| `/api/v1/notifications` | Alerts and confirmations     |
+| `/api/v1/settings`    | App configuration              |
+| `/api/v1/admin`       | User management, logs (superuser) |
