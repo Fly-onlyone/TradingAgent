@@ -1,37 +1,37 @@
 """Database models."""
 
-from app.db.models.user import User
-from app.db.models.order import Order, OrderSide, OrderType, OrderStatus
-from app.db.models.strategy import Strategy
+from app.db.models.agent_decision import (
+    AgentDecision,
+    DecisionAction,
+    DecisionStatus,
+    DecisionType,
+)
+from app.db.models.agent_session import AgentSession, MessageRole
+from app.db.models.agent_task import (
+    AgentMode,
+    AgentTask,
+    RiskLevel,
+    TaskFrequency,
+    TaskSchedule,
+    TaskStatus,
+)
 from app.db.models.knowledge import (
     StrategyKnowledge,
     TradeLesson,
     TradingPattern,
 )
-from app.db.models.news import NewsSource, NewsArticle, CredibilityEvent
 from app.db.models.market import MarketData, Trade
-from app.db.models.agent_task import (
-    AgentTask,
-    TaskFrequency,
-    TaskStatus,
-    RiskLevel,
-    AgentMode,
-    TaskType,
-)
-from app.db.models.agent_decision import (
-    AgentDecision,
-    DecisionType,
-    DecisionAction,
-    DecisionStatus,
-)
-from app.db.models.agent_session import AgentSession, MessageRole
+from app.db.models.news import CredibilityEvent, NewsArticle, NewsSource
 from app.db.models.notification import (
     Notification,
-    NotificationType,
-    NotificationStatus,
     NotificationAction,
+    NotificationStatus,
+    NotificationType,
     UserNotificationSettings,
 )
+from app.db.models.order import Order, OrderSide, OrderStatus, OrderType
+from app.db.models.strategy import Strategy
+from app.db.models.user import User
 
 __all__ = [
     # User
@@ -60,7 +60,7 @@ __all__ = [
     "TaskStatus",
     "RiskLevel",
     "AgentMode",
-    "TaskType",
+    "TaskSchedule",
     # Agent Decision
     "AgentDecision",
     "DecisionType",

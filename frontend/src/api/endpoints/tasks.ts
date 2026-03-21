@@ -10,13 +10,11 @@ import type {
   TaskListResponse,
   TaskExecutionListResponse,
   TaskStatus,
-  TaskType,
 } from '@/types/task';
 import type { PaginationParams } from '@/types';
 
 export interface TasksFilter extends PaginationParams {
   status?: TaskStatus;
-  taskType?: TaskType;
 }
 
 export const tasksApi = {
