@@ -20,6 +20,13 @@ Trading Agent (Claude SDK)
 External: OKX Exchange │ News APIs │ Local Embeddings (nomic) │ MongoDB
 ```
 
+## Development
+
+- Web dev: run `uv run python run.py` from the repo root to start the backend and Vite together.
+- Desktop dev: run `cd frontend && bun run tauri:dev` to start Vite via Tauri's `beforeDevCommand` and let the Tauri app
+  spawn the backend.
+- Do not run `uv run python run.py` alongside `bun run tauri:dev`, or the backend will be launched twice.
+
 ## Automatic Task Workflow
 
 The task system lets users create scheduled trading operations that run autonomously. Tasks go through a complete
@@ -215,12 +222,14 @@ Expired confirmations are cleaned up every 5 minutes by the scheduler.
 
 ## Embeddings (Knowledge RAG)
 
-The knowledge system uses local embeddings for semantic search across trading strategies, trade lessons, trading patterns,
+The knowledge system uses local embeddings for semantic search across trading strategies, trade lessons, trading
+patterns,
 and news articles.
 
 ### Model
 
-- **Model**: [`nomic-ai/nomic-embed-text-v1.5`](https://huggingface.co/nomic-ai/nomic-embed-text-v1.5) — 768 dimensions, 270 MB
+- **Model**: [`nomic-ai/nomic-embed-text-v1.5`](https://huggingface.co/nomic-ai/nomic-embed-text-v1.5) — 768 dimensions,
+  270 MB
 - **Runtime**: `sentence-transformers` with ONNX backend (2-3x faster than PyTorch on CPU)
 - **Inference**: Runs locally on CPU, no API key required. ~30-50ms per embedding.
 - **Task prefixes**: Documents use `"search_document: "`, queries use `"search_query: "` (required by nomic)
@@ -245,13 +254,13 @@ Document embedding tasks can be deferred while a game is running to avoid CPU co
 
 ### Key Files
 
-| File | Purpose |
-|------|---------|
-| `backend/app/knowledge/embeddings.py` | `EmbeddingService` singleton, specialized generators, cosine similarity |
-| `backend/app/knowledge/retriever.py` | `KnowledgeRetriever` — semantic search across all knowledge types |
-| `backend/app/knowledge/game_detector.py` | `psutil`-based game process detection |
-| `backend/app/knowledge/trade_learner.py` | Extracts lessons from completed trades + generates embeddings |
-| `backend/app/knowledge/pattern_miner.py` | Discovers technical patterns + generates embeddings |
+| File                                     | Purpose                                                                 |
+|------------------------------------------|-------------------------------------------------------------------------|
+| `backend/app/knowledge/embeddings.py`    | `EmbeddingService` singleton, specialized generators, cosine similarity |
+| `backend/app/knowledge/retriever.py`     | `KnowledgeRetriever` — semantic search across all knowledge types       |
+| `backend/app/knowledge/game_detector.py` | `psutil`-based game process detection                                   |
+| `backend/app/knowledge/trade_learner.py` | Extracts lessons from completed trades + generates embeddings           |
+| `backend/app/knowledge/pattern_miner.py` | Discovers technical patterns + generates embeddings                     |
 
 ## API Reference
 

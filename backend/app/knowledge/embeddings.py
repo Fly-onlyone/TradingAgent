@@ -30,8 +30,6 @@ def _get_model() -> SentenceTransformer:
         logger.info("Loading embedding model: %s (ONNX backend)", MODEL_NAME)
         _model = SentenceTransformer(
             MODEL_NAME,
-            backend="onnx",
-            model_kwargs={"provider": "CPUExecutionProvider"},
             trust_remote_code=True,
         )
         logger.info("Embedding model loaded successfully (dim=%d)", DIMENSION)

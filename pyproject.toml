@@ -2,7 +2,7 @@
 name = "trading-agent"
 version = "0.1.0"
 description = "Automatic Trading Agent Backend with Claude AI"
-requires-python = ">=3.11,<3.14"
+requires-python = ">=3.11,<3.13"
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.30.0",
@@ -13,7 +13,8 @@ dependencies = [
     "motor>=3.6.0",
     "beanie>=1.26.0",
     # Embeddings (local model)
-    "sentence-transformers[onnx]>=5.0.0",
+    "sentence-transformers>=5.0.0",
+    "einops>=0.8.0",
     # Process monitoring (game detection for embedding deferral)
     "psutil>=5.9.0",
     # Core
@@ -52,6 +53,9 @@ dev = [
     "ruff>=0.3.0",
     "mypy>=1.9.0",
 ]
+
+[tool.uv]
+environments = ["sys_platform == 'win32'"]
 
 [build-system]
 requires = ["hatchling"]
