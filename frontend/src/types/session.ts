@@ -240,6 +240,11 @@ export const DECISION_TYPE_CONFIG: Record<
 		color: "#00bcd4",
 		icon: "notifications",
 	},
+	task_modification: {
+		label: "Task Change",
+		color: "#795548",
+		icon: "edit_note",
+	},
 };
 
 export const DECISION_ACTION_CONFIG: Record<

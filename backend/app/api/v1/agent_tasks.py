@@ -207,6 +207,7 @@ def task_to_response(task: AgentTask) -> TaskResponse:
         symbols=task.symbols,
         risk_level=task.risk_level.value,
         agent_mode=task.agent_mode.value,
+        task_modification_mode=task.task_modification_mode.value,
         max_position_size=task.max_position_size,
         max_daily_trades=task.max_daily_trades,
         custom_instructions=task.custom_instructions,
@@ -279,6 +280,7 @@ async def create_task(
         symbols=task_data.symbols,
         risk_level=task_data.risk_level,
         agent_mode=task_data.agent_mode,
+        task_modification_mode=task_data.task_modification_mode,
         max_position_size=task_data.max_position_size,
         max_daily_trades=task_data.max_daily_trades,
         monitoring_conditions=[
