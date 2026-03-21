@@ -15,6 +15,7 @@ from app.db.models.agent_task import (
     MonitoringConditionType,
     RiskLevel,
     TaskFrequency,
+    TaskModificationMode,
     TaskSchedule,
     TaskStatus,
 )
@@ -59,6 +60,7 @@ class TaskCreate(BaseModel):
     symbols: list[str] = Field(default_factory=list)
     risk_level: RiskLevel = RiskLevel.MODERATE
     agent_mode: AgentMode = AgentMode.ASK
+    task_modification_mode: TaskModificationMode = TaskModificationMode.DISABLED
     max_position_size: float | None = None
     max_daily_trades: int | None = None
 
@@ -89,6 +91,7 @@ class TaskUpdate(BaseModel):
     symbols: list[str] | None = None
     risk_level: RiskLevel | None = None
     agent_mode: AgentMode | None = None
+    task_modification_mode: TaskModificationMode | None = None
     max_position_size: float | None = None
     max_daily_trades: int | None = None
 
@@ -122,6 +125,7 @@ class TaskResponse(BaseModel):
     symbols: list[str]
     risk_level: str
     agent_mode: str
+    task_modification_mode: str
     max_position_size: float | None
     max_daily_trades: int | None
     custom_instructions: str | None

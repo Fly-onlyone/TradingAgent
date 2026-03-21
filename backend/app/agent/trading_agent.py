@@ -36,6 +36,7 @@ SYSTEM_PROMPT = """You are an expert autonomous trading agent for cryptocurrency
 3. **News Analysis**: Assess market sentiment from news and social media
 4. **Risk Management**: Calculate position sizes and set appropriate stop-losses
 5. **Order Execution**: Place and manage trading orders
+6. **Web Search**: Search the web for real-time news, regulatory updates, and analyst opinions using search_web and search_news tools
 
 ## Decision Framework:
 When asked to analyze or trade, follow this process:
@@ -248,7 +249,9 @@ class TradingAgent:
         )
         return float(match.group(1)) if match else None
 
-    async def analyze(self, user_message: str, user_id: str | None = None) -> dict[str, Any]:
+    async def analyze(
+        self, user_message: str, user_id: str | None = None
+    ) -> dict[str, Any]:
         """Analyze market/trading prompt and normalize output for task scheduler.
 
         Prefers structured data from the submit_recommendation tool.
@@ -262,7 +265,9 @@ class TradingAgent:
         recommendation = get_pending_recommendation(request_id)
 
         if recommendation:
-            logger.info("Using structured recommendation from submit_recommendation tool")
+            logger.info(
+                "Using structured recommendation from submit_recommendation tool"
+            )
             summary = recommendation.get("summary", "")
             if len(summary) > 300:
                 summary = f"{summary[:297]}..."

@@ -43,6 +43,29 @@ class AgentMode(str, Enum):
     ASK = "ask"  # Notify user and wait for confirmation
 
 
+class TaskModificationMode(str, Enum):
+    """Controls whether the agent can modify task configuration during execution."""
+
+    DISABLED = "disabled"  # Agent cannot modify task
+    AUTO = "auto"  # Apply changes immediately
+    ASK = "ask"  # Create pending decision for user approval
+
+
+AGENT_MODIFIABLE_FIELDS: frozenset[str] = frozenset(
+    {
+        "symbols",
+        "risk_level",
+        "max_position_size",
+        "max_daily_trades",
+        "monitoring_conditions",
+        "alert_cooldown_minutes",
+        "custom_instructions",
+        "schedules",
+        "use_subagents",
+    }
+)
+
+
 class MonitoringConditionType(str, Enum):
     """Type of monitoring condition to evaluate."""
 
@@ -99,6 +122,7 @@ class AgentTask(Document):
     symbols: list[str] = Field(default_factory=list)  # Trading pairs to analyze
     risk_level: RiskLevel = RiskLevel.MODERATE
     agent_mode: AgentMode = AgentMode.ASK
+    task_modification_mode: TaskModificationMode = TaskModificationMode.DISABLED
     max_position_size: float | None = None  # Max position in quote currency
     max_daily_trades: int | None = None  # Limit trades per day
 

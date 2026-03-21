@@ -9,6 +9,7 @@ Trading agent/
 │       ├── agent/
 │       │   ├── tools/
 │       │   ├── subagents/
+│       │   ├── mcp_tools.py
 │       │   └── trading_agent.py
 │       ├── api/
 │       │   ├── v1/
@@ -17,14 +18,18 @@ Trading agent/
 │       │   └── models/
 │       ├── exchange/
 │       ├── knowledge/
+│       ├── middleware/
 │       ├── news/
+│       ├── security/
 │       ├── services/
+│       ├── utils/
 │       ├── config.py
 │       └── main.py
 ├── frontend/
 │   └── src/
 │       ├── api/
 │       │   ├── endpoints/
+│       │   ├── queryOptions/
 │       │   ├── websocket/
 │       │   └── client.ts
 │       ├── components/
@@ -32,6 +37,7 @@ Trading agent/
 │       │   ├── charts/
 │       │   ├── common/
 │       │   ├── data-display/
+│       │   ├── effects/
 │       │   ├── layout/
 │       │   ├── trades/
 │       │   └── trading/
@@ -55,28 +61,22 @@ Trading agent/
 
 ## Code Patterns
 
-### Pattern: Claude Tool Definition
+### Pattern: MCP Tool Registration
 
-**When to Apply**: Agent tools in `backend/app/agent/tools/`.
+**When to Apply**: Agent tools in `backend/app/agent/mcp_tools.py`.
+
+Tools are plain async functions in `backend/app/agent/tools/`, wrapped as MCP tools via
+`claude_agent_sdk`'s `@tool` decorator in `mcp_tools.py`:
 
 ```python
-def get_tool_definitions() -> list[dict]:
-    return [
-        {
-            "name": "get_market_price",
-            "description": "Get current price for a trading pair",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "symbol": {"type": "string", "description": "Trading pair (e.g., BTC-USDT)"}
-                },
-                "required": ["symbol"]
-            }
-        }
-    ]
+from claude_agent_sdk import tool
 
-async def execute_tool(name: str, args: dict) -> str:
-    if name == "get_market_price":
-        return await _get_market_price(args["symbol"])
-    raise ValueError(f"Unknown tool: {name}")
+@tool(
+    "get_ticker", "Get current ticker/price data for a trading symbol", {"symbol": str}
+)
+async def mcp_get_ticker(args: dict[str, Any]) -> dict[str, Any]:
+    from app.agent.tools.market_tools import get_ticker
+
+    result = await get_ticker(symbol=args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(result)}]}
 ```

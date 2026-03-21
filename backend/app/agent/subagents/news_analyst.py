@@ -110,6 +110,9 @@ class NewsAnalyst:
         news = await get_latest_news(assets=assets, limit=15)
         sentiment = await get_news_sentiment(assets=assets, hours=hours)
 
+        # Fetch real-time web news
+        web_news_section = await self._fetch_web_news(assets)
+
         # Build context for Claude
         context = f"""
 Assets of Interest: {", ".join(assets) if assets else "All major crypto"}
@@ -120,7 +123,7 @@ Time Window: Last {hours} hours
 
 ## Sentiment Overview:
 {self._format_sentiment(sentiment)}
-
+{web_news_section}
 Based on this news data, provide your analysis and trading implications.
 """
 
@@ -158,10 +161,27 @@ Based on this news data, provide your analysis and trading implications.
         if not self._client:
             raise RuntimeError("Analyst not connected. Call connect() first.")
 
-        # Search for specific news
+        # Search for specific news from database
         news = await search_news(query=query, assets=assets, limit=10)
 
-        if not news.get("articles"):
+        # Also search the web for real-time results
+        web_news_section = ""
+        try:
+            from app.agent.tools.web_search_tools import (
+                search_news as brave_search_news,
+            )
+
+            web_results = await brave_search_news(query=query, count=5, freshness="pd")
+            if web_results.get("articles"):
+                web_news_section = "\n## Real-time Web News:\n" + self._format_web_news(
+                    web_results
+                )
+        except Exception:
+            logger.debug(
+                "Web search unavailable for breaking news query", exc_info=True
+            )
+
+        if not news.get("articles") and not web_news_section:
             return {
                 "query": query,
                 "assets": assets,
@@ -176,6 +196,7 @@ Assets: {", ".join(assets) if assets else "All"}
 
 ## Relevant News Found:
 {self._format_news(news)}
+{web_news_section}
 
 Analyze this news and provide:
 1. Summary of key information
@@ -199,6 +220,43 @@ Analyze this news and provide:
             "signal": signal,
             "news": news.get("articles", []),
         }
+
+    async def _fetch_web_news(self, assets: list[str] | None) -> str:
+        """Fetch real-time news from Brave Search API."""
+        try:
+            from app.agent.tools.web_search_tools import (
+                search_news as brave_search_news,
+            )
+
+            asset_str = " ".join(assets) if assets else "crypto"
+            web_results = await brave_search_news(
+                query=f"{asset_str} cryptocurrency news",
+                count=5,
+                freshness="pd",
+            )
+            if web_results.get("articles"):
+                return "\n## Real-time Web News:\n" + self._format_web_news(web_results)
+        except Exception:
+            logger.debug("Web search unavailable for news analysis", exc_info=True)
+        return ""
+
+    def _format_web_news(self, data: dict) -> str:
+        """Format Brave Search news results for prompt."""
+        articles = data.get("articles", [])
+        if not articles:
+            return "No web news results found."
+
+        lines = []
+        for i, article in enumerate(articles, 1):
+            breaking = " [BREAKING]" if article.get("breaking") else ""
+            lines.append(f"{i}. {article.get('title')}{breaking}")
+            lines.append(
+                f"   Source: {article.get('source')} | {article.get('age', 'recent')}"
+            )
+            if article.get("description"):
+                lines.append(f"   {article['description'][:200]}")
+            lines.append("")
+        return "\n".join(lines)
 
     def _format_news(self, data: dict) -> str:
         """Format news articles for prompt."""

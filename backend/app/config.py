@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     glassnode_api_key: str = ""
     coingecko_api_key: str = ""
     defillama_api_url: str = "https://api.llama.fi"
+    brave_search_api_key: str = ""
 
     # Sentry
     sentry_dsn: str = ""
@@ -91,7 +92,11 @@ class Settings(BaseSettings):
                 stacklevel=2,
             )
 
-        if not self.debug and "localhost" in self.mongodb_url and "@" not in self.mongodb_url:
+        if (
+            not self.debug
+            and "localhost" in self.mongodb_url
+            and "@" not in self.mongodb_url
+        ):
             warnings.warn(
                 "MongoDB connection has no authentication credentials. "
                 "Configure a URI with username:password@ for production.",

@@ -25,6 +25,7 @@ from app.db.models.agent_task import (
     MonitoringConditionType,
     RiskLevel,
     TaskFrequency,
+    TaskModificationMode,
     TaskSchedule,
     TaskStatus,
 )
@@ -48,6 +49,24 @@ class AgentTaskScheduler:
 
             self._trading_agent = TradingAgent()
         return self._trading_agent
+
+    def _set_modification_context(self, request_id: str, task: AgentTask) -> None:
+        """Set task execution context for the modify_task tool."""
+        if task.task_modification_mode != TaskModificationMode.DISABLED:
+            from app.agent.mcp_tools import set_task_execution_context
+
+            set_task_execution_context(
+                request_id=request_id,
+                task_id=str(task.id),
+                user_id=str(task.user_id),
+                mode=task.task_modification_mode.value,
+            )
+
+    def _clear_modification_context(self, request_id: str) -> None:
+        """Clear task execution context after agent completes."""
+        from app.agent.mcp_tools import clear_task_execution_context
+
+        clear_task_execution_context(request_id)
 
     # Transient error types that justify a retry
     _RETRYABLE_ERRORS = (ConnectionError, TimeoutError, OSError)
@@ -272,14 +291,21 @@ class AgentTaskScheduler:
                 else:
                     prompt = self._build_analysis_prompt(symbol, task)
 
+                # Set task context for modify_task tool
+                request_id = f"task-{task.id}-{symbol}"
+                self._set_modification_context(request_id, task)
+
                 # Run agent analysis with retry on transient errors
-                result = await self._execute_with_retry(
-                    lambda: agent.analyze(
-                        user_message=prompt,
-                        user_id=str(task.user_id),
-                    ),
-                    max_retries=task.max_retries,
-                )
+                try:
+                    result = await self._execute_with_retry(
+                        lambda: agent.analyze(
+                            user_message=prompt,
+                            user_id=str(task.user_id),
+                        ),
+                        max_retries=task.max_retries,
+                    )
+                finally:
+                    self._clear_modification_context(request_id)
 
                 # Store decision
                 decision = AgentDecision(
@@ -326,14 +352,21 @@ class AgentTaskScheduler:
                 else:
                     prompt = self._build_trading_prompt(symbol, task)
 
+                # Set task context for modify_task tool
+                request_id = f"task-{task.id}-{symbol}"
+                self._set_modification_context(request_id, task)
+
                 # Run agent analysis with retry on transient errors
-                result = await self._execute_with_retry(
-                    lambda: agent.analyze(
-                        user_message=prompt,
-                        user_id=str(task.user_id),
-                    ),
-                    max_retries=task.max_retries,
-                )
+                try:
+                    result = await self._execute_with_retry(
+                        lambda: agent.analyze(
+                            user_message=prompt,
+                            user_id=str(task.user_id),
+                        ),
+                        max_retries=task.max_retries,
+                    )
+                finally:
+                    self._clear_modification_context(request_id)
 
                 action = self._parse_action(result.get("action"))
                 confidence = float(result.get("confidence") or 0)
@@ -903,6 +936,7 @@ class AgentTaskScheduler:
         if task.custom_instructions:
             prompt += f"\n\nAdditional context: {task.custom_instructions}"
 
+        prompt += self._modification_hint(task)
         return prompt
 
     def _build_trading_prompt(self, symbol: str, task: AgentTask) -> str:
@@ -926,7 +960,23 @@ Provide:
         if task.custom_instructions:
             prompt += f"\n\nAdditional instructions: {task.custom_instructions}"
 
+        prompt += self._modification_hint(task)
         return prompt
+
+    def _modification_hint(self, task: AgentTask) -> str:
+        """Append modify_task hint if task self-modification is enabled."""
+        if task.task_modification_mode == TaskModificationMode.DISABLED:
+            return ""
+        mode = task.task_modification_mode.value
+        return (
+            f"\n\n[Task Self-Modification: {mode} mode] "
+            "You can modify this task's configuration using the modify_task tool "
+            "when market conditions warrant changes. "
+            f"Current config: symbols={task.symbols}, "
+            f"risk_level={task.risk_level.value}, "
+            f"max_position_size={task.max_position_size}, "
+            f"max_daily_trades={task.max_daily_trades}."
+        )
 
     def _get_risk_config(self, risk_level: RiskLevel) -> dict:
         """Get risk configuration based on risk level."""

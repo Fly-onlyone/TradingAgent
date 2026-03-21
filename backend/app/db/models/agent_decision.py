@@ -18,6 +18,7 @@ class DecisionType(str, Enum):
     RISK_ALERT = "risk_alert"  # Risk warning
     NEWS_INSIGHT = "news_insight"  # News-based insight
     MONITORING_ALERT = "monitoring_alert"  # Price/condition alert
+    TASK_MODIFICATION = "task_modification"  # Agent-proposed task config change
 
 
 class DecisionAction(str, Enum):
@@ -92,6 +93,7 @@ class AgentDecision(Document):
     summary: str  # Short summary (1-2 sentences)
     reasoning: str  # Full AI reasoning
     key_factors: list[str] = Field(default_factory=list)  # Main decision factors
+    proposed_changes: dict | None = None  # Before/after for task modifications
 
     # Trade specifics (if applicable)
     suggested_entry: Optional[float] = None

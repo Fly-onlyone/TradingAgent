@@ -109,6 +109,9 @@ class TechnicalAnalyst:
         patterns = await detect_chart_patterns(symbol, timeframe)
         price_action = await get_price_action(symbol, timeframe)
 
+        # Fetch analyst commentary from web
+        web_section = await self._fetch_analyst_commentary(symbol)
+
         # Build context for Claude
         context = f"""
 Symbol: {symbol}
@@ -122,7 +125,7 @@ Timeframe: {timeframe}
 
 ## Price Action:
 {self._format_price_action(price_action)}
-
+{web_section}
 Based on this technical data, provide your analysis and trading signal.
 """
 
@@ -142,6 +145,29 @@ Based on this technical data, provide your analysis and trading signal.
             "analysis": analysis_text,
             "signal": signal,
         }
+
+    async def _fetch_analyst_commentary(self, symbol: str) -> str:
+        """Fetch analyst commentary from Brave Search."""
+        try:
+            from app.agent.tools.web_search_tools import search_web
+
+            asset = symbol.upper().replace("-USDT", "").replace("-USD", "")
+            web_results = await search_web(
+                query=f"{asset} crypto technical analysis market outlook",
+                count=3,
+                freshness="pw",
+            )
+            if web_results.get("results"):
+                lines = ["\n## Analyst Commentary (Web):"]
+                for i, r in enumerate(web_results["results"], 1):
+                    lines.append(f"{i}. {r.get('title')}")
+                    if r.get("description"):
+                        lines.append(f"   {r['description'][:200]}")
+                    lines.append("")
+                return "\n".join(lines)
+        except Exception:
+            logger.debug("Web search unavailable for technical analysis", exc_info=True)
+        return ""
 
     def _format_indicators(self, data: dict) -> str:
         """Format indicators for prompt."""

@@ -26,7 +26,8 @@ export type DecisionType =
 	| "trade_execution"
 	| "risk_alert"
 	| "news_insight"
-	| "monitoring_alert";
+	| "monitoring_alert"
+	| "task_modification";
 export type DecisionAction = "buy" | "sell" | "hold" | "wait" | "close";
 export type DecisionStatus =
 	| "pending"
@@ -155,6 +156,7 @@ export interface MarketContext {
 export interface AgentDecisionDetail extends AgentDecisionSummary {
 	reasoning: string;
 	keyFactors: string[];
+	proposedChanges?: Record<string, unknown>; // For task modification decisions
 
 	// Trade specifics
 	suggestedEntry?: number;

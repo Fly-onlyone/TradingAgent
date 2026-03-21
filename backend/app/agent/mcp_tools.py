@@ -9,12 +9,15 @@ from typing import Any
 
 from claude_agent_sdk import create_sdk_mcp_server, tool
 
+
 # ============================================================
 # Market Tools
 # ============================================================
 
 
-@tool("get_ticker", "Get current ticker/price data for a trading symbol", {"symbol": str})
+@tool(
+    "get_ticker", "Get current ticker/price data for a trading symbol", {"symbol": str}
+)
 async def mcp_get_ticker(args: dict[str, Any]) -> dict[str, Any]:
     from app.agent.tools.market_tools import get_ticker
 
@@ -480,7 +483,9 @@ async def mcp_submit_recommendation(args: dict[str, Any]) -> dict[str, Any]:
         "content": [
             {
                 "type": "text",
-                "text": json.dumps({"status": "ok", "message": "Recommendation recorded."}),
+                "text": json.dumps(
+                    {"status": "ok", "message": "Recommendation recorded."}
+                ),
             }
         ]
     }
@@ -491,6 +496,275 @@ def get_pending_recommendation(request_id: str) -> dict[str, Any] | None:
     return _pending_recommendations.pop(
         request_id, _pending_recommendations.pop("__latest__", None)
     )
+
+
+# ============================================================
+# Task Self-Modification
+# ============================================================
+
+_task_execution_context: dict[str, dict[str, Any]] = {}
+
+
+def set_task_execution_context(
+    request_id: str, task_id: str, user_id: str, mode: str
+) -> None:
+    """Register execution context so the modify_task tool can access the current task."""
+    _task_execution_context[request_id] = {
+        "task_id": task_id,
+        "user_id": user_id,
+        "mode": mode,
+    }
+
+
+def clear_task_execution_context(request_id: str) -> None:
+    """Remove execution context after task execution completes."""
+    _task_execution_context.pop(request_id, None)
+
+
+def _get_task_context() -> dict[str, Any] | None:
+    if not _task_execution_context:
+        return None
+    return next(reversed(_task_execution_context.values()))
+
+
+def _text_result(data: dict[str, Any]) -> dict[str, Any]:
+    """Wrap a dict as an MCP tool text result."""
+    return {"content": [{"type": "text", "text": json.dumps(data)}]}
+
+
+@tool(
+    "modify_task",
+    "Propose or apply modifications to the current task's configuration. "
+    "Use when market conditions warrant changes to risk level, symbols, "
+    "position sizing, schedule, or monitoring conditions.",
+    {
+        "type": "object",
+        "properties": {
+            "changes": {
+                "type": "object",
+                "description": (
+                    "Object with field names as keys and new values. "
+                    "Allowed fields: symbols, risk_level, max_position_size, "
+                    "max_daily_trades, monitoring_conditions, alert_cooldown_minutes, "
+                    "custom_instructions, schedules, use_subagents"
+                ),
+            },
+            "reason": {
+                "type": "string",
+                "description": "Explanation for why these changes are needed",
+            },
+        },
+        "required": ["changes", "reason"],
+    },
+)
+async def mcp_modify_task(args: dict[str, Any]) -> dict[str, Any]:
+    import logging
+
+    from app.db.models.agent_task import AGENT_MODIFIABLE_FIELDS, AgentTask, RiskLevel
+
+    _logger = logging.getLogger(__name__)
+    changes: dict[str, Any] = args.get("changes", {})
+    reason: str = args.get("reason", "")
+
+    ctx = _get_task_context()
+    if not ctx:
+        return _text_result({"status": "error", "message": "No active task context."})
+
+    invalid_fields = set(changes.keys()) - AGENT_MODIFIABLE_FIELDS
+    if invalid_fields:
+        return _text_result(
+            {
+                "status": "error",
+                "message": f"Cannot modify: {', '.join(sorted(invalid_fields))}. "
+                f"Allowed: {', '.join(sorted(AGENT_MODIFIABLE_FIELDS))}",
+            }
+        )
+
+    if not changes:
+        return _text_result({"status": "error", "message": "No changes provided."})
+
+    if "risk_level" in changes:
+        try:
+            RiskLevel(changes["risk_level"])
+        except ValueError:
+            return _text_result(
+                {
+                    "status": "error",
+                    "message": f"Invalid risk_level: {changes['risk_level']}. "
+                    "Must be conservative, moderate, or aggressive.",
+                }
+            )
+
+    from beanie import PydanticObjectId
+
+    task = await AgentTask.get(PydanticObjectId(ctx["task_id"]))
+    if not task:
+        return _text_result({"status": "error", "message": "Task not found."})
+
+    # Build before/after diff
+    before: dict[str, Any] = {}
+    after: dict[str, Any] = {}
+    for field_name, new_value in changes.items():
+        current_value = getattr(task, field_name, None)
+        if hasattr(current_value, "model_dump"):
+            current_value = current_value.model_dump()
+        elif isinstance(current_value, list):
+            current_value = [
+                item.model_dump() if hasattr(item, "model_dump") else item
+                for item in current_value
+            ]
+        before[field_name] = current_value
+        after[field_name] = new_value
+
+    mode = ctx["mode"]
+
+    if mode == "auto":
+        for field_name, new_value in changes.items():
+            setattr(task, field_name, new_value)
+        task.update_timestamp()
+        await task.save()
+
+        if "schedules" in changes:
+            try:
+                from app.agent.task_scheduler import get_scheduler
+
+                scheduler = get_scheduler()
+                await scheduler.schedule_task(task)
+            except Exception:
+                _logger.warning(
+                    "Failed to reschedule after modification", exc_info=True
+                )
+
+        _logger.info("Task %s auto-modified: %s", ctx["task_id"], list(changes.keys()))
+        return _text_result(
+            {
+                "status": "ok",
+                "message": f"Task modified (auto). Changed: {', '.join(changes.keys())}.",
+                "applied": True,
+            }
+        )
+
+    if mode == "ask":
+        from datetime import UTC, datetime, timedelta
+
+        from app.db.models.agent_decision import (
+            AgentDecision,
+            DecisionStatus,
+            DecisionType,
+        )
+        from app.db.models.notification import Notification, NotificationType
+
+        decision = AgentDecision(
+            user_id=PydanticObjectId(ctx["user_id"]),
+            task_id=PydanticObjectId(ctx["task_id"]),
+            decision_type=DecisionType.TASK_MODIFICATION,
+            status=DecisionStatus.PENDING,
+            summary=f"Agent proposes task changes: {', '.join(changes.keys())}",
+            reasoning=reason,
+            key_factors=list(changes.keys()),
+            proposed_changes={"before": before, "after": after, "reason": reason},
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+        )
+        await decision.insert()
+
+        notification = Notification(
+            user_id=PydanticObjectId(ctx["user_id"]),
+            notification_type=NotificationType.TASK_MODIFICATION_PROPOSED,
+            title="Agent proposes task changes",
+            message=f"Modify: {', '.join(changes.keys())}. Reason: {reason}",
+            related_task_id=PydanticObjectId(ctx["task_id"]),
+            related_decision_id=decision.id,
+        )
+        await notification.insert()
+
+        _logger.info(
+            "Task %s modification proposed: %s", ctx["task_id"], list(changes.keys())
+        )
+        return _text_result(
+            {
+                "status": "ok",
+                "message": f"Awaiting user approval. Fields: {', '.join(changes.keys())}.",
+                "applied": False,
+                "decision_id": str(decision.id),
+            }
+        )
+
+    return _text_result({"status": "error", "message": f"Unknown mode: {mode}"})
+
+
+# ============================================================
+# Web Search Tools (Brave Search API)
+# ============================================================
+
+
+@tool(
+    "search_web",
+    "Search the web for real-time information. Use for regulatory updates, analyst opinions, project news, or any current information not in the database.",
+    {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "Search query (max 400 chars)",
+            },
+            "count": {
+                "type": "integer",
+                "description": "Number of results (1-20, default 5)",
+                "default": 5,
+            },
+            "freshness": {
+                "type": "string",
+                "enum": ["pd", "pw", "pm"],
+                "description": "pd=past day, pw=past week, pm=past month",
+            },
+        },
+        "required": ["query"],
+    },
+)
+async def mcp_search_web(args: dict[str, Any]) -> dict[str, Any]:
+    from app.agent.tools.web_search_tools import search_web
+
+    result = await search_web(
+        query=args["query"],
+        count=args.get("count", 5),
+        freshness=args.get("freshness"),
+    )
+    return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+
+@tool(
+    "search_news",
+    "Search for recent news articles. Optimized for breaking news and recent developments about crypto assets, regulations, and markets.",
+    {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "News search query",
+            },
+            "count": {
+                "type": "integer",
+                "description": "Number of results (1-20, default 5)",
+                "default": 5,
+            },
+            "freshness": {
+                "type": "string",
+                "enum": ["pd", "pw", "pm"],
+                "description": "pd=past day, pw=past week, pm=past month",
+            },
+        },
+        "required": ["query"],
+    },
+)
+async def mcp_search_news(args: dict[str, Any]) -> dict[str, Any]:
+    from app.agent.tools.web_search_tools import search_news
+
+    result = await search_news(
+        query=args["query"],
+        count=args.get("count", 5),
+        freshness=args.get("freshness"),
+    )
+    return {"content": [{"type": "text", "text": json.dumps(result)}]}
 
 
 # ============================================================
@@ -511,6 +785,9 @@ ALL_TRADING_TOOLS = [
     # News
     mcp_get_latest_news,
     mcp_get_news_sentiment,
+    # Web search
+    mcp_search_web,
+    mcp_search_news,
     # Knowledge
     mcp_search_strategies,
     mcp_search_lessons,
@@ -519,6 +796,8 @@ ALL_TRADING_TOOLS = [
     mcp_get_open_orders,
     mcp_place_order,
     mcp_cancel_order,
+    # Task self-modification
+    mcp_modify_task,
     # Structured output
     mcp_submit_recommendation,
 ]

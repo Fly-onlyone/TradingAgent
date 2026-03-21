@@ -108,6 +108,9 @@ class FundamentalAnalyst:
         fundamentals = await get_project_fundamentals(symbol)
         macro = await get_macro_indicators()
 
+        # Fetch real-time web intelligence
+        web_section = await self._fetch_web_intelligence(symbol)
+
         # Build context for Claude
         context = f"""
 Asset: {symbol}
@@ -120,7 +123,7 @@ Asset: {symbol}
 
 ## Macro Environment:
 {self._format_macro(macro)}
-
+{web_section}
 Based on this fundamental data, provide your analysis and valuation assessment.
 """
 
@@ -139,6 +142,32 @@ Based on this fundamental data, provide your analysis and valuation assessment.
             "analysis": analysis_text,
             "valuation": valuation,
         }
+
+    async def _fetch_web_intelligence(self, symbol: str) -> str:
+        """Fetch regulatory/partnership news from Brave Search."""
+        try:
+            from app.agent.tools.web_search_tools import search_web
+
+            asset = symbol.upper().replace("-USDT", "").replace("-USD", "")
+            web_results = await search_web(
+                query=f"{asset} crypto regulation partnership governance",
+                count=5,
+                freshness="pw",
+            )
+            if web_results.get("results"):
+                lines = ["\n## Recent Web Intelligence:"]
+                for i, r in enumerate(web_results["results"], 1):
+                    lines.append(f"{i}. {r.get('title')}")
+                    lines.append(f"   {r.get('age', '')} | {r.get('url', '')}")
+                    if r.get("description"):
+                        lines.append(f"   {r['description'][:200]}")
+                    lines.append("")
+                return "\n".join(lines)
+        except Exception:
+            logger.debug(
+                "Web search unavailable for fundamental analysis", exc_info=True
+            )
+        return ""
 
     def _format_onchain(self, data: dict) -> str:
         """Format on-chain metrics for prompt."""
@@ -171,7 +200,9 @@ Based on this fundamental data, provide your analysis and valuation assessment.
         if metrics.get("max_supply"):
             lines.append(f"  Max Supply: {metrics.get('max_supply'):,.0f}")
             if metrics.get("circulating_supply"):
-                pct = (metrics.get("circulating_supply") / metrics.get("max_supply")) * 100
+                pct = (
+                    metrics.get("circulating_supply") / metrics.get("max_supply")
+                ) * 100
                 lines.append(f"  % Circulating: {pct:.1f}%")
 
         # ATH
@@ -204,7 +235,9 @@ Based on this fundamental data, provide your analysis and valuation assessment.
             if tokenomics.get("market_cap"):
                 lines.append(f"  Market Cap: ${tokenomics.get('market_cap'):,.0f}")
             if tokenomics.get("fully_diluted_valuation"):
-                lines.append(f"  FDV: ${tokenomics.get('fully_diluted_valuation'):,.0f}")
+                lines.append(
+                    f"  FDV: ${tokenomics.get('fully_diluted_valuation'):,.0f}"
+                )
 
         defi = data.get("defi_metrics", {})
         if defi and defi.get("tvl"):
@@ -223,7 +256,9 @@ Based on this fundamental data, provide your analysis and valuation assessment.
             if project.get("name"):
                 lines.append(f"  Name: {project.get('name')}")
             if project.get("categories"):
-                lines.append(f"  Categories: {', '.join(project.get('categories', [])[:3])}")
+                lines.append(
+                    f"  Categories: {', '.join(project.get('categories', [])[:3])}"
+                )
 
         return "\n".join(lines) if lines else "Limited fundamental data available"
 
@@ -235,7 +270,9 @@ Based on this fundamental data, provide your analysis and valuation assessment.
         if crypto:
             lines.append("Crypto Market:")
             if crypto.get("total_market_cap_usd"):
-                lines.append(f"  Total Market Cap: ${crypto.get('total_market_cap_usd'):,.0f}")
+                lines.append(
+                    f"  Total Market Cap: ${crypto.get('total_market_cap_usd'):,.0f}"
+                )
             if crypto.get("btc_dominance"):
                 lines.append(f"  BTC Dominance: {crypto.get('btc_dominance'):.1f}%")
             if crypto.get("eth_dominance"):
@@ -265,7 +302,8 @@ Based on this fundamental data, provide your analysis and valuation assessment.
             assessment = "UNDERVALUED"
             score = 70
         elif (
-            "significantly overvalued" in analysis_lower or "strongly overvalued" in analysis_lower
+            "significantly overvalued" in analysis_lower
+            or "strongly overvalued" in analysis_lower
         ):
             assessment = "STRONGLY_OVERVALUED"
             score = 10

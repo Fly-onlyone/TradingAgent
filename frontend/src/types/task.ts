@@ -6,6 +6,7 @@ export type TaskFrequency = "once" | "hourly" | "daily" | "weekly" | "custom";
 export type TaskStatus = "active" | "paused" | "completed" | "failed";
 export type RiskLevel = "conservative" | "moderate" | "aggressive";
 export type AgentMode = "auto" | "ask";
+export type TaskModificationMode = "disabled" | "auto" | "ask";
 
 export type MonitoringConditionType =
 	| "price_above"
@@ -50,6 +51,7 @@ export interface AgentTask {
 	symbols: string[];
 	riskLevel: RiskLevel;
 	agentMode: AgentMode;
+	taskModificationMode: TaskModificationMode;
 	maxPositionSize?: number;
 	maxDailyTrades?: number;
 	customInstructions?: string;
@@ -83,6 +85,7 @@ export interface TaskCreate {
 	symbols: string[];
 	riskLevel: RiskLevel;
 	agentMode: AgentMode;
+	taskModificationMode?: TaskModificationMode;
 	maxPositionSize?: number;
 	maxDailyTrades?: number;
 	monitoringConditions?: MonitoringCondition[];
@@ -101,6 +104,7 @@ export interface TaskUpdate {
 	symbols?: string[];
 	riskLevel?: RiskLevel;
 	agentMode?: AgentMode;
+	taskModificationMode?: TaskModificationMode;
 	maxPositionSize?: number;
 	maxDailyTrades?: number;
 	monitoringConditions?: MonitoringCondition[];
@@ -169,6 +173,25 @@ export const AGENT_MODE_CONFIG: Record<
 	ask: {
 		label: "Ask",
 		description: "Notify and wait for confirmation",
+	},
+};
+
+// Task modification mode configurations
+export const TASK_MODIFICATION_MODE_CONFIG: Record<
+	TaskModificationMode,
+	{ label: string; description: string }
+> = {
+	disabled: {
+		label: "Disabled",
+		description: "Agent cannot modify task configuration",
+	},
+	auto: {
+		label: "Auto",
+		description: "Agent applies changes immediately",
+	},
+	ask: {
+		label: "Ask",
+		description: "Agent proposes changes for approval",
 	},
 };
 

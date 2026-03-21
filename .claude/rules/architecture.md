@@ -17,7 +17,7 @@
 ### Knowledge RAG Flow
 
 1. **Query** → Knowledge tool receives search request
-2. **Embedding** → OpenAI text-embedding-3-small
+2. **Embedding** → Local nomic-embed-text-v1.5 (sentence-transformers/ONNX)
 3. **Vector Search** → MongoDB Atlas vector search
 4. **Context Assembly** → Retrieve relevant documents
 5. **Response** → Claude uses context for informed answers
