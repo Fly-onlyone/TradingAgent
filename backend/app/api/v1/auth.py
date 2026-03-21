@@ -10,6 +10,7 @@ from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
 
 from app.config import get_settings
+from app.db.models.app_settings import AppSettings
 from app.db.models.user import User
 
 # Fixed dev user ID so all debug-mode layers (REST, WebSocket) share
@@ -25,6 +26,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 class Token(BaseModel):
     access_token: str
     token_type: str
+    expires_in: int | None = None  # seconds until expiry, None = no expiry
 
 
 class TokenData(BaseModel):
@@ -37,6 +39,11 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     full_name: str | None = None
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
 
 
 class UserResponse(BaseModel):
@@ -63,16 +70,48 @@ def get_password_hash(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
+def is_token_revoked_by_password_change(user: User, payload: dict) -> bool:
+    """Check if a token was issued before the user's last password change."""
+    if user.password_changed_at is None:
+        return False
+    iat = payload.get("iat")
+    if iat is None:
+        return False
+    iat_dt = datetime.fromtimestamp(iat, tz=UTC)
+    return iat_dt < user.password_changed_at
+
+
+async def _get_effective_token_expire_minutes() -> int:
+    """DB setting > env var > 0 (no expiry)."""
+    app_settings = await AppSettings.get_instance()
+    if app_settings.access_token_expire_minutes > 0:
+        return app_settings.access_token_expire_minutes
+    return settings.access_token_expire_minutes
+
+
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
-    """Create JWT access token."""
+    """Create JWT access token with iat claim."""
     to_encode = data.copy()
+    to_encode["iat"] = datetime.now(UTC)
     if expires_delta is not None:
         expire = datetime.now(UTC) + expires_delta
-        to_encode.update({"exp": expire})
+        to_encode["exp"] = expire
     encoded_jwt = jwt.encode(
         to_encode, settings.secret_key, algorithm=settings.algorithm
     )
     return encoded_jwt
+
+
+async def _build_token_response(email: str) -> dict:
+    """Create a token with the current effective expiry and return as Token dict."""
+    expire_minutes = await _get_effective_token_expire_minutes()
+    expires_delta = timedelta(minutes=expire_minutes) if expire_minutes > 0 else None
+    access_token = create_access_token(data={"sub": email}, expires_delta=expires_delta)
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "expires_in": expire_minutes * 60 if expire_minutes > 0 else None,
+    }
 
 
 async def get_current_user(
@@ -97,6 +136,10 @@ async def get_current_user(
     user = await User.find_one(User.email == email)
     if user is None:
         raise credentials_exception
+
+    if is_token_revoked_by_password_change(user, payload):
+        raise credentials_exception
+
     return user
 
 
@@ -168,14 +211,32 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    access_token_expires: timedelta | None = None
-    if settings.access_token_expire_minutes > 0:
-        access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    return await _build_token_response(user.email)
 
-    access_token = create_access_token(
-        data={"sub": user.email}, expires_delta=access_token_expires
-    )
-    return {"access_token": access_token, "token_type": "bearer"}
+
+@router.post("/refresh", response_model=Token)
+async def refresh_token(
+    current_user: User = Depends(get_current_active_user),
+) -> dict:
+    """Issue a new token from a valid current token."""
+    return await _build_token_response(current_user.email)
+
+
+@router.post("/change-password", response_model=Token)
+async def change_password(
+    body: ChangePasswordRequest,
+    current_user: User = Depends(get_current_active_user),
+) -> dict:
+    """Change password and return a new token. Invalidates all prior tokens."""
+    if not verify_password(body.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    current_user.hashed_password = get_password_hash(body.new_password)
+    current_user.password_changed_at = datetime.now(UTC)
+    current_user.update_timestamp()
+    await current_user.save()
+
+    return await _build_token_response(current_user.email)
 
 
 @router.get("/me", response_model=UserResponse)

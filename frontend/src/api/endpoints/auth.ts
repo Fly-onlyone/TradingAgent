@@ -72,6 +72,30 @@ export const authApi = {
     },
 
     /**
+     * Refresh the current JWT token
+     */
+    async refreshToken(): Promise<AuthTokens> {
+        const response = await apiClient.post<AuthTokens>("/auth/refresh");
+        handleAuthResponse(response.data);
+        return response.data;
+    },
+
+    /**
+     * Change password and receive a new token
+     */
+    async changePassword(
+        currentPassword: string,
+        newPassword: string,
+    ): Promise<AuthTokens> {
+        const response = await apiClient.post<AuthTokens>("/auth/change-password", {
+            current_password: currentPassword,
+            new_password: newPassword,
+        });
+        handleAuthResponse(response.data);
+        return response.data;
+    },
+
+    /**
      * Logout (clear local token)
      */
     logout(): void {

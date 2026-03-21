@@ -1,7 +1,6 @@
 """User model for MongoDB."""
 
-from datetime import datetime, timezone, UTC
-from typing import Optional
+from datetime import UTC, datetime
 
 from beanie import Document, Indexed
 from pydantic import EmailStr, Field
@@ -12,9 +11,10 @@ class User(Document):
 
     email: Indexed(EmailStr, unique=True)  # type: ignore[valid-type]
     hashed_password: str
-    full_name: Optional[str] = None
+    full_name: str | None = None
     is_active: bool = True
     is_superuser: bool = False
+    password_changed_at: datetime | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

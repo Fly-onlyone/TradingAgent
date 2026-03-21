@@ -10,7 +10,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from jose import JWTError, jwt
 
 from app.agent.trading_agent import create_agent_with_tools
-from app.api.v1.auth import _DEV_USER_ID
+from app.api.v1.auth import _DEV_USER_ID, is_token_revoked_by_password_change
 from app.api.websocket.connection_manager import manager
 from app.config import get_settings
 from app.db.models.agent_session import AgentSession
@@ -42,10 +42,18 @@ async def get_user_from_token(token: str) -> User | None:
         )
 
     try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        payload = jwt.decode(
+            token, settings.secret_key, algorithms=[settings.algorithm]
+        )
         email = payload.get("sub")
         if email:
-            return await User.find_one(User.email == email)
+            user = await User.find_one(User.email == email)
+            if user and is_token_revoked_by_password_change(user, payload):
+                logger.warning(
+                    "WebSocket token invalidated by password change for %s", email
+                )
+                return None
+            return user
     except JWTError as e:
         logger.warning("WebSocket JWT validation failed: %s", e)
         return None

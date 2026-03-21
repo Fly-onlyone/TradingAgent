@@ -68,6 +68,14 @@ export interface EmbeddingConfigUpdate {
 	gamingCheckIntervalMinutes?: number;
 }
 
+export interface AuthConfig {
+	accessTokenExpireMinutes: number;
+}
+
+export interface AuthConfigUpdate {
+	accessTokenExpireMinutes?: number;
+}
+
 function transformAgentConfig(data: Record<string, unknown>): AgentConfig {
 	return {
 		authMode: data.auth_mode as string,
@@ -228,6 +236,30 @@ export const settingsApi = {
 		return {
 			success: response.data.success as boolean,
 			message: response.data.message as string,
+		};
+	},
+
+	async getAuthConfig(): Promise<AuthConfig> {
+		const response =
+			await apiClient.get<Record<string, unknown>>("/settings/auth");
+		return {
+			accessTokenExpireMinutes:
+				response.data.access_token_expire_minutes as number,
+		};
+	},
+
+	async updateAuthConfig(update: AuthConfigUpdate): Promise<AuthConfig> {
+		const payload: Record<string, unknown> = {};
+		if (update.accessTokenExpireMinutes !== undefined)
+			payload.access_token_expire_minutes = update.accessTokenExpireMinutes;
+
+		const response = await apiClient.put<Record<string, unknown>>(
+			"/settings/auth",
+			payload,
+		);
+		return {
+			accessTokenExpireMinutes:
+				response.data.access_token_expire_minutes as number,
 		};
 	},
 };

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, ClassVar
 
@@ -57,6 +57,9 @@ class AppSettings(Document):
     okx_passphrase: str = ""
     okx_sandbox: bool = True
 
+    # Auth / token settings
+    access_token_expire_minutes: int = 0  # 0 = use env var fallback, then no expiry
+
     # Embedding task deferral — pause CPU-heavy embedding when gaming
     defer_embedding_when_gaming: bool = False
     gaming_process_list: list[str] = []  # e.g. ["cs2.exe", "valorant.exe"]
@@ -76,7 +79,7 @@ class AppSettings(Document):
         ]
 
     @classmethod
-    def _instance_sort_key(cls, instance: "AppSettings") -> tuple[datetime, str]:
+    def _instance_sort_key(cls, instance: AppSettings) -> tuple[datetime, str]:
         updated = instance.updated_at
         if updated.tzinfo is None or updated.utcoffset() is None:
             updated = updated.replace(tzinfo=UTC)
@@ -86,7 +89,7 @@ class AppSettings(Document):
     async def _archive_conflicting_instance(
         cls,
         canonical_id: Any,
-        instance: "AppSettings",
+        instance: AppSettings,
     ) -> None:
         archive_collection = cls.get_pymongo_collection().database["app_settings_conflicts"]
         archived_doc = instance.model_dump(mode="python")
@@ -97,7 +100,7 @@ class AppSettings(Document):
         await archive_collection.insert_one(archived_doc)
 
     @classmethod
-    async def ensure_singleton_document(cls) -> "AppSettings":
+    async def ensure_singleton_document(cls) -> AppSettings:
         """Ensure only one settings document exists and return it."""
         instances = await cls.find_all().to_list()
 
@@ -144,7 +147,7 @@ class AppSettings(Document):
         return canonical
 
     @classmethod
-    async def get_instance(cls) -> "AppSettings":
+    async def get_instance(cls) -> AppSettings:
         """Get or create the singleton settings document."""
         instance = await cls.ensure_singleton_document()
 

@@ -147,7 +147,11 @@ def _get_agent_sdk_model_aliases() -> list[str]:
     if annotation is None:
         return []
 
-    aliases = [value for value in _collect_literal_model_aliases(annotation) if value != "inherit"]
+    aliases = [
+        value
+        for value in _collect_literal_model_aliases(annotation)
+        if value != "inherit"
+    ]
 
     deduplicated: list[str] = []
     seen: set[str] = set()
@@ -328,7 +332,9 @@ async def update_agent_config(
         app_settings.agent_max_thinking_tokens = body.max_thinking_tokens
 
     await app_settings.save_with_timestamp()
-    logger.info("Agent config updated: auth_mode=%s", app_settings.agent_auth_mode.value)
+    logger.info(
+        "Agent config updated: auth_mode=%s", app_settings.agent_auth_mode.value
+    )
 
     effective_key = _resolve_api_key(app_settings)
     cli_logged_in = _check_cli_login()
@@ -367,7 +373,9 @@ async def test_agent_connection(
                 max_tokens=10,
                 messages=[{"role": "user", "content": "ping"}],
             )
-            friendly_name = _format_model_label(family, DEFAULT_MODEL_BY_FAMILY.get(family))
+            friendly_name = _format_model_label(
+                family, DEFAULT_MODEL_BY_FAMILY.get(family)
+            )
             return {
                 "success": True,
                 "message": f"Connected successfully (model: {friendly_name})",
@@ -509,7 +517,9 @@ async def update_embedding_config(
     if body.gaming_process_list is not None:
         app_settings.gaming_process_list = body.gaming_process_list
     if body.gaming_check_interval_minutes is not None:
-        app_settings.gaming_check_interval_minutes = max(1, body.gaming_check_interval_minutes)
+        app_settings.gaming_check_interval_minutes = max(
+            1, body.gaming_check_interval_minutes
+        )
 
     await app_settings.save_with_timestamp()
     logger.info(
@@ -621,3 +631,45 @@ async def test_exchange_connection(
         return {"success": False, "message": f"OKX API error: {msg}"}
     except Exception as e:
         return {"success": False, "message": f"Connection failed: {e}"}
+
+
+# ── Auth / Token Expiry Configuration ──────────────────────────
+
+
+class AuthConfigResponse(BaseModel):
+    access_token_expire_minutes: int
+
+
+class AuthConfigUpdate(BaseModel):
+    access_token_expire_minutes: int | None = None
+
+
+@router.get("/auth", response_model=AuthConfigResponse)
+async def get_auth_config(
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Get current auth / token expiry configuration."""
+    app_settings = await AppSettings.get_instance()
+    effective = (
+        app_settings.access_token_expire_minutes or settings.access_token_expire_minutes
+    )
+    return {"access_token_expire_minutes": effective}
+
+
+@router.put("/auth", response_model=AuthConfigResponse)
+async def update_auth_config(
+    body: AuthConfigUpdate,
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Update token expiry configuration. 0 = no expiry."""
+    app_settings = await AppSettings.get_instance()
+    if body.access_token_expire_minutes is not None:
+        app_settings.access_token_expire_minutes = max(
+            0, body.access_token_expire_minutes
+        )
+    await app_settings.save_with_timestamp()
+    effective = (
+        app_settings.access_token_expire_minutes or settings.access_token_expire_minutes
+    )
+    logger.info("Auth config updated (expire_minutes=%d)", effective)
+    return {"access_token_expire_minutes": effective}
