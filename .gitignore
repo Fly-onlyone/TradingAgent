@@ -29,9 +29,13 @@ venv/
 logs/
 
 # IDE
+.idea/
 .vscode/
 *.swp
 *.swo
+
+# Claude Code local settings
+.claude/settings.local.json
 
 # Frontend
 frontend/node_modules/
