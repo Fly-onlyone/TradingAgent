@@ -114,6 +114,9 @@ class AgentTaskScheduler:
             replace_existing=True,
         )
 
+        # Schedule strategy auto-discovery if enabled
+        await self._schedule_auto_discovery()
+
     async def stop(self) -> None:
         """Stop the scheduler."""
         self._running = False
@@ -126,6 +129,51 @@ class AgentTaskScheduler:
                 logger.warning("Error disconnecting scheduler trading agent: %s", exc)
 
         logger.info("Agent task scheduler stopped")
+
+    async def _schedule_auto_discovery(self) -> None:
+        """Schedule or remove the strategy auto-discovery job based on settings."""
+        from app.db.models.app_settings import AppSettings
+
+        job_id = "auto_discover_strategies"
+
+        try:
+            app_settings = await AppSettings.get_instance()
+        except Exception:
+            logger.debug("Could not load AppSettings for auto-discovery", exc_info=True)
+            return
+
+        # Remove existing job if present
+        if self.scheduler.get_job(job_id):
+            self.scheduler.remove_job(job_id)
+
+        if not app_settings.auto_discover_enabled:
+            return
+
+        hours = max(1, app_settings.auto_discover_interval_hours)
+        self.scheduler.add_job(
+            self._run_strategy_discovery,
+            IntervalTrigger(hours=hours),
+            id=job_id,
+            name="Strategy auto-discovery",
+            replace_existing=True,
+        )
+        logger.info("Strategy auto-discovery scheduled every %d hours", hours)
+
+    async def _run_strategy_discovery(self) -> None:
+        """Execute one strategy discovery cycle."""
+        from app.services.strategy_discovery import StrategyDiscoveryService
+
+        try:
+            service = StrategyDiscoveryService()
+            stats = await service.run_discovery_cycle()
+            logger.info("Strategy discovery stats: %s", stats)
+        except Exception:
+            logger.exception("Strategy auto-discovery cycle failed")
+
+    async def reschedule_auto_discovery(self) -> None:
+        """Public method to reschedule after settings change."""
+        if self._running:
+            await self._schedule_auto_discovery()
 
     async def _load_active_tasks(self) -> None:
         """Load all active tasks from database and schedule them."""

@@ -1,8 +1,7 @@
 """Notification models for push notifications and user preferences."""
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Optional
 
 from beanie import Document, Indexed, PydanticObjectId
 from pydantic import Field
@@ -23,6 +22,7 @@ class NotificationType(str, Enum):
         "task_modification_proposed"  # Agent proposed task changes
     )
     TASK_MODIFICATION_APPLIED = "task_modification_applied"  # Task changes applied
+    STRATEGY_DISCOVERED = "strategy_discovered"  # Auto-discovered strategy from news
 
 
 class NotificationStatus(str, Enum):
@@ -55,10 +55,10 @@ class Notification(Document):
     notification_type: NotificationType  # Index defined in Settings
 
     # Related entities
-    decision_id: Optional[PydanticObjectId] = None
-    task_id: Optional[PydanticObjectId] = None
-    order_id: Optional[PydanticObjectId] = None
-    session_id: Optional[PydanticObjectId] = None
+    decision_id: PydanticObjectId | None = None
+    task_id: PydanticObjectId | None = None
+    order_id: PydanticObjectId | None = None
+    session_id: PydanticObjectId | None = None
 
     # Additional data for the notification
     data: dict = Field(default_factory=dict)
@@ -68,22 +68,22 @@ class Notification(Document):
     status: NotificationStatus = NotificationStatus.PENDING
 
     # Delivery tracking
-    delivered_at: Optional[datetime] = None
-    delivery_error: Optional[str] = None
+    delivered_at: datetime | None = None
+    delivery_error: str | None = None
 
     # User interaction
-    read_at: Optional[datetime] = None
-    action_taken: Optional[NotificationAction] = None
-    action_taken_at: Optional[datetime] = None
-    action_comment: Optional[str] = None
+    read_at: datetime | None = None
+    action_taken: NotificationAction | None = None
+    action_taken_at: datetime | None = None
+    action_comment: str | None = None
 
     # Web Push specific
     push_sent: bool = False
-    push_endpoint: Optional[str] = None  # Which subscription received it
+    push_endpoint: str | None = None  # Which subscription received it
 
     # Timestamps
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    expires_at: Optional[datetime] = None  # For confirmations
+    expires_at: datetime | None = None  # For confirmations
 
     class Settings:
         name = "notifications"
@@ -126,7 +126,7 @@ class Notification(Document):
         self.read_at = datetime.now(UTC)
 
     def take_action(
-        self, action: NotificationAction, comment: Optional[str] = None
+        self, action: NotificationAction, comment: str | None = None
     ) -> None:
         """Record user action on notification."""
         self.status = NotificationStatus.ACTIONED
@@ -151,7 +151,7 @@ class UserNotificationSettings(Document):
 
     # Web Push configuration
     web_push_enabled: bool = True
-    web_push_subscription: Optional[dict] = None
+    web_push_subscription: dict | None = None
     # Subscription object: {endpoint, keys: {p256dh, auth}}
 
     # Notification type preferences
@@ -164,8 +164,8 @@ class UserNotificationSettings(Document):
 
     # Quiet hours (don't send notifications)
     quiet_hours_enabled: bool = False
-    quiet_hours_start: Optional[str] = None  # HH:MM
-    quiet_hours_end: Optional[str] = None  # HH:MM
+    quiet_hours_start: str | None = None  # HH:MM
+    quiet_hours_end: str | None = None  # HH:MM
     quiet_hours_timezone: str = "UTC"
 
     # Timestamps

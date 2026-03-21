@@ -76,6 +76,33 @@ export interface AuthConfigUpdate {
 	accessTokenExpireMinutes?: number;
 }
 
+export interface StrategyDiscoverySource {
+	id: string;
+	name: string;
+	domain: string;
+	rssUrl: string | null;
+	strategyExtraction: boolean;
+}
+
+export interface StrategyDiscoveryConfig {
+	enabled: boolean;
+	intervalHours: number;
+	minConfidence: number;
+	sources: StrategyDiscoverySource[];
+}
+
+export interface StrategyDiscoveryConfigUpdate {
+	enabled?: boolean;
+	intervalHours?: number;
+	minConfidence?: number;
+}
+
+export interface DiscoveryRunResult {
+	sourcesCrawled: number;
+	articlesProcessed: number;
+	strategiesFound: number;
+}
+
 function transformAgentConfig(data: Record<string, unknown>): AgentConfig {
 	return {
 		authMode: data.auth_mode as string,
@@ -183,8 +210,9 @@ export const settingsApi = {
 	},
 
 	async getEmbeddingConfig(): Promise<EmbeddingConfig> {
-		const response =
-			await apiClient.get<Record<string, unknown>>("/settings/embedding");
+		const response = await apiClient.get<Record<string, unknown>>(
+			"/settings/embedding",
+		);
 		return transformEmbeddingConfig(response.data);
 	},
 
@@ -197,8 +225,7 @@ export const settingsApi = {
 		if (update.gamingProcessList !== undefined)
 			payload.gaming_process_list = update.gamingProcessList;
 		if (update.gamingCheckIntervalMinutes !== undefined)
-			payload.gaming_check_interval_minutes =
-				update.gamingCheckIntervalMinutes;
+			payload.gaming_check_interval_minutes = update.gamingCheckIntervalMinutes;
 
 		const response = await apiClient.put<Record<string, unknown>>(
 			"/settings/embedding",
@@ -243,8 +270,43 @@ export const settingsApi = {
 		const response =
 			await apiClient.get<Record<string, unknown>>("/settings/auth");
 		return {
-			accessTokenExpireMinutes:
-				response.data.access_token_expire_minutes as number,
+			accessTokenExpireMinutes: response.data
+				.access_token_expire_minutes as number,
+		};
+	},
+
+	async getStrategyDiscoveryConfig(): Promise<StrategyDiscoveryConfig> {
+		const response = await apiClient.get<Record<string, unknown>>(
+			"/settings/strategy-discovery",
+		);
+		return transformStrategyDiscoveryConfig(response.data);
+	},
+
+	async updateStrategyDiscoveryConfig(
+		update: StrategyDiscoveryConfigUpdate,
+	): Promise<StrategyDiscoveryConfig> {
+		const payload: Record<string, unknown> = {};
+		if (update.enabled !== undefined) payload.enabled = update.enabled;
+		if (update.intervalHours !== undefined)
+			payload.interval_hours = update.intervalHours;
+		if (update.minConfidence !== undefined)
+			payload.min_confidence = update.minConfidence;
+
+		const response = await apiClient.put<Record<string, unknown>>(
+			"/settings/strategy-discovery",
+			payload,
+		);
+		return transformStrategyDiscoveryConfig(response.data);
+	},
+
+	async runStrategyDiscoveryNow(): Promise<DiscoveryRunResult> {
+		const response = await apiClient.post<Record<string, unknown>>(
+			"/settings/strategy-discovery/run-now",
+		);
+		return {
+			sourcesCrawled: response.data.sources_crawled as number,
+			articlesProcessed: response.data.articles_processed as number,
+			strategiesFound: response.data.strategies_found as number,
 		};
 	},
 
@@ -258,10 +320,28 @@ export const settingsApi = {
 			payload,
 		);
 		return {
-			accessTokenExpireMinutes:
-				response.data.access_token_expire_minutes as number,
+			accessTokenExpireMinutes: response.data
+				.access_token_expire_minutes as number,
 		};
 	},
 };
+
+function transformStrategyDiscoveryConfig(
+	data: Record<string, unknown>,
+): StrategyDiscoveryConfig {
+	const rawSources = (data.sources as Array<Record<string, unknown>>) || [];
+	return {
+		enabled: data.enabled as boolean,
+		intervalHours: data.interval_hours as number,
+		minConfidence: data.min_confidence as number,
+		sources: rawSources.map((s) => ({
+			id: s.id as string,
+			name: s.name as string,
+			domain: s.domain as string,
+			rssUrl: s.rss_url as string | null,
+			strategyExtraction: s.strategy_extraction as boolean,
+		})),
+	};
+}
 
 export default settingsApi;

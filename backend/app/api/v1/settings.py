@@ -535,6 +535,126 @@ async def update_embedding_config(
     }
 
 
+# ── Strategy Auto-Discovery Configuration ──────────────────────
+
+
+class DiscoverySourceResponse(BaseModel):
+    id: str
+    name: str
+    domain: str
+    rss_url: str | None
+    strategy_extraction: bool
+
+
+class StrategyDiscoveryConfigResponse(BaseModel):
+    enabled: bool
+    interval_hours: int
+    min_confidence: float
+    sources: list[DiscoverySourceResponse]
+
+
+class StrategyDiscoveryConfigUpdate(BaseModel):
+    enabled: bool | None = None
+    interval_hours: int | None = None
+    min_confidence: float | None = None
+
+
+class DiscoveryRunResult(BaseModel):
+    sources_crawled: int
+    articles_processed: int
+    strategies_found: int
+
+
+@router.get("/strategy-discovery", response_model=StrategyDiscoveryConfigResponse)
+async def get_strategy_discovery_config(
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Get strategy auto-discovery configuration."""
+    from app.db.models.news import NewsSource
+
+    app_settings = await AppSettings.get_instance()
+    sources = await NewsSource.find(
+        NewsSource.strategy_extraction == True  # noqa: E712
+    ).to_list()
+
+    return {
+        "enabled": app_settings.auto_discover_enabled,
+        "interval_hours": app_settings.auto_discover_interval_hours,
+        "min_confidence": app_settings.auto_discover_min_confidence,
+        "sources": [
+            {
+                "id": str(s.id),
+                "name": s.name,
+                "domain": s.domain,
+                "rss_url": s.rss_url,
+                "strategy_extraction": s.strategy_extraction,
+            }
+            for s in sources
+        ],
+    }
+
+
+@router.put("/strategy-discovery", response_model=StrategyDiscoveryConfigResponse)
+async def update_strategy_discovery_config(
+    body: StrategyDiscoveryConfigUpdate,
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Update strategy auto-discovery configuration and reschedule."""
+    from app.db.models.news import NewsSource
+
+    app_settings = await AppSettings.get_instance()
+
+    if body.enabled is not None:
+        app_settings.auto_discover_enabled = body.enabled
+    if body.interval_hours is not None:
+        app_settings.auto_discover_interval_hours = max(1, body.interval_hours)
+    if body.min_confidence is not None:
+        app_settings.auto_discover_min_confidence = max(0.0, min(1.0, body.min_confidence))
+
+    await app_settings.save_with_timestamp()
+
+    # Reschedule the discovery job
+    try:
+        from app.agent.task_scheduler import AgentTaskScheduler
+
+        scheduler = AgentTaskScheduler()
+        await scheduler.reschedule_auto_discovery()
+    except Exception:
+        logger.warning("Could not reschedule auto-discovery", exc_info=True)
+
+    sources = await NewsSource.find(
+        NewsSource.strategy_extraction == True  # noqa: E712
+    ).to_list()
+
+    return {
+        "enabled": app_settings.auto_discover_enabled,
+        "interval_hours": app_settings.auto_discover_interval_hours,
+        "min_confidence": app_settings.auto_discover_min_confidence,
+        "sources": [
+            {
+                "id": str(s.id),
+                "name": s.name,
+                "domain": s.domain,
+                "rss_url": s.rss_url,
+                "strategy_extraction": s.strategy_extraction,
+            }
+            for s in sources
+        ],
+    }
+
+
+@router.post("/strategy-discovery/run-now", response_model=DiscoveryRunResult)
+async def run_strategy_discovery_now(
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Run one strategy discovery cycle immediately."""
+    from app.services.strategy_discovery import StrategyDiscoveryService
+
+    service = StrategyDiscoveryService()
+    stats = await service.run_discovery_cycle()
+    return stats
+
+
 # ── Exchange (OKX) Configuration ────────────────────────────────
 
 

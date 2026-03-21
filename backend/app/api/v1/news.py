@@ -1,14 +1,13 @@
 """News intelligence endpoints using Beanie ODM."""
 
 from datetime import datetime
-from typing import Optional
 
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.api.v1.auth import get_current_active_user
-from app.db.models.news import NewsSource, NewsArticle
+from app.db.models.news import NewsArticle, NewsSource
 from app.db.models.user import User
 
 router = APIRouter()
@@ -19,18 +18,19 @@ class NewsSourceCreate(BaseModel):
     name: str
     domain: str
     source_type: str  # official, major_news, news, blog, social
-    description: Optional[str] = None
-    rss_url: Optional[str] = None
+    description: str | None = None
+    rss_url: str | None = None
     crawl_interval_hours: int = 1
 
 
 class NewsSourceUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    source_type: Optional[str] = None
-    rss_url: Optional[str] = None
-    crawl_enabled: Optional[bool] = None
-    crawl_interval_hours: Optional[int] = None
+    name: str | None = None
+    description: str | None = None
+    source_type: str | None = None
+    rss_url: str | None = None
+    crawl_enabled: bool | None = None
+    crawl_interval_hours: int | None = None
+    strategy_extraction: bool | None = None
 
 
 class NewsSourceResponse(BaseModel):
@@ -38,15 +38,16 @@ class NewsSourceResponse(BaseModel):
     name: str
     domain: str
     source_type: str
-    description: Optional[str]
+    description: str | None
     credibility_score: float
-    accuracy_history: Optional[dict]
-    bias_rating: Optional[str]
-    rss_url: Optional[str]
+    accuracy_history: dict | None
+    bias_rating: str | None
+    rss_url: str | None
     crawl_enabled: bool
     crawl_interval_hours: int
-    last_crawled: Optional[datetime]
-    last_error: Optional[str]
+    strategy_extraction: bool
+    last_crawled: datetime | None
+    last_error: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -61,15 +62,15 @@ class NewsArticleResponse(BaseModel):
     url: str
     title: str
     content: str
-    summary: Optional[str]
-    sentiment_score: Optional[float]
-    relevance_score: Optional[float]
-    mentioned_assets: Optional[list]
-    keywords: Optional[list]
-    predicted_impact: Optional[str]
-    actual_impact: Optional[str]
+    summary: str | None
+    sentiment_score: float | None
+    relevance_score: float | None
+    mentioned_assets: list | None
+    keywords: list | None
+    predicted_impact: str | None
+    actual_impact: str | None
     prediction_verified: bool
-    published_at: Optional[datetime]
+    published_at: datetime | None
     fetched_at: datetime
     created_at: datetime
 
@@ -152,9 +153,9 @@ async def create_news_source(
 
 @router.get("/sources", response_model=list[NewsSourceResponse])
 async def list_news_sources(
-    source_type: Optional[str] = None,
-    crawl_enabled: Optional[bool] = None,
-    min_credibility: Optional[float] = None,
+    source_type: str | None = None,
+    crawl_enabled: bool | None = None,
+    min_credibility: float | None = None,
     current_user: User = Depends(get_current_active_user),
 ) -> list[NewsSourceResponse]:
     """List news sources with filtering."""
@@ -220,10 +221,10 @@ async def delete_news_source(
 # News Article Endpoints
 @router.get("/articles", response_model=NewsArticleListResponse)
 async def list_news_articles(
-    source_id: Optional[str] = None,
-    asset: Optional[str] = None,
-    sentiment: Optional[str] = None,  # positive, negative, neutral
-    min_relevance: Optional[float] = None,
+    source_id: str | None = None,
+    asset: str | None = None,
+    sentiment: str | None = None,  # positive, negative, neutral
+    min_relevance: float | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_active_user),
@@ -279,7 +280,7 @@ async def get_news_article(
 # Sentiment Feed Endpoint
 @router.get("/sentiment-feed")
 async def get_sentiment_feed(
-    assets: Optional[str] = None,  # Comma-separated list of assets
+    assets: str | None = None,  # Comma-separated list of assets
     hours: int = Query(24, ge=1, le=168),  # Last N hours
     current_user: User = Depends(get_current_active_user),
 ) -> dict:

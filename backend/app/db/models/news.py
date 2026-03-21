@@ -1,8 +1,7 @@
 """News intelligence models (MongoDB/Beanie)."""
 
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Optional
 
 from beanie import Document, Indexed, PydanticObjectId
 from pydantic import Field, field_validator
@@ -27,19 +26,20 @@ class NewsSource(Document):
     name: str
     domain: Indexed(str, unique=True)  # type: ignore[valid-type]
     source_type: NewsSourceType = NewsSourceType.UNKNOWN
-    description: Optional[str] = None
+    description: str | None = None
 
     # Credibility
     credibility_score: float = Field(default=0.5, ge=0.0, le=1.0)
-    accuracy_history: Optional[dict] = None  # Track prediction accuracy
-    bias_rating: Optional[str] = None  # 'neutral', 'bullish', 'bearish'
+    accuracy_history: dict | None = None  # Track prediction accuracy
+    bias_rating: str | None = None  # 'neutral', 'bullish', 'bearish'
 
     # Crawling config
-    rss_url: Optional[str] = None
+    rss_url: str | None = None
     crawl_enabled: bool = True
     crawl_interval_hours: int = 1
-    last_crawled: Optional[datetime] = None
-    last_error: Optional[str] = None
+    strategy_extraction: bool = False  # Run AI strategy extraction on articles
+    last_crawled: datetime | None = None
+    last_error: str | None = None
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -96,24 +96,24 @@ class NewsArticle(Document):
     content_hash: Indexed(str)  # type: ignore[valid-type]  # Detect duplicate content
     title: str
     content: str
-    summary: Optional[str] = None  # AI-generated summary
+    summary: str | None = None  # AI-generated summary
 
     # Analysis
-    sentiment_score: Optional[float] = Field(default=None, ge=-1.0, le=1.0)
-    relevance_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    mentioned_assets: Optional[list[str]] = None  # ['BTC', 'ETH', ...]
-    keywords: Optional[list[str]] = None  # Extracted keywords
+    sentiment_score: float | None = Field(default=None, ge=-1.0, le=1.0)
+    relevance_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    mentioned_assets: list[str] | None = None  # ['BTC', 'ETH', ...]
+    keywords: list[str] | None = None  # Extracted keywords
 
     # Prediction tracking
-    predicted_impact: Optional[str] = None  # 'bullish', 'bearish', 'neutral'
-    actual_impact: Optional[str] = None
+    predicted_impact: str | None = None  # 'bullish', 'bearish', 'neutral'
+    actual_impact: str | None = None
     prediction_verified: bool = False
 
     # Embedding for semantic search (768-dim nomic-embed-text-v1.5 vector)
-    embedding: Optional[list[float]] = None
+    embedding: list[float] | None = None
 
     # Timestamps
-    published_at: Optional[datetime] = None
+    published_at: datetime | None = None
     fetched_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -144,18 +144,18 @@ class CredibilityEvent(Document):
     """Track source credibility based on prediction accuracy."""
 
     source_id: Indexed(PydanticObjectId)  # type: ignore[valid-type]
-    article_id: Optional[PydanticObjectId] = None
+    article_id: PydanticObjectId | None = None
 
     # Prediction evaluation
     prediction_type: str  # 'price_movement', 'event'
     predicted_outcome: str
     actual_outcome: str
     was_accurate: bool
-    confidence_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    confidence_score: float | None = Field(default=None, ge=0.0, le=1.0)
 
     # Context
-    symbol: Optional[str] = None
-    timeframe_hours: Optional[int] = None
+    symbol: str | None = None
+    timeframe_hours: int | None = None
 
     evaluated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

@@ -42,6 +42,7 @@ import { useEffect, useState } from "react";
 import { tasksApi } from "@/api/endpoints/tasks";
 import { PageTransition } from "@/components/common/PageTransition";
 import { type Column, DataTable } from "@/components/data-display/DataTable";
+import { StrategyDiscoveryCard } from "@/components/tasks/StrategyDiscoveryCard";
 import type {
 	AgentMode,
 	MonitoringCondition,
@@ -481,6 +482,8 @@ function TasksPage() {
 							{error ?? "Failed to load tasks"}
 						</Alert>
 					)}
+
+					<StrategyDiscoveryCard />
 
 					{isLoadingTasks ? (
 						<Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>

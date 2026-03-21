@@ -65,6 +65,11 @@ class AppSettings(Document):
     gaming_process_list: list[str] = []  # e.g. ["cs2.exe", "valorant.exe"]
     gaming_check_interval_minutes: int = 3
 
+    # Strategy auto-discovery from news sources
+    auto_discover_enabled: bool = False
+    auto_discover_interval_hours: int = 6
+    auto_discover_min_confidence: float = 0.5
+
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     class Settings:
