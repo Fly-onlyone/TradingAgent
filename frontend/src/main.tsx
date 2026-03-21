@@ -5,7 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import ReactDOM from "react-dom/client";
+import { ZoomIndicator } from "./components/common/ZoomIndicator";
 import { useAppTheme } from "./hooks/useAppTheme";
+import { useUIScaleZoom } from "./hooks/useUIScaleZoom";
 // Import the generated route tree
 import { routeTree } from "./routeTree.gen";
 import { initializeFrontendLogging } from "./utils/frontendLogger";
@@ -54,10 +56,12 @@ initializeFrontendLogging();
 
 function App() {
 	const theme = useAppTheme();
+	const { uiScale, visible } = useUIScaleZoom();
 	return (
 		<ThemeProvider theme={theme}>
 			<CssBaseline />
 			<RouterProvider router={router} />
+			<ZoomIndicator uiScale={uiScale} visible={visible} />
 		</ThemeProvider>
 	);
 }
