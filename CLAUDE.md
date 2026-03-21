@@ -71,7 +71,13 @@ Separate Sentry projects per layer (org: `fly-theonlyone`):
 
 - **Backend port**: **7000**
 - **Dev entry**: `python run.py` starts both frontend + backend with watchfiles reload
-- **Auth**: JWT-based. Superuser check via `get_current_superuser` dependency (defined in auth dependency files)
+- **Auth**: JWT-based with configurable token expiry and transparent refresh. Superuser check via `get_current_superuser`
+  dependency (defined in auth dependency files)
+  - Token expiry: configurable via `AppSettings.access_token_expire_minutes` (DB) > `ACCESS_TOKEN_EXPIRE_MINUTES` (env) > 0 (no expiry)
+  - `POST /auth/refresh` — re-issues token from valid current token
+  - `POST /auth/change-password` — invalidates all prior tokens via `iat` vs `password_changed_at` check
+  - Frontend interceptor auto-refreshes on 401 before logging out
+  - Encryption: Fernet (AES-128-CBC + HMAC-SHA256) for secrets at rest, keys from `SECRETS_ENCRYPTION_KEYS` env var
 
 ## Key Patterns
 
