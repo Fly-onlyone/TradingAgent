@@ -40,14 +40,6 @@ export interface CLILoginResult {
 	message: string;
 }
 
-export interface ProtonPassStatus {
-	available: boolean;
-	loggedIn: boolean;
-	configured: boolean;
-	usingReference: boolean;
-	message: string;
-}
-
 export interface ExchangeConfig {
 	hasApiKey: boolean;
 	maskedApiKey: string;
@@ -175,39 +167,6 @@ export const settingsApi = {
 	async cliLogout(): Promise<CLILoginResult> {
 		const response = await apiClient.post<Record<string, unknown>>(
 			"/settings/agent/cli-logout",
-		);
-		return {
-			success: response.data.success as boolean,
-			message: response.data.message as string,
-		};
-	},
-
-	async getProtonPassStatus(): Promise<ProtonPassStatus> {
-		const response = await apiClient.get<Record<string, unknown>>(
-			"/settings/security/proton-pass",
-		);
-		return {
-			available: response.data.available as boolean,
-			loggedIn: response.data.logged_in as boolean,
-			configured: response.data.configured as boolean,
-			usingReference: response.data.using_reference as boolean,
-			message: response.data.message as string,
-		};
-	},
-
-	async startProtonPassLogin(): Promise<CLILoginResult> {
-		const response = await apiClient.post<Record<string, unknown>>(
-			"/settings/security/proton-pass/login",
-		);
-		return {
-			success: response.data.success as boolean,
-			message: response.data.message as string,
-		};
-	},
-
-	async protonPassLogout(): Promise<CLILoginResult> {
-		const response = await apiClient.post<Record<string, unknown>>(
-			"/settings/security/proton-pass/logout",
 		);
 		return {
 			success: response.data.success as boolean,

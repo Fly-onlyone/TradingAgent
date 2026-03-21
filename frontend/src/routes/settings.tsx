@@ -5,8 +5,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ErrorIcon from "@mui/icons-material/Error";
-import LoginIcon from "@mui/icons-material/Login";
-import LogoutIcon from "@mui/icons-material/Logout";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import {
 	Alert,
@@ -26,7 +24,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import AddIcon from "@mui/icons-material/Add";
 import type {
@@ -37,7 +35,6 @@ import { settingsApi } from "@/api/endpoints/settings";
 import { AgentConfigPanel } from "@/components/agent/AgentConfigPanel";
 import { PageTransition } from "@/components/common/PageTransition";
 import { useAuth } from "@/hooks/useAuth";
-import { usePollingLogin } from "@/hooks/usePollingLogin";
 import { useAuthStore } from "@/store/authStore";
 import { notify } from "@/store/uiStore";
 import { spring } from "@/utils/animations/variants";
@@ -49,195 +46,6 @@ export const Route = createFileRoute("/settings")({
 	beforeLoad: requireAuth,
 	component: SettingsPage,
 });
-
-function ProtonPassAuthCard() {
-	const { user } = useAuthStore();
-	const isSuperuser = user?.isSuperuser ?? false;
-	const queryClient = useQueryClient();
-	const [loginResult, setLoginResult] = useState<{
-		success: boolean;
-		message: string;
-	} | null>(null);
-
-	const statusQuery = useQuery({
-		queryKey: ["proton-pass-status"],
-		queryFn: () => settingsApi.getProtonPassStatus(),
-		enabled: isSuperuser || import.meta.env.DEV,
-		staleTime: 30_000,
-	});
-
-	const { isPolling: isPollingLogin, startPolling } = usePollingLogin({
-		pollFn: useCallback(async () => {
-			const fresh = await settingsApi.getProtonPassStatus();
-			return fresh.loggedIn;
-		}, []),
-		onSuccess: useCallback(() => {
-			setLoginResult({
-				success: true,
-				message: "Successfully logged in to Proton Pass",
-			});
-			notify.success("Successfully logged in to Proton Pass");
-			queryClient.invalidateQueries({ queryKey: ["proton-pass-status"] });
-		}, [queryClient]),
-		onTimeout: useCallback(() => {
-			setLoginResult({
-				success: false,
-				message: "Login timed out. Please try again.",
-			});
-		}, []),
-	});
-
-	const loginMutation = useMutation({
-		mutationFn: () => settingsApi.startProtonPassLogin(),
-		onSuccess: (result) => {
-			setLoginResult(result);
-			if (result.success) {
-				startPolling();
-			} else {
-				notify.error(result.message);
-			}
-		},
-		onError: () => {
-			setLoginResult({ success: false, message: "Login request failed" });
-		},
-	});
-
-	const logoutMutation = useMutation({
-		mutationFn: () => settingsApi.protonPassLogout(),
-		onSuccess: (result) => {
-			setLoginResult(result);
-			queryClient.invalidateQueries({ queryKey: ["proton-pass-status"] });
-			if (result.success) notify.success(result.message);
-			else notify.error(result.message);
-		},
-		onError: () => {
-			setLoginResult({ success: false, message: "Logout request failed" });
-		},
-	});
-
-	if (!isSuperuser && !import.meta.env.DEV) {
-		return (
-			<Card sx={{ mb: 3 }}>
-				<CardContent>
-					<Typography variant="h6" gutterBottom>
-						Proton Pass Authentication
-					</Typography>
-					<Alert severity="info">
-						Superuser access is required to manage Proton Pass authentication.
-					</Alert>
-				</CardContent>
-			</Card>
-		);
-	}
-
-	const status = statusQuery.data;
-
-	return (
-		<Card sx={{ mb: 3 }}>
-			<CardContent>
-				<Typography variant="h6" gutterBottom>
-					Proton Pass Authentication
-				</Typography>
-
-				{statusQuery.isLoading ? (
-					<Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
-						<CircularProgress size={24} />
-					</Box>
-				) : statusQuery.error ? (
-					<Alert severity="error">Failed to load Proton Pass status</Alert>
-				) : status ? (
-					<Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-						<Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-							<Typography variant="subtitle2">CLI Status</Typography>
-							<Chip
-								icon={status.loggedIn ? <CheckCircleIcon /> : <ErrorIcon />}
-								label={status.loggedIn ? "Authenticated" : "Not Authenticated"}
-								color={status.loggedIn ? "success" : "warning"}
-								size="small"
-								variant="outlined"
-							/>
-							<Chip
-								label={status.available ? "CLI Available" : "CLI Missing"}
-								color={status.available ? "default" : "error"}
-								size="small"
-								variant="outlined"
-							/>
-						</Box>
-
-						<Alert severity={status.loggedIn ? "success" : "info"}>
-							{status.message}
-						</Alert>
-
-						{!status.configured && (
-							<Alert severity="warning">
-								No encryption key source configured. Set
-								`SECRETS_ENCRYPTION_KEYS_REF` (recommended) or
-								`SECRETS_ENCRYPTION_KEYS`.
-							</Alert>
-						)}
-
-						{status.usingReference && (
-							<Alert severity="info">
-								Using Proton Pass reference from `SECRETS_ENCRYPTION_KEYS_REF`.
-							</Alert>
-						)}
-
-						<Box sx={{ display: "flex", gap: 1 }}>
-							{status.loggedIn ? (
-								<Button
-									variant="outlined"
-									color="error"
-									size="small"
-									startIcon={
-										logoutMutation.isPending ? (
-											<CircularProgress size={14} />
-										) : (
-											<LogoutIcon />
-										)
-									}
-									onClick={() => logoutMutation.mutate()}
-									disabled={logoutMutation.isPending}
-								>
-									Logout Proton Pass
-								</Button>
-							) : (
-								<Button
-									variant="contained"
-									size="small"
-									startIcon={
-										loginMutation.isPending || isPollingLogin ? (
-											<CircularProgress size={16} color="inherit" />
-										) : (
-											<LoginIcon />
-										)
-									}
-									onClick={() => loginMutation.mutate()}
-									disabled={
-										!status.available ||
-										loginMutation.isPending ||
-										isPollingLogin
-									}
-								>
-									{isPollingLogin
-										? "Waiting for login..."
-										: loginMutation.isPending
-											? "Opening terminal..."
-											: "Login with Proton Pass"}
-								</Button>
-							)}
-						</Box>
-
-						{loginResult && (
-							<Alert severity={loginResult.success ? "success" : "error"}>
-								{loginResult.message}
-							</Alert>
-						)}
-					</Box>
-				) : null}
-			</CardContent>
-		</Card>
-	);
-}
 
 function EmbeddingConfigCard() {
 	const { user } = useAuthStore();
@@ -916,9 +724,6 @@ function SettingsPage() {
 
 					{/* Embedding Configuration (superuser only) */}
 					<EmbeddingConfigCard />
-
-					{/* Proton Pass Authentication (superuser only) */}
-					<ProtonPassAuthCard />
 
 					{/* OKX Exchange Configuration (superuser only) */}
 					<ExchangeConfigCard />

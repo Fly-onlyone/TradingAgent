@@ -91,9 +91,8 @@ async def _validate_app_settings_secret_encryption() -> None:
     except (SecretEncryptionError, SecretDecryptionError, RuntimeError) as exc:
         raise RuntimeError(
             "Stored application secrets could not be validated. Configure "
-            "`SECRETS_ENCRYPTION_KEYS_REF` (Proton Pass) or "
-            "`SECRETS_ENCRYPTION_KEYS` and ensure pass-cli authentication "
-            "is active before startup."
+            "`SECRETS_ENCRYPTION_KEYS` (comma-separated Fernet keys) "
+            "before startup."
         ) from exc
 
 

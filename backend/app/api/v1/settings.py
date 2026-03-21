@@ -1,6 +1,5 @@
 """Settings endpoints for agent configuration (superuser only)."""
 
-import asyncio
 import logging
 import os
 import shutil
@@ -55,13 +54,6 @@ class CLILoginStatusResponse(BaseModel):
     logged_in: bool
     message: str
 
-
-class ProtonPassStatusResponse(BaseModel):
-    available: bool
-    logged_in: bool
-    configured: bool
-    using_reference: bool
-    message: str
 
 
 # ── Helpers ─────────────────────────────────────────────────────
@@ -125,40 +117,8 @@ def _ensure_encryption_available() -> None:
         raise HTTPException(
             status_code=409,
             detail="Secret encryption is not configured. Set SECRETS_ENCRYPTION_KEYS "
-            "or configure Proton Pass before saving API keys.",
+            "before saving API keys.",
         )
-
-
-def _find_pass_cli() -> str | None:
-    for candidate in ("pass-cli", "pass"):
-        cli = shutil.which(candidate)
-        if cli:
-            return cli
-    return None
-
-
-async def _check_proton_pass_login() -> tuple[bool, str, bool]:
-    """Return login status and availability for Proton Pass CLI."""
-    cli_path = _find_pass_cli()
-    if not cli_path:
-        return False, "Proton Pass CLI not found (`pass-cli`)", False
-
-    try:
-        result = await asyncio.to_thread(
-            subprocess.run,
-            [cli_path, "test"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except Exception as e:  # noqa: BLE001
-        return False, f"Failed to check Proton Pass auth: {e}", True
-
-    if result.returncode == 0:
-        return True, "Proton Pass CLI is authenticated", True
-
-    error_message = result.stderr.strip() or result.stdout.strip() or "Not authenticated"
-    return False, error_message, True
 
 
 def _collect_literal_model_aliases(annotation: Any) -> list[str]:
@@ -506,85 +466,6 @@ async def start_cli_logout(
     if removed:
         return {"success": True, "message": "Successfully logged out"}
     return {"success": True, "message": "No active session found"}
-
-
-@router.get("/security/proton-pass", response_model=ProtonPassStatusResponse)
-async def get_proton_pass_status(
-    _: User = Depends(get_current_superuser),
-) -> dict:
-    """Get Proton Pass CLI availability/authentication status."""
-    logged_in, message, available = await _check_proton_pass_login()
-    using_reference = bool(settings.secrets_encryption_keys_ref)
-    configured = using_reference or bool(settings.secrets_encryption_keys)
-
-    return {
-        "available": available,
-        "logged_in": logged_in,
-        "configured": configured,
-        "using_reference": using_reference,
-        "message": message,
-    }
-
-
-@router.post("/security/proton-pass/login", response_model=CLILoginResponse)
-async def start_proton_pass_login(
-    _: User = Depends(get_current_superuser),
-) -> dict:
-    """Start Proton Pass web login in a separate terminal window."""
-    cli_path = _find_pass_cli()
-    if not cli_path:
-        return {
-            "success": False,
-            "message": "Proton Pass CLI not found. Install `pass-cli` first.",
-        }
-
-    logged_in, _, _ = await _check_proton_pass_login()
-    if logged_in:
-        return {"success": True, "message": "Proton Pass CLI is already authenticated"}
-
-    try:
-        popen_kwargs: dict = {}
-        if sys.platform == "win32":
-            popen_kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
-        subprocess.Popen([cli_path, "login"], **popen_kwargs)
-        return {
-            "success": True,
-            "message": "A terminal opened. Complete Proton Pass login in your browser.",
-        }
-    except Exception as e:
-        logger.error("Proton Pass login error: %s", e, exc_info=True)
-        return {"success": False, "message": f"Login error: {e}"}
-
-
-@router.post("/security/proton-pass/logout", response_model=CLILoginResponse)
-async def proton_pass_logout(
-    _: User = Depends(get_current_superuser),
-) -> dict:
-    """Log out Proton Pass CLI by removing local session."""
-    cli_path = _find_pass_cli()
-    if not cli_path:
-        return {
-            "success": False,
-            "message": "Proton Pass CLI not found. Install `pass-cli` first.",
-        }
-
-    try:
-        result = await asyncio.to_thread(
-            subprocess.run,
-            [cli_path, "logout"],
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
-    except Exception as e:  # noqa: BLE001
-        logger.error("Proton Pass logout error: %s", e, exc_info=True)
-        return {"success": False, "message": f"Logout error: {e}"}
-
-    if result.returncode == 0:
-        return {"success": True, "message": "Successfully logged out of Proton Pass"}
-
-    error_message = result.stderr.strip() or result.stdout.strip() or "Logout failed"
-    return {"success": False, "message": error_message}
 
 
 # ── Embedding / Task Configuration ──────────────────────────────

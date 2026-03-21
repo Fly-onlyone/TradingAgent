@@ -46,8 +46,6 @@ class Settings(BaseSettings):
     # App-managed secret encryption
     # Comma-separated Fernet keys (first encrypts, all decrypt).
     secrets_encryption_keys: str = ""
-    # Proton Pass reference resolved by pass-cli (e.g. pass://vault/item/field).
-    secrets_encryption_keys_ref: str = ""
 
     # OpenAI (for embeddings) — env-var-only, not covered by DB encryption
     openai_api_key: str = ""
