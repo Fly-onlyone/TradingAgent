@@ -352,6 +352,21 @@ class AgentTaskScheduler:
                 else:
                     prompt = self._build_trading_prompt(symbol, task)
 
+                # Inject relevant knowledge context from RAG
+                try:
+                    from app.knowledge.retriever import get_retriever
+
+                    knowledge_ctx = await get_retriever().get_relevant_context(
+                        f"{symbol} trading", max_results=6,
+                    )
+                    if knowledge_ctx and knowledge_ctx != "No relevant knowledge found.":
+                        prompt = (
+                            f"## Historical Knowledge Context\n{knowledge_ctx}"
+                            f"\n\n---\n\n{prompt}"
+                        )
+                except Exception:
+                    logger.debug("Failed to inject knowledge context", exc_info=True)
+
                 # Set task context for modify_task tool
                 request_id = f"task-{task.id}-{symbol}"
                 self._set_modification_context(request_id, task)

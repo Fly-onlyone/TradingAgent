@@ -162,19 +162,13 @@ class EmbeddingService:
 
     @staticmethod
     def cosine_similarity(vec1: list[float], vec2: list[float]) -> float:
-        """Calculate cosine similarity between two vectors using numpy."""
+        """Dot product of pre-normalized vectors (sentence-transformers normalizes on encode)."""
         if len(vec1) != len(vec2):
             return 0.0
 
-        a = np.array(vec1)
-        b = np.array(vec2)
-        norm_a = np.linalg.norm(a)
-        norm_b = np.linalg.norm(b)
-
-        if norm_a == 0 or norm_b == 0:
-            return 0.0
-
-        return float(np.dot(a, b) / (norm_a * norm_b))
+        result = float(np.dot(vec1, vec2))
+        # Clamp to [-1, 1] for floating-point drift
+        return max(-1.0, min(1.0, result))
 
 
 # ── Singleton instance ──

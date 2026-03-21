@@ -309,6 +309,45 @@ async def mcp_search_lessons(args: dict[str, Any]) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
 
 
+@tool(
+    "search_patterns",
+    "Search discovered trading patterns (technical, sentiment, correlation) by query",
+    {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "Natural language query for pattern search",
+            },
+            "pattern_type": {
+                "type": "string",
+                "description": "Filter by pattern type (technical, sentiment, correlation)",
+            },
+            "min_success_rate": {
+                "type": "number",
+                "description": "Minimum success rate threshold (0-100)",
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Number of results to return",
+                "default": 5,
+            },
+        },
+        "required": ["query"],
+    },
+)
+async def mcp_search_patterns(args: dict[str, Any]) -> dict[str, Any]:
+    from app.agent.tools.knowledge_tools import search_patterns
+
+    result = await search_patterns(
+        query=args["query"],
+        pattern_type=args.get("pattern_type"),
+        min_success_rate=args.get("min_success_rate"),
+        limit=args.get("limit", 5),
+    )
+    return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+
+
 # ============================================================
 # Trading Execution Tools
 # ============================================================
@@ -812,6 +851,7 @@ ALL_TRADING_TOOLS = [
     # Knowledge
     mcp_search_strategies,
     mcp_search_lessons,
+    mcp_search_patterns,
     # Trading
     mcp_get_account_balance,
     mcp_get_open_orders,
