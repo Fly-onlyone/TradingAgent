@@ -356,10 +356,18 @@ class AgentTaskScheduler:
                 try:
                     from app.knowledge.retriever import get_retriever
 
+                    knowledge_query = self._build_knowledge_query(symbol, task)
                     knowledge_ctx = await get_retriever().get_relevant_context(
-                        f"{symbol} trading", max_results=6,
+                        knowledge_query,
+                        max_results=6,
+                        symbol=symbol,
+                        timeframes=self._extract_task_timeframes(task),
+                        market_conditions=self._extract_market_conditions(task),
                     )
-                    if knowledge_ctx and knowledge_ctx != "No relevant knowledge found.":
+                    if (
+                        knowledge_ctx
+                        and knowledge_ctx != "No relevant knowledge found."
+                    ):
                         prompt = (
                             f"## Historical Knowledge Context\n{knowledge_ctx}"
                             f"\n\n---\n\n{prompt}"
@@ -953,6 +961,77 @@ class AgentTaskScheduler:
 
         prompt += self._modification_hint(task)
         return prompt
+
+    def _build_knowledge_query(self, symbol: str, task: AgentTask) -> str:
+        """Build a retrieval query from the actual task context."""
+        timeframes = self._extract_task_timeframes(task)
+        market_conditions = self._extract_market_conditions(task)
+        condition_descriptions = [
+            condition.description.strip()
+            for condition in task.monitoring_conditions
+            if condition.description and condition.description.strip()
+        ]
+
+        lines = [
+            f"Trading symbol: {symbol}",
+            "Goal: retrieve lessons, strategies, and patterns relevant to the current trade setup.",
+            f"Risk level: {task.risk_level.value}",
+        ]
+
+        if task.description:
+            lines.append(f"Task description: {task.description.strip()}")
+        if task.custom_instructions:
+            lines.append(f"Custom instructions: {task.custom_instructions.strip()}")
+        if timeframes:
+            lines.append(f"Relevant timeframes: {', '.join(timeframes)}")
+        if market_conditions:
+            lines.append(
+                f"Market conditions of interest: {', '.join(market_conditions)}"
+            )
+        if condition_descriptions:
+            lines.append(
+                f"Monitoring conditions: {'; '.join(condition_descriptions[:3])}"
+            )
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _extract_task_timeframes(task: AgentTask) -> list[str]:
+        """Collect unique monitoring timeframes for retrieval ranking."""
+        seen: set[str] = set()
+        timeframes: list[str] = []
+        for condition in task.monitoring_conditions:
+            if not condition.timeframe:
+                continue
+            timeframe = condition.timeframe.strip().upper()
+            if not timeframe or timeframe in seen:
+                continue
+            seen.add(timeframe)
+            timeframes.append(timeframe)
+        return timeframes
+
+    def _extract_market_conditions(self, task: AgentTask) -> list[str]:
+        """Infer regime keywords from user-authored task context."""
+        text_parts = [
+            task.description or "",
+            task.custom_instructions or "",
+            " ".join(
+                condition.description or "" for condition in task.monitoring_conditions
+            ),
+        ]
+        full_text = " ".join(text_parts).lower()
+        keywords = [
+            "bullish",
+            "bearish",
+            "breakout",
+            "breakdown",
+            "trend",
+            "reversal",
+            "volatile",
+            "ranging",
+            "momentum",
+        ]
+        return [keyword for keyword in keywords if keyword in full_text]
 
     def _build_trading_prompt(self, symbol: str, task: AgentTask) -> str:
         """Build trading prompt with risk parameters."""

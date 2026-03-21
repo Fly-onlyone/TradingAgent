@@ -223,8 +223,7 @@ Expired confirmations are cleaned up every 5 minutes by the scheduler.
 ## Embeddings (Knowledge RAG)
 
 The knowledge system uses local embeddings for semantic search across trading strategies, trade lessons, trading
-patterns,
-and news articles.
+patterns, and news articles.
 
 ### Model
 
@@ -240,8 +239,17 @@ and news articles.
    specialized generators (`StrategyEmbeddingGenerator`, `TradeLessonEmbeddingGenerator`, `PatternEmbeddingGenerator`)
    and embedded as 768-dim vectors stored inline on the MongoDB document.
 2. **Query embedding**: When the agent or user searches, the query is embedded with the `search_query:` prefix.
-3. **Retrieval**: `KnowledgeRetriever` computes cosine similarity between the query vector and all stored document
-   vectors, filtering by a minimum similarity threshold (default 0.7).
+3. **Retrieval**: `KnowledgeRetriever` scans the relevant MongoDB documents in Python, computes cosine similarity, and
+   then re-ranks matches with trading-aware metadata such as recency, symbol/timeframe overlap, validation freshness,
+   and historical quality metrics.
+4. **Automatic agent context**: Trading tasks build a structured retrieval query from the task description, custom
+   instructions, risk level, and monitoring timeframes before injecting the returned context into the model prompt.
+
+### Scope Notes
+
+- **Automatic RAG corpus**: Strategies, trade lessons, and trading patterns are part of the automatic retriever.
+- **News**: News articles also store embeddings, but the trading task retriever does not inject news automatically.
+  Real-time and historical news continue to flow through the dedicated news tools.
 
 ### Gaming Deferral
 
@@ -254,13 +262,13 @@ Document embedding tasks can be deferred while a game is running to avoid CPU co
 
 ### Key Files
 
-| File                                     | Purpose                                                                 |
-|------------------------------------------|-------------------------------------------------------------------------|
-| `backend/app/knowledge/embeddings.py`    | `EmbeddingService` singleton, specialized generators, cosine similarity |
-| `backend/app/knowledge/retriever.py`     | `KnowledgeRetriever` — semantic search across all knowledge types       |
-| `backend/app/knowledge/game_detector.py` | `psutil`-based game process detection                                   |
-| `backend/app/knowledge/trade_learner.py` | Extracts lessons from completed trades + generates embeddings           |
-| `backend/app/knowledge/pattern_miner.py` | Discovers technical patterns + generates embeddings                     |
+| File                                     | Purpose                                                                   |
+|------------------------------------------|---------------------------------------------------------------------------|
+| `backend/app/knowledge/embeddings.py`    | `EmbeddingService` singleton, specialized generators, cosine similarity   |
+| `backend/app/knowledge/retriever.py`     | `KnowledgeRetriever` — weighted semantic retrieval across knowledge types |
+| `backend/app/knowledge/game_detector.py` | `psutil`-based game process detection                                     |
+| `backend/app/knowledge/trade_learner.py` | Extracts lessons from completed trades + generates embeddings             |
+| `backend/app/knowledge/pattern_miner.py` | Discovers technical patterns + generates embeddings                       |
 
 ## API Reference
 
