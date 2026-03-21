@@ -97,6 +97,64 @@ class TaskSchedule(BaseModel):
     enabled: bool = True  # Toggle individual schedules on/off
 
 
+def coerce_task_change_value(field_name: str, value: Any) -> Any:
+    """Coerce task updates into the document's expected runtime types."""
+    if (
+        field_name == "risk_level"
+        and value is not None
+        and not isinstance(value, RiskLevel)
+    ):
+        return RiskLevel(value)
+
+    if (
+        field_name == "agent_mode"
+        and value is not None
+        and not isinstance(value, AgentMode)
+    ):
+        return AgentMode(value)
+
+    if (
+        field_name == "task_modification_mode"
+        and value is not None
+        and not isinstance(value, TaskModificationMode)
+    ):
+        return TaskModificationMode(value)
+
+    if field_name == "schedules":
+        if not isinstance(value, list):
+            raise ValueError("schedules must be a list")
+        return [
+            (
+                item
+                if isinstance(item, TaskSchedule)
+                else TaskSchedule.model_validate(item)
+            )
+            for item in value
+        ]
+
+    if field_name == "monitoring_conditions":
+        if not isinstance(value, list):
+            raise ValueError("monitoring_conditions must be a list")
+        return [
+            (
+                item
+                if isinstance(item, MonitoringCondition)
+                else MonitoringCondition.model_validate(item)
+            )
+            for item in value
+        ]
+
+    return value
+
+
+def coerce_task_changes(changes: dict[str, Any]) -> dict[str, Any]:
+    """Coerce a patch dict before applying it to an AgentTask instance."""
+    return {
+        field_name: coerce_task_change_value(field_name, value)
+        for field_name, value in changes.items()
+    }
+
+
 class AgentTask(Document):
     """Scheduled agent task document."""
 

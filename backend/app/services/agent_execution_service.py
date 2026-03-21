@@ -13,7 +13,7 @@ from app.db.models.agent_decision import (
     DecisionType,
     ExecutionStatus,
 )
-from app.db.models.agent_task import AgentTask
+from app.db.models.agent_task import AgentTask, coerce_task_changes
 from app.db.models.notification import Notification, NotificationType
 
 logger = logging.getLogger(__name__)
@@ -116,9 +116,19 @@ class AgentExecutionService:
             await decision.save()
             return decision
 
+        try:
+            coerced_changes = coerce_task_changes(after)
+        except (TypeError, ValueError) as exc:
+            decision.mark_execution_failed(
+                f"Invalid task changes: {exc}",
+                error_code="invalid_changes",
+            )
+            await decision.save()
+            return decision
+
         # Apply each field change
         changed_fields = []
-        for field_name, new_value in after.items():
+        for field_name, new_value in coerced_changes.items():
             setattr(task, field_name, new_value)
             changed_fields.append(field_name)
 
@@ -126,7 +136,7 @@ class AgentExecutionService:
         await task.save()
 
         # Reschedule if schedules changed
-        if "schedules" in after:
+        if "schedules" in coerced_changes:
             try:
                 scheduler = get_scheduler()
                 await scheduler.schedule_task(task)

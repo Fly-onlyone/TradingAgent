@@ -5,10 +5,10 @@ Each wrapper delegates to the original tool function in app.agent.tools.
 """
 
 import json
+from contextvars import ContextVar
 from typing import Any
 
 from claude_agent_sdk import create_sdk_mcp_server, tool
-
 
 # ============================================================
 # Market Tools
@@ -503,6 +503,9 @@ def get_pending_recommendation(request_id: str) -> dict[str, Any] | None:
 # ============================================================
 
 _task_execution_context: dict[str, dict[str, Any]] = {}
+_active_task_request_id: ContextVar[str | None] = ContextVar(
+    "active_task_request_id", default=None
+)
 
 
 def set_task_execution_context(
@@ -514,17 +517,32 @@ def set_task_execution_context(
         "user_id": user_id,
         "mode": mode,
     }
+    _active_task_request_id.set(request_id)
 
 
 def clear_task_execution_context(request_id: str) -> None:
     """Remove execution context after task execution completes."""
     _task_execution_context.pop(request_id, None)
+    if _active_task_request_id.get() == request_id:
+        _active_task_request_id.set(None)
 
 
 def _get_task_context() -> dict[str, Any] | None:
-    if not _task_execution_context:
+    request_id = _active_task_request_id.get()
+    if not request_id:
         return None
-    return next(reversed(_task_execution_context.values()))
+    return _task_execution_context.get(request_id)
+
+
+def _serialize_task_value(value: Any) -> Any:
+    """Convert task field values into JSON-serializable data."""
+    if hasattr(value, "model_dump"):
+        return value.model_dump()
+    if isinstance(value, list):
+        return [_serialize_task_value(item) for item in value]
+    if hasattr(value, "value"):
+        return value.value
+    return value
 
 
 def _text_result(data: dict[str, Any]) -> dict[str, Any]:
@@ -560,7 +578,12 @@ def _text_result(data: dict[str, Any]) -> dict[str, Any]:
 async def mcp_modify_task(args: dict[str, Any]) -> dict[str, Any]:
     import logging
 
-    from app.db.models.agent_task import AGENT_MODIFIABLE_FIELDS, AgentTask, RiskLevel
+    from app.db.models.agent_task import (
+        AGENT_MODIFIABLE_FIELDS,
+        AgentTask,
+        RiskLevel,
+        coerce_task_changes,
+    )
 
     _logger = logging.getLogger(__name__)
     changes: dict[str, Any] = args.get("changes", {})
@@ -595,6 +618,11 @@ async def mcp_modify_task(args: dict[str, Any]) -> dict[str, Any]:
                 }
             )
 
+    try:
+        coerced_changes = coerce_task_changes(changes)
+    except (TypeError, ValueError) as exc:
+        return _text_result({"status": "error", "message": str(exc)})
+
     from beanie import PydanticObjectId
 
     task = await AgentTask.get(PydanticObjectId(ctx["task_id"]))
@@ -606,20 +634,13 @@ async def mcp_modify_task(args: dict[str, Any]) -> dict[str, Any]:
     after: dict[str, Any] = {}
     for field_name, new_value in changes.items():
         current_value = getattr(task, field_name, None)
-        if hasattr(current_value, "model_dump"):
-            current_value = current_value.model_dump()
-        elif isinstance(current_value, list):
-            current_value = [
-                item.model_dump() if hasattr(item, "model_dump") else item
-                for item in current_value
-            ]
-        before[field_name] = current_value
-        after[field_name] = new_value
+        before[field_name] = _serialize_task_value(current_value)
+        after[field_name] = _serialize_task_value(coerced_changes[field_name])
 
     mode = ctx["mode"]
 
     if mode == "auto":
-        for field_name, new_value in changes.items():
+        for field_name, new_value in coerced_changes.items():
             setattr(task, field_name, new_value)
         task.update_timestamp()
         await task.save()
