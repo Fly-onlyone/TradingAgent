@@ -217,18 +217,20 @@ function OrdersPage() {
 			render: (row) =>
 				tabValue === 0 && isCancellableStatus(row.status) ? (
 					<Tooltip title="Cancel order">
-						<IconButton
-							size="small"
-							color="error"
-							onClick={() => {
-								setActionMessage(null);
-								setActionError(null);
-								cancelMutation.mutate(row);
-							}}
-							disabled={cancelMutation.isPending}
-						>
-							<CancelIcon fontSize="small" />
-						</IconButton>
+						<span>
+							<IconButton
+								size="small"
+								color="error"
+								onClick={() => {
+									setActionMessage(null);
+									setActionError(null);
+									cancelMutation.mutate(row);
+								}}
+								disabled={cancelMutation.isPending}
+							>
+								<CancelIcon fontSize="small" />
+							</IconButton>
+						</span>
 					</Tooltip>
 				) : null,
 		},
