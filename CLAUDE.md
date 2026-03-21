@@ -105,7 +105,7 @@ Separate Sentry projects per layer (org: `fly-theonlyone`):
   placeholders) — same pattern in `logs.tsx`
 - **Hook ordering**: Biome enforces `useHookAtTopLevel` — early returns (like auth guards) must come AFTER all hooks,
   not before
-- **Pre-existing errors**: ~362 ruff errors and ~174 biome errors across the codebase — only verify new/modified files
+- **Pre-existing errors**: ~351 ruff errors and ~178 biome errors across the codebase — only verify new/modified files
 
 ## Context7 IDs
 
