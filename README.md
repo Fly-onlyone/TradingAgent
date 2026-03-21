@@ -19,6 +19,7 @@ monitoring.
   - [Knowledge Types](#knowledge-types)
   - [Auto-Generated Knowledge](#auto-generated-knowledge)
   - [Agent Integration](#agent-integration)
+- [Strategy Import](#strategy-import)
 - [Automation Flow](#automation-flow)
   - [Task Types](#task-types)
   - [Lifecycle](#lifecycle)
@@ -34,6 +35,7 @@ monitoring.
 - **Real-Time Market Data** — Live tickers, watchlists, and technical indicator charts via OKX
 - **Order Management** — Track open orders, order history, and active positions
 - **Risk Controls** — Configurable risk levels (conservative/moderate/aggressive), position limits, stop-loss enforcement
+- **Strategy Import** — Create strategies from URLs (articles, blog posts) or file uploads (TXT, JSON, YAML, PDF) with AI-powered extraction
 - **Knowledge Base (RAG)** — Semantic search over trading strategies, lessons from past trades, and discovered patterns
 - **News & Sentiment** — Aggregated market news with credibility-weighted sentiment scoring
 - **Price Monitoring** — Condition-based alerts (price thresholds, RSI, volume spikes) with cooldowns
@@ -200,7 +202,7 @@ The agent augments its analysis with a local knowledge base using semantic searc
 
 | Type                | Source                           | Contains                                                     |
 |---------------------|----------------------------------|--------------------------------------------------------------|
-| **Strategy**        | User-created via UI/API          | Entry/exit rules, risk params, win rate, Sharpe ratio        |
+| **Strategy**        | Manual, URL import, or file upload | Entry/exit rules, risk params, win rate, Sharpe ratio        |
 | **Trade Lesson**    | Auto-extracted from filled orders | Outcome, P&L %, mistakes, successes, market context          |
 | **Trading Pattern** | Discovered by PatternMiner       | Conditions, success rate, sample count, average return       |
 
@@ -222,6 +224,26 @@ The agent uses knowledge at two levels:
 
 1. **Interactive chat** — The system prompt instructs the agent to call `search_strategies`, `search_lessons`, and `search_patterns` before every analysis
 2. **Scheduled tasks** — The task scheduler automatically injects relevant knowledge context into the prompt before the agent runs
+
+## Strategy Import
+
+Strategies can be created from external sources — web articles or uploaded files — using AI to extract structured rules.
+
+**Supported sources:**
+
+- **URL** — Paste a link to a trading strategy article or blog post. The backend fetches content via trafilatura and sends it to Claude for extraction.
+- **File upload** — Upload a `.txt`, `.json`, `.yaml`, or `.pdf` file. PDF text is extracted via PyMuPDF.
+
+**Flow:**
+
+```
+Provide URL or File → Backend extracts text → Claude AI extracts structured fields
+  → Preview (name, entry/exit rules, risk params, symbols, timeframes)
+  → User reviews & edits → Confirm
+  → Creates Strategy (user-owned) + StrategyKnowledge (RAG with embedding)
+```
+
+The create page is at `/strategies/create` with three tabs: **Manual**, **URL Import**, and **File Upload**.
 
 ## Automation Flow
 
@@ -282,6 +304,7 @@ The backend serves a REST API at `http://localhost:7000`. Interactive docs are a
 | `/api/v1/market`      | Tickers, indicators, candles   |
 | `/api/v1/orders`      | Order history and positions    |
 | `/api/v1/strategies`  | Strategy CRUD                  |
+| `/api/v1/strategies/import` | AI extraction from URL/file, confirm |
 | `/api/v1/knowledge`   | Knowledge base (RAG) search    |
 | `/api/v1/news`        | News feed and sentiment        |
 | `/api/v1/agent/tasks` | Scheduled task management      |

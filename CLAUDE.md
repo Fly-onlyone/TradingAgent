@@ -86,7 +86,10 @@ Separate Sentry projects per layer (org: `fly-theonlyone`):
   deprecated `get_motor_collection`)
 - **DB session**: All models must be registered in `backend/app/db/session.py` `document_models` list
 - **API router registration**: In `backend/app/api/v1/__init__.py` — order matters (specific prefixes before generic
-  `/admin`)
+  `/admin`). Sub-prefixes (e.g. `/strategies/import`) must be registered before their parent (`/strategies`)
+- **Strategy import**: Two-step flow — extract (URL or file upload → AI extraction → preview) then confirm (save both
+  `Strategy` + `StrategyKnowledge` with embedding). Endpoints at `/api/v1/strategies/import/`. AI extraction uses
+  Claude tool_use with forced `save_strategy` tool for structured output. Pattern: `backend/app/services/strategy_extractor.py`
 - **Frontend types**: snake_case from API → camelCase in TS via transform functions in endpoint files
 - **Frontend state**: Zustand stores with devtools middleware. Pattern: `store/xxxStore.ts`
 - **Query options**: Centralized in `frontend/src/api/queryOptions/admin.ts` with shared `ADMIN_STALE_TIME`/
