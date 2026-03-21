@@ -124,7 +124,7 @@ export default defineConfig({
 			? [
 					sentryVitePlugin({
 						org: "fly-theonlyone",
-						project: "trading-agent",
+						project: "trading-agent-frontend",
 						authToken: process.env.SENTRY_AUTH_TOKEN,
 						sourcemaps: {
 							filesToDeleteAfterUpload: ["./dist/**/*.map"],

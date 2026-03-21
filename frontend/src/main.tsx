@@ -16,6 +16,7 @@ Sentry.init(
 		browserTracingIntegrationFactory: () => Sentry.browserTracingIntegration(),
 		browserProfilingIntegrationFactory: () =>
 			Sentry.browserProfilingIntegration(),
+		consoleLoggingIntegrationFactory: () => Sentry.consoleLoggingIntegration(),
 	}),
 );
 
@@ -64,7 +65,12 @@ function App() {
 // Render the app
 const rootElement = document.getElementById("app");
 if (rootElement && !rootElement.innerHTML) {
-	const root = ReactDOM.createRoot(rootElement);
+	const root = ReactDOM.createRoot(rootElement, {
+		// React 19 error hooks — capture errors Sentry can't catch via ErrorBoundary alone
+		onUncaughtError: Sentry.reactErrorHandler(),
+		onCaughtError: Sentry.reactErrorHandler(),
+		onRecoverableError: Sentry.reactErrorHandler(),
+	});
 	root.render(
 		<StrictMode>
 			<Sentry.ErrorBoundary fallback={<p>Something went wrong</p>}>

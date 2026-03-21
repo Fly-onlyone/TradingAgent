@@ -35,14 +35,16 @@ This file provides guidance to Coding agent when working with this project.
 
 ## Sentry
 
-- **Backend**: `sentry-sdk[fastapi]` — conditional init when `SENTRY_DSN` is set
+Separate Sentry projects per layer (org: `fly-theonlyone`):
+
+- **Backend project**: `trading-agent-backend` — `sentry-sdk[fastapi]`, conditional init when `SENTRY_DSN` is set
   - FastAPI auto-integration (transactions, error capture), `LoggingIntegration` (ERROR+ as events, INFO+ as breadcrumbs)
   - Config: `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`, `SENTRY_TRACES_SAMPLE_RATE`, `SENTRY_PROFILES_SAMPLE_RATE`
   - Test endpoint: `POST /api/v1/admin/sentry-test` (superuser)
-- **Frontend**: `@sentry/react` — conditional init when `VITE_SENTRY_DSN` is set
+- **Frontend project**: `trading-agent-frontend` — `@sentry/react`, conditional init when `VITE_SENTRY_DSN` is set
   - `Sentry.ErrorBoundary` wraps the React tree in `main.tsx`
   - Browser tracing + profiling integrations
-  - Source maps uploaded via `@sentry/vite-plugin` when `SENTRY_AUTH_TOKEN` is set at build time
+  - Source maps uploaded via `@sentry/vite-plugin` to `trading-agent-frontend` project when `SENTRY_AUTH_TOKEN` is set at build time
   - Config: `VITE_SENTRY_DSN`, `VITE_SENTRY_ENVIRONMENT`, `VITE_SENTRY_RELEASE`, `VITE_SENTRY_TRACES_SAMPLE_RATE`, `VITE_SENTRY_PROFILE_SESSION_SAMPLE_RATE`, `VITE_SENTRY_PROFILE_LIFECYCLE`
 - **Admin page**: `/admin/sentry` — status, captured items, test events, dashboard links
 
