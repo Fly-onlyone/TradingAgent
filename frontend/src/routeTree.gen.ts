@@ -19,6 +19,7 @@ import { Route as TradesIndexRouteImport } from './routes/trades/index'
 import { Route as TasksIndexRouteImport } from './routes/tasks/index'
 import { Route as StrategiesIndexRouteImport } from './routes/strategies/index'
 import { Route as KnowledgeIndexRouteImport } from './routes/knowledge/index'
+import { Route as StrategiesCreateRouteImport } from './routes/strategies/create'
 import { Route as AuthRegisterRouteImport } from './routes/auth/register'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AdminLogsRouteImport } from './routes/admin/logs'
@@ -74,6 +75,11 @@ const KnowledgeIndexRoute = KnowledgeIndexRouteImport.update({
   path: '/knowledge/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StrategiesCreateRoute = StrategiesCreateRouteImport.update({
+  id: '/strategies/create',
+  path: '/strategies/create',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRegisterRoute = AuthRegisterRouteImport.update({
   id: '/auth/register',
   path: '/auth/register',
@@ -106,6 +112,7 @@ export interface FileRoutesByFullPath {
   '/admin/logs': typeof AdminLogsRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
+  '/strategies/create': typeof StrategiesCreateRoute
   '/knowledge/': typeof KnowledgeIndexRoute
   '/strategies/': typeof StrategiesIndexRoute
   '/tasks/': typeof TasksIndexRoute
@@ -122,6 +129,7 @@ export interface FileRoutesByTo {
   '/admin/logs': typeof AdminLogsRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
+  '/strategies/create': typeof StrategiesCreateRoute
   '/knowledge': typeof KnowledgeIndexRoute
   '/strategies': typeof StrategiesIndexRoute
   '/tasks': typeof TasksIndexRoute
@@ -139,6 +147,7 @@ export interface FileRoutesById {
   '/admin/logs': typeof AdminLogsRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
+  '/strategies/create': typeof StrategiesCreateRoute
   '/knowledge/': typeof KnowledgeIndexRoute
   '/strategies/': typeof StrategiesIndexRoute
   '/tasks/': typeof TasksIndexRoute
@@ -157,6 +166,7 @@ export interface FileRouteTypes {
     | '/admin/logs'
     | '/auth/login'
     | '/auth/register'
+    | '/strategies/create'
     | '/knowledge/'
     | '/strategies/'
     | '/tasks/'
@@ -173,6 +183,7 @@ export interface FileRouteTypes {
     | '/admin/logs'
     | '/auth/login'
     | '/auth/register'
+    | '/strategies/create'
     | '/knowledge'
     | '/strategies'
     | '/tasks'
@@ -189,6 +200,7 @@ export interface FileRouteTypes {
     | '/admin/logs'
     | '/auth/login'
     | '/auth/register'
+    | '/strategies/create'
     | '/knowledge/'
     | '/strategies/'
     | '/tasks/'
@@ -206,6 +218,7 @@ export interface RootRouteChildren {
   AdminLogsRoute: typeof AdminLogsRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthRegisterRoute: typeof AuthRegisterRoute
+  StrategiesCreateRoute: typeof StrategiesCreateRoute
   KnowledgeIndexRoute: typeof KnowledgeIndexRoute
   StrategiesIndexRoute: typeof StrategiesIndexRoute
   TasksIndexRoute: typeof TasksIndexRoute
@@ -284,6 +297,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof KnowledgeIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/strategies/create': {
+      id: '/strategies/create'
+      path: '/strategies/create'
+      fullPath: '/strategies/create'
+      preLoaderRoute: typeof StrategiesCreateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/register': {
       id: '/auth/register'
       path: '/auth/register'
@@ -326,6 +346,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminLogsRoute: AdminLogsRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthRegisterRoute: AuthRegisterRoute,
+  StrategiesCreateRoute: StrategiesCreateRoute,
   KnowledgeIndexRoute: KnowledgeIndexRoute,
   StrategiesIndexRoute: StrategiesIndexRoute,
   TasksIndexRoute: TasksIndexRoute,
