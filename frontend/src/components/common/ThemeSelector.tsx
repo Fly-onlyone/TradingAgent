@@ -5,32 +5,68 @@
 import CheckIcon from "@mui/icons-material/Check";
 import PaletteOutlinedIcon from "@mui/icons-material/PaletteOutlined";
 import { Box, IconButton, Popover, Tooltip, Typography } from "@mui/material";
-import { useState } from "react";
+import type { PopoverPosition } from "@mui/material/Popover";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useUIStore } from "@/store/uiStore";
 import type { ThemeId } from "@/theme/presets";
 import { themeList } from "@/theme/presets";
 
 export function ThemeSelector() {
-	const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+	const buttonRef = useRef<HTMLButtonElement | null>(null);
+	const [anchorPosition, setAnchorPosition] = useState<PopoverPosition | null>(
+		null,
+	);
 	const themeId = useUIStore((s) => s.themeId);
+	const uiScale = useUIStore((s) => s.uiScale);
 	const setThemeId = useUIStore((s) => s.setThemeId);
+	const open = Boolean(anchorPosition);
+
+	const updateAnchorPosition = useCallback(() => {
+		const button = buttonRef.current;
+		if (!button) return;
+
+		const rect = button.getBoundingClientRect();
+		const zoom = uiScale || 1;
+		setAnchorPosition({
+			top: rect.bottom / zoom,
+			left: (rect.left + rect.width / 2) / zoom,
+		});
+	}, [uiScale]);
+
+	useEffect(() => {
+		if (!open) return;
+
+		const handleLayoutChange = () => {
+			window.requestAnimationFrame(updateAnchorPosition);
+		};
+
+		handleLayoutChange();
+		window.addEventListener("resize", handleLayoutChange);
+		window.addEventListener("scroll", handleLayoutChange, true);
+
+		return () => {
+			window.removeEventListener("resize", handleLayoutChange);
+			window.removeEventListener("scroll", handleLayoutChange, true);
+		};
+	}, [open, updateAnchorPosition]);
 
 	return (
 		<>
 			<Tooltip title="Theme">
 				<IconButton
+					ref={buttonRef}
 					color="inherit"
-					onClick={(e) => setAnchorEl(e.currentTarget)}
+					onClick={updateAnchorPosition}
 				>
 					<PaletteOutlinedIcon />
 				</IconButton>
 			</Tooltip>
 
 			<Popover
-				open={Boolean(anchorEl)}
-				anchorEl={anchorEl}
-				onClose={() => setAnchorEl(null)}
-				anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+				open={open}
+				anchorReference="anchorPosition"
+				anchorPosition={anchorPosition ?? undefined}
+				onClose={() => setAnchorPosition(null)}
 				transformOrigin={{ vertical: "top", horizontal: "center" }}
 				slotProps={{
 					paper: { sx: { p: 2, mt: 1 } },
@@ -56,7 +92,7 @@ export function ThemeSelector() {
 								}}
 								onClick={() => {
 									setThemeId(preset.id as ThemeId);
-									setAnchorEl(null);
+									setAnchorPosition(null);
 								}}
 							>
 								<Box
@@ -74,8 +110,7 @@ export function ThemeSelector() {
 										boxShadow: isActive
 											? `0 0 12px ${preset.primary.main}`
 											: "none",
-										transition:
-											"box-shadow 0.2s ease, border-color 0.2s ease",
+										transition: "box-shadow 0.2s ease, border-color 0.2s ease",
 										"&:hover": {
 											boxShadow: `0 0 10px ${preset.primary.main}`,
 										},
@@ -93,9 +128,7 @@ export function ThemeSelector() {
 								<Typography
 									variant="caption"
 									sx={{
-										color: isActive
-											? "text.primary"
-											: "text.secondary",
+										color: isActive ? "text.primary" : "text.secondary",
 										fontWeight: isActive ? 600 : 400,
 										fontSize: "0.65rem",
 									}}
