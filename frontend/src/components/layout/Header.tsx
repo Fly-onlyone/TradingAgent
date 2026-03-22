@@ -75,7 +75,47 @@ export function Header() {
             }}
         >
             <Toolbar sx={{minHeight: "48px !important", px: 2}}>
-                <Box sx={{flexGrow: 1}}/>
+                {/* Brand */}
+                <Box
+                    component={Link}
+                    to="/"
+                    sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        textDecoration: "none",
+                        gap: 1,
+                        flexGrow: 1,
+                    }}
+                >
+                    <img
+                        src="/coin.png"
+                        alt="TradingBot"
+                        width={24}
+                        height={24}
+                        style={{display: "block"}}
+                    />
+                    <Typography
+                        variant="subtitle2"
+                        fontWeight={700}
+                        noWrap
+                        sx={{
+                            background: (t) =>
+                                `linear-gradient(135deg, ${t.palette.primary.main} 0%, ${t.palette.primary.light} 100%)`,
+                            backgroundSize: "200% 100%",
+                            backgroundClip: "text",
+                            WebkitBackgroundClip: "text",
+                            WebkitTextFillColor: "transparent",
+                            animation: "brandShine 3.5s linear infinite",
+                            "@keyframes brandShine": {
+                                "0%": {backgroundPosition: "0% 50%"},
+                                "50%": {backgroundPosition: "100% 50%"},
+                                "100%": {backgroundPosition: "0% 50%"},
+                            },
+                        }}
+                    >
+                        TradingBot
+                    </Typography>
+                </Box>
 
                 {/* Actions */}
                 <Box sx={{display: "flex", alignItems: "center", gap: 1}}>
