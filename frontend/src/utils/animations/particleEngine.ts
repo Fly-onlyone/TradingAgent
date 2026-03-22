@@ -22,12 +22,12 @@ export interface ParticleConfig {
 }
 
 export const DEFAULT_CONFIG: ParticleConfig = {
-	count: 90,
+	count: 130,
 	lineDistance: 180,
-	lineOpacity: 0.2,
+	lineOpacity: 0.28,
 	mouseRadius: 250,
 	mouseStrength: 0.03,
-	speed: 0.4,
+	speed: 0.3,
 	color: "249, 115, 22",
 };
 
@@ -44,7 +44,7 @@ export function createParticles(
 			y: Math.random() * height,
 			vx: (Math.random() - 0.5) * speed,
 			vy: (Math.random() - 0.5) * speed,
-			opacity: 0.3 + Math.random() * 0.5,
+			opacity: 0.4 + Math.random() * 0.5,
 		});
 	}
 	return particles;
@@ -120,9 +120,9 @@ export function drawParticles(
 
 	// Draw particles
 	for (const p of particles) {
-		ctx.fillStyle = `rgba(${color}, ${p.opacity * 0.8})`;
+		ctx.fillStyle = `rgba(${color}, ${p.opacity})`;
 		ctx.beginPath();
-		ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+		ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
 		ctx.fill();
 	}
 }
