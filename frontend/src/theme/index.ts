@@ -36,6 +36,8 @@ declare module "@mui/material/styles" {
             cardTint: string;
             gradientAccent: string;
             sectionGlow: string;
+            spacing: ThemePreset["spacing"];
+            elevation: ThemePreset["elevation"];
         };
     }
 
@@ -66,6 +68,8 @@ declare module "@mui/material/styles" {
             cardTint?: string;
             gradientAccent?: string;
             sectionGlow?: string;
+            spacing?: ThemePreset["spacing"];
+            elevation?: ThemePreset["elevation"];
         };
     }
 }

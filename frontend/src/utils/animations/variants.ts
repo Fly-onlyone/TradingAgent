@@ -244,6 +244,54 @@ export const rippleExpand: Variants = {
     },
 };
 
+// ============ Fade In Up (single-element entry) ============
+
+export const fadeInUp = {
+    hidden: {opacity: 0, y: 20},
+    visible: {
+        opacity: 1,
+        y: 0,
+        transition: {type: "spring", ...spring.gentle},
+    },
+};
+
+// ============ Tab Switch (AnimatePresence between tab panels) ============
+
+export const tabSwitch: Variants = {
+    initial: {opacity: 0, y: 10},
+    animate: {
+        opacity: 1,
+        y: 0,
+        transition: {type: "spring", ...spring.snappy, duration: 0.2},
+    },
+    exit: {
+        opacity: 0,
+        y: -10,
+        transition: {duration: 0.15},
+    },
+};
+
+// ============ Number Change (scale pulse for updating numbers) ============
+
+export const numberChange = {
+    animate: {
+        scale: [1, 1.05, 1],
+        transition: {duration: 0.3, ease: "easeInOut"},
+    },
+};
+
+// ============ Container Reveal (clip-overflow y-translate reveal) ============
+
+export const containerReveal = {
+    hidden: {opacity: 0, y: 30, clipPath: "inset(10% 0% 0% 0%)"},
+    visible: {
+        opacity: 1,
+        y: 0,
+        clipPath: "inset(0% 0% 0% 0%)",
+        transition: {type: "spring", ...spring.gentle, duration: 0.5},
+    },
+};
+
 // ============ Reduced motion variants ============
 
 export const reducedMotionPage: Variants = {

@@ -42,6 +42,8 @@ export function createAppTheme(preset: ThemePreset) {
             cardTint: preset.cardTint,
             gradientAccent: preset.gradientAccent,
             sectionGlow: preset.sectionGlow,
+            spacing: preset.spacing,
+            elevation: preset.elevation,
         },
     });
 }

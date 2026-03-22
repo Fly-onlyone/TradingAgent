@@ -2,7 +2,7 @@
  * Orders Page
  */
 
-import CancelIcon from "@mui/icons-material/Cancel";
+import ListAltIcon from "@mui/icons-material/ListAlt";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import {
 	Alert,
@@ -11,24 +11,25 @@ import {
 	Card,
 	CardContent,
 	Chip,
-	IconButton,
 	Stack,
 	Tab,
 	Tabs,
 	TextField,
-	Tooltip,
 	Typography,
 } from "@mui/material";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import { ordersApi } from "@/api/endpoints/orders";
+import { EmptyState } from "@/components/common/EmptyState";
 import { PageTransition } from "@/components/common/PageTransition";
+import { SectionHeader } from "@/components/common/SectionHeader";
 import { type Column, DataTable } from "@/components/data-display/DataTable";
 import { PositionCard } from "@/components/trading/PositionCard";
 import { useOrderStore } from "@/store/orderStore";
 import type { OkxOrder } from "@/types";
+import { listStagger } from "@/utils/animations/variants";
 import { ORDER_STATUSES } from "@/utils/constants";
 import { getErrorMessage } from "@/utils/errors";
 import { formatDateTime, formatPrice } from "@/utils/formatters";
@@ -46,20 +47,11 @@ function formatTimestamp(ms: number): string {
 	return formatDateTime(new Date(ms).toISOString());
 }
 
-function isCancellableStatus(status: string): boolean {
-	return (
-		status === "open" || status === "pending" || status === "partially_filled"
-	);
-}
-
 function OrdersPage() {
-	const queryClient = useQueryClient();
 	const positions = useOrderStore((state) => state.positions);
 
 	const [tabValue, setTabValue] = useState(0);
 	const [symbolFilter, setSymbolFilter] = useState("");
-	const [actionMessage, setActionMessage] = useState<string | null>(null);
-	const [actionError, setActionError] = useState<string | null>(null);
 
 	const normalizedSymbol = symbolFilter.trim().toUpperCase();
 
@@ -83,35 +75,6 @@ function OrdersPage() {
 			}),
 		refetchInterval: 15_000,
 		retry: 1,
-	});
-
-	const cancelMutation = useMutation({
-		mutationFn: async (order: OkxOrder) => {
-			const result = await ordersApi.cancelOkxOrder({
-				symbol: order.symbol,
-				orderId: order.orderId,
-			});
-			if (!result.success) {
-				throw new Error(
-					result.error || result.message || "Order cancellation failed",
-				);
-			}
-			return result;
-		},
-		onSuccess: async (result) => {
-			setActionError(null);
-			setActionMessage(result.message);
-			await queryClient.invalidateQueries({
-				queryKey: ["orders", "okx", "open"],
-			});
-			await queryClient.invalidateQueries({
-				queryKey: ["orders", "okx", "history"],
-			});
-		},
-		onError: (error) => {
-			setActionMessage(null);
-			setActionError(getErrorMessage(error));
-		},
 	});
 
 	const getStatusChip = (status: string) => {
@@ -210,35 +173,9 @@ function OrdersPage() {
 			label: "Updated",
 			render: (row) => formatTimestamp(row.updatedAtMs),
 		},
-		{
-			id: "actions",
-			label: "",
-			sortable: false,
-			render: (row) =>
-				tabValue === 0 && isCancellableStatus(row.status) ? (
-					<Tooltip title="Cancel order">
-						<span>
-							<IconButton
-								size="small"
-								color="error"
-								onClick={() => {
-									setActionMessage(null);
-									setActionError(null);
-									cancelMutation.mutate(row);
-								}}
-								disabled={cancelMutation.isPending}
-							>
-								<CancelIcon fontSize="small" />
-							</IconButton>
-						</span>
-					</Tooltip>
-				) : null,
-		},
 	];
 
 	const handleRefresh = () => {
-		setActionMessage(null);
-		setActionError(null);
 		if (tabValue === 0) {
 			void openOrdersQuery.refetch();
 			return;
@@ -251,9 +188,10 @@ function OrdersPage() {
 	return (
 		<PageTransition pageKey="orders">
 			<Box>
-				<Typography variant="h4" fontWeight={700} gutterBottom>
-					Orders & Positions
-				</Typography>
+				<SectionHeader
+					title="Orders & Positions"
+					subtitle="Review agent-executed orders and current positions"
+				/>
 
 				<Stack
 					direction={{ xs: "column", sm: "row" }}
@@ -275,9 +213,7 @@ function OrdersPage() {
 						startIcon={<RefreshIcon />}
 						onClick={handleRefresh}
 						disabled={
-							openOrdersQuery.isFetching ||
-							historyOrdersQuery.isFetching ||
-							cancelMutation.isPending
+							openOrdersQuery.isFetching || historyOrdersQuery.isFetching
 						}
 					>
 						Refresh
@@ -294,35 +230,29 @@ function OrdersPage() {
 						{activeApiError}
 					</Alert>
 				)}
-				{actionError && (
-					<Alert severity="error" sx={{ mb: 2 }}>
-						{actionError}
-					</Alert>
-				)}
-				{actionMessage && (
-					<Alert severity="success" sx={{ mb: 2 }}>
-						{actionMessage}
-					</Alert>
-				)}
 
 				<Tabs
 					value={tabValue}
 					onChange={(_, v) => setTabValue(v)}
 					sx={{ mb: 3 }}
 				>
-					<Tab label={`Open Orders (${openCount})`} />
-					<Tab label={`Order History (${historyCount})`} />
-					<Tab label={`Positions (${positions.length})`} />
+					<Tab label={`Open Orders${openCount > 0 ? ` (${openCount})` : ""}`} />
+					<Tab
+						label={`Order History${historyCount > 0 ? ` (${historyCount})` : ""}`}
+					/>
+					<Tab
+						label={`Positions${positions.length > 0 ? ` (${positions.length})` : ""}`}
+					/>
 				</Tabs>
 
 				<AnimatePresence mode="wait">
 					{tabValue === 0 && (
 						<motion.div
 							key="open-orders"
-							initial={{ opacity: 0, x: -20 }}
-							animate={{ opacity: 1, x: 0 }}
-							exit={{ opacity: 0, x: 20 }}
-							transition={{ duration: 0.15 }}
+							variants={listStagger.container}
+							initial="hidden"
+							animate="visible"
+							exit={{ opacity: 0, x: 20, transition: { duration: 0.15 } }}
 						>
 							<Card>
 								<CardContent>
@@ -331,7 +261,7 @@ function OrdersPage() {
 										rows={openOrders}
 										rowKey="orderId"
 										loading={openOrdersQuery.isLoading}
-										emptyMessage="No open orders from OKX"
+										emptyMessage="No open orders — the agent hasn't placed any yet"
 										maxHeight={500}
 									/>
 								</CardContent>
@@ -342,10 +272,10 @@ function OrdersPage() {
 					{tabValue === 1 && (
 						<motion.div
 							key="order-history"
-							initial={{ opacity: 0, x: -20 }}
-							animate={{ opacity: 1, x: 0 }}
-							exit={{ opacity: 0, x: 20 }}
-							transition={{ duration: 0.15 }}
+							variants={listStagger.container}
+							initial="hidden"
+							animate="visible"
+							exit={{ opacity: 0, x: 20, transition: { duration: 0.15 } }}
 						>
 							<Card>
 								<CardContent>
@@ -370,27 +300,26 @@ function OrdersPage() {
 							exit={{ opacity: 0, x: 20 }}
 							transition={{ duration: 0.15 }}
 						>
-							<Box
-								sx={{
-									display: "grid",
-									gridTemplateColumns: "repeat(auto-fill, minmax(350px, 1fr))",
-									gap: 2,
-								}}
-							>
-								{positions.length === 0 ? (
-									<Card>
-										<CardContent>
-											<Typography color="text.secondary" align="center">
-												No open positions
-											</Typography>
-										</CardContent>
-									</Card>
-								) : (
-									positions.map((position) => (
+							{positions.length === 0 ? (
+								<EmptyState
+									icon={<ListAltIcon />}
+									title="No open positions"
+									description="The agent hasn't opened any trades yet"
+								/>
+							) : (
+								<Box
+									sx={{
+										display: "grid",
+										gridTemplateColumns:
+											"repeat(auto-fill, minmax(350px, 1fr))",
+										gap: 2,
+									}}
+								>
+									{positions.map((position) => (
 										<PositionCard key={position.id} position={position} />
-									))
-								)}
-							</Box>
+									))}
+								</Box>
+							)}
 						</motion.div>
 					)}
 				</AnimatePresence>

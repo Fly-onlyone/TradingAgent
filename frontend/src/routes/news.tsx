@@ -18,10 +18,11 @@ import {
 import {useQuery} from "@tanstack/react-query";
 import {createFileRoute} from "@tanstack/react-router";
 import {motion} from "framer-motion";
-import {useState} from "react";
+import {useMemo, useState} from "react";
 import {newsApi} from "@/api/endpoints/news";
 import {EmptyState} from "@/components/common/EmptyState";
 import {PageTransition} from "@/components/common/PageTransition";
+import {SectionHeader} from "@/components/common/SectionHeader";
 import {ShimmerSkeleton} from "@/components/common/ShimmerSkeleton";
 import {SentimentBadge} from "@/components/data-display/SentimentBadge";
 import {StatCard} from "@/components/data-display/StatCard";
@@ -38,6 +39,7 @@ export const Route = createFileRoute("/news")({
 
 function NewsPage() {
     const [searchQuery, setSearchQuery] = useState("");
+    const [sourceFilter, setSourceFilter] = useState<string | null>(null);
     const debouncedQuery = useDebounce(searchQuery, 300);
 
     const {data: marketSentiment, isLoading: loadingSentiment} = useQuery({
@@ -53,21 +55,77 @@ function NewsPage() {
                 : newsApi.getArticles({pageSize: 20}).then((r) => r.items ?? []),
     });
 
+    const sentimentScore = marketSentiment?.overallMarketSentiment ?? null;
+
+    const uniqueSources = useMemo(() => {
+        if (!articles) return [];
+        const sources = new Set<string>();
+        for (const article of articles) {
+            const name = article.source?.name;
+            if (name) sources.add(name);
+        }
+        return Array.from(sources).sort();
+    }, [articles]);
+
+    const filteredArticles = useMemo(() => {
+        if (!articles) return [];
+        if (!sourceFilter) return articles;
+        return articles.filter((a) => a.source?.name === sourceFilter);
+    }, [articles, sourceFilter]);
+
     return (
         <PageTransition pageKey="news">
             <Box>
-                <Typography variant="h4" fontWeight={700} gutterBottom>
-                    News & Sentiment
-                </Typography>
+                <SectionHeader
+                    title="News & Sentiment"
+                    subtitle="Market news and sentiment analysis used by the agent"
+                />
 
                 {/* Market Sentiment Overview */}
                 <Grid container spacing={3} sx={{mb: 4}}>
                     <Grid size={{xs: 12, md: 4}}>
-                        <StatCard
-                            title="Overall Market Sentiment"
-                            value={marketSentiment?.overallMarketSentiment.toFixed(2) || "-"}
-                            loading={loadingSentiment}
-                        />
+                        <Card sx={{p: 2}}>
+                            <Typography variant="subtitle2" color="text.secondary" sx={{mb: 1.5}}>
+                                Overall Market Sentiment
+                            </Typography>
+                            {loadingSentiment ? (
+                                <ShimmerSkeleton shimmerVariant="text"/>
+                            ) : (
+                                <>
+                                    <Box sx={{
+                                        position: "relative",
+                                        height: 8,
+                                        borderRadius: 4,
+                                        overflow: "hidden",
+                                        bgcolor: "rgba(255,255,255,0.06)"
+                                    }}>
+                                        <Box
+                                            sx={{
+                                                position: "absolute",
+                                                left: 0,
+                                                top: 0,
+                                                bottom: 0,
+                                                width: `${Math.max(5, Math.min(100, ((sentimentScore ?? 0) + 1) / 2 * 100))}%`,
+                                                borderRadius: 4,
+                                                background: (sentimentScore ?? 0) > 0.2
+                                                    ? (theme) => theme.palette.success.main
+                                                    : (sentimentScore ?? 0) < -0.2
+                                                        ? (theme) => theme.palette.error.main
+                                                        : (theme) => theme.palette.warning.main,
+                                                transition: "width 0.5s ease, background 0.3s ease",
+                                            }}
+                                        />
+                                    </Box>
+                                    <Box sx={{display: "flex", justifyContent: "space-between", mt: 0.75}}>
+                                        <Typography variant="caption" color="error.main">Bearish</Typography>
+                                        <Typography variant="caption" fontWeight={600}>
+                                            {sentimentScore != null ? sentimentScore.toFixed(2) : "N/A"}
+                                        </Typography>
+                                        <Typography variant="caption" color="success.main">Bullish</Typography>
+                                    </Box>
+                                </>
+                            )}
+                        </Card>
                     </Grid>
                     <Grid size={{xs: 12, md: 4}}>
                         <StatCard
@@ -112,8 +170,23 @@ function NewsPage() {
                             ),
                         },
                     }}
-                    sx={{mb: 3}}
+                    sx={{mb: 2}}
                 />
+
+                {/* Source filter chips */}
+                <Box sx={{display: "flex", gap: 1, mb: 3, flexWrap: "wrap"}}>
+                    <Chip label="All" variant={!sourceFilter ? "filled" : "outlined"}
+                          onClick={() => setSourceFilter(null)} size="small"/>
+                    {uniqueSources.map((source) => (
+                        <Chip
+                            key={source}
+                            label={source}
+                            variant={sourceFilter === source ? "filled" : "outlined"}
+                            onClick={() => setSourceFilter(source === sourceFilter ? null : source)}
+                            size="small"
+                        />
+                    ))}
+                </Box>
 
                 {/* News Articles */}
                 <Grid container spacing={2}>
@@ -123,15 +196,15 @@ function NewsPage() {
                                 <ShimmerSkeleton shimmerVariant="card"/>
                             </Grid>
                         ))
-                    ) : articles && articles.length > 0 ? (
-                        articles.map((article, index) => (
-                            <Grid key={article.id} size={{xs: 12, md: 6, lg: 4}}>
+                    ) : filteredArticles.length > 0 ? (
+                        filteredArticles.map((article, index) => (
+                            <Grid key={article.id} size={{xs: 12, sm: index === 0 ? 12 : 6, md: index === 0 ? 12 : 4}}>
                                 <motion.div
                                     initial={{opacity: 0, y: 40, scale: 0.95}}
                                     animate={{opacity: 1, y: 0, scale: 1}}
                                     transition={{...spring.snappy, delay: index * 0.06}}
                                 >
-                                    <NewsCard article={article}/>
+                                    <NewsCard article={article} featured={index === 0}/>
                                 </motion.div>
                             </Grid>
                         ))
@@ -142,7 +215,9 @@ function NewsPage() {
                                 description={
                                     searchQuery
                                         ? "Try a different search term"
-                                        : "No news articles available"
+                                        : sourceFilter
+                                            ? "No articles from this source"
+                                            : "No news articles available"
                                 }
                             />
                         </Grid>
@@ -153,7 +228,7 @@ function NewsPage() {
     );
 }
 
-function NewsCard({article}: { article: NewsArticle }) {
+function NewsCard({article, featured = false}: { article: NewsArticle; featured?: boolean }) {
     return (
         <Card
             component={motion.div}
@@ -190,7 +265,7 @@ function NewsCard({article}: { article: NewsArticle }) {
                         )}
                 </Box>
 
-                <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                <Typography variant={featured ? "h5" : "subtitle1"} fontWeight={600} gutterBottom>
                     {article.title}
                 </Typography>
 

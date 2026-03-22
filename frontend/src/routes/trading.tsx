@@ -1,10 +1,9 @@
 /**
- * Trading Page
+ * Market Monitor Page
+ *
+ * Read-only view of live market data used by the trading agent for automated decisions.
  */
 
-import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
-import InsightsIcon from "@mui/icons-material/Insights";
-import MonetizationOnIcon from "@mui/icons-material/MonetizationOn";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
 import TimelineIcon from "@mui/icons-material/Timeline";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
@@ -23,11 +22,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { ordersApi } from "@/api/endpoints/orders";
 import {
-	marketAccountQueryOptions,
 	marketOverviewQueryOptions,
 	marketTickerQueryOptions,
 } from "@/api/queryOptions/market";
 import { PageTransition } from "@/components/common/PageTransition";
+import { SectionHeader } from "@/components/common/SectionHeader";
 import { StatCard } from "@/components/data-display/StatCard";
 import {
 	MarketOverviewPanel,
@@ -44,7 +43,6 @@ import { getErrorMessage } from "@/utils/errors";
 import {
 	formatPercent,
 	formatPrice,
-	formatUSD,
 	formatVolume,
 } from "@/utils/formatters";
 import { requireAuth } from "./-guards";
@@ -76,12 +74,6 @@ function TradingPage() {
 		retry: 1,
 	});
 
-	const accountQuery = useQuery({
-		...marketAccountQueryOptions(),
-		refetchInterval: 60_000,
-		retry: 1,
-	});
-
 	const overviewQuery = useQuery({
 		...marketOverviewQueryOptions(),
 		refetchInterval: 120_000,
@@ -104,13 +96,10 @@ function TradingPage() {
 			? resolvedTicker.lastPrice
 			: 0;
 
-	const accountError =
-		accountQuery.data?.error ||
-		(accountQuery.isError ? getErrorMessage(accountQuery.error) : null);
 	const overviewError =
 		overviewQuery.data?.error ||
 		(overviewQuery.isError ? getErrorMessage(overviewQuery.error) : null);
-	const pageError = accountError || overviewError || null;
+	const pageError = overviewError || null;
 
 	const orderHistoryError =
 		orderHistoryQuery.data?.error ||
@@ -121,6 +110,18 @@ function TradingPage() {
 	return (
 		<PageTransition pageKey="trading">
 			<Box>
+				<SectionHeader
+					title="Market Monitor"
+					subtitle="Live market data — the agent uses this data for automated decisions"
+				/>
+
+				<Alert severity="info" sx={{ mb: 2 }} icon={false}>
+					<Typography variant="body2">
+						This is a read-only view of market data. All trading is handled
+						automatically by the agent.
+					</Typography>
+				</Alert>
+
 				<motion.div
 					initial={{ opacity: 0, x: -40 }}
 					animate={{ opacity: 1, x: 0 }}
@@ -159,8 +160,9 @@ function TradingPage() {
 							exclusive
 							onChange={(_, value) => value && setSelectedTimeframe(value)}
 							size="small"
+							sx={{ flexWrap: "wrap" }}
 						>
-							{TIMEFRAMES.slice(0, 6).map((timeframe) => (
+							{TIMEFRAMES.map((timeframe) => (
 								<ToggleButton key={timeframe.value} value={timeframe.value}>
 									{timeframe.label}
 								</ToggleButton>
@@ -215,39 +217,6 @@ function TradingPage() {
 									loading={tickerQuery.isLoading && !resolvedTicker}
 								/>
 							</Grid>
-							<Grid size={{ xs: 12, sm: 6, md: 4 }}>
-								<StatCard
-									title="Account Equity"
-									value={formatUSD(accountQuery.data?.totalEquity ?? 0)}
-									icon={<AccountBalanceWalletIcon />}
-									loading={accountQuery.isLoading}
-								/>
-							</Grid>
-							<Grid size={{ xs: 12, sm: 6, md: 4 }}>
-								<StatCard
-									title="Available Balance"
-									value={formatUSD(accountQuery.data?.availableBalance ?? 0)}
-									icon={<MonetizationOnIcon />}
-									loading={accountQuery.isLoading}
-								/>
-							</Grid>
-							<Grid size={{ xs: 12, sm: 6, md: 4 }}>
-								<StatCard
-									title="Margin / UPL"
-									value={formatUSD(accountQuery.data?.unrealizedPnl ?? 0)}
-									changeLabel={
-										accountQuery.data?.marginRatio !== null &&
-										accountQuery.data?.marginRatio !== undefined
-											? `Margin Ratio: ${accountQuery.data.marginRatio.toFixed(2)}`
-											: "Margin Ratio: -"
-									}
-									icon={<InsightsIcon />}
-									trend={
-										(accountQuery.data?.unrealizedPnl ?? 0) >= 0 ? "up" : "down"
-									}
-									loading={accountQuery.isLoading}
-								/>
-							</Grid>
 						</Grid>
 					</Grid>
 
@@ -263,7 +232,7 @@ function TradingPage() {
 							<Card>
 								<CardContent>
 									<Typography variant="h6" gutterBottom>
-										Watchlist
+										Agent Watchlist
 									</Typography>
 									<Box
 										sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}

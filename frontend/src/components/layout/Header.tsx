@@ -21,13 +21,16 @@ import {
 import {Link} from "@tanstack/react-router";
 import {motion} from "framer-motion";
 import {useState} from "react";
+import {StatusDot} from "@/components/common/StatusDot";
 import {ThemeSelector} from "@/components/common/ThemeSelector";
+import {useAgentStore} from "@/store/agentStore";
 import {useAuth} from "@/hooks/useAuth";
 import {useUIStore} from "@/store/uiStore";
 
 export function Header() {
     const {user, logout} = useAuth();
     const {notifications} = useUIStore();
+    const agentStatus = useAgentStore((s) => s.status);
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
     const handleMenu = (event: React.MouseEvent<HTMLElement>) => {
@@ -74,7 +77,7 @@ export function Header() {
                 },
             }}
         >
-            <Toolbar sx={{minHeight: "48px !important", px: 2}}>
+            <Toolbar sx={{minHeight: "52px !important", px: {xs: 2, sm: 3}}}>
                 {/* Brand */}
                 <Box
                     component={Link}
@@ -119,12 +122,27 @@ export function Header() {
 
                 {/* Actions */}
                 <Box sx={{display: "flex", alignItems: "center", gap: 1}}>
+                    {/* Agent Status */}
+                    <Tooltip title={`Agent: ${agentStatus}`}>
+                        <Box sx={{display: "flex", alignItems: "center", gap: 0.75, mr: 1}}>
+                            <StatusDot
+                                status={agentStatus === "connected" || agentStatus === "analyzing" ? "online" : agentStatus === "error" ? "busy" : "offline"}
+                                size={7}
+                            />
+                            <Typography variant="caption" color="text.secondary"
+                                        sx={{display: {xs: "none", sm: "block"}}}>
+                                Agent
+                            </Typography>
+                        </Box>
+                    </Tooltip>
+
                     {/* Theme Selector */}
                     <ThemeSelector/>
 
                     {/* Notifications */}
                     <Tooltip title="Notifications">
                         <IconButton
+                            aria-label="Notifications"
                             color="inherit"
                             sx={
                                 unreadCount > 0

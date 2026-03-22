@@ -3,6 +3,7 @@
  */
 
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import LinkIcon from "@mui/icons-material/Link";
 import {
@@ -24,6 +25,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { strategiesApi } from "@/api/endpoints/strategies";
 import { PageTransition } from "@/components/common/PageTransition";
+import { SectionHeader } from "@/components/common/SectionHeader";
 import { notify } from "@/store/uiStore";
 import type { ExtractedStrategy, StrategyImportConfirm } from "@/types";
 import { requireAuth } from "../-guards";
@@ -55,13 +57,15 @@ function CreateStrategyPage() {
 	return (
 		<PageTransition pageKey="strategies-create">
 			<Box>
-				<Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
+				<Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
 					<IconButton onClick={() => navigate({ to: "/strategies" })}>
 						<ArrowBackIcon />
 					</IconButton>
-					<Typography variant="h4" fontWeight={700}>
-						Create Strategy
-					</Typography>
+					<SectionHeader
+						title="Import Strategy"
+						subtitle="Add a trading strategy for the agent via URL, file upload, or manual entry"
+						sx={{ mb: 0 }}
+					/>
 				</Box>
 
 				<Tabs
@@ -170,7 +174,26 @@ function UrlImportTab({
 
 	if (extracted) {
 		return (
-			<Box>
+			<Card
+				sx={{
+					mt: 3,
+					p: 3,
+					border: (theme) =>
+						`1px solid ${theme.trading.border.medium}`,
+				}}
+			>
+				<Typography
+					variant="h6"
+					sx={{
+						mb: 2,
+						display: "flex",
+						alignItems: "center",
+						gap: 1,
+					}}
+				>
+					<AutoAwesomeIcon color="primary" />
+					AI Extraction Preview
+				</Typography>
 				<SourceChip label={url} type="url" />
 				<StrategyForm
 					form={extracted}
@@ -180,7 +203,7 @@ function UrlImportTab({
 					isLoading={confirmMutation.isPending}
 					onBack={() => setExtracted(null)}
 				/>
-			</Box>
+			</Card>
 		);
 	}
 
@@ -267,7 +290,26 @@ function FileUploadTab({
 
 	if (extracted) {
 		return (
-			<Box>
+			<Card
+				sx={{
+					mt: 3,
+					p: 3,
+					border: (theme) =>
+						`1px solid ${theme.trading.border.medium}`,
+				}}
+			>
+				<Typography
+					variant="h6"
+					sx={{
+						mb: 2,
+						display: "flex",
+						alignItems: "center",
+						gap: 1,
+					}}
+				>
+					<AutoAwesomeIcon color="primary" />
+					AI Extraction Preview
+				</Typography>
 				<SourceChip label={selectedFile?.name || "file"} type="file" />
 				<StrategyForm
 					form={extracted}
@@ -277,7 +319,7 @@ function FileUploadTab({
 					isLoading={confirmMutation.isPending}
 					onBack={() => setExtracted(null)}
 				/>
-			</Box>
+			</Card>
 		);
 	}
 
@@ -295,17 +337,40 @@ function FileUploadTab({
 					onChange={handleFileSelect}
 					style={{ display: "none" }}
 				/>
-				<Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-					<Button
-						variant="outlined"
-						onClick={() => fileInputRef.current?.click()}
-						startIcon={<CloudUploadIcon />}
-					>
-						Choose File
-					</Button>
+				<Box
+					onClick={() => fileInputRef.current?.click()}
+					sx={{
+						border: (theme) =>
+							`2px dashed ${theme.trading.border.medium}`,
+						borderRadius: 2,
+						p: 4,
+						textAlign: "center",
+						cursor: "pointer",
+						transition: "border-color 0.2s, background-color 0.2s",
+						"&:hover": {
+							borderColor: "primary.main",
+							backgroundColor: (theme) =>
+								`rgba(${theme.trading.primaryRgb}, 0.05)`,
+						},
+					}}
+				>
+					<CloudUploadIcon
+						sx={{ fontSize: 48, color: "text.secondary", mb: 2 }}
+					/>
+					<Typography variant="body1" fontWeight={500}>
+						Drop a file here or click to browse
+					</Typography>
+					<Typography variant="caption" color="text.secondary">
+						Supports PDF, TXT, MD files
+					</Typography>
 					{selectedFile && (
-						<Typography variant="body2" color="text.secondary">
-							{selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
+						<Typography
+							variant="body2"
+							color="text.secondary"
+							sx={{ mt: 1 }}
+						>
+							{selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)}{" "}
+							KB)
 						</Typography>
 					)}
 				</Box>

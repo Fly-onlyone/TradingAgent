@@ -8,7 +8,7 @@ import type { TypographyOptions } from '@mui/material/styles/createTypography';
 export const typography: TypographyOptions = {
   fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
   h1: {
-    fontSize: '2.5rem',
+    fontSize: '2.25rem',
     fontWeight: 700,
     lineHeight: 1.2,
     letterSpacing: '-0.02em',
@@ -25,7 +25,7 @@ export const typography: TypographyOptions = {
     lineHeight: 1.4,
   },
   h4: {
-    fontSize: '1.25rem',
+    fontSize: '1.125rem',
     fontWeight: 600,
     lineHeight: 1.4,
   },
@@ -72,10 +72,10 @@ export const typography: TypographyOptions = {
   },
   overline: {
     fontSize: '0.75rem',
-    fontWeight: 600,
+    fontWeight: 500,
     lineHeight: 2.66,
     textTransform: 'uppercase',
-    letterSpacing: '0.08em',
+    letterSpacing: '0.1em',
   },
 };
 

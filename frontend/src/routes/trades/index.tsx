@@ -3,12 +3,13 @@
  * Displays trade history with profit/loss analysis
  */
 
-import { Alert, Box, Typography } from "@mui/material";
+import { Alert, Box, Card, CardContent, Typography } from "@mui/material";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { tradesApi } from "@/api/endpoints/trades";
 import { PageTransition } from "@/components/common/PageTransition";
+import { SectionHeader } from "@/components/common/SectionHeader";
 import {
 	TradeExportButton,
 	TradeFilterBar,
@@ -17,7 +18,7 @@ import {
 	TradeTable,
 } from "@/components/trades";
 import { useTradeStore } from "@/store/tradeStore";
-import { spring } from "@/utils/animations/variants";
+import { tabSwitch } from "@/utils/animations/variants";
 import { requireAuth } from "../-guards";
 
 export const Route = createFileRoute("/trades/")({
@@ -76,29 +77,17 @@ function TradesPage() {
 	return (
 		<PageTransition pageKey="trades">
 			<Box>
-				<motion.div
-					initial={{ opacity: 0, x: -40 }}
-					animate={{ opacity: 1, x: 0 }}
-					transition={{ ...spring.snappy, delay: 0.1 }}
-				>
-					<Box
-						sx={{
-							display: "flex",
-							justifyContent: "space-between",
-							alignItems: "center",
-							mb: 3,
-						}}
-					>
-						<Typography variant="h4" fontWeight={700}>
-							Trade History
-						</Typography>
+				<SectionHeader
+					title="Trade History"
+					subtitle="Review agent-executed trades and P&L performance"
+					action={
 						<TradeExportButton
 							startDate={filters.startDate}
 							endDate={filters.endDate}
 							disabled={isLoading || !tradesQuery.data?.trades.length}
 						/>
-					</Box>
-				</motion.div>
+					}
+				/>
 
 				{error && (
 					<Alert severity="error" sx={{ mb: 3 }}>
@@ -114,6 +103,30 @@ function TradesPage() {
 					/>
 				</Box>
 
+				{/* P&L Chart Placeholder */}
+				<Card sx={{ mb: 3 }}>
+					<CardContent>
+						<Typography variant="h6" sx={{ mb: 2 }}>
+							P&L Performance
+						</Typography>
+						<Box
+							sx={{
+								height: 200,
+								display: "flex",
+								alignItems: "center",
+								justifyContent: "center",
+								border: (theme) =>
+									`1px dashed ${theme.trading.border.subtle}`,
+								borderRadius: 1,
+							}}
+						>
+							<Typography variant="body2" color="text.secondary">
+								P&L chart — coming soon
+							</Typography>
+						</Box>
+					</CardContent>
+				</Card>
+
 				{/* Filter Bar */}
 				<TradeFilterBar
 					filters={filters}
@@ -124,30 +137,42 @@ function TradesPage() {
 				/>
 
 				{/* Trade Data */}
-				{viewMode === "table" ? (
-					<TradeTable
-						trades={tradesQuery.data?.trades ?? []}
-						total={tradesQuery.data?.total ?? 0}
-						page={filters.page ?? 1}
-						pageSize={filters.pageSize ?? 20}
-						onPageChange={setPage}
-						onPageSizeChange={setPageSize}
-						isLoading={tradesQuery.isLoading}
-					/>
-				) : (
-					<TradesBySymbolAccordion
-						data={bySymbolQuery.data ?? []}
-						expandedSymbols={expandedSymbols}
-						onToggleSymbol={toggleSymbolExpanded}
-						onExpandAll={() =>
-							expandAllSymbols(
-								(bySymbolQuery.data ?? []).map((item) => item.symbol),
-							)
-						}
-						onCollapseAll={collapseAllSymbols}
-						isLoading={bySymbolQuery.isLoading}
-					/>
-				)}
+				<AnimatePresence mode="wait">
+					<motion.div
+						key={viewMode}
+						variants={tabSwitch}
+						initial="initial"
+						animate="animate"
+						exit="exit"
+					>
+						{viewMode === "table" ? (
+							<TradeTable
+								trades={tradesQuery.data?.trades ?? []}
+								total={tradesQuery.data?.total ?? 0}
+								page={filters.page ?? 1}
+								pageSize={filters.pageSize ?? 20}
+								onPageChange={setPage}
+								onPageSizeChange={setPageSize}
+								isLoading={tradesQuery.isLoading}
+							/>
+						) : (
+							<TradesBySymbolAccordion
+								data={bySymbolQuery.data ?? []}
+								expandedSymbols={expandedSymbols}
+								onToggleSymbol={toggleSymbolExpanded}
+								onExpandAll={() =>
+									expandAllSymbols(
+										(bySymbolQuery.data ?? []).map(
+											(item) => item.symbol,
+										),
+									)
+								}
+								onCollapseAll={collapseAllSymbols}
+								isLoading={bySymbolQuery.isLoading}
+							/>
+						)}
+					</motion.div>
+				</AnimatePresence>
 			</Box>
 		</PageTransition>
 	);

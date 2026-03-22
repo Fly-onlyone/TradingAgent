@@ -105,6 +105,16 @@ export interface ThemePreset {
         meshBlobCycleMin: number;
         meshBlobCycleMax: number;
     };
+    spacing: {
+        page: number;
+        sectionGap: number;
+        cardPadding: number;
+    };
+    elevation: {
+        surface: string;
+        raised: string;
+        floating: string;
+    };
 }
 
 const solar: ThemePreset = {
@@ -166,8 +176,8 @@ const solar: ThemePreset = {
         neutralRgb: "148, 163, 184",
     },
     border: {
-        subtle: "rgba(249, 115, 22, 0.12)",
-        medium: "rgba(249, 115, 22, 0.10)",
+        subtle: "rgba(249, 115, 22, 0.08)",
+        medium: "rgba(249, 115, 22, 0.15)",
         strong: "rgba(249, 115, 22, 0.35)",
         white: "rgba(255, 255, 255, 0.1)",
     },
@@ -228,6 +238,16 @@ const solar: ThemePreset = {
         meshBlobCount: 4,
         meshBlobCycleMin: 18,
         meshBlobCycleMax: 25,
+    },
+    spacing: {
+        page: 24,
+        sectionGap: 24,
+        cardPadding: 20,
+    },
+    elevation: {
+        surface: "0 1px 3px rgba(0,0,0,0.2)",
+        raised: "0 4px 12px rgba(0,0,0,0.25)",
+        floating: "0 12px 32px rgba(0,0,0,0.35)",
     },
 };
 
@@ -290,8 +310,8 @@ const glacier: ThemePreset = {
         neutralRgb: "148, 163, 184",
     },
     border: {
-        subtle: "rgba(0, 188, 212, 0.12)",
-        medium: "rgba(0, 188, 212, 0.10)",
+        subtle: "rgba(0, 188, 212, 0.08)",
+        medium: "rgba(0, 188, 212, 0.15)",
         strong: "rgba(0, 188, 212, 0.35)",
         white: "rgba(255, 255, 255, 0.1)",
     },
@@ -352,6 +372,16 @@ const glacier: ThemePreset = {
         meshBlobCount: 3,
         meshBlobCycleMin: 25,
         meshBlobCycleMax: 35,
+    },
+    spacing: {
+        page: 28,
+        sectionGap: 28,
+        cardPadding: 24,
+    },
+    elevation: {
+        surface: "0 1px 3px rgba(0,0,0,0.25)",
+        raised: "0 4px 12px rgba(0,0,0,0.3)",
+        floating: "0 12px 32px rgba(0,0,0,0.4)",
     },
 };
 
@@ -414,8 +444,8 @@ const jade: ThemePreset = {
         neutralRgb: "148, 163, 184",
     },
     border: {
-        subtle: "rgba(16, 185, 129, 0.12)",
-        medium: "rgba(16, 185, 129, 0.10)",
+        subtle: "rgba(16, 185, 129, 0.08)",
+        medium: "rgba(16, 185, 129, 0.15)",
         strong: "rgba(16, 185, 129, 0.35)",
         white: "rgba(255, 255, 255, 0.1)",
     },
@@ -476,6 +506,16 @@ const jade: ThemePreset = {
         meshBlobCount: 5,
         meshBlobCycleMin: 20,
         meshBlobCycleMax: 28,
+    },
+    spacing: {
+        page: 24,
+        sectionGap: 24,
+        cardPadding: 20,
+    },
+    elevation: {
+        surface: "0 1px 3px rgba(0,0,0,0.2)",
+        raised: "0 4px 12px rgba(0,0,0,0.25)",
+        floating: "0 12px 32px rgba(0,0,0,0.35)",
     },
 };
 
@@ -538,8 +578,8 @@ const eclipse: ThemePreset = {
         neutralRgb: "148, 163, 184",
     },
     border: {
-        subtle: "rgba(139, 92, 246, 0.12)",
-        medium: "rgba(139, 92, 246, 0.10)",
+        subtle: "rgba(139, 92, 246, 0.08)",
+        medium: "rgba(139, 92, 246, 0.15)",
         strong: "rgba(139, 92, 246, 0.35)",
         white: "rgba(255, 255, 255, 0.1)",
     },
@@ -600,6 +640,16 @@ const eclipse: ThemePreset = {
         meshBlobCount: 4,
         meshBlobCycleMin: 22,
         meshBlobCycleMax: 30,
+    },
+    spacing: {
+        page: 32,
+        sectionGap: 32,
+        cardPadding: 28,
+    },
+    elevation: {
+        surface: "0 1px 3px rgba(0,0,0,0.3)",
+        raised: "0 4px 12px rgba(0,0,0,0.35)",
+        floating: "0 12px 32px rgba(0,0,0,0.45)",
     },
 };
 

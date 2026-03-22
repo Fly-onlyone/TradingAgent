@@ -18,36 +18,30 @@ import {
     FormControlLabel,
     Grid2 as Grid,
     Switch,
+    Tab,
+    Tabs,
     TextField,
     Typography,
 } from "@mui/material";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
-import { motion } from "framer-motion";
-import { useState } from "react";
-import { Controller, useForm } from "react-hook-form";
+import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
+import {createFileRoute} from "@tanstack/react-router";
+import {useState} from "react";
+import {Controller, useForm} from "react-hook-form";
 import AddIcon from "@mui/icons-material/Add";
-import type {
-	AuthConfigUpdate,
-	EmbeddingConfigUpdate,
-	ExchangeConfigUpdate,
-} from "@/api/endpoints/settings";
-import { authApi } from "@/api/endpoints/auth";
-import { settingsApi } from "@/api/endpoints/settings";
-import { AgentConfigPanel } from "@/components/agent/AgentConfigPanel";
-import { PageTransition } from "@/components/common/PageTransition";
-import { useAuth } from "@/hooks/useAuth";
-import { useAuthStore } from "@/store/authStore";
-import { notify } from "@/store/uiStore";
-import { spring } from "@/utils/animations/variants";
-import { getErrorMessage } from "@/utils/errors";
-import {
-	type ChangePasswordInput,
-	type SettingsInput,
-	changePasswordSchema,
-	settingsSchema,
-} from "@/utils/validators";
-import { requireAuth } from "./-guards";
+import type {AuthConfigUpdate, EmbeddingConfigUpdate, ExchangeConfigUpdate,} from "@/api/endpoints/settings";
+import {settingsApi} from "@/api/endpoints/settings";
+import {authApi} from "@/api/endpoints/auth";
+import {AgentConfigPanel} from "@/components/agent/AgentConfigPanel";
+import {MetricRow} from "@/components/common/MetricRow";
+import {PageTransition} from "@/components/common/PageTransition";
+import {SectionHeader} from "@/components/common/SectionHeader";
+import {ThemeSelector} from "@/components/common/ThemeSelector";
+import {useAuth} from "@/hooks/useAuth";
+import {useAuthStore} from "@/store/authStore";
+import {notify, useUIStore} from "@/store/uiStore";
+import {getErrorMessage} from "@/utils/errors";
+import {type ChangePasswordInput, changePasswordSchema, type SettingsInput, settingsSchema,} from "@/utils/validators";
+import {requireAuth} from "./-guards";
 
 export const Route = createFileRoute("/settings")({
     beforeLoad: requireAuth,
@@ -571,64 +565,32 @@ function ExchangeConfigCard() {
 
                         {/* Current Keys Display */}
                         {config.hasApiKey && (
-                            <Box sx={{display: "flex", flexDirection: "column", gap: 0.5}}>
-                                <Box sx={{display: "flex", alignItems: "center", gap: 1}}>
-                                    <Typography
-                                        variant="body2"
-                                        color="text.secondary"
-                                        sx={{minWidth: 80}}
-                                    >
-                                        API Key:
-                                    </Typography>
-                                    <Typography
-                                        variant="body2"
-                                        fontFamily="monospace"
-                                        color="text.secondary"
-                                    >
-                                        {config.maskedApiKey}
-                                    </Typography>
-                                </Box>
-                                {config.hasSecretKey && (
-                                    <Box sx={{display: "flex", alignItems: "center", gap: 1}}>
-                                        <Typography
-                                            variant="body2"
-                                            color="text.secondary"
-                                            sx={{minWidth: 80}}
-                                        >
-                                            Secret:
-                                        </Typography>
-                                        <Typography
-                                            variant="body2"
-                                            fontFamily="monospace"
-                                            color="text.secondary"
-                                        >
-                                            {config.maskedSecretKey}
-                                        </Typography>
-                                    </Box>
-                                )}
-                                {config.hasPassphrase && (
-                                    <Box sx={{display: "flex", alignItems: "center", gap: 1}}>
-                                        <Typography
-                                            variant="body2"
-                                            color="text.secondary"
-                                            sx={{minWidth: 80}}
-                                        >
-                                            Passphrase:
-                                        </Typography>
-                                        <Typography
-                                            variant="body2"
-                                            fontFamily="monospace"
-                                            color="text.secondary"
-                                        >
-                                            ••••••••
-                                        </Typography>
-                                    </Box>
-                                )}
+                            <Box>
+                                <MetricRow
+                                    label="API Key"
+                                    value={config.maskedApiKey || "Not configured"}
+                                />
+                                <MetricRow
+                                    label="Secret Key"
+                                    value={
+                                        config.hasSecretKey
+                                            ? (config.maskedSecretKey || "Configured")
+                                            : "Not configured"
+                                    }
+                                />
+                                <MetricRow
+                                    label="Passphrase"
+                                    value={
+                                        config.hasPassphrase
+                                            ? "••••••••"
+                                            : "Not configured"
+                                    }
+                                />
                                 <Button
                                     size="small"
                                     color="error"
                                     onClick={handleClearCredentials}
-                                    sx={{alignSelf: "flex-start", mt: 0.5}}
+                                    sx={{alignSelf: "flex-start", mt: 1}}
                                 >
                                     Clear All Credentials
                                 </Button>
@@ -737,6 +699,10 @@ function ExchangeConfigCard() {
 
 function SettingsPage() {
     const {user} = useAuth();
+    const isSuperuser = user?.isSuperuser ?? false;
+    const [settingsTab, setSettingsTab] = useState(0);
+    const {reducedMotion, setReducedMotion, effectsEnabled, setEffectsEnabled} =
+        useUIStore();
 
     const {
         control,
@@ -771,189 +737,281 @@ function SettingsPage() {
     return (
         <PageTransition pageKey="settings">
             <Box sx={{maxWidth: 800, mx: "auto"}}>
-                <motion.div
-                    initial={{opacity: 0, x: -40}}
-                    animate={{opacity: 1, x: 0}}
-                    transition={{...spring.snappy, delay: 0.1}}
+                <SectionHeader
+                    title="Settings"
+                    subtitle="Configure your account, agent, and application preferences"
+                />
+
+                <Tabs
+                    value={settingsTab}
+                    onChange={(_, v) => setSettingsTab(v)}
+                    sx={{mb: 3, borderBottom: 1, borderColor: "divider"}}
                 >
-                    <Typography variant="h4" fontWeight={700} gutterBottom>
-                        Settings
-                    </Typography>
-                </motion.div>
+                    <Tab label="Profile"/>
+                    <Tab label="Agent & Exchange"/>
+                    <Tab label="Appearance"/>
+                    {isSuperuser && <Tab label="Admin"/>}
+                </Tabs>
 
-                <form onSubmit={handleSubmit(onSubmit)}>
-                    {/* Profile Settings */}
-                    <Card sx={{mb: 3}}>
+                {/* Tab 0: Profile */}
+                {settingsTab === 0 && (
+                    <form onSubmit={handleSubmit(onSubmit)}>
+                        {/* Profile Settings */}
+                        <Card sx={{mb: 3}}>
+                            <CardContent>
+                                <Typography variant="h6" gutterBottom>
+                                    Profile
+                                </Typography>
+
+                                <Grid container spacing={3}>
+                                    <Grid size={{xs: 12, sm: 6}}>
+                                        <Controller
+                                            name="email"
+                                            control={control}
+                                            render={({field}) => (
+                                                <TextField
+                                                    {...field}
+                                                    label="Email"
+                                                    fullWidth
+                                                    error={!!errors.email}
+                                                    helperText={errors.email?.message}
+                                                />
+                                            )}
+                                        />
+                                    </Grid>
+                                    <Grid size={{xs: 12, sm: 6}}>
+                                        <Controller
+                                            name="username"
+                                            control={control}
+                                            render={({field}) => (
+                                                <TextField
+                                                    {...field}
+                                                    label="Username"
+                                                    fullWidth
+                                                    error={!!errors.username}
+                                                    helperText={errors.username?.message}
+                                                />
+                                            )}
+                                        />
+                                    </Grid>
+                                </Grid>
+                            </CardContent>
+                        </Card>
+
+                        {/* Trading Preferences */}
+                        <Card sx={{mb: 3}}>
+                            <CardContent>
+                                <Typography variant="h6" gutterBottom>
+                                    Trading Preferences
+                                </Typography>
+
+                                <Grid container spacing={3}>
+                                    <Grid size={{xs: 12, sm: 6}}>
+                                        <Controller
+                                            name="defaultSymbol"
+                                            control={control}
+                                            render={({field}) => (
+                                                <TextField
+                                                    {...field}
+                                                    label="Default Symbol"
+                                                    fullWidth
+                                                    helperText="Default trading pair to load"
+                                                />
+                                            )}
+                                        />
+                                    </Grid>
+                                    <Grid size={{xs: 12, sm: 6}}>
+                                        <Controller
+                                            name="defaultTimeframe"
+                                            control={control}
+                                            render={({field}) => (
+                                                <TextField
+                                                    {...field}
+                                                    label="Default Timeframe"
+                                                    fullWidth
+                                                    helperText="Default chart timeframe"
+                                                />
+                                            )}
+                                        />
+                                    </Grid>
+                                </Grid>
+                            </CardContent>
+                        </Card>
+
+                        {/* Notification Settings */}
+                        <Card sx={{mb: 3}}>
+                            <CardContent>
+                                <Typography variant="h6" gutterBottom>
+                                    Notifications
+                                </Typography>
+
+                                <Box
+                                    sx={{
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        gap: 1,
+                                    }}
+                                >
+                                    <Controller
+                                        name="notifications.email"
+                                        control={control}
+                                        render={({field}) => (
+                                            <FormControlLabel
+                                                control={
+                                                    <Switch {...field} checked={field.value}/>
+                                                }
+                                                label="Email notifications"
+                                            />
+                                        )}
+                                    />
+                                    <Controller
+                                        name="notifications.push"
+                                        control={control}
+                                        render={({field}) => (
+                                            <FormControlLabel
+                                                control={
+                                                    <Switch {...field} checked={field.value}/>
+                                                }
+                                                label="Push notifications"
+                                            />
+                                        )}
+                                    />
+                                    <Divider sx={{my: 1}}/>
+                                    <Controller
+                                        name="notifications.orderFilled"
+                                        control={control}
+                                        render={({field}) => (
+                                            <FormControlLabel
+                                                control={
+                                                    <Switch {...field} checked={field.value}/>
+                                                }
+                                                label="Order filled alerts"
+                                            />
+                                        )}
+                                    />
+                                    <Controller
+                                        name="notifications.priceAlerts"
+                                        control={control}
+                                        render={({field}) => (
+                                            <FormControlLabel
+                                                control={
+                                                    <Switch {...field} checked={field.value}/>
+                                                }
+                                                label="Price alerts"
+                                            />
+                                        )}
+                                    />
+                                    <Controller
+                                        name="notifications.newsAlerts"
+                                        control={control}
+                                        render={({field}) => (
+                                            <FormControlLabel
+                                                control={
+                                                    <Switch {...field} checked={field.value}/>
+                                                }
+                                                label="News alerts"
+                                            />
+                                        )}
+                                    />
+                                </Box>
+                            </CardContent>
+                        </Card>
+
+                        {/* Change Password */}
+                        <ChangePasswordCard/>
+
+                        {/* Save Button */}
+                        <Box sx={{display: "flex", justifyContent: "flex-end"}}>
+                            <Button
+                                type="submit"
+                                variant="contained"
+                                size="large"
+                                disabled={!isDirty}
+                            >
+                                Save Changes
+                            </Button>
+                        </Box>
+                    </form>
+                )}
+
+                {/* Tab 1: Agent & Exchange */}
+                {settingsTab === 1 && (
+                    <>
+                        <AgentConfigPanel variant="card"/>
+                        <ExchangeConfigCard/>
+                        <AuthConfigCard/>
+                    </>
+                )}
+
+                {/* Tab 2: Appearance */}
+                {settingsTab === 2 && (
+                    <Card>
                         <CardContent>
-                            <Typography variant="h6" gutterBottom>
-                                Profile
+                            <Typography variant="h6" sx={{mb: 2}}>
+                                Appearance
                             </Typography>
 
-                            <Grid container spacing={3}>
-                                <Grid size={{xs: 12, sm: 6}}>
-                                    <Controller
-                                        name="email"
-                                        control={control}
-                                        render={({field}) => (
-                                            <TextField
-                                                {...field}
-                                                label="Email"
-                                                fullWidth
-                                                error={!!errors.email}
-                                                helperText={errors.email?.message}
-                                            />
-                                        )}
-                                    />
-                                </Grid>
-                                <Grid size={{xs: 12, sm: 6}}>
-                                    <Controller
-                                        name="username"
-                                        control={control}
-                                        render={({field}) => (
-                                            <TextField
-                                                {...field}
-                                                label="Username"
-                                                fullWidth
-                                                error={!!errors.username}
-                                                helperText={errors.username?.message}
-                                            />
-                                        )}
-                                    />
-                                </Grid>
-                            </Grid>
-                        </CardContent>
-                    </Card>
+                            {/* Theme Selector */}
+                            <Box sx={{mb: 3}}>
+                                <Typography variant="subtitle2" sx={{mb: 1}}>
+                                    Theme
+                                </Typography>
+                                <ThemeSelector/>
+                            </Box>
 
-                    {/* Trading Preferences */}
-                    <Card sx={{mb: 3}}>
-                        <CardContent>
-                            <Typography variant="h6" gutterBottom>
-                                Trading Preferences
-                            </Typography>
+                            {/* Reduced Motion */}
+                            <Box
+                                sx={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    mb: 2,
+                                }}
+                            >
+                                <Box>
+                                    <Typography variant="body2">Reduced Motion</Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                        Minimize animations for accessibility
+                                    </Typography>
+                                </Box>
+                                <Switch
+                                    checked={reducedMotion}
+                                    onChange={(_, checked) => setReducedMotion(checked)}
+                                />
+                            </Box>
 
-                            <Grid container spacing={3}>
-                                <Grid size={{xs: 12, sm: 6}}>
-                                    <Controller
-                                        name="defaultSymbol"
-                                        control={control}
-                                        render={({field}) => (
-                                            <TextField
-                                                {...field}
-                                                label="Default Symbol"
-                                                fullWidth
-                                                helperText="Default trading pair to load"
-                                            />
-                                        )}
-                                    />
-                                </Grid>
-                                <Grid size={{xs: 12, sm: 6}}>
-                                    <Controller
-                                        name="defaultTimeframe"
-                                        control={control}
-                                        render={({field}) => (
-                                            <TextField
-                                                {...field}
-                                                label="Default Timeframe"
-                                                fullWidth
-                                                helperText="Default chart timeframe"
-                                            />
-                                        )}
-                                    />
-                                </Grid>
-                            </Grid>
-                        </CardContent>
-                    </Card>
-
-                    {/* Notification Settings */}
-                    <Card sx={{mb: 3}}>
-                        <CardContent>
-                            <Typography variant="h6" gutterBottom>
-                                Notifications
-                            </Typography>
-
-                            <Box sx={{display: "flex", flexDirection: "column", gap: 1}}>
-                                <Controller
-                                    name="notifications.email"
-                                    control={control}
-                                    render={({field}) => (
-                                        <FormControlLabel
-                                            control={<Switch {...field} checked={field.value}/>}
-                                            label="Email notifications"
-                                        />
-                                    )}
-                                />
-                                <Controller
-                                    name="notifications.push"
-                                    control={control}
-                                    render={({field}) => (
-                                        <FormControlLabel
-                                            control={<Switch {...field} checked={field.value}/>}
-                                            label="Push notifications"
-                                        />
-                                    )}
-                                />
-                                <Divider sx={{my: 1}}/>
-                                <Controller
-                                    name="notifications.orderFilled"
-                                    control={control}
-                                    render={({field}) => (
-                                        <FormControlLabel
-                                            control={<Switch {...field} checked={field.value}/>}
-                                            label="Order filled alerts"
-                                        />
-                                    )}
-                                />
-                                <Controller
-                                    name="notifications.priceAlerts"
-                                    control={control}
-                                    render={({field}) => (
-                                        <FormControlLabel
-                                            control={<Switch {...field} checked={field.value}/>}
-                                            label="Price alerts"
-                                        />
-                                    )}
-                                />
-                                <Controller
-                                    name="notifications.newsAlerts"
-                                    control={control}
-                                    render={({field}) => (
-                                        <FormControlLabel
-                                            control={<Switch {...field} checked={field.value}/>}
-                                            label="News alerts"
-                                        />
-                                    )}
+                            {/* Effects */}
+                            <Box
+                                sx={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    mb: 2,
+                                }}
+                            >
+                                <Box>
+                                    <Typography variant="body2">
+                                        Background Effects
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                        Mesh blobs, particle grid, cursor glow
+                                    </Typography>
+                                </Box>
+                                <Switch
+                                    checked={effectsEnabled}
+                                    onChange={(_, checked) => setEffectsEnabled(checked)}
                                 />
                             </Box>
                         </CardContent>
                     </Card>
+                )}
 
-                    {/* Change Password */}
-                    <ChangePasswordCard/>
-
-                    {/* Token Expiry Configuration (superuser only) */}
-                    <AuthConfigCard/>
-
-                    {/* AI Agent Configuration (superuser only) */}
-                    <AgentConfigPanel variant="card"/>
-
-                    {/* Embedding Configuration (superuser only) */}
-                    <EmbeddingConfigCard/>
-
-                    {/* OKX Exchange Configuration (superuser only) */}
-                    <ExchangeConfigCard/>
-
-                    {/* Save Button */}
-                    <Box sx={{display: "flex", justifyContent: "flex-end"}}>
-                        <Button
-                            type="submit"
-                            variant="contained"
-                            size="large"
-                            disabled={!isDirty}
-                        >
-                            Save Changes
-                        </Button>
-                    </Box>
-                </form>
+                {/* Tab 3: Admin (superuser only) */}
+                {isSuperuser && settingsTab === 3 && (
+                    <>
+                        <EmbeddingConfigCard/>
+                    </>
+                )}
             </Box>
         </PageTransition>
     );
