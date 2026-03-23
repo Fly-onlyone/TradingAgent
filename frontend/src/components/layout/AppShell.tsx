@@ -47,7 +47,7 @@ export function AppShell({children}: AppShellProps) {
     const showEffects = showLayout && effectsEnabled;
 
     return (
-        <Box sx={{display: "flex", minHeight: "100vh"}}>
+        <Box sx={{display: "flex", height: "100vh", overflow: "hidden"}}>
             {/* Background Effects Layer */}
             {showEffects && (
                 <>
@@ -67,7 +67,10 @@ export function AppShell({children}: AppShellProps) {
                 component="main"
                 sx={{
                     flexGrow: 1,
-                    minHeight: "100vh",
+                    minHeight: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    overflow: "hidden",
                     position: "relative",
                     zIndex: 1,
                     transition: (theme) =>
@@ -85,7 +88,8 @@ export function AppShell({children}: AppShellProps) {
                     ref={contentRef}
                     sx={{
                         p: showLayout ? {xs: 2, sm: 2.5, md: 3} : 0,
-                        height: showLayout ? "calc(100vh - 52px)" : "100vh",
+                        flex: 1,
+                        minHeight: 0,
                         overflow: "auto",
                         pb: showLayout && isMobile ? "72px" : undefined,
                     }}

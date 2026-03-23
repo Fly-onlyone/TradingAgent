@@ -16,7 +16,13 @@ export function createComponents(
     return {
         MuiCssBaseline: {
             styleOverrides: {
+                html: {
+                    height: "100%",
+                    overflow: "hidden",
+                },
                 body: {
+                    height: "100%",
+                    overflow: "hidden",
                     scrollbarColor: `${scrollbar.thumb} ${background.default}`,
                     scrollBehavior: "smooth",
                     background: background.default,
