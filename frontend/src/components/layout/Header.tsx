@@ -12,8 +12,8 @@ import {
 	Box,
 	Divider,
 	IconButton,
-	Menu,
 	MenuItem,
+	Popover,
 	Toolbar,
 	Tooltip,
 	Typography,
@@ -21,7 +21,7 @@ import {
 import type { PopoverPosition } from "@mui/material/Popover";
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { StatusDot } from "@/components/common/StatusDot";
 import { ThemeSelector } from "@/components/common/ThemeSelector";
 import { NotificationPanel } from "@/components/layout/NotificationPanel";
@@ -36,7 +36,9 @@ export function Header() {
 	const backendStatus = useUIStore((s) => s.backendStatus);
 	const backendStatusMessage = useUIStore((s) => s.backendStatusMessage);
 	const agentStatus = useAgentStore((s) => s.status);
-	const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+	const accountButtonRef = useRef<HTMLButtonElement | null>(null);
+	const [accountMenuPosition, setAccountMenuPosition] =
+		useState<PopoverPosition | null>(null);
 
 	// Notification panel
 	const notifButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -55,12 +57,28 @@ export function Header() {
 		});
 	}, [uiScale]);
 
-	const handleMenu = (event: React.MouseEvent<HTMLElement>) => {
-		setAnchorEl(event.currentTarget);
-	};
+	const updateAccountMenuPosition = useCallback(() => {
+		const button = accountButtonRef.current;
+		if (!button) return;
+		const rect = button.getBoundingClientRect();
+		const zoom = uiScale || 1;
+		setAccountMenuPosition({
+			top: rect.bottom / zoom,
+			left: rect.right / zoom,
+		});
+	}, [uiScale]);
+
+	const toggleAccountMenu = useCallback(() => {
+		if (accountMenuPosition) {
+			setAccountMenuPosition(null);
+			return;
+		}
+
+		updateAccountMenuPosition();
+	}, [accountMenuPosition, updateAccountMenuPosition]);
 
 	const handleClose = () => {
-		setAnchorEl(null);
+		setAccountMenuPosition(null);
 	};
 
 	const handleLogout = () => {
@@ -69,6 +87,24 @@ export function Header() {
 	};
 
 	const unreadCount = notifications.length;
+	const isAccountMenuOpen = Boolean(accountMenuPosition);
+
+	useEffect(() => {
+		if (!isAccountMenuOpen) return;
+
+		const handleLayoutChange = () => {
+			window.requestAnimationFrame(updateAccountMenuPosition);
+		};
+
+		handleLayoutChange();
+		window.addEventListener("resize", handleLayoutChange);
+		window.addEventListener("scroll", handleLayoutChange, true);
+
+		return () => {
+			window.removeEventListener("resize", handleLayoutChange);
+			window.removeEventListener("scroll", handleLayoutChange, true);
+		};
+	}, [isAccountMenuOpen, updateAccountMenuPosition]);
 
 	return (
 		<AppBar
@@ -246,7 +282,8 @@ export function Header() {
 					{/* User Menu */}
 					<Tooltip title="Account">
 						<IconButton
-							onClick={handleMenu}
+							ref={accountButtonRef}
+							onClick={toggleAccountMenu}
 							color="inherit"
 							sx={{ position: "relative" }}
 						>
@@ -263,20 +300,19 @@ export function Header() {
 						</IconButton>
 					</Tooltip>
 
-					<Menu
-						anchorEl={anchorEl}
-						open={Boolean(anchorEl)}
+					<Popover
+						anchorReference="anchorPosition"
+						anchorPosition={accountMenuPosition ?? undefined}
+						open={isAccountMenuOpen}
 						onClose={handleClose}
-						anchorOrigin={{
-							vertical: "bottom",
-							horizontal: "right",
-						}}
 						transformOrigin={{
 							vertical: "top",
 							horizontal: "right",
 						}}
-						PaperProps={{
-							sx: { minWidth: 200, mt: 1 },
+						slotProps={{
+							paper: {
+								sx: { minWidth: 200, mt: 1 },
+							},
 						}}
 					>
 						<Box sx={{ px: 2, py: 1 }}>
@@ -294,7 +330,7 @@ export function Header() {
 							<LogoutIcon sx={{ mr: 1.5, fontSize: 20 }} />
 							Logout
 						</MenuItem>
-					</Menu>
+					</Popover>
 				</Box>
 			</Toolbar>
 		</AppBar>
