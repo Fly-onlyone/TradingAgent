@@ -1,8 +1,7 @@
 """Knowledge base models for RAG and trade learning (MongoDB/Beanie)."""
 
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Optional
 
 from beanie import Document, Indexed, PydanticObjectId
 from pydantic import Field, field_validator
@@ -36,19 +35,25 @@ class StrategyKnowledge(Document):
     risk_params: dict  # Position sizing, stop-loss
 
     # Performance metrics
-    backtest_results: Optional[dict] = None
-    win_rate: Optional[float] = None
-    avg_return: Optional[float] = None
-    max_drawdown: Optional[float] = None
-    sharpe_ratio: Optional[float] = None
+    backtest_results: dict | None = None
+    win_rate: float | None = None
+    avg_return: float | None = None
+    max_drawdown: float | None = None
+    sharpe_ratio: float | None = None
+
+    # Rating aggregates
+    overall_rating: float | None = None
+    rating_confidence: float | None = None
+    rating_count: int = 0
+    average_user_rating: float | None = None
 
     # Metadata
-    market_conditions: Optional[list[str]] = None  # Best conditions for strategy
-    asset_classes: Optional[list[str]] = None  # Suitable assets
-    timeframes: Optional[list[str]] = None  # Suitable timeframes
+    market_conditions: list[str] | None = None  # Best conditions for strategy
+    asset_classes: list[str] | None = None  # Suitable assets
+    timeframes: list[str] | None = None  # Suitable timeframes
 
     # Embedding for semantic search (768-dim nomic-embed-text-v1.5 vector stored inline)
-    embedding: Optional[list[float]] = None
+    embedding: list[float] | None = None
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -61,6 +66,10 @@ class StrategyKnowledge(Document):
                 [("created_at", DESCENDING)],
                 name="strategy_knowledge_created_desc",
             ),
+            IndexModel(
+                [("overall_rating", DESCENDING)],
+                name="strategy_knowledge_overall_rating_desc",
+            ),
         ]
 
     def update_timestamp(self) -> None:
@@ -71,29 +80,29 @@ class StrategyKnowledge(Document):
 class TradeLesson(Document):
     """Lessons learned from past trades."""
 
-    order_id: Optional[PydanticObjectId] = None
+    order_id: PydanticObjectId | None = None
 
     # Trade outcome
     outcome: TradeOutcome
     profit_pct: float
-    profit_amount: Optional[float] = None
+    profit_amount: float | None = None
 
     # Lesson content
     lesson_summary: str  # AI-generated insight
     market_context: dict  # Market conditions during trade
-    mistakes: Optional[list[str]] = None  # What went wrong
-    successes: Optional[list[str]] = None  # What went right
-    recommendations: Optional[list[str]] = None  # Future improvements
+    mistakes: list[str] | None = None  # What went wrong
+    successes: list[str] | None = None  # What went right
+    recommendations: list[str] | None = None  # Future improvements
 
     # Trade metadata
     symbol: Indexed(str)  # type: ignore[valid-type]
     side: TradeSide
     entry_price: float
     exit_price: float
-    duration_minutes: Optional[int] = None
+    duration_minutes: int | None = None
 
     # Embedding for semantic search (768-dim nomic-embed-text-v1.5 vector)
-    embedding: Optional[list[float]] = None
+    embedding: list[float] | None = None
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -150,18 +159,18 @@ class TradingPattern(Document):
     success_rate: float
     sample_count: int
     avg_return: float
-    avg_duration_hours: Optional[int] = None
+    avg_duration_hours: int | None = None
 
     # Applicability
-    symbols: Optional[list[str]] = None  # Symbols where pattern works
-    timeframes: Optional[list[str]] = None  # Best timeframes
-    market_conditions: Optional[list[str]] = None  # Best conditions
+    symbols: list[str] | None = None  # Symbols where pattern works
+    timeframes: list[str] | None = None  # Best timeframes
+    market_conditions: list[str] | None = None  # Best conditions
 
     # Embedding for semantic search (768-dim nomic-embed-text-v1.5 vector)
-    embedding: Optional[list[float]] = None
+    embedding: list[float] | None = None
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    last_validated: Optional[datetime] = None
+    last_validated: datetime | None = None
 
     class Settings:
         name = "trading_patterns"

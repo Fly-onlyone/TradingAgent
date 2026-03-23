@@ -1,44 +1,86 @@
-"""Local embedding service using nomic-embed-text-v1.5 via sentence-transformers (ONNX)."""
+"""Local embedding service via sentence-transformers.
+
+Supports multiple models (see embedding_models.py registry).
+Active model is read from AppSettings.embedding_model_name.
+"""
 
 import asyncio
 import hashlib
 import logging
-import numpy as np
 import os
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
+
+import numpy as np
 
 # Prevent thread over-subscription when multiple requests run concurrently
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 
 from sentence_transformers import SentenceTransformer  # noqa: E402
 
+from app.knowledge.embedding_models import (
+    DEFAULT_MODEL,
+    EMBEDDING_MODELS,
+    get_model_config,
+)
+
 logger = logging.getLogger(__name__)
 
 _model: SentenceTransformer | None = None
+_model_name: str | None = None
 _model_lock = threading.Lock()
 _executor = ThreadPoolExecutor(max_workers=2)
 
-MODEL_NAME = "nomic-ai/nomic-embed-text-v1.5"
-DIMENSION = 768
+# Keep module-level constants for backwards compatibility
+MODEL_NAME = DEFAULT_MODEL
+DIMENSION = EMBEDDING_MODELS[DEFAULT_MODEL].dimension
+
+
+def _get_active_model_name() -> str:
+    """Read the active model from AppSettings (sync-safe, falls back to default)."""
+    try:
+        from app.db.models.app_settings import AppSettings
+
+        # Use sync access via cached singleton if available
+        settings = AppSettings._cached_instance  # type: ignore[attr-defined]
+        if settings and settings.embedding_model_name:
+            return settings.embedding_model_name
+    except Exception:
+        pass
+    return DEFAULT_MODEL
 
 
 def _get_model() -> SentenceTransformer:
-    """Lazy-load the sentence-transformers model (singleton)."""
-    global _model
-    if _model is not None:
+    """Lazy-load the sentence-transformers model (singleton, reloads on model change)."""
+    global _model, _model_name
+
+    active_name = _get_active_model_name()
+
+    if _model is not None and _model_name == active_name:
         return _model
 
     with _model_lock:
-        if _model is None:
-            logger.info("Loading embedding model: %s (ONNX backend)", MODEL_NAME)
+        # Re-check after acquiring lock
+        active_name = _get_active_model_name()
+        if _model is None or _model_name != active_name:
+            config = get_model_config(active_name)
+            logger.info("Loading embedding model: %s (%dM params)", config.hf_id, config.params_millions)
             _model = SentenceTransformer(
-                MODEL_NAME,
+                config.hf_id,
                 trust_remote_code=True,
             )
-            logger.info("Embedding model loaded successfully (dim=%d)", DIMENSION)
+            _model_name = active_name
+            logger.info("Embedding model loaded successfully (dim=%d)", config.dimension)
     return _model
+
+
+def reload_model() -> None:
+    """Force reload the embedding model (e.g. after settings change)."""
+    global _model, _model_name
+    with _model_lock:
+        _model = None
+        _model_name = None
 
 
 async def preload_model() -> None:
@@ -60,12 +102,15 @@ def _encode_sync(texts: list[str], *, normalize: bool = True) -> np.ndarray:
 
 
 class EmbeddingService:
-    """Service for generating text embeddings using a local nomic model.
+    """Service for generating text embeddings using a configurable local model.
 
     Uses singleton model — safe to instantiate multiple times.
     """
 
     dimension = DIMENSION
+
+    def _get_config(self):
+        return get_model_config(_get_active_model_name())
 
     async def generate_document_embedding(
         self,
@@ -73,29 +118,24 @@ class EmbeddingService:
         *,
         defer_if_gaming: bool = True,
     ) -> list[float] | None:
-        """Generate embedding for a document (strategy, lesson, pattern, article).
-
-        Prepends 'search_document: ' prefix as required by nomic models.
-        If defer_if_gaming is True and the setting is enabled, waits for games to exit.
-        """
+        """Generate embedding for a document (strategy, lesson, pattern, article)."""
         if not text or not text.strip():
             return None
 
         if defer_if_gaming:
             await self._wait_if_gaming()
 
-        prefixed = f"search_document: {text[:30000]}"
+        config = self._get_config()
+        prefixed = f"{config.prefix_document}{text[:30000]}"
         return await self._encode_single(prefixed)
 
     async def generate_query_embedding(self, text: str) -> list[float] | None:
-        """Generate embedding for a search query.
-
-        Prepends 'search_query: ' prefix as required by nomic models.
-        """
+        """Generate embedding for a search query."""
         if not text or not text.strip():
             return None
 
-        prefixed = f"search_query: {text[:30000]}"
+        config = self._get_config()
+        prefixed = f"{config.prefix_query}{text[:30000]}"
         return await self._encode_single(prefixed)
 
     async def generate_document_embeddings(
@@ -111,7 +151,8 @@ class EmbeddingService:
         if defer_if_gaming:
             await self._wait_if_gaming()
 
-        prefixed = [f"search_document: {t[:30000]}" if t.strip() else "" for t in texts]
+        config = self._get_config()
+        prefixed = [f"{config.prefix_document}{t[:30000]}" if t.strip() else "" for t in texts]
         try:
             loop = asyncio.get_running_loop()
             non_empty = [(i, t) for i, t in enumerate(prefixed) if t]

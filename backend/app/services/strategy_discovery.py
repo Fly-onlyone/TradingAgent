@@ -34,7 +34,9 @@ class StrategyDiscoveryService:
         stats = {"sources_crawled": 0, "articles_processed": 0, "strategies_found": 0}
 
         if not sources:
-            logger.info("Strategy discovery: no sources with strategy_extraction enabled")
+            logger.info(
+                "Strategy discovery: no sources with strategy_extraction enabled"
+            )
             return stats
 
         app_settings = await AppSettings.get_instance()
@@ -79,7 +81,9 @@ class StrategyDiscoveryService:
                 article.content, source_hint=article.url
             )
         except Exception:
-            logger.debug("AI extraction failed for article %s", article.url, exc_info=True)
+            logger.debug(
+                "AI extraction failed for article %s", article.url, exc_info=True
+            )
             return None
 
         # Validate: must have a meaningful name and at least entry rules
@@ -116,7 +120,27 @@ class StrategyDiscoveryService:
             if knowledge.embedding is not None:
                 await knowledge.save()
         except Exception:
-            logger.warning("Failed to generate embedding for discovered strategy %s", knowledge.id, exc_info=True)
+            logger.warning(
+                "Failed to generate embedding for discovered strategy %s",
+                knowledge.id,
+                exc_info=True,
+            )
+
+        # Calculate initial rating
+        try:
+            from app.services.strategy_rating_calculator import StrategyRatingCalculator
+
+            calculator = StrategyRatingCalculator()
+            overall, confidence = await calculator.calculate_overall_rating(knowledge)
+            knowledge.overall_rating = overall
+            knowledge.rating_confidence = confidence
+            await knowledge.save()
+        except Exception:
+            logger.warning(
+                "Failed to calculate initial rating for strategy %s",
+                knowledge.id,
+                exc_info=True,
+            )
 
         # Notify all superusers
         await self._notify_superusers(knowledge, article)

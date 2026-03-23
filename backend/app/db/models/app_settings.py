@@ -36,6 +36,7 @@ class AppSettings(Document):
     """
 
     SINGLETON_KEY: ClassVar[str] = "app_settings"
+    _cached_instance: ClassVar[AppSettings | None] = None
     SECRET_FIELD_NAMES: ClassVar[tuple[str, ...]] = (
         "agent_api_key",
         "okx_api_key",
@@ -59,6 +60,9 @@ class AppSettings(Document):
 
     # Auth / token settings
     access_token_expire_minutes: int = 0  # 0 = use env var fallback, then no expiry
+
+    # Embedding model selection
+    embedding_model_name: str = "nomic-ai/nomic-embed-text-v1.5"
 
     # Embedding task deferral — pause CPU-heavy embedding when gaming
     defer_embedding_when_gaming: bool = False
@@ -160,6 +164,7 @@ class AppSettings(Document):
         if migrated:
             logger.info("Migrated legacy plaintext app settings secrets to encrypted format")
 
+        cls._cached_instance = instance
         return instance
 
     async def save_with_timestamp(self) -> None:

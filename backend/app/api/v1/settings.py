@@ -535,6 +535,89 @@ async def update_embedding_config(
     }
 
 
+# ── Embedding Model Selection ────────────────────────────────────
+
+
+class EmbeddingModelInfo(BaseModel):
+    hf_id: str
+    label: str
+    dimension: int
+    description: str
+    params_millions: int
+
+
+class EmbeddingModelConfigResponse(BaseModel):
+    current_model: str
+    available_models: list[EmbeddingModelInfo]
+
+
+class EmbeddingModelConfigUpdate(BaseModel):
+    model_name: str
+
+
+@router.get("/embedding/model", response_model=EmbeddingModelConfigResponse)
+async def get_embedding_model_config(
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Get current embedding model and list of available models."""
+    from app.knowledge.embedding_models import EMBEDDING_MODELS
+
+    app_settings = await AppSettings.get_instance()
+    return {
+        "current_model": app_settings.embedding_model_name,
+        "available_models": [
+            {
+                "hf_id": m.hf_id,
+                "label": m.label,
+                "dimension": m.dimension,
+                "description": m.description,
+                "params_millions": m.params_millions,
+            }
+            for m in EMBEDDING_MODELS.values()
+        ],
+    }
+
+
+@router.put("/embedding/model", response_model=EmbeddingModelConfigResponse)
+async def update_embedding_model_config(
+    body: EmbeddingModelConfigUpdate,
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Switch the active embedding model."""
+    from app.knowledge.embedding_models import EMBEDDING_MODELS, SUPPORTED_MODEL_NAMES
+    from app.knowledge.embeddings import reload_model
+
+    if body.model_name not in SUPPORTED_MODEL_NAMES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown model: {body.model_name}. Supported: {', '.join(SUPPORTED_MODEL_NAMES)}",
+        )
+
+    app_settings = await AppSettings.get_instance()
+    old_model = app_settings.embedding_model_name
+    app_settings.embedding_model_name = body.model_name
+    await app_settings.save_with_timestamp()
+
+    # Force model reload on next embedding call
+    reload_model()
+
+    logger.info("Embedding model changed: %s → %s", old_model, body.model_name)
+
+    return {
+        "current_model": app_settings.embedding_model_name,
+        "available_models": [
+            {
+                "hf_id": m.hf_id,
+                "label": m.label,
+                "dimension": m.dimension,
+                "description": m.description,
+                "params_millions": m.params_millions,
+            }
+            for m in EMBEDDING_MODELS.values()
+        ],
+    }
+
+
 # ── Strategy Auto-Discovery Configuration ──────────────────────
 
 

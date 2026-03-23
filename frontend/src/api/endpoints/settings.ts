@@ -68,6 +68,19 @@ export interface EmbeddingConfigUpdate {
 	gamingCheckIntervalMinutes?: number;
 }
 
+export interface EmbeddingModelInfo {
+	hfId: string;
+	label: string;
+	dimension: number;
+	description: string;
+	paramsMillions: number;
+}
+
+export interface EmbeddingModelConfig {
+	currentModel: string;
+	availableModels: EmbeddingModelInfo[];
+}
+
 export interface AuthConfig {
 	accessTokenExpireMinutes: number;
 }
@@ -232,6 +245,47 @@ export const settingsApi = {
 			payload,
 		);
 		return transformEmbeddingConfig(response.data);
+	},
+
+	async getEmbeddingModelConfig(): Promise<EmbeddingModelConfig> {
+		const response = await apiClient.get<Record<string, unknown>>(
+			"/settings/embedding/model",
+		);
+		const data = response.data;
+		return {
+			currentModel: data.current_model as string,
+			availableModels: (
+				data.available_models as Array<Record<string, unknown>>
+			).map((m) => ({
+				hfId: m.hf_id as string,
+				label: m.label as string,
+				dimension: m.dimension as number,
+				description: m.description as string,
+				paramsMillions: m.params_millions as number,
+			})),
+		};
+	},
+
+	async updateEmbeddingModelConfig(
+		modelName: string,
+	): Promise<EmbeddingModelConfig> {
+		const response = await apiClient.put<Record<string, unknown>>(
+			"/settings/embedding/model",
+			{ model_name: modelName },
+		);
+		const data = response.data;
+		return {
+			currentModel: data.current_model as string,
+			availableModels: (
+				data.available_models as Array<Record<string, unknown>>
+			).map((m) => ({
+				hfId: m.hf_id as string,
+				label: m.label as string,
+				dimension: m.dimension as number,
+				description: m.description as string,
+				paramsMillions: m.params_millions as number,
+			})),
+		};
 	},
 
 	async getExchangeConfig(): Promise<ExchangeConfig> {

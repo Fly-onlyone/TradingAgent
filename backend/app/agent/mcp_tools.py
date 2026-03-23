@@ -16,13 +16,27 @@ from claude_agent_sdk import create_sdk_mcp_server, tool
 
 
 @tool(
-    "get_ticker", "Get current ticker/price data for a trading symbol", {"symbol": str}
+    "get_ticker",
+    "Get current ticker/price data for a trading symbol",
+    {
+        "type": "object",
+        "properties": {
+            "symbol": {
+                "type": "string",
+                "description": "Trading pair symbol (e.g., BTC-USDT)",
+            },
+        },
+        "required": ["symbol"],
+    },
 )
 async def mcp_get_ticker(args: dict[str, Any]) -> dict[str, Any]:
-    from app.agent.tools.market_tools import get_ticker
+    try:
+        from app.agent.tools.market_tools import get_ticker
 
-    result = await get_ticker(symbol=args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        result = await get_ticker(symbol=args["symbol"])
+        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
 
 
 @tool(
@@ -45,10 +59,13 @@ async def mcp_get_ticker(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_get_orderbook(args: dict[str, Any]) -> dict[str, Any]:
-    from app.agent.tools.market_tools import get_orderbook
+    try:
+        from app.agent.tools.market_tools import get_orderbook
 
-    result = await get_orderbook(symbol=args["symbol"], depth=args.get("depth", 20))
-    return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        result = await get_orderbook(symbol=args["symbol"], depth=args.get("depth", 20))
+        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
 
 
 @tool(
@@ -76,14 +93,17 @@ async def mcp_get_orderbook(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_get_candlesticks(args: dict[str, Any]) -> dict[str, Any]:
-    from app.agent.tools.market_tools import get_candlesticks
+    try:
+        from app.agent.tools.market_tools import get_candlesticks
 
-    result = await get_candlesticks(
-        symbol=args["symbol"],
-        timeframe=args.get("timeframe", "1H"),
-        limit=args.get("limit", 100),
-    )
-    return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        result = await get_candlesticks(
+            symbol=args["symbol"],
+            timeframe=args.get("timeframe", "1H"),
+            limit=args.get("limit", 100),
+        )
+        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
 
 
 # ============================================================
@@ -111,13 +131,16 @@ async def mcp_get_candlesticks(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_get_technical_indicators(args: dict[str, Any]) -> dict[str, Any]:
-    from app.agent.tools.technical_tools import get_technical_indicators
+    try:
+        from app.agent.tools.technical_tools import get_technical_indicators
 
-    result = await get_technical_indicators(
-        symbol=args["symbol"],
-        timeframe=args.get("timeframe", "1H"),
-    )
-    return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        result = await get_technical_indicators(
+            symbol=args["symbol"],
+            timeframe=args.get("timeframe", "1H"),
+        )
+        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
 
 
 @tool(
@@ -137,13 +160,16 @@ async def mcp_get_technical_indicators(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_detect_chart_patterns(args: dict[str, Any]) -> dict[str, Any]:
-    from app.agent.tools.technical_tools import detect_chart_patterns
+    try:
+        from app.agent.tools.technical_tools import detect_chart_patterns
 
-    result = await detect_chart_patterns(
-        symbol=args["symbol"],
-        timeframe=args.get("timeframe", "4H"),
-    )
-    return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        result = await detect_chart_patterns(
+            symbol=args["symbol"],
+            timeframe=args.get("timeframe", "4H"),
+        )
+        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
 
 
 # ============================================================
@@ -154,13 +180,25 @@ async def mcp_detect_chart_patterns(args: dict[str, Any]) -> dict[str, Any]:
 @tool(
     "get_onchain_metrics",
     "Get on-chain metrics for crypto assets (exchange flows, whale activity, etc.)",
-    {"symbol": str},
+    {
+        "type": "object",
+        "properties": {
+            "symbol": {
+                "type": "string",
+                "description": "Crypto asset symbol (e.g., BTC, ETH, BTC-USDT)",
+            },
+        },
+        "required": ["symbol"],
+    },
 )
 async def mcp_get_onchain_metrics(args: dict[str, Any]) -> dict[str, Any]:
-    from app.agent.tools.fundamental_tools import get_onchain_metrics
+    try:
+        from app.agent.tools.fundamental_tools import get_onchain_metrics
 
-    result = await get_onchain_metrics(symbol=args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        result = await get_onchain_metrics(symbol=args["symbol"])
+        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
 
 
 @tool(
@@ -173,10 +211,13 @@ async def mcp_get_onchain_metrics(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_get_macro_indicators(args: dict[str, Any]) -> dict[str, Any]:
-    from app.agent.tools.fundamental_tools import get_macro_indicators
+    try:
+        from app.agent.tools.fundamental_tools import get_macro_indicators
 
-    result = await get_macro_indicators()
-    return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        result = await get_macro_indicators()
+        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
 
 
 # ============================================================
@@ -205,13 +246,16 @@ async def mcp_get_macro_indicators(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_get_latest_news(args: dict[str, Any]) -> dict[str, Any]:
-    from app.agent.tools.news_tools import get_latest_news
+    try:
+        from app.agent.tools.news_tools import get_latest_news
 
-    result = await get_latest_news(
-        assets=args.get("assets"),
-        limit=args.get("limit", 10),
-    )
-    return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+        result = await get_latest_news(
+            assets=args.get("assets"),
+            limit=args.get("limit", 10),
+        )
+        return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
 
 
 @tool(
@@ -235,13 +279,16 @@ async def mcp_get_latest_news(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_get_news_sentiment(args: dict[str, Any]) -> dict[str, Any]:
-    from app.agent.tools.news_tools import get_news_sentiment
+    try:
+        from app.agent.tools.news_tools import get_news_sentiment
 
-    result = await get_news_sentiment(
-        assets=args.get("assets"),
-        hours=args.get("hours", 24),
-    )
-    return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+        result = await get_news_sentiment(
+            assets=args.get("assets"),
+            hours=args.get("hours", 24),
+        )
+        return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
 
 
 # ============================================================
@@ -269,13 +316,16 @@ async def mcp_get_news_sentiment(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_search_strategies(args: dict[str, Any]) -> dict[str, Any]:
-    from app.agent.tools.knowledge_tools import search_strategies
+    try:
+        from app.agent.tools.knowledge_tools import search_strategies
 
-    result = await search_strategies(
-        query=args["query"],
-        limit=args.get("limit", 5),
-    )
-    return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+        result = await search_strategies(
+            query=args["query"],
+            limit=args.get("limit", 5),
+        )
+        return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
 
 
 @tool(
@@ -299,14 +349,17 @@ async def mcp_search_strategies(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_search_lessons(args: dict[str, Any]) -> dict[str, Any]:
-    from app.agent.tools.knowledge_tools import search_lessons
+    try:
+        from app.agent.tools.knowledge_tools import search_lessons
 
-    result = await search_lessons(
-        query=args["query"],
-        symbol=args.get("symbol"),
-        limit=args.get("limit", 5),
-    )
-    return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+        result = await search_lessons(
+            query=args["query"],
+            symbol=args.get("symbol"),
+            limit=args.get("limit", 5),
+        )
+        return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
 
 
 @tool(
@@ -337,15 +390,18 @@ async def mcp_search_lessons(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_search_patterns(args: dict[str, Any]) -> dict[str, Any]:
-    from app.agent.tools.knowledge_tools import search_patterns
+    try:
+        from app.agent.tools.knowledge_tools import search_patterns
 
-    result = await search_patterns(
-        query=args["query"],
-        pattern_type=args.get("pattern_type"),
-        min_success_rate=args.get("min_success_rate"),
-        limit=args.get("limit", 5),
-    )
-    return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+        result = await search_patterns(
+            query=args["query"],
+            pattern_type=args.get("pattern_type"),
+            min_success_rate=args.get("min_success_rate"),
+            limit=args.get("limit", 5),
+        )
+        return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
 
 
 # ============================================================
@@ -363,10 +419,13 @@ async def mcp_search_patterns(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_get_account_balance(args: dict[str, Any]) -> dict[str, Any]:
-    from app.agent.tools.trading_tools import get_account_balance
+    try:
+        from app.agent.tools.trading_tools import get_account_balance
 
-    result = await get_account_balance()
-    return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        result = await get_account_balance()
+        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
 
 
 @tool(
@@ -384,10 +443,13 @@ async def mcp_get_account_balance(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_get_open_orders(args: dict[str, Any]) -> dict[str, Any]:
-    from app.agent.tools.trading_tools import get_open_orders
+    try:
+        from app.agent.tools.trading_tools import get_open_orders
 
-    result = await get_open_orders(symbol=args.get("symbol"))
-    return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        result = await get_open_orders(symbol=args.get("symbol"))
+        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
 
 
 @tool(
@@ -428,30 +490,49 @@ async def mcp_get_open_orders(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_place_order(args: dict[str, Any]) -> dict[str, Any]:
-    from app.agent.tools.trading_tools import place_order
+    try:
+        from app.agent.tools.trading_tools import place_order
 
-    result = await place_order(
-        symbol=args["symbol"],
-        side=args["side"],
-        order_type=args["order_type"],
-        quantity=args["quantity"],
-        price=args.get("price"),
-        stop_loss=args.get("stop_loss"),
-        take_profit=args.get("take_profit"),
-    )
-    return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        result = await place_order(
+            symbol=args["symbol"],
+            side=args["side"],
+            order_type=args["order_type"],
+            quantity=args["quantity"],
+            price=args.get("price"),
+            stop_loss=args.get("stop_loss"),
+            take_profit=args.get("take_profit"),
+        )
+        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
 
 
 @tool(
     "cancel_order",
     "Cancel an open order",
-    {"symbol": str, "order_id": str},
+    {
+        "type": "object",
+        "properties": {
+            "symbol": {
+                "type": "string",
+                "description": "Trading pair symbol (e.g., BTC-USDT)",
+            },
+            "order_id": {
+                "type": "string",
+                "description": "Order ID to cancel",
+            },
+        },
+        "required": ["symbol", "order_id"],
+    },
 )
 async def mcp_cancel_order(args: dict[str, Any]) -> dict[str, Any]:
-    from app.agent.tools.trading_tools import cancel_order
+    try:
+        from app.agent.tools.trading_tools import cancel_order
 
-    result = await cancel_order(symbol=args["symbol"], order_id=args["order_id"])
-    return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        result = await cancel_order(symbol=args["symbol"], order_id=args["order_id"])
+        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
 
 
 # ============================================================
@@ -511,23 +592,25 @@ _pending_recommendations: dict[str, dict[str, Any]] = {}
     },
 )
 async def mcp_submit_recommendation(args: dict[str, Any]) -> dict[str, Any]:
-    request_id = args.pop("_request_id", None)
-    if request_id:
-        _pending_recommendations[request_id] = args
-    else:
-        # Store under a fallback key so the latest call is always available
-        _pending_recommendations["__latest__"] = args
+    try:
+        request_id = args.pop("_request_id", None)
+        if request_id:
+            _pending_recommendations[request_id] = args
+        else:
+            _pending_recommendations["__latest__"] = args
 
-    return {
-        "content": [
-            {
-                "type": "text",
-                "text": json.dumps(
-                    {"status": "ok", "message": "Recommendation recorded."}
-                ),
-            }
-        ]
-    }
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(
+                        {"status": "ok", "message": "Recommendation recorded."}
+                    ),
+                }
+            ]
+        }
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
 
 
 def get_pending_recommendation(request_id: str) -> dict[str, Any] | None:
@@ -615,141 +698,150 @@ def _text_result(data: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_modify_task(args: dict[str, Any]) -> dict[str, Any]:
-    import logging
+    try:
+        import logging
 
-    from app.db.models.agent_task import (
-        AGENT_MODIFIABLE_FIELDS,
-        AgentTask,
-        RiskLevel,
-        coerce_task_changes,
-    )
-
-    _logger = logging.getLogger(__name__)
-    changes: dict[str, Any] = args.get("changes", {})
-    reason: str = args.get("reason", "")
-
-    ctx = _get_task_context()
-    if not ctx:
-        return _text_result({"status": "error", "message": "No active task context."})
-
-    invalid_fields = set(changes.keys()) - AGENT_MODIFIABLE_FIELDS
-    if invalid_fields:
-        return _text_result(
-            {
-                "status": "error",
-                "message": f"Cannot modify: {', '.join(sorted(invalid_fields))}. "
-                f"Allowed: {', '.join(sorted(AGENT_MODIFIABLE_FIELDS))}",
-            }
+        from app.db.models.agent_task import (
+            AGENT_MODIFIABLE_FIELDS,
+            AgentTask,
+            RiskLevel,
+            coerce_task_changes,
         )
 
-    if not changes:
-        return _text_result({"status": "error", "message": "No changes provided."})
+        _logger = logging.getLogger(__name__)
+        changes: dict[str, Any] = args.get("changes", {})
+        reason: str = args.get("reason", "")
 
-    if "risk_level" in changes:
-        try:
-            RiskLevel(changes["risk_level"])
-        except ValueError:
+        ctx = _get_task_context()
+        if not ctx:
+            return _text_result(
+                {"status": "error", "message": "No active task context."}
+            )
+
+        invalid_fields = set(changes.keys()) - AGENT_MODIFIABLE_FIELDS
+        if invalid_fields:
             return _text_result(
                 {
                     "status": "error",
-                    "message": f"Invalid risk_level: {changes['risk_level']}. "
-                    "Must be conservative, moderate, or aggressive.",
+                    "message": f"Cannot modify: {', '.join(sorted(invalid_fields))}. "
+                    f"Allowed: {', '.join(sorted(AGENT_MODIFIABLE_FIELDS))}",
                 }
             )
 
-    try:
-        coerced_changes = coerce_task_changes(changes)
-    except (TypeError, ValueError) as exc:
-        return _text_result({"status": "error", "message": str(exc)})
+        if not changes:
+            return _text_result({"status": "error", "message": "No changes provided."})
 
-    from beanie import PydanticObjectId
-
-    task = await AgentTask.get(PydanticObjectId(ctx["task_id"]))
-    if not task:
-        return _text_result({"status": "error", "message": "Task not found."})
-
-    # Build before/after diff
-    before: dict[str, Any] = {}
-    after: dict[str, Any] = {}
-    for field_name, new_value in changes.items():
-        current_value = getattr(task, field_name, None)
-        before[field_name] = _serialize_task_value(current_value)
-        after[field_name] = _serialize_task_value(coerced_changes[field_name])
-
-    mode = ctx["mode"]
-
-    if mode == "auto":
-        for field_name, new_value in coerced_changes.items():
-            setattr(task, field_name, new_value)
-        task.update_timestamp()
-        await task.save()
-
-        if "schedules" in changes:
+        if "risk_level" in changes:
             try:
-                from app.agent.task_scheduler import get_scheduler
-
-                scheduler = get_scheduler()
-                await scheduler.schedule_task(task)
-            except Exception:
-                _logger.warning(
-                    "Failed to reschedule after modification", exc_info=True
+                RiskLevel(changes["risk_level"])
+            except ValueError:
+                return _text_result(
+                    {
+                        "status": "error",
+                        "message": f"Invalid risk_level: {changes['risk_level']}. "
+                        "Must be conservative, moderate, or aggressive.",
+                    }
                 )
 
-        _logger.info("Task %s auto-modified: %s", ctx["task_id"], list(changes.keys()))
-        return _text_result(
-            {
-                "status": "ok",
-                "message": f"Task modified (auto). Changed: {', '.join(changes.keys())}.",
-                "applied": True,
-            }
-        )
+        try:
+            coerced_changes = coerce_task_changes(changes)
+        except (TypeError, ValueError) as exc:
+            return _text_result({"status": "error", "message": str(exc)})
 
-    if mode == "ask":
-        from datetime import UTC, datetime, timedelta
+        from beanie import PydanticObjectId
 
-        from app.db.models.agent_decision import (
-            AgentDecision,
-            DecisionStatus,
-            DecisionType,
-        )
-        from app.db.models.notification import Notification, NotificationType
+        task = await AgentTask.get(PydanticObjectId(ctx["task_id"]))
+        if not task:
+            return _text_result({"status": "error", "message": "Task not found."})
 
-        decision = AgentDecision(
-            user_id=PydanticObjectId(ctx["user_id"]),
-            task_id=PydanticObjectId(ctx["task_id"]),
-            decision_type=DecisionType.TASK_MODIFICATION,
-            status=DecisionStatus.PENDING,
-            summary=f"Agent proposes task changes: {', '.join(changes.keys())}",
-            reasoning=reason,
-            key_factors=list(changes.keys()),
-            proposed_changes={"before": before, "after": after, "reason": reason},
-            expires_at=datetime.now(UTC) + timedelta(hours=1),
-        )
-        await decision.insert()
+        # Build before/after diff
+        before: dict[str, Any] = {}
+        after: dict[str, Any] = {}
+        for field_name, new_value in changes.items():
+            current_value = getattr(task, field_name, None)
+            before[field_name] = _serialize_task_value(current_value)
+            after[field_name] = _serialize_task_value(coerced_changes[field_name])
 
-        notification = Notification(
-            user_id=PydanticObjectId(ctx["user_id"]),
-            notification_type=NotificationType.TASK_MODIFICATION_PROPOSED,
-            title="Agent proposes task changes",
-            message=f"Modify: {', '.join(changes.keys())}. Reason: {reason}",
-            related_task_id=PydanticObjectId(ctx["task_id"]),
-            related_decision_id=decision.id,
-        )
-        await notification.insert()
+        mode = ctx["mode"]
 
-        _logger.info(
-            "Task %s modification proposed: %s", ctx["task_id"], list(changes.keys())
-        )
-        return _text_result(
-            {
-                "status": "ok",
-                "message": f"Awaiting user approval. Fields: {', '.join(changes.keys())}.",
-                "applied": False,
-                "decision_id": str(decision.id),
-            }
-        )
+        if mode == "auto":
+            for field_name, new_value in coerced_changes.items():
+                setattr(task, field_name, new_value)
+            task.update_timestamp()
+            await task.save()
 
-    return _text_result({"status": "error", "message": f"Unknown mode: {mode}"})
+            if "schedules" in changes:
+                try:
+                    from app.agent.task_scheduler import get_scheduler
+
+                    scheduler = get_scheduler()
+                    await scheduler.schedule_task(task)
+                except Exception:
+                    _logger.warning(
+                        "Failed to reschedule after modification", exc_info=True
+                    )
+
+            _logger.info(
+                "Task %s auto-modified: %s", ctx["task_id"], list(changes.keys())
+            )
+            return _text_result(
+                {
+                    "status": "ok",
+                    "message": f"Task modified (auto). Changed: {', '.join(changes.keys())}.",
+                    "applied": True,
+                }
+            )
+
+        if mode == "ask":
+            from datetime import UTC, datetime, timedelta
+
+            from app.db.models.agent_decision import (
+                AgentDecision,
+                DecisionStatus,
+                DecisionType,
+            )
+            from app.db.models.notification import Notification, NotificationType
+
+            decision = AgentDecision(
+                user_id=PydanticObjectId(ctx["user_id"]),
+                task_id=PydanticObjectId(ctx["task_id"]),
+                decision_type=DecisionType.TASK_MODIFICATION,
+                status=DecisionStatus.PENDING,
+                summary=f"Agent proposes task changes: {', '.join(changes.keys())}",
+                reasoning=reason,
+                key_factors=list(changes.keys()),
+                proposed_changes={"before": before, "after": after, "reason": reason},
+                expires_at=datetime.now(UTC) + timedelta(hours=1),
+            )
+            await decision.insert()
+
+            notification = Notification(
+                user_id=PydanticObjectId(ctx["user_id"]),
+                notification_type=NotificationType.TASK_MODIFICATION_PROPOSED,
+                title="Agent proposes task changes",
+                message=f"Modify: {', '.join(changes.keys())}. Reason: {reason}",
+                related_task_id=PydanticObjectId(ctx["task_id"]),
+                related_decision_id=decision.id,
+            )
+            await notification.insert()
+
+            _logger.info(
+                "Task %s modification proposed: %s",
+                ctx["task_id"],
+                list(changes.keys()),
+            )
+            return _text_result(
+                {
+                    "status": "ok",
+                    "message": f"Awaiting user approval. Fields: {', '.join(changes.keys())}.",
+                    "applied": False,
+                    "decision_id": str(decision.id),
+                }
+            )
+
+        return _text_result({"status": "error", "message": f"Unknown mode: {mode}"})
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
 
 
 # ============================================================
@@ -782,14 +874,17 @@ async def mcp_modify_task(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_search_web(args: dict[str, Any]) -> dict[str, Any]:
-    from app.agent.tools.web_search_tools import search_web
+    try:
+        from app.agent.tools.web_search_tools import search_web
 
-    result = await search_web(
-        query=args["query"],
-        count=args.get("count", 5),
-        freshness=args.get("freshness"),
-    )
-    return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        result = await search_web(
+            query=args["query"],
+            count=args.get("count", 5),
+            freshness=args.get("freshness"),
+        )
+        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
 
 
 @tool(
@@ -817,14 +912,17 @@ async def mcp_search_web(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_search_news(args: dict[str, Any]) -> dict[str, Any]:
-    from app.agent.tools.web_search_tools import search_news
+    try:
+        from app.agent.tools.web_search_tools import search_news
 
-    result = await search_news(
-        query=args["query"],
-        count=args.get("count", 5),
-        freshness=args.get("freshness"),
-    )
-    return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        result = await search_news(
+            query=args["query"],
+            count=args.get("count", 5),
+            freshness=args.get("freshness"),
+        )
+        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
 
 
 # ============================================================

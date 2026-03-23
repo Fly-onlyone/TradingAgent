@@ -58,8 +58,8 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler = get_scheduler()
     await scheduler.start()
 
-    # Preload local embedding model to avoid cold-start latency on first request
-    await preload_embedding_model()
+    # Warm embeddings in the background so API startup doesn't block on model download/cache issues.
+    asyncio.create_task(preload_embedding_model())
 
     mongo_handler.start()
     logger.info("Application started")

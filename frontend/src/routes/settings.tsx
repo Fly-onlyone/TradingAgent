@@ -230,6 +230,90 @@ function EmbeddingConfigCard() {
     );
 }
 
+function EmbeddingModelCard() {
+    const {user} = useAuthStore();
+    const isSuperuser = user?.isSuperuser ?? false;
+    const queryClient = useQueryClient();
+
+    const configQuery = useQuery({
+        queryKey: ["embedding-model-config"],
+        queryFn: () => settingsApi.getEmbeddingModelConfig(),
+        enabled: isSuperuser || import.meta.env.DEV,
+        staleTime: 60_000,
+    });
+
+    const updateMutation = useMutation({
+        mutationFn: (modelName: string) =>
+            settingsApi.updateEmbeddingModelConfig(modelName),
+        onSuccess: () => {
+            queryClient.invalidateQueries({queryKey: ["embedding-model-config"]});
+            notify.success("Embedding model updated — will load on next use");
+        },
+        onError: (error) => {
+            notify.error("Failed to update embedding model", getErrorMessage(error));
+        },
+    });
+
+    if (!isSuperuser && !import.meta.env.DEV) return null;
+
+    const config = configQuery.data;
+
+    return (
+        <Card sx={{mb: 3}}>
+            <CardContent>
+                <Typography variant="h6" gutterBottom>
+                    Embedding Model
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{mb: 2}}>
+                    Select the local embedding model for RAG search. All models produce 768-dim vectors.
+                </Typography>
+
+                {configQuery.isLoading ? (
+                    <CircularProgress size={20}/>
+                ) : config ? (
+                    <Box sx={{display: "flex", flexDirection: "column", gap: 1.5}}>
+                        {config.availableModels.map((model) => {
+                            const isActive = model.hfId === config.currentModel;
+                            return (
+                                <Box
+                                    key={model.hfId}
+                                    sx={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "space-between",
+                                        p: 1.5,
+                                        borderRadius: 1,
+                                        border: isActive ? "1.5px solid" : "1px solid",
+                                        borderColor: isActive ? "primary.main" : "divider",
+                                        bgcolor: isActive ? "action.selected" : "transparent",
+                                        cursor: "pointer",
+                                        "&:hover": {bgcolor: "action.hover"},
+                                    }}
+                                    onClick={() => {
+                                        if (!isActive) updateMutation.mutate(model.hfId);
+                                    }}
+                                >
+                                    <Box>
+                                        <Typography variant="subtitle2">
+                                            {model.label}
+                                            {isActive && (
+                                                <Chip label="Active" size="small" color="primary" sx={{ml: 1}}/>
+                                            )}
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                            {model.description}
+                                        </Typography>
+                                    </Box>
+                                </Box>
+                            );
+                        })}
+                    </Box>
+                ) : null}
+            </CardContent>
+        </Card>
+    );
+}
+
 function ChangePasswordCard() {
     const {
         control,
@@ -1009,6 +1093,7 @@ function SettingsPage() {
                 {/* Tab 3: Admin (superuser only) */}
                 {isSuperuser && settingsTab === 3 && (
                     <>
+                        <EmbeddingModelCard/>
                         <EmbeddingConfigCard/>
                     </>
                 )}

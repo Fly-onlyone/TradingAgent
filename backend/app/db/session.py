@@ -22,7 +22,9 @@ _db: AsyncIOMotorDatabase | None = None
 
 async def _ensure_mongodb_running() -> None:
     """Try to start MongoDB if it's not reachable (Windows service)."""
-    test_client = AsyncIOMotorClient(settings.mongodb_url, serverSelectionTimeoutMS=2000)
+    test_client = AsyncIOMotorClient(
+        settings.mongodb_url, serverSelectionTimeoutMS=2000
+    )
     try:
         await test_client.admin.command("ping")
         return  # Already running
@@ -117,6 +119,7 @@ async def init_db() -> None:
     from app.db.models.notification import Notification, UserNotificationSettings
     from app.db.models.order import Order
     from app.db.models.strategy import Strategy
+    from app.db.models.strategy_rating import StrategyRating
     from app.db.models.user import User
 
     document_models = [
@@ -124,6 +127,7 @@ async def init_db() -> None:
         Order,
         Strategy,
         StrategyKnowledge,
+        StrategyRating,
         TradeLesson,
         TradingPattern,
         NewsSource,
@@ -185,7 +189,9 @@ async def init_db() -> None:
             if not dropped:
                 raise
     else:
-        raise RuntimeError("Failed to initialize Beanie after resolving index conflicts")
+        raise RuntimeError(
+            "Failed to initialize Beanie after resolving index conflicts"
+        )
 
     await _validate_app_settings_secret_encryption()
 

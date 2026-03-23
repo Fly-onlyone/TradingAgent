@@ -1,13 +1,14 @@
 """News analysis tools for the trading agent."""
 
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Any, Optional
+import asyncio
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from app.db.models.news import NewsArticle, NewsSource
 
 
 async def get_latest_news(
-    assets: Optional[list[str]] = None,
+    assets: list[str] | None = None,
     limit: int = 10,
 ) -> dict[str, Any]:
     """Get latest news articles for specified assets.
@@ -26,12 +27,14 @@ async def get_latest_news(
         normalized_assets = [a.upper().replace("-USDT", "") for a in assets]
         query = query.find({"mentioned_assets": {"$in": normalized_assets}})
 
-    articles = await query.sort(-NewsArticle.published_at).limit(limit).to_list()
+    articles = await asyncio.wait_for(
+        query.sort(-NewsArticle.published_at).limit(limit).to_list(), timeout=10.0
+    )
 
     news_items = []
     for article in articles:
         # Get source info
-        source = await NewsSource.get(article.source_id)
+        source = await asyncio.wait_for(NewsSource.get(article.source_id), timeout=10.0)
         source_name = source.name if source else "Unknown"
         credibility = source.credibility_score if source else 0.5
 
@@ -58,7 +61,9 @@ async def get_latest_news(
         valid_sentiments = [
             n["sentiment_score"] for n in news_items if n["sentiment_score"] is not None
         ]
-        avg_sentiment = sum(valid_sentiments) / len(valid_sentiments) if valid_sentiments else 0
+        avg_sentiment = (
+            sum(valid_sentiments) / len(valid_sentiments) if valid_sentiments else 0
+        )
     else:
         avg_sentiment = 0
 
@@ -71,7 +76,7 @@ async def get_latest_news(
 
 
 async def get_news_sentiment(
-    assets: Optional[list[str]] = None,
+    assets: list[str] | None = None,
     hours: int = 24,
 ) -> dict[str, Any]:
     """Get aggregated news sentiment for specified assets.
@@ -91,7 +96,7 @@ async def get_news_sentiment(
         normalized_assets = [a.upper().replace("-USDT", "") for a in assets]
         query = query.find({"mentioned_assets": {"$in": normalized_assets}})
 
-    articles = await query.to_list()
+    articles = await asyncio.wait_for(query.to_list(), timeout=10.0)
 
     if not articles:
         return {
@@ -124,7 +129,7 @@ async def get_news_sentiment(
             neutral += 1
 
         # Get source credibility for weighting
-        source = await NewsSource.get(article.source_id)
+        source = await asyncio.wait_for(NewsSource.get(article.source_id), timeout=10.0)
         credibility = source.credibility_score if source else 0.5
         source_name = source.name if source else "Unknown"
 
@@ -190,7 +195,7 @@ async def get_news_sentiment(
 
 async def search_news(
     query: str,
-    assets: Optional[list[str]] = None,
+    assets: list[str] | None = None,
     limit: int = 10,
 ) -> dict[str, Any]:
     """Search news articles by query.
@@ -216,13 +221,17 @@ async def search_news(
         normalized_assets = [a.upper().replace("-USDT", "") for a in assets]
         search_filter["mentioned_assets"] = {"$in": normalized_assets}
 
-    articles = (
-        await NewsArticle.find(search_filter).sort(-NewsArticle.published_at).limit(limit).to_list()
+    articles = await asyncio.wait_for(
+        NewsArticle.find(search_filter)
+        .sort(-NewsArticle.published_at)
+        .limit(limit)
+        .to_list(),
+        timeout=10.0,
     )
 
     news_items = []
     for article in articles:
-        source = await NewsSource.get(article.source_id)
+        source = await asyncio.wait_for(NewsSource.get(article.source_id), timeout=10.0)
 
         news_items.append(
             {

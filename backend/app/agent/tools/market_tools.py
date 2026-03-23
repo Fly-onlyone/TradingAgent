@@ -1,5 +1,6 @@
 """Market data tools for the trading agent."""
 
+import asyncio
 from typing import Any
 
 from app.exchange.okx_client import OKXClient
@@ -15,7 +16,7 @@ async def get_ticker(symbol: str) -> dict[str, Any]:
         Ticker data including price, volume, and 24h changes
     """
     client = await OKXClient.create()
-    result = await client.get_ticker(symbol.upper())
+    result = await asyncio.wait_for(client.get_ticker(symbol.upper()), timeout=10.0)
 
     if result.get("code") != "0" or not result.get("data"):
         return {"error": f"Failed to get ticker for {symbol}"}
@@ -50,7 +51,9 @@ async def get_orderbook(symbol: str, depth: int = 20) -> dict[str, Any]:
         Order book with bids and asks
     """
     client = await OKXClient.create()
-    result = await client.get_orderbook(symbol.upper(), depth)
+    result = await asyncio.wait_for(
+        client.get_orderbook(symbol.upper(), depth), timeout=10.0
+    )
 
     if result.get("code") != "0" or not result.get("data"):
         return {"error": f"Failed to get orderbook for {symbol}"}
@@ -96,7 +99,9 @@ async def get_candlesticks(
         List of OHLCV candles
     """
     client = await OKXClient.create()
-    result = await client.get_candlesticks(symbol.upper(), timeframe, limit)
+    result = await asyncio.wait_for(
+        client.get_candlesticks(symbol.upper(), timeframe, limit), timeout=10.0
+    )
 
     if result.get("code") != "0" or not result.get("data"):
         return {"error": f"Failed to get candlesticks for {symbol}"}
