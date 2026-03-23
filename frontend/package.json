@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 3000",
+    "dev:tauri-managed": "node scripts/tauri-dev.mjs",
     "dev:backend": "cd .. && uv run python run.py --serve",
     "dev:all": "concurrently --kill-others -n front,back -c blue,green \"bun run dev\" \"bun run dev:backend\"",
     "build": "vite build && tsc",

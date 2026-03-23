@@ -18,11 +18,13 @@ import {
 	Tooltip,
 	Typography,
 } from "@mui/material";
+import type { PopoverPosition } from "@mui/material/Popover";
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { StatusDot } from "@/components/common/StatusDot";
 import { ThemeSelector } from "@/components/common/ThemeSelector";
+import { NotificationPanel } from "@/components/layout/NotificationPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useAgentStore } from "@/store/agentStore";
 import { useUIStore } from "@/store/uiStore";
@@ -30,8 +32,28 @@ import { useUIStore } from "@/store/uiStore";
 export function Header() {
 	const { user, logout } = useAuth();
 	const { notifications } = useUIStore();
+	const uiScale = useUIStore((s) => s.uiScale);
+	const backendStatus = useUIStore((s) => s.backendStatus);
+	const backendStatusMessage = useUIStore((s) => s.backendStatusMessage);
 	const agentStatus = useAgentStore((s) => s.status);
 	const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+
+	// Notification panel
+	const notifButtonRef = useRef<HTMLButtonElement | null>(null);
+	const [notifPosition, setNotifPosition] = useState<PopoverPosition | null>(
+		null,
+	);
+
+	const openNotifPanel = useCallback(() => {
+		const button = notifButtonRef.current;
+		if (!button) return;
+		const rect = button.getBoundingClientRect();
+		const zoom = uiScale || 1;
+		setNotifPosition({
+			top: rect.bottom / zoom,
+			left: rect.right / zoom,
+		});
+	}, [uiScale]);
 
 	const handleMenu = (event: React.MouseEvent<HTMLElement>) => {
 		setAnchorEl(event.currentTarget);
@@ -118,6 +140,37 @@ export function Header() {
 
 				{/* Actions */}
 				<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+					{/* Backend Status */}
+					<Tooltip
+						title={
+							backendStatusMessage
+								? `Backend: ${backendStatusMessage}`
+								: `Backend: ${backendStatus}`
+						}
+					>
+						<Box
+							sx={{ display: "flex", alignItems: "center", gap: 0.75, mr: 1 }}
+						>
+							<StatusDot
+								status={
+									backendStatus === "online"
+										? "online"
+										: backendStatus === "connecting"
+											? "loading"
+											: "offline"
+								}
+								size={7}
+							/>
+							<Typography
+								variant="caption"
+								color="text.secondary"
+								sx={{ display: { xs: "none", sm: "block" } }}
+							>
+								Backend
+							</Typography>
+						</Box>
+					</Tooltip>
+
 					{/* Agent Status */}
 					<Tooltip title={`Agent: ${agentStatus}`}>
 						<Box
@@ -149,8 +202,10 @@ export function Header() {
 					{/* Notifications */}
 					<Tooltip title="Notifications">
 						<IconButton
+							ref={notifButtonRef}
 							aria-label="Notifications"
 							color="inherit"
+							onClick={openNotifPanel}
 							sx={
 								unreadCount > 0
 									? {
@@ -183,31 +238,24 @@ export function Header() {
 						</IconButton>
 					</Tooltip>
 
+					<NotificationPanel
+						anchorPosition={notifPosition}
+						onClose={() => setNotifPosition(null)}
+					/>
+
 					{/* User Menu */}
 					<Tooltip title="Account">
-						<IconButton onClick={handleMenu} color="inherit">
+						<IconButton
+							onClick={handleMenu}
+							color="inherit"
+							sx={{ position: "relative" }}
+						>
 							<Avatar
 								sx={{
 									width: 32,
 									height: 32,
 									bgcolor: "primary.main",
 									fontSize: "0.875rem",
-									border: "2px solid transparent",
-									backgroundClip: "padding-box",
-									"&::before": {
-										content: '""',
-										position: "absolute",
-										inset: -2,
-										borderRadius: "50%",
-										background: (theme) =>
-											`linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.light})`,
-										opacity: 0,
-										transition: "opacity 0.3s ease",
-										zIndex: -1,
-									},
-									"&:hover::before": {
-										opacity: 1,
-									},
 								}}
 							>
 								{user?.email?.[0].toUpperCase() || "U"}

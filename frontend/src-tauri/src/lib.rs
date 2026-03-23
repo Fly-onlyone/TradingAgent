@@ -1,19 +1,126 @@
-use std::sync::Mutex;
+use std::{
+    net::{SocketAddr, TcpStream},
+    path::PathBuf,
+    sync::Mutex,
+    time::Duration,
+};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager, RunEvent, WindowEvent,
 };
-use tauri_plugin_shell::{process::CommandChild, ShellExt};
+use tauri_plugin_shell::{
+    process::{CommandChild, CommandEvent},
+    ShellExt,
+};
 
 struct BackendProcess(Mutex<Option<CommandChild>>);
+
+const BACKEND_ADDR: &str = "127.0.0.1:7000";
+
+fn write_console_line(message: &str, is_stderr: bool) {
+    if is_stderr {
+        eprintln!("{message}");
+    } else {
+        println!("{message}");
+    }
+}
+
+fn log_backend_output(level: log::Level, chunk: &[u8]) {
+    let text = String::from_utf8_lossy(chunk);
+
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        write_console_line(
+            &format!("[backend] {line}"),
+            matches!(level, log::Level::Warn | log::Level::Error),
+        );
+        log::log!(level, "[backend] {line}");
+    }
+}
+
+#[tauri::command]
+fn frontend_log(level: String, message: String) {
+    let normalized_level = level.trim().to_uppercase();
+    let trimmed_message = message.trim();
+
+    if trimmed_message.is_empty() {
+        return;
+    }
+
+    let console_line = format!("[frontend/{normalized_level}] {trimmed_message}");
+
+    match normalized_level.as_str() {
+        "ERROR" | "CRITICAL" => {
+            write_console_line(&console_line, true);
+            log::error!("{console_line}");
+        }
+        "WARNING" | "WARN" => {
+            write_console_line(&console_line, true);
+            log::warn!("{console_line}");
+        }
+        "DEBUG" | "TRACE" => {
+            write_console_line(&console_line, false);
+            log::debug!("{console_line}");
+        }
+        _ => {
+            write_console_line(&console_line, false);
+            log::info!("{console_line}");
+        }
+    }
+}
+
+fn is_backend_listening() -> bool {
+    let addr: SocketAddr = match BACKEND_ADDR.parse() {
+        Ok(addr) => addr,
+        Err(_) => return false,
+    };
+
+    TcpStream::connect_timeout(&addr, Duration::from_millis(250)).is_ok()
+}
+
+fn backend_command(project_root: &std::path::Path) -> (PathBuf, Vec<String>) {
+    let python_path = if cfg!(target_os = "windows") {
+        project_root
+            .join(".venv")
+            .join("Scripts")
+            .join("python.exe")
+    } else {
+        project_root.join(".venv").join("bin").join("python")
+    };
+
+    if python_path.exists() {
+        return (
+            python_path,
+            vec!["run.py".to_string(), "--serve".to_string()],
+        );
+    }
+
+    (
+        PathBuf::from("uv"),
+        vec![
+            "run".to_string(),
+            "python".to_string(),
+            "run.py".to_string(),
+            "--serve".to_string(),
+        ],
+    )
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![frontend_log])
         .plugin(
             tauri_plugin_log::Builder::default()
                 .level(log::LevelFilter::Info)
+                .target(tauri_plugin_log::Target::new(
+                    tauri_plugin_log::TargetKind::Stdout,
+                ))
                 .build(),
         )
         .plugin(tauri_plugin_notification::init())
@@ -26,23 +133,53 @@ pub fn run() {
         .manage(BackendProcess(Mutex::new(None)))
         .setup(|app| {
             // Spawn the Python backend process
-            let project_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("../..")
                 .canonicalize()
                 .unwrap_or_else(|_| std::env::current_dir().unwrap());
 
-            match app
-                .shell()
-                .command("uv")
-                .args(["run", "python", "run.py", "--serve"])
-                .current_dir(&project_root)
-                .spawn()
-            {
-                Ok((_rx, child)) => {
-                    *app.state::<BackendProcess>().0.lock().unwrap() = Some(child);
-                    log::info!("Backend process spawned from {:?}", project_root);
+            if is_backend_listening() {
+                log::info!("Backend already listening on {}", BACKEND_ADDR);
+            } else {
+                let (command_path, command_args) = backend_command(&project_root);
+
+                match app
+                    .shell()
+                    .command(command_path)
+                    .args(command_args)
+                    .current_dir(&project_root)
+                    .spawn()
+                {
+                    Ok((mut rx, child)) => {
+                        tauri::async_runtime::spawn(async move {
+                            while let Some(event) = rx.recv().await {
+                                match event {
+                                    CommandEvent::Stdout(bytes) => {
+                                        log_backend_output(log::Level::Info, &bytes);
+                                    }
+                                    CommandEvent::Stderr(bytes) => {
+                                        log_backend_output(log::Level::Warn, &bytes);
+                                    }
+                                    CommandEvent::Error(message) => {
+                                        log::error!("[backend] {message}");
+                                    }
+                                    CommandEvent::Terminated(payload) => {
+                                        log::info!(
+                                            "[backend] process exited with code {:?} and signal {:?}",
+                                            payload.code,
+                                            payload.signal
+                                        );
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        });
+
+                        *app.state::<BackendProcess>().0.lock().unwrap() = Some(child);
+                        log::info!("Backend process spawned from {:?}", project_root);
+                    }
+                    Err(e) => log::warn!("Failed to spawn backend process: {e}"),
                 }
-                Err(e) => log::warn!("Failed to spawn backend process: {e}"),
             }
 
             // Build tray context menu
@@ -92,12 +229,12 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| match event {
-            // Intercept window close → hide to tray instead
+            // In packaged builds, intercept window close and minimize to tray.
             RunEvent::WindowEvent {
                 label,
                 event: WindowEvent::CloseRequested { api, .. },
                 ..
-            } if label == "main" => {
+            } if label == "main" && !cfg!(debug_assertions) => {
                 api.prevent_close();
                 if let Some(w) = app.get_webview_window("main") {
                     let _ = w.hide();

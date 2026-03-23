@@ -1,5 +1,5 @@
 import {Box, type SxProps, type Theme, Typography} from "@mui/material";
-import {type ReactNode} from "react";
+import type {ReactNode} from "react";
 
 interface MetricRowProps {
     label: string;
@@ -16,8 +16,7 @@ export function MetricRow({label, value, sx}: MetricRowProps) {
                 justifyContent: "space-between",
                 py: 1.5,
                 px: 0,
-                borderBottom: (theme) =>
-                    `1px solid ${theme.trading.border.subtle}`,
+                borderBottom: (theme) => `1px solid ${theme.trading.border.subtle}`,
                 "&:last-child": {borderBottom: "none"},
                 ...sx,
             }}
@@ -25,9 +24,17 @@ export function MetricRow({label, value, sx}: MetricRowProps) {
             <Typography variant="body2" color="text.secondary">
                 {label}
             </Typography>
-            <Typography variant="body2" fontWeight={500}>
+            <Box
+                sx={{
+                    color: "text.primary",
+                    fontSize: (theme) => theme.typography.body2.fontSize,
+                    fontWeight: 500,
+                    lineHeight: (theme) => theme.typography.body2.lineHeight,
+                    textAlign: "right",
+                }}
+            >
                 {value}
-            </Typography>
+            </Box>
         </Box>
     );
 }

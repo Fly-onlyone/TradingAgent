@@ -8,13 +8,15 @@ import type { ThemeId } from "@/theme/presets";
 import { sendNativeNotification } from "@/utils/nativeNotifications";
 
 type SidebarState = "expanded" | "collapsed" | "hidden";
+type BackendStatus = "connecting" | "online" | "offline";
 
-interface NotificationConfig {
+export interface NotificationConfig {
 	id: string;
 	type: "success" | "error" | "warning" | "info";
 	title: string;
 	message?: string;
 	duration?: number;
+	createdAt: number;
 	action?: {
 		label: string;
 		onClick: () => void;
@@ -42,6 +44,7 @@ interface UIState {
 
 	// Notifications
 	notifications: NotificationConfig[];
+	notificationHistory: NotificationConfig[];
 
 	// Modals
 	modals: Record<string, ModalConfig>;
@@ -49,6 +52,8 @@ interface UIState {
 	// Loading
 	globalLoading: boolean;
 	loadingMessage: string;
+	backendStatus: BackendStatus;
+	backendStatusMessage: string;
 
 	// Actions
 	setSidebarState: (state: SidebarState) => void;
@@ -59,14 +64,18 @@ interface UIState {
 	setEffectsEnabled: (enabled: boolean) => void;
 	setUIScale: (scale: number) => void;
 
-	addNotification: (notification: Omit<NotificationConfig, "id">) => string;
+	addNotification: (
+		notification: Omit<NotificationConfig, "id" | "createdAt">,
+	) => string;
 	removeNotification: (id: string) => void;
 	clearNotifications: () => void;
+	clearNotificationHistory: () => void;
 
 	openModal: (id: string, data?: unknown) => void;
 	closeModal: (id: string) => void;
 
 	setGlobalLoading: (loading: boolean, message?: string) => void;
+	setBackendStatus: (status: BackendStatus, message?: string) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -77,11 +86,14 @@ export const useUIStore = create<UIState>()(
 			themeId: "solar" as ThemeId,
 			reducedMotion: false,
 			effectsEnabled: true,
-		uiScale: 1,
+			uiScale: 1,
 			notifications: [],
+			notificationHistory: [],
 			modals: {},
 			globalLoading: false,
 			loadingMessage: "",
+			backendStatus: "connecting",
+			backendStatusMessage: "Waiting for backend health check",
 
 			setSidebarState: (sidebarState) => set({ sidebarState }),
 
@@ -96,13 +108,14 @@ export const useUIStore = create<UIState>()(
 			setThemeId: (themeId) => set({ themeId }),
 			setReducedMotion: (reducedMotion) => set({ reducedMotion }),
 			setEffectsEnabled: (effectsEnabled) => set({ effectsEnabled }),
-		setUIScale: (uiScale) =>
-			set({ uiScale: Math.max(0.75, Math.min(1.5, uiScale)) }),
+			setUIScale: (uiScale) =>
+				set({ uiScale: Math.max(0.75, Math.min(1.5, uiScale)) }),
 
 			addNotification: (notification) => {
 				const id = crypto.randomUUID();
+				const entry = { ...notification, id, createdAt: Date.now() };
 				set((state) => ({
-					notifications: [...state.notifications, { ...notification, id }],
+					notifications: [...state.notifications, entry],
 				}));
 
 				// Send native notification when tab is hidden and type warrants it
@@ -110,7 +123,7 @@ export const useUIStore = create<UIState>()(
 					document.hidden &&
 					(notification.type === "error" || notification.type === "success")
 				) {
-					sendNativeNotification(
+					void sendNativeNotification(
 						notification.title,
 						notification.message ?? "",
 					);
@@ -128,11 +141,27 @@ export const useUIStore = create<UIState>()(
 			},
 
 			removeNotification: (id) =>
+				set((state) => {
+					const removed = state.notifications.find((n) => n.id === id);
+					const history = removed
+						? [removed, ...state.notificationHistory].slice(0, 50)
+						: state.notificationHistory;
+					return {
+						notifications: state.notifications.filter((n) => n.id !== id),
+						notificationHistory: history,
+					};
+				}),
+
+			clearNotifications: () =>
 				set((state) => ({
-					notifications: state.notifications.filter((n) => n.id !== id),
+					notifications: [],
+					notificationHistory: [
+						...state.notifications,
+						...state.notificationHistory,
+					].slice(0, 50),
 				})),
 
-			clearNotifications: () => set({ notifications: [] }),
+			clearNotificationHistory: () => set({ notificationHistory: [] }),
 
 			openModal: (id, data) =>
 				set((state) => ({
@@ -152,6 +181,9 @@ export const useUIStore = create<UIState>()(
 
 			setGlobalLoading: (globalLoading, loadingMessage = "") =>
 				set({ globalLoading, loadingMessage }),
+
+			setBackendStatus: (backendStatus, backendStatusMessage = "") =>
+				set({ backendStatus, backendStatusMessage }),
 		}),
 		{
 			name: "ui-storage",
