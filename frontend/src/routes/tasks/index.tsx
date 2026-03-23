@@ -26,7 +26,6 @@ import {
 	IconButton,
 	InputLabel,
 	MenuItem,
-	Select,
 	Slider,
 	Switch,
 	TextField,
@@ -38,11 +37,12 @@ import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { format, parse } from "date-fns";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { tasksApi } from "@/api/endpoints/tasks";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { PageTransition } from "@/components/common/PageTransition";
 import { SectionHeader } from "@/components/common/SectionHeader";
+import { ZoomAwareSelect } from "@/components/common/ZoomAwareSelect";
 import { type Column, DataTable } from "@/components/data-display/DataTable";
 import { StrategyDiscoveryCard } from "@/components/tasks/StrategyDiscoveryCard";
 import { useUIStore } from "@/store/uiStore";
@@ -92,10 +92,17 @@ const DAYS_OF_WEEK = [
 function TasksPage() {
 	const queryClient = useQueryClient();
 	const backendStatus = useUIStore((s) => s.backendStatus);
+	const createUiKey = useCallback(() => crypto.randomUUID(), []);
 
 	const [existingTaskId, setExistingTaskId] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+	const [scheduleKeys, setScheduleKeys] = useState<string[]>(() => [
+		createUiKey(),
+	]);
+	const [monitoringConditionKeys, setMonitoringConditionKeys] = useState<
+		string[]
+	>([]);
 
 	const [formData, setFormData] = useState<TaskCreate>({
 		name: "",
@@ -126,6 +133,14 @@ function TasksPage() {
 			return;
 		}
 		setExistingTaskId(task.id);
+		setScheduleKeys(
+			(task.schedules.length > 0 ? task.schedules : [{}]).map(() =>
+				createUiKey(),
+			),
+		);
+		setMonitoringConditionKeys(
+			(task.monitoringConditions ?? []).map(() => createUiKey()),
+		);
 		setFormData({
 			name: task.name,
 			description: task.description,
@@ -148,7 +163,7 @@ function TasksPage() {
 			useSubagents: task.useSubagents ?? false,
 			customInstructions: task.customInstructions,
 		});
-	}, [task]);
+	}, [createUiKey, task]);
 
 	const historyQuery = useQuery({
 		queryKey: ["tasks", "history", existingTaskId],
@@ -204,6 +219,8 @@ function TasksPage() {
 				alertCooldownMinutes: 60,
 				useSubagents: false,
 			});
+			setScheduleKeys([createUiKey()]);
+			setMonitoringConditionKeys([]);
 			setError(null);
 			void queryClient.invalidateQueries({ queryKey: ["tasks"] });
 		},
@@ -329,6 +346,7 @@ function TasksPage() {
 	};
 
 	const removeSchedule = (idx: number) => {
+		setScheduleKeys((prev) => prev.filter((_, i) => i !== idx));
 		setFormData({
 			...formData,
 			schedules: formData.schedules.filter((_, i) => i !== idx),
@@ -336,6 +354,7 @@ function TasksPage() {
 	};
 
 	const addSchedule = () => {
+		setScheduleKeys((prev) => [...prev, createUiKey()]);
 		setFormData({
 			...formData,
 			schedules: [
@@ -537,7 +556,7 @@ function TasksPage() {
 
 										<FormControl fullWidth>
 											<InputLabel>Symbols</InputLabel>
-											<Select
+											<ZoomAwareSelect
 												multiple
 												value={formData.symbols}
 												label="Symbols"
@@ -566,7 +585,7 @@ function TasksPage() {
 														{symbol}
 													</MenuItem>
 												))}
-											</Select>
+											</ZoomAwareSelect>
 										</FormControl>
 
 										<Typography
@@ -579,7 +598,7 @@ function TasksPage() {
 
 										{formData.schedules.map((schedule, idx) => (
 											<Box
-												key={idx}
+												key={scheduleKeys[idx] as string}
 												sx={{
 													display: "flex",
 													flexDirection: "column",
@@ -610,7 +629,7 @@ function TasksPage() {
 
 													<FormControl sx={{ minWidth: 130 }}>
 														<InputLabel>Frequency</InputLabel>
-														<Select
+														<ZoomAwareSelect
 															value={schedule.frequency}
 															label="Frequency"
 															size="small"
@@ -625,7 +644,7 @@ function TasksPage() {
 															<MenuItem value="daily">Daily</MenuItem>
 															<MenuItem value="weekly">Weekly</MenuItem>
 															<MenuItem value="custom">Custom</MenuItem>
-														</Select>
+														</ZoomAwareSelect>
 													</FormControl>
 
 													{(schedule.frequency === "daily" ||
@@ -661,7 +680,7 @@ function TasksPage() {
 													{schedule.frequency === "weekly" && (
 														<FormControl size="small" sx={{ minWidth: 120 }}>
 															<InputLabel>Day</InputLabel>
-															<Select
+															<ZoomAwareSelect
 																value={schedule.dayOfWeek ?? 0}
 																label="Day"
 																onChange={(e) =>
@@ -675,7 +694,7 @@ function TasksPage() {
 																		{day.label}
 																	</MenuItem>
 																))}
-															</Select>
+															</ZoomAwareSelect>
 														</FormControl>
 													)}
 
@@ -791,7 +810,7 @@ function TasksPage() {
 											<>
 												<FormControl fullWidth>
 													<InputLabel>Agent Mode</InputLabel>
-													<Select
+													<ZoomAwareSelect
 														value={formData.agentMode}
 														label="Agent Mode"
 														onChange={(e) =>
@@ -825,7 +844,7 @@ function TasksPage() {
 																Auto - Execute automatically
 															</Box>
 														</MenuItem>
-													</Select>
+													</ZoomAwareSelect>
 												</FormControl>
 
 												<TextField
@@ -872,7 +891,7 @@ function TasksPage() {
 												{(formData.monitoringConditions ?? []).map(
 													(condition, index) => (
 														<Box
-															key={index}
+															key={monitoringConditionKeys[index] as string}
 															sx={{
 																display: "flex",
 																gap: 1,
@@ -881,7 +900,7 @@ function TasksPage() {
 														>
 															<FormControl sx={{ minWidth: 160 }}>
 																<InputLabel>Condition</InputLabel>
-																<Select
+																<ZoomAwareSelect
 																	value={condition.conditionType}
 																	label="Condition"
 																	size="small"
@@ -909,7 +928,7 @@ function TasksPage() {
 																			{MONITORING_CONDITION_CONFIG[type].label}
 																		</MenuItem>
 																	))}
-																</Select>
+																</ZoomAwareSelect>
 															</FormControl>
 
 															<TextField
@@ -956,7 +975,7 @@ function TasksPage() {
 															) : (
 																<FormControl size="small" sx={{ minWidth: 90 }}>
 																	<InputLabel>Timeframe</InputLabel>
-																	<Select
+																	<ZoomAwareSelect
 																		value={condition.timeframe ?? ""}
 																		label="Timeframe"
 																		onChange={(e) => {
@@ -978,7 +997,7 @@ function TasksPage() {
 																		<MenuItem value="1H">1H</MenuItem>
 																		<MenuItem value="4H">4H</MenuItem>
 																		<MenuItem value="1D">1D</MenuItem>
-																	</Select>
+																	</ZoomAwareSelect>
 																</FormControl>
 															)}
 
@@ -986,6 +1005,9 @@ function TasksPage() {
 																size="small"
 																color="error"
 																onClick={() => {
+																	setMonitoringConditionKeys((prev) =>
+																		prev.filter((_, i) => i !== index),
+																	);
 																	const updated = (
 																		formData.monitoringConditions ?? []
 																	).filter((_, i) => i !== index);
@@ -1009,6 +1031,10 @@ function TasksPage() {
 															conditionType: "price_above",
 															threshold: 0,
 														};
+														setMonitoringConditionKeys((prev) => [
+															...prev,
+															createUiKey(),
+														]);
 														setFormData({
 															...formData,
 															monitoringConditions: [

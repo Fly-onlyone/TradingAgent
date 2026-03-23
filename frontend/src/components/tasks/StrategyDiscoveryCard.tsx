@@ -16,7 +16,6 @@ import {
 	FormControlLabel,
 	InputLabel,
 	MenuItem,
-	Select,
 	Slider,
 	Switch,
 	Typography,
@@ -27,6 +26,7 @@ import {
 	type StrategyDiscoveryConfig,
 	settingsApi,
 } from "@/api/endpoints/settings";
+import { ZoomAwareSelect } from "@/components/common/ZoomAwareSelect";
 import { useAuthStore } from "@/store/authStore";
 import { notify } from "@/store/uiStore";
 
@@ -122,7 +122,7 @@ export function StrategyDiscoveryCard() {
 					<Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
 						<FormControl size="small" sx={{ maxWidth: 250 }}>
 							<InputLabel>Check Interval</InputLabel>
-							<Select
+							<ZoomAwareSelect
 								value={config.intervalHours}
 								label="Check Interval"
 								onChange={(e) =>
@@ -137,7 +137,7 @@ export function StrategyDiscoveryCard() {
 										{opt.label}
 									</MenuItem>
 								))}
-							</Select>
+							</ZoomAwareSelect>
 						</FormControl>
 
 						<Box sx={{ maxWidth: 350 }}>

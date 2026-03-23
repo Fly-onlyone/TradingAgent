@@ -30,6 +30,7 @@ import type { AgentConfigUpdate } from "@/api/endpoints/settings";
 import { settingsApi } from "@/api/endpoints/settings";
 import { agentConfigQueryOptions } from "@/api/queryOptions/agent";
 import { usePollingLogin } from "@/hooks/usePollingLogin";
+import { useZoomAwareMenu } from "@/hooks/useZoomAwareMenu";
 import { notify } from "@/store/uiStore";
 
 interface AgentConfigPanelProps {
@@ -53,6 +54,13 @@ export function AgentConfigPanel({
 		success: boolean;
 		message: string;
 	} | null>(null);
+	const {
+		anchorRef: modelFieldRef,
+		handleClose: handleModelMenuClose,
+		handleOpen: handleModelMenuOpen,
+		menuProps: modelMenuProps,
+		open: isModelMenuOpen,
+	} = useZoomAwareMenu();
 
 	const configQuery = useQuery(agentConfigQueryOptions());
 
@@ -341,21 +349,29 @@ export function AgentConfigPanel({
 				<Typography variant="subtitle2" gutterBottom>
 					Model
 				</Typography>
-				<TextField
-					select
-					size="small"
-					fullWidth={variant === "standalone"}
-					value={config.model}
-					onChange={(e) => updateMutation.mutate({ model: e.target.value })}
-					disabled={updateMutation.isPending}
-					sx={{ minWidth: 280 }}
-				>
-					{resolvedModelOptions.map((opt) => (
-						<MenuItem key={opt.value} value={opt.value}>
-							{opt.label}
-						</MenuItem>
-					))}
-				</TextField>
+				<Box ref={modelFieldRef}>
+					<TextField
+						select
+						size="small"
+						fullWidth={variant === "standalone"}
+						value={config.model}
+						onChange={(e) => updateMutation.mutate({ model: e.target.value })}
+						disabled={updateMutation.isPending}
+						sx={{ minWidth: 280 }}
+						SelectProps={{
+							open: isModelMenuOpen,
+							onOpen: handleModelMenuOpen,
+							onClose: handleModelMenuClose,
+							MenuProps: modelMenuProps,
+						}}
+					>
+						{resolvedModelOptions.map((opt) => (
+							<MenuItem key={opt.value} value={opt.value}>
+								{opt.label}
+							</MenuItem>
+						))}
+					</TextField>
+				</Box>
 			</Box>
 
 			{/* Thinking Budget (agent page only) */}
