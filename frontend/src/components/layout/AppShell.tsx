@@ -30,6 +30,7 @@ export function AppShell({children}: AppShellProps) {
     });
     const contentRef = useRef<HTMLDivElement>(null);
     const isAuthPage = currentPath.startsWith("/auth/");
+    const isAgentPage = currentPath.startsWith("/agent");
 
     useEffect(() => {
         const durationMs = markNavEnd(currentPath);
@@ -39,6 +40,7 @@ export function AppShell({children}: AppShellProps) {
     }, [currentPath]);
 
     useEffect(() => {
+        void currentPath;
         contentRef.current?.scrollTo(0, 0);
     }, [currentPath]);
 
@@ -47,7 +49,7 @@ export function AppShell({children}: AppShellProps) {
     const showEffects = showLayout && effectsEnabled;
 
     return (
-        <Box sx={{display: "flex", height: "100vh", overflow: "hidden"}}>
+        <Box sx={{display: "flex", height: "calc(100dvh / var(--ui-zoom, 1))", overflow: "hidden"}}>
             {/* Background Effects Layer */}
             {showEffects && (
                 <>
@@ -90,7 +92,10 @@ export function AppShell({children}: AppShellProps) {
                         p: showLayout ? {xs: 2, sm: 2.5, md: 3} : 0,
                         flex: 1,
                         minHeight: 0,
-                        overflow: "auto",
+                        display: "flex",
+                        flexDirection: "column",
+                        overflowX: "hidden",
+                        overflowY: isAgentPage ? "hidden" : "auto",
                         pb: showLayout && isMobile ? "72px" : undefined,
                     }}
                 >
@@ -120,9 +125,7 @@ export function AppShell({children}: AppShellProps) {
                                     : {opacity: 0, x: 80, scale: 0.85}
                             }
                             animate={
-                                reducedMotion
-                                    ? {opacity: 1}
-                                    : {opacity: 1, x: 0, scale: 1}
+                                reducedMotion ? {opacity: 1} : {opacity: 1, x: 0, scale: 1}
                             }
                             exit={
                                 reducedMotion
@@ -174,9 +177,7 @@ export function AppShell({children}: AppShellProps) {
                                 <Box>
                                     <strong>{notification.title}</strong>
                                     {notification.message && (
-                                        <Box
-                                            sx={{mt: 0.5, fontSize: "0.875rem", opacity: 0.9}}
-                                        >
+                                        <Box sx={{mt: 0.5, fontSize: "0.875rem", opacity: 0.9}}>
                                             {notification.message}
                                         </Box>
                                     )}
