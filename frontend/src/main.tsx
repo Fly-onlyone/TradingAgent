@@ -1,7 +1,11 @@
 import CssBaseline from "@mui/material/CssBaseline";
 import { ThemeProvider } from "@mui/material/styles";
 import * as Sentry from "@sentry/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+	QueryClient,
+	QueryClientProvider,
+	onlineManager,
+} from "@tanstack/react-query";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode, useEffect } from "react";
 import ReactDOM from "react-dom/client";
@@ -30,7 +34,8 @@ const queryClient = new QueryClient({
 		queries: {
 			staleTime: 1000 * 60, // 1 minute
 			gcTime: 1000 * 60 * 10, // 10 minutes
-			retry: 1,
+			retry: 3,
+			retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
 			refetchOnMount: false,
 			refetchOnWindowFocus: false,
 		},
@@ -161,21 +166,37 @@ function ensureBackendHealthMonitor(
 	reportBackendStatus(setBackendStatus, "connecting", backendHealthUrl);
 	void checkBackendHealth(setBackendStatus);
 
-	let consecutiveSuccesses = 0;
+	let wasOnline = false;
+	let intervalId: number | undefined;
+
+	const schedulePolling = (ms: number) => {
+		if (intervalId) window.clearInterval(intervalId);
+		intervalId = window.setInterval(poll, ms);
+	};
+
 	const poll = () => {
 		if (document.hidden) return;
 		void checkBackendHealth(setBackendStatus).then(() => {
-			consecutiveSuccesses =
-				lastBackendStatus === "online" ? consecutiveSuccesses + 1 : 0;
+			const isOnline = lastBackendStatus === "online";
+
+			// Notify TanStack Query of backend connectivity changes
+			if (isOnline !== wasOnline) {
+				onlineManager.setOnline(isOnline);
+			}
+
+			// Adaptive interval: fast when offline, slow when stable
+			if (isOnline && !wasOnline) {
+				schedulePolling(HEALTH_POLL_SLOW_MS);
+			} else if (!isOnline && wasOnline) {
+				schedulePolling(HEALTH_POLL_FAST_MS);
+			}
+
+			wasOnline = isOnline;
 		});
 	};
 
-	// Start fast, slow down once stable
-	const fastInterval = window.setInterval(poll, HEALTH_POLL_FAST_MS);
-	window.setTimeout(() => {
-		window.clearInterval(fastInterval);
-		window.setInterval(poll, HEALTH_POLL_SLOW_MS);
-	}, HEALTH_POLL_SLOW_MS);
+	// Start with fast polling
+	schedulePolling(HEALTH_POLL_FAST_MS);
 }
 
 function App() {
