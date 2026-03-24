@@ -83,6 +83,58 @@ fn is_backend_listening() -> bool {
     TcpStream::connect_timeout(&addr, Duration::from_millis(250)).is_ok()
 }
 
+/// Kill any process listening on the backend port so we can spawn a fresh one.
+fn kill_process_on_port(port: u16) {
+    #[cfg(target_os = "windows")]
+    {
+        // netstat -ano | findstr :7000 → extract PID, then taskkill
+        let output = std::process::Command::new("cmd")
+            .args(["/C", &format!("netstat -ano | findstr :{port} | findstr LISTENING")])
+            .output();
+
+        if let Ok(output) = output {
+            let text = String::from_utf8_lossy(&output.stdout);
+            let mut killed_pids = std::collections::HashSet::new();
+            for line in text.lines() {
+                if let Some(pid_str) = line.split_whitespace().last() {
+                    if let Ok(pid) = pid_str.parse::<u32>() {
+                        if pid > 0 && killed_pids.insert(pid) {
+                            log::info!("Killing orphaned backend process (PID {pid}) on port {port}");
+                            let _ = std::process::Command::new("taskkill")
+                                .args(["/PID", &pid.to_string(), "/T", "/F"])
+                                .output();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let output = std::process::Command::new("lsof")
+            .args(["-ti", &format!(":{port}")])
+            .output();
+
+        if let Ok(output) = output {
+            let text = String::from_utf8_lossy(&output.stdout);
+            for pid_str in text.split_whitespace() {
+                if let Ok(pid) = pid_str.parse::<u32>() {
+                    if pid > 0 {
+                        log::info!("Killing orphaned backend process (PID {pid}) on port {port}");
+                        let _ = std::process::Command::new("kill")
+                            .args(["-9", &pid.to_string()])
+                            .output();
+                    }
+                }
+            }
+        }
+    }
+
+    // Brief wait for the port to free up
+    std::thread::sleep(Duration::from_millis(500));
+}
+
 fn backend_command(project_root: &std::path::Path) -> (PathBuf, Vec<String>) {
     let python_path = if cfg!(target_os = "windows") {
         project_root
@@ -138,48 +190,51 @@ pub fn run() {
                 .canonicalize()
                 .unwrap_or_else(|_| std::env::current_dir().unwrap());
 
+            // Kill any orphaned backend from a previous session
             if is_backend_listening() {
-                log::info!("Backend already listening on {}", BACKEND_ADDR);
-            } else {
-                let (command_path, command_args) = backend_command(&project_root);
+                log::info!("Killing orphaned backend on {}", BACKEND_ADDR);
+                kill_process_on_port(7000);
+            }
 
-                match app
-                    .shell()
-                    .command(command_path)
-                    .args(command_args)
-                    .current_dir(&project_root)
-                    .spawn()
-                {
-                    Ok((mut rx, child)) => {
-                        tauri::async_runtime::spawn(async move {
-                            while let Some(event) = rx.recv().await {
-                                match event {
-                                    CommandEvent::Stdout(bytes) => {
-                                        log_backend_output(log::Level::Info, &bytes);
-                                    }
-                                    CommandEvent::Stderr(bytes) => {
-                                        log_backend_output(log::Level::Warn, &bytes);
-                                    }
-                                    CommandEvent::Error(message) => {
-                                        log::error!("[backend] {message}");
-                                    }
-                                    CommandEvent::Terminated(payload) => {
-                                        log::info!(
-                                            "[backend] process exited with code {:?} and signal {:?}",
-                                            payload.code,
-                                            payload.signal
-                                        );
-                                    }
-                                    _ => {}
+            // Always spawn a fresh backend so we own the process
+            let (command_path, command_args) = backend_command(&project_root);
+
+            match app
+                .shell()
+                .command(command_path)
+                .args(command_args)
+                .current_dir(&project_root)
+                .spawn()
+            {
+                Ok((mut rx, child)) => {
+                    tauri::async_runtime::spawn(async move {
+                        while let Some(event) = rx.recv().await {
+                            match event {
+                                CommandEvent::Stdout(bytes) => {
+                                    log_backend_output(log::Level::Info, &bytes);
                                 }
+                                CommandEvent::Stderr(bytes) => {
+                                    log_backend_output(log::Level::Warn, &bytes);
+                                }
+                                CommandEvent::Error(message) => {
+                                    log::error!("[backend] {message}");
+                                }
+                                CommandEvent::Terminated(payload) => {
+                                    log::info!(
+                                        "[backend] process exited with code {:?} and signal {:?}",
+                                        payload.code,
+                                        payload.signal
+                                    );
+                                }
+                                _ => {}
                             }
-                        });
+                        }
+                    });
 
-                        *app.state::<BackendProcess>().0.lock().unwrap() = Some(child);
-                        log::info!("Backend process spawned from {:?}", project_root);
-                    }
-                    Err(e) => log::warn!("Failed to spawn backend process: {e}"),
+                    *app.state::<BackendProcess>().0.lock().unwrap() = Some(child);
+                    log::info!("Backend process spawned from {:?}", project_root);
                 }
+                Err(e) => log::warn!("Failed to spawn backend process: {e}"),
             }
 
             // Build tray context menu
