@@ -14,6 +14,76 @@ use tauri_plugin_shell::{
     ShellExt,
 };
 
+/// Windows Job Object that auto-kills the backend when this process dies
+/// (handles force-kill from IDE, crash, etc. where ExitRequested never fires).
+#[cfg(target_os = "windows")]
+mod win_job {
+    use std::ffi::c_void;
+    use windows_sys::Win32::{
+        Foundation::{CloseHandle, INVALID_HANDLE_VALUE},
+        System::{
+            JobObjects::{
+                AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+                SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+                JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+            },
+            Threading::{OpenProcess, PROCESS_SET_QUOTA, PROCESS_TERMINATE},
+        },
+    };
+
+    pub struct JobGuard(*mut c_void);
+
+    unsafe impl Send for JobGuard {}
+    unsafe impl Sync for JobGuard {}
+
+    impl Drop for JobGuard {
+        fn drop(&mut self) {
+            unsafe {
+                CloseHandle(self.0);
+            }
+        }
+    }
+
+    pub fn assign_child_to_job(pid: u32) -> Option<JobGuard> {
+        unsafe {
+            let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+            if job.is_null() || job == INVALID_HANDLE_VALUE {
+                return None;
+            }
+
+            let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+
+            if SetInformationJobObject(
+                job,
+                JobObjectExtendedLimitInformation,
+                (&info as *const JOBOBJECT_EXTENDED_LIMIT_INFORMATION).cast(),
+                std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+            ) == 0
+            {
+                CloseHandle(job);
+                return None;
+            }
+
+            let process = OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, 0, pid);
+            if process.is_null() || process == INVALID_HANDLE_VALUE {
+                CloseHandle(job);
+                return None;
+            }
+
+            let ok = AssignProcessToJobObject(job, process);
+            CloseHandle(process);
+            if ok == 0 {
+                CloseHandle(job);
+                return None;
+            }
+
+            log::info!("Backend PID {pid} bound to Job Object (kill-on-close)");
+            Some(JobGuard(job))
+        }
+    }
+}
+
 struct BackendProcess(Mutex<Option<CommandChild>>);
 
 const BACKEND_ADDR: &str = "127.0.0.1:7000";
@@ -89,7 +159,10 @@ fn kill_process_on_port(port: u16) {
     {
         // netstat -ano | findstr :7000 → extract PID, then taskkill
         let output = std::process::Command::new("cmd")
-            .args(["/C", &format!("netstat -ano | findstr :{port} | findstr LISTENING")])
+            .args([
+                "/C",
+                &format!("netstat -ano | findstr :{port} | findstr LISTENING"),
+            ])
             .output();
 
         if let Ok(output) = output {
@@ -99,7 +172,9 @@ fn kill_process_on_port(port: u16) {
                 if let Some(pid_str) = line.split_whitespace().last() {
                     if let Ok(pid) = pid_str.parse::<u32>() {
                         if pid > 0 && killed_pids.insert(pid) {
-                            log::info!("Killing orphaned backend process (PID {pid}) on port {port}");
+                            log::info!(
+                                "Killing orphaned backend process (PID {pid}) on port {port}"
+                            );
                             let _ = std::process::Command::new("taskkill")
                                 .args(["/PID", &pid.to_string(), "/T", "/F"])
                                 .output();
@@ -230,6 +305,11 @@ pub fn run() {
                             }
                         }
                     });
+
+                    #[cfg(target_os = "windows")]
+                    if let Some(guard) = win_job::assign_child_to_job(child.pid()) {
+                        app.manage(guard);
+                    }
 
                     *app.state::<BackendProcess>().0.lock().unwrap() = Some(child);
                     log::info!("Backend process spawned from {:?}", project_root);
