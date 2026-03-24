@@ -53,6 +53,12 @@ export interface ExchangeConfig {
     sandbox: boolean;
 }
 
+export interface ExchangeCredentials {
+    apiKey: string;
+    secretKey: string;
+    passphrase: string;
+}
+
 export interface ExchangeConfigUpdate {
     apiKey?: string;
     secretKey?: string;
@@ -340,6 +346,17 @@ export const settingsApi = {
             payload,
         );
         return transformExchangeConfig(response.data);
+    },
+
+    async revealExchangeCredentials(): Promise<ExchangeCredentials> {
+        const response = await apiClient.post<Record<string, unknown>>(
+            "/settings/exchange/reveal",
+        );
+        return {
+            apiKey: response.data.api_key as string,
+            secretKey: response.data.secret_key as string,
+            passphrase: response.data.passphrase as string,
+        };
     },
 
     async testExchangeConnection(): Promise<TestConnectionResult> {

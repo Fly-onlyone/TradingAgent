@@ -103,6 +103,17 @@ async def place_order(
     Returns:
         Order placement result
     """
+    # Check sandbox mode — block trading early
+    from app.db.models.app_settings import AppSettings
+
+    app_settings = await AppSettings.get_instance()
+    if app_settings.okx_sandbox:
+        return {
+            "error": "Sandbox mode is active — trading is disabled. "
+            "The agent can only track positions and suggest trades. "
+            "Disable Sandbox Mode in Settings to place real orders."
+        }
+
     # Validate inputs
     if side not in ["buy", "sell"]:
         return {"error": "Side must be 'buy' or 'sell'"}

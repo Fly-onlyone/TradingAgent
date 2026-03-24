@@ -61,13 +61,13 @@ class OKXWebSocket:
 
     @property
     def public_url(self) -> str:
-        """Get public WebSocket URL based on sandbox mode."""
-        return self.SANDBOX_PUBLIC_URL if self.sandbox else self.PUBLIC_URL
+        """Always use production WebSocket for real market data."""
+        return self.PUBLIC_URL
 
     @property
     def private_url(self) -> str:
-        """Get private WebSocket URL based on sandbox mode."""
-        return self.SANDBOX_PRIVATE_URL if self.sandbox else self.PRIVATE_URL
+        """Always use production WebSocket for real account data."""
+        return self.PRIVATE_URL
 
     async def connect_public(self) -> None:
         """Connect to public WebSocket for market data."""

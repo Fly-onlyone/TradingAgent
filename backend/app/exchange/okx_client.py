@@ -32,13 +32,14 @@ class OKXClient:
         self._public: PublicData.PublicAPI | None = None
 
     def _init_sdk_clients(self) -> None:
-        flag = "1" if self.sandbox else "0"
-        self._trade = Trade.TradeAPI(self.api_key, self.secret_key, self.passphrase, False, flag)
+        # Always use production (flag="0") for all clients.
+        # Sandbox mode blocks trading at the method level, not the SDK level.
+        self._trade = Trade.TradeAPI(self.api_key, self.secret_key, self.passphrase, False, "0")
         self._account = Account.AccountAPI(
-            self.api_key, self.secret_key, self.passphrase, False, flag
+            self.api_key, self.secret_key, self.passphrase, False, "0"
         )
-        self._market = MarketData.MarketAPI(flag=flag)
-        self._public = PublicData.PublicAPI(flag=flag)
+        self._market = MarketData.MarketAPI(flag="0")
+        self._public = PublicData.PublicAPI(flag="0")
 
     async def _traced(self, name: str, fn: Callable, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """Execute an OKX SDK call in a thread with a Sentry span."""
@@ -96,17 +97,13 @@ class OKXClient:
         client_order_id: str | None = None,
         reduce_only: bool = False,
     ) -> dict[str, Any]:
-        """Place a new order.
-
-        Args:
-            inst_id: Instrument ID (e.g., "BTC-USDT")
-            side: "buy" or "sell"
-            order_type: "market", "limit", "post_only", etc.
-            size: Order quantity
-            price: Price for limit orders
-            client_order_id: Custom order ID
-            reduce_only: Whether to reduce position only
-        """
+        """Place a new order. Blocked when sandbox mode is active."""
+        if self.sandbox:
+            return {
+                "code": "-1",
+                "msg": "Sandbox mode is active — trading is disabled. "
+                "Disable Sandbox Mode in Settings to place orders.",
+            }
         return await self._traced(
             "place_order",
             self._trade.place_order,
@@ -126,7 +123,13 @@ class OKXClient:
         order_id: str | None = None,
         client_order_id: str | None = None,
     ) -> dict[str, Any]:
-        """Cancel an order by order ID or client order ID."""
+        """Cancel an order. Blocked when sandbox mode is active."""
+        if self.sandbox:
+            return {
+                "code": "-1",
+                "msg": "Sandbox mode is active — trading is disabled. "
+                "Disable Sandbox Mode in Settings to cancel orders.",
+            }
         if not order_id and not client_order_id:
             raise ValueError("Either order_id or client_order_id must be provided")
         return await self._traced(

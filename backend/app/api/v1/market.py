@@ -245,17 +245,10 @@ async def get_account_balance(
             )
         code = str(result.get("code", "unknown"))
         message = str(result.get("msg", "Unknown error from OKX"))
-        sandbox_hint = (
-            " Sandbox Mode is enabled; use OKX demo API credentials or disable "
-            "Sandbox Mode in Settings for production credentials."
-            if client.sandbox
-            else ""
-        )
         logger.warning(
-            "OKX account balance request failed: code=%s msg=%s sandbox=%s",
+            "OKX account balance request failed: code=%s msg=%s",
             code,
             message,
-            client.sandbox,
         )
         return AccountBalanceResponse(
             total_equity=0.0,
@@ -263,24 +256,18 @@ async def get_account_balance(
             unrealized_pnl=0.0,
             margin_ratio=None,
             currencies=[],
-            error=f"OKX API error ({code}): {message}.{sandbox_hint}",
+            error=f"OKX API error ({code}): {message}",
         )
     except Exception as exc:
         sentry_sdk.capture_exception(exc)
         logger.warning("Failed to fetch account balance from OKX: %s", exc)
-        sandbox_hint = (
-            " Sandbox Mode is enabled; use OKX demo API credentials or disable "
-            "Sandbox Mode in Settings for production credentials."
-            if client.sandbox
-            else ""
-        )
         return AccountBalanceResponse(
             total_equity=0.0,
             available_balance=0.0,
             unrealized_pnl=0.0,
             margin_ratio=None,
             currencies=[],
-            error=f"Unable to fetch account balance from OKX: {exc}.{sandbox_hint}",
+            error=f"Unable to fetch account balance from OKX: {exc}",
         )
 
 

@@ -775,6 +775,12 @@ class ExchangeConfigResponse(BaseModel):
     sandbox: bool
 
 
+class ExchangeCredentialsRevealResponse(BaseModel):
+    api_key: str
+    secret_key: str
+    passphrase: str
+
+
 class ExchangeConfigUpdate(BaseModel):
     api_key: str | None = None
     secret_key: str | None = None
@@ -815,6 +821,19 @@ async def get_exchange_config(
     """Get current OKX exchange configuration."""
     app_settings = await AppSettings.get_instance()
     return _build_exchange_response(app_settings)
+
+
+@router.post("/exchange/reveal", response_model=ExchangeCredentialsRevealResponse)
+async def reveal_exchange_credentials(
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Reveal decrypted OKX exchange credentials (superuser only)."""
+    app_settings = await AppSettings.get_instance()
+    return {
+        "api_key": _resolve_okx_api_key(app_settings),
+        "secret_key": _resolve_okx_secret_key(app_settings),
+        "passphrase": _resolve_okx_passphrase(app_settings),
+    }
 
 
 @router.put("/exchange", response_model=ExchangeConfigResponse)

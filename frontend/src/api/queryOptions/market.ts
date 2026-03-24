@@ -11,7 +11,6 @@ export function marketAccountQueryOptions() {
         queryFn: () => marketApi.getAccountBalance(),
         staleTime: MARKET_STALE_TIME,
         gcTime: MARKET_GC_TIME,
-        refetchOnMount: false,
     });
 }
 
@@ -21,7 +20,6 @@ export function marketOverviewQueryOptions() {
         queryFn: () => marketApi.getMarketOverview(),
         staleTime: MARKET_STALE_TIME,
         gcTime: MARKET_GC_TIME,
-        refetchOnMount: false,
     });
 }
 
@@ -31,6 +29,5 @@ export function marketTickerQueryOptions(symbol: string) {
         queryFn: () => marketApi.getTicker(symbol),
         staleTime: 20_000,
         gcTime: MARKET_GC_TIME,
-        refetchOnMount: false,
     });
 }
