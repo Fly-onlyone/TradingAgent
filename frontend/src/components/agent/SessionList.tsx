@@ -26,8 +26,10 @@ import {
 	Tooltip,
 	Typography,
 } from "@mui/material";
+import type { PopoverPosition } from "@mui/material/Popover";
 import { AnimatePresence, motion } from "framer-motion";
 import { type MouseEvent, useState } from "react";
+import { useUIStore } from "@/store/uiStore";
 import type { AgentSession, SessionsByDateGroup } from "@/types/session";
 
 interface SessionListProps {
@@ -55,15 +57,23 @@ function SessionItem({
 	onDelete,
 	onRename,
 }: SessionItemProps) {
-	const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+	const [anchorPosition, setAnchorPosition] = useState<PopoverPosition | null>(
+		null,
+	);
+	const uiScale = useUIStore((s) => s.uiScale);
 
 	const handleMenuOpen = (event: MouseEvent<HTMLElement>) => {
 		event.stopPropagation();
-		setAnchorEl(event.currentTarget);
+		const rect = event.currentTarget.getBoundingClientRect();
+		const zoom = uiScale || 1;
+		setAnchorPosition({
+			top: (rect.top + rect.height / 2) / zoom,
+			left: rect.right / zoom,
+		});
 	};
 
 	const handleMenuClose = () => {
-		setAnchorEl(null);
+		setAnchorPosition(null);
 	};
 
 	const handleDelete = () => {
@@ -169,11 +179,11 @@ function SessionItem({
 			</ListItemButton>
 
 			<Menu
-				anchorEl={anchorEl}
-				open={Boolean(anchorEl)}
+				open={Boolean(anchorPosition)}
 				onClose={handleMenuClose}
-				anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-				transformOrigin={{ vertical: "top", horizontal: "right" }}
+				anchorReference="anchorPosition"
+				anchorPosition={anchorPosition ?? undefined}
+				transformOrigin={{ vertical: "center", horizontal: "left" }}
 			>
 				<MenuItem onClick={handleRename} dense>
 					<ListItemIcon>
