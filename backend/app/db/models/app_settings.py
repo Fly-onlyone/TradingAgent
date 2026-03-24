@@ -50,7 +50,9 @@ class AppSettings(Document):
     agent_auth_mode: AgentAuthMode = AgentAuthMode.SUBSCRIPTION
     agent_api_key: str = ""  # Encrypted/stored API key (empty = use env var)
     agent_model: str = "sonnet"
-    agent_max_thinking_tokens: int = 10000
+    agent_thinking_mode: str = "adaptive"  # "adaptive", "enabled", "disabled"
+    agent_thinking_budget: int = 10000  # Token budget when mode is "enabled"
+    agent_effort: str = "high"  # "low", "medium", "high", "max"
 
     # OKX Exchange configuration
     okx_api_key: str = ""
@@ -68,6 +70,9 @@ class AppSettings(Document):
     defer_embedding_when_gaming: bool = False
     gaming_process_list: list[str] = []  # e.g. ["cs2.exe", "valorant.exe"]
     gaming_check_interval_minutes: int = 3
+
+    # Chat session retention
+    session_retention_days: int = 0  # 0 = keep forever
 
     # Strategy auto-discovery from news sources
     auto_discover_enabled: bool = False
@@ -100,7 +105,9 @@ class AppSettings(Document):
         canonical_id: Any,
         instance: AppSettings,
     ) -> None:
-        archive_collection = cls.get_pymongo_collection().database["app_settings_conflicts"]
+        archive_collection = cls.get_pymongo_collection().database[
+            "app_settings_conflicts"
+        ]
         archived_doc = instance.model_dump(mode="python")
         archived_doc.pop("id", None)
         archived_doc["original_id"] = instance.id
@@ -162,7 +169,9 @@ class AppSettings(Document):
 
         migrated = await instance.migrate_plaintext_secrets_if_needed()
         if migrated:
-            logger.info("Migrated legacy plaintext app settings secrets to encrypted format")
+            logger.info(
+                "Migrated legacy plaintext app settings secrets to encrypted format"
+            )
 
         cls._cached_instance = instance
         return instance
@@ -218,7 +227,9 @@ class AppSettings(Document):
 
     def has_persisted_secret_values(self) -> bool:
         """Return True when any secret field has a non-empty stored value."""
-        return any(bool(getattr(self, field_name)) for field_name in self.SECRET_FIELD_NAMES)
+        return any(
+            bool(getattr(self, field_name)) for field_name in self.SECRET_FIELD_NAMES
+        )
 
     def has_encrypted_secret_values(self) -> bool:
         """Return True when at least one stored secret uses encrypted marker format."""

@@ -26,7 +26,7 @@ import {
 } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
-import type { AgentConfigUpdate } from "@/api/endpoints/settings";
+import type { AgentConfig, AgentConfigUpdate } from "@/api/endpoints/settings";
 import { settingsApi } from "@/api/endpoints/settings";
 import { agentConfigQueryOptions } from "@/api/queryOptions/agent";
 import { usePollingLogin } from "@/hooks/usePollingLogin";
@@ -74,15 +74,65 @@ export function AgentConfigPanel({
 	const updateMutation = useMutation({
 		mutationFn: (update: AgentConfigUpdate) =>
 			settingsApi.updateAgentConfig(update),
-		onSuccess: (_, variables) => {
-			void queryClient.invalidateQueries({ queryKey: ["agent-config"] });
+		onMutate: async (update) => {
+			await queryClient.cancelQueries({ queryKey: ["agent-config"] });
+			const previousConfig = queryClient.getQueryData<AgentConfig>([
+				"agent-config",
+			]);
+
+			if (previousConfig) {
+				queryClient.setQueryData<AgentConfig>(["agent-config"], {
+					...previousConfig,
+					...(update.authMode !== undefined
+						? { authMode: update.authMode }
+						: {}),
+					...(update.model !== undefined ? { model: update.model } : {}),
+					...(update.thinkingMode !== undefined
+						? { thinkingMode: update.thinkingMode }
+						: {}),
+					...(update.thinkingBudget !== undefined
+						? { thinkingBudget: update.thinkingBudget }
+						: {}),
+					...(update.effort !== undefined ? { effort: update.effort } : {}),
+					...(update.apiKey !== undefined
+						? {
+								hasApiKey: update.apiKey.trim().length > 0,
+								maskedApiKey:
+									update.apiKey.trim().length > 0
+										? previousConfig.maskedApiKey || "Configured"
+										: "",
+							}
+						: {}),
+				});
+			}
+
+			return { previousConfig };
+		},
+		onSuccess: (updatedConfig, variables) => {
+			queryClient.setQueryData<AgentConfig>(["agent-config"], {
+				...updatedConfig,
+				...(variables.authMode !== undefined
+					? { authMode: variables.authMode }
+					: {}),
+				...(variables.model !== undefined ? { model: variables.model } : {}),
+				...(variables.thinkingMode !== undefined
+					? { thinkingMode: variables.thinkingMode }
+					: {}),
+				...(variables.thinkingBudget !== undefined
+					? { thinkingBudget: variables.thinkingBudget }
+					: {}),
+				...(variables.effort !== undefined ? { effort: variables.effort } : {}),
+			});
 			notify.success("Agent configuration updated");
 			setTestResult(null);
 			if (variables.apiKey !== undefined) {
 				setApiKeyInput("");
 			}
 		},
-		onError: () => {
+		onError: (_, __, context) => {
+			if (context?.previousConfig) {
+				queryClient.setQueryData(["agent-config"], context.previousConfig);
+			}
 			notify.error("Failed to update agent configuration");
 		},
 	});
@@ -153,7 +203,6 @@ export function AgentConfigPanel({
 				return [{ value: config.model, label: config.model }, ...fetched];
 			})()
 		: [];
-
 	const handleAuthModeChange = (
 		_: React.MouseEvent<HTMLElement>,
 		newMode: string | null,
@@ -374,39 +423,98 @@ export function AgentConfigPanel({
 				</Box>
 			</Box>
 
-			{/* Thinking Budget (agent page only) */}
+			{/* Thinking Mode (agent page only) */}
 			{showThinkingBudget && (
-				<Box>
-					<Typography variant="subtitle2" gutterBottom>
-						Thinking Budget:{" "}
-						{config.maxThinkingTokens === 0
-							? "Disabled"
-							: `${config.maxThinkingTokens.toLocaleString()} tokens`}
-					</Typography>
-					<Slider
-						value={config.maxThinkingTokens}
-						onChange={(_, value) =>
-							updateMutation.mutate({ maxThinkingTokens: value as number })
-						}
-						min={0}
-						max={50000}
-						step={1000}
-						marks={[
-							{ value: 0, label: "Off" },
-							{ value: 10000, label: "10k" },
-							{ value: 25000, label: "25k" },
-							{ value: 50000, label: "50k" },
-						]}
-						valueLabelDisplay="auto"
-						valueLabelFormat={(v) =>
-							v === 0 ? "Off" : `${(v / 1000).toFixed(0)}k`
-						}
-						disabled={updateMutation.isPending}
-						size="small"
-					/>
-					<Typography variant="caption" color="text.secondary">
-						Maximum tokens for agent reasoning. 0 = disabled.
-					</Typography>
+				<Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+					<Box>
+						<Typography variant="subtitle2" gutterBottom>
+							Thinking Mode
+						</Typography>
+						<ToggleButtonGroup
+							value={config.thinkingMode}
+							exclusive
+							onChange={(_, value) => {
+								if (value !== null)
+									updateMutation.mutate({ thinkingMode: value });
+							}}
+							size="small"
+							fullWidth
+							disabled={updateMutation.isPending}
+						>
+							<ToggleButton value="adaptive">Adaptive</ToggleButton>
+							<ToggleButton value="enabled">Budget</ToggleButton>
+							<ToggleButton value="disabled">Off</ToggleButton>
+						</ToggleButtonGroup>
+						<Typography
+							variant="caption"
+							color="text.secondary"
+							sx={{ mt: 0.5 }}
+						>
+							{config.thinkingMode === "adaptive" &&
+								"Claude decides when and how much to think (recommended)."}
+							{config.thinkingMode === "enabled" &&
+								"Fixed token budget for reasoning."}
+							{config.thinkingMode === "disabled" &&
+								"Extended thinking is disabled."}
+						</Typography>
+					</Box>
+					{config.thinkingMode === "enabled" && (
+						<Box>
+							<Typography variant="subtitle2" gutterBottom>
+								Thinking Budget:{" "}
+								{`${config.thinkingBudget.toLocaleString()} tokens`}
+							</Typography>
+							<Slider
+								value={config.thinkingBudget}
+								onChange={(_, value) =>
+									updateMutation.mutate({
+										thinkingBudget: value as number,
+									})
+								}
+								min={1000}
+								max={50000}
+								step={1000}
+								marks={[
+									{ value: 1000, label: "1k" },
+									{ value: 10000, label: "10k" },
+									{ value: 25000, label: "25k" },
+									{ value: 50000, label: "50k" },
+								]}
+								valueLabelDisplay="auto"
+								valueLabelFormat={(v) => `${(v / 1000).toFixed(0)}k`}
+								disabled={updateMutation.isPending}
+								size="small"
+							/>
+						</Box>
+					)}
+					{/* Effort Level */}
+					<Box>
+						<Typography variant="subtitle2" gutterBottom>
+							Effort Level
+						</Typography>
+						<ToggleButtonGroup
+							value={config.effort}
+							exclusive
+							onChange={(_, value) => {
+								if (value !== null) updateMutation.mutate({ effort: value });
+							}}
+							size="small"
+							fullWidth
+							disabled={updateMutation.isPending}
+						>
+							<ToggleButton value="low">Low</ToggleButton>
+							<ToggleButton value="medium">Medium</ToggleButton>
+							<ToggleButton value="high">High</ToggleButton>
+							<ToggleButton value="max">Max</ToggleButton>
+						</ToggleButtonGroup>
+						<Typography
+							variant="caption"
+							color="text.secondary"
+							sx={{ mt: 0.5 }}
+						>
+							Controls the depth and intensity of reasoning.
+						</Typography>
+					</Box>
 				</Box>
 			)}
 

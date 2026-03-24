@@ -98,8 +98,17 @@ class TradingAgent:
             resolve_anthropic_api_key(),
         )
 
-        # Use thinking budget from DB settings (0 = disabled)
-        thinking_tokens = app_settings.agent_max_thinking_tokens or None
+        # Build ThinkingConfig from DB settings
+        match app_settings.agent_thinking_mode:
+            case "enabled":
+                thinking = {
+                    "type": "enabled",
+                    "budget_tokens": app_settings.agent_thinking_budget,
+                }
+            case "disabled":
+                thinking = {"type": "disabled"}
+            case _:
+                thinking = {"type": "adaptive"}
 
         options = ClaudeAgentOptions(
             system_prompt=SYSTEM_PROMPT,
@@ -108,7 +117,8 @@ class TradingAgent:
             permission_mode="bypassPermissions",
             max_turns=10,
             model=app_settings.agent_model or None,
-            max_thinking_tokens=thinking_tokens,
+            thinking=thinking,
+            effort=app_settings.agent_effort or None,
         )
 
         if api_key:

@@ -29,7 +29,9 @@ class AgentConfigResponse(BaseModel):
     has_api_key: bool
     masked_api_key: str
     model: str
-    max_thinking_tokens: int
+    thinking_mode: str
+    thinking_budget: int
+    effort: str
     cli_logged_in: bool
 
 
@@ -37,7 +39,9 @@ class AgentConfigUpdate(BaseModel):
     auth_mode: str | None = None
     api_key: str | None = None
     model: str | None = None
-    max_thinking_tokens: int | None = None
+    thinking_mode: str | None = None
+    thinking_budget: int | None = None
+    effort: str | None = None
 
 
 class AgentModelOption(BaseModel):
@@ -53,7 +57,6 @@ class TestConnectionResponse(BaseModel):
 class CLILoginStatusResponse(BaseModel):
     logged_in: bool
     message: str
-
 
 
 # ── Helpers ─────────────────────────────────────────────────────
@@ -290,7 +293,9 @@ async def get_agent_config(
         "has_api_key": bool(effective_key),
         "masked_api_key": _mask_key(effective_key),
         "model": effective_model,
-        "max_thinking_tokens": app_settings.agent_max_thinking_tokens,
+        "thinking_mode": app_settings.agent_thinking_mode,
+        "thinking_budget": app_settings.agent_thinking_budget,
+        "effort": app_settings.agent_effort,
         "cli_logged_in": cli_logged_in,
     }
 
@@ -328,8 +333,24 @@ async def update_agent_config(
     if body.model is not None:
         app_settings.agent_model = _normalize_to_family(body.model)
 
-    if body.max_thinking_tokens is not None:
-        app_settings.agent_max_thinking_tokens = body.max_thinking_tokens
+    if body.thinking_mode is not None:
+        if body.thinking_mode not in ("adaptive", "enabled", "disabled"):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid thinking_mode. Must be one of: adaptive, enabled, disabled",
+            )
+        app_settings.agent_thinking_mode = body.thinking_mode
+
+    if body.thinking_budget is not None:
+        app_settings.agent_thinking_budget = body.thinking_budget
+
+    if body.effort is not None:
+        if body.effort not in ("low", "medium", "high", "max"):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid effort. Must be one of: low, medium, high, max",
+            )
+        app_settings.agent_effort = body.effort
 
     await app_settings.save_with_timestamp()
     logger.info(
@@ -345,7 +366,9 @@ async def update_agent_config(
         "has_api_key": bool(effective_key),
         "masked_api_key": _mask_key(effective_key),
         "model": effective_model,
-        "max_thinking_tokens": app_settings.agent_max_thinking_tokens,
+        "thinking_mode": app_settings.agent_thinking_mode,
+        "thinking_budget": app_settings.agent_thinking_budget,
+        "effort": app_settings.agent_effort,
         "cli_logged_in": cli_logged_in,
     }
 
@@ -692,7 +715,9 @@ async def update_strategy_discovery_config(
     if body.interval_hours is not None:
         app_settings.auto_discover_interval_hours = max(1, body.interval_hours)
     if body.min_confidence is not None:
-        app_settings.auto_discover_min_confidence = max(0.0, min(1.0, body.min_confidence))
+        app_settings.auto_discover_min_confidence = max(
+            0.0, min(1.0, body.min_confidence)
+        )
 
     await app_settings.save_with_timestamp()
 
@@ -876,3 +901,49 @@ async def update_auth_config(
     )
     logger.info("Auth config updated (expire_minutes=%d)", effective)
     return {"access_token_expire_minutes": effective}
+
+
+# ── Session Retention Configuration ─────────────────────────────
+
+
+class SessionRetentionConfigResponse(BaseModel):
+    session_retention_days: int
+
+
+class SessionRetentionConfigUpdate(BaseModel):
+    session_retention_days: int | None = None
+
+
+@router.get("/session-retention", response_model=SessionRetentionConfigResponse)
+async def get_session_retention_config(
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Get current session retention configuration."""
+    app_settings = await AppSettings.get_instance()
+    return {"session_retention_days": app_settings.session_retention_days}
+
+
+@router.put("/session-retention", response_model=SessionRetentionConfigResponse)
+async def update_session_retention_config(
+    body: SessionRetentionConfigUpdate,
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Update session retention. 0 = keep forever."""
+    app_settings = await AppSettings.get_instance()
+    if body.session_retention_days is not None:
+        app_settings.session_retention_days = max(0, body.session_retention_days)
+    await app_settings.save_with_timestamp()
+
+    # Reschedule the cleanup job
+    try:
+        from app.agent.task_scheduler import AgentTaskScheduler
+
+        scheduler = AgentTaskScheduler()
+        await scheduler.reschedule_session_cleanup()
+    except Exception:
+        logger.warning("Could not reschedule session cleanup", exc_info=True)
+
+    logger.info(
+        "Session retention updated (days=%d)", app_settings.session_retention_days
+    )
+    return {"session_retention_days": app_settings.session_retention_days}

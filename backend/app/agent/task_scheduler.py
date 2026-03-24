@@ -114,6 +114,9 @@ class AgentTaskScheduler:
             replace_existing=True,
         )
 
+        # Schedule session retention cleanup if enabled
+        await self._schedule_session_cleanup()
+
         # Schedule strategy auto-discovery if enabled
         await self._schedule_auto_discovery()
 
@@ -174,6 +177,69 @@ class AgentTaskScheduler:
         """Public method to reschedule after settings change."""
         if self._running:
             await self._schedule_auto_discovery()
+
+    async def _schedule_session_cleanup(self) -> None:
+        """Schedule or remove the session retention cleanup job based on settings."""
+        from app.db.models.app_settings import AppSettings
+
+        job_id = "cleanup_old_sessions"
+
+        try:
+            app_settings = await AppSettings.get_instance()
+        except Exception:
+            logger.debug("Could not load AppSettings for session cleanup", exc_info=True)
+            return
+
+        if self.scheduler.get_job(job_id):
+            self.scheduler.remove_job(job_id)
+
+        if app_settings.session_retention_days <= 0:
+            return
+
+        self.scheduler.add_job(
+            self._cleanup_old_sessions,
+            IntervalTrigger(hours=6),
+            id=job_id,
+            name="Cleanup old chat sessions",
+            replace_existing=True,
+        )
+        logger.info(
+            "Session cleanup scheduled (retention=%d days)",
+            app_settings.session_retention_days,
+        )
+
+    async def _cleanup_old_sessions(self) -> None:
+        """Delete chat sessions older than the configured retention period."""
+        from app.db.models.agent_session import AgentSession
+        from app.db.models.app_settings import AppSettings
+
+        try:
+            app_settings = await AppSettings.get_instance()
+            days = app_settings.session_retention_days
+            if days <= 0:
+                return
+
+            cutoff = datetime.now(UTC) - timedelta(days=days)
+
+            # Delete sessions whose last activity is before the cutoff
+            old_sessions = await AgentSession.find(
+                {"$or": [
+                    {"last_message_at": {"$lt": cutoff}},
+                    {"last_message_at": None, "started_at": {"$lt": cutoff}},
+                ]}
+            ).to_list()
+
+            if old_sessions:
+                for session in old_sessions:
+                    await session.delete()
+                logger.info("Cleaned up %d old sessions (retention=%d days)", len(old_sessions), days)
+        except Exception:
+            logger.exception("Session cleanup failed")
+
+    async def reschedule_session_cleanup(self) -> None:
+        """Public method to reschedule after settings change."""
+        if self._running:
+            await self._schedule_session_cleanup()
 
     async def _load_active_tasks(self) -> None:
         """Load all active tasks from database and schedule them."""
