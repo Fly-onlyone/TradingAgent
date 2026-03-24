@@ -2,7 +2,6 @@
 
 import logging
 
-from anthropic import Anthropic
 from pydantic import BaseModel
 
 from app.config import get_settings
@@ -92,12 +91,12 @@ class StrategyExtractor:
     """Extract structured strategy data from unstructured content using Claude."""
 
     def __init__(self) -> None:
+        from anthropic import Anthropic
+
         settings = get_settings()
         self.client = Anthropic(api_key=settings.anthropic_api_key)
 
-    async def extract_from_text(
-        self, content: str, source_hint: str = ""
-    ) -> ExtractedStrategy:
+    async def extract_from_text(self, content: str, source_hint: str = "") -> ExtractedStrategy:
         """Send content to Claude and extract structured strategy fields."""
         truncated = content[:MAX_CONTENT_LENGTH]
         hint = f"\n\nSource: {source_hint}" if source_hint else ""

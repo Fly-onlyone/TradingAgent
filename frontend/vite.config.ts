@@ -135,6 +135,17 @@ export default defineConfig({
 	],
 	build: {
 		sourcemap: "hidden",
+		rollupOptions: {
+			output: {
+				manualChunks: (id: string) => {
+					if (id.includes("@mui/") || id.includes("@emotion/"))
+						return "vendor-mui";
+					if (id.includes("framer-motion")) return "vendor-motion";
+					if (id.includes("@tanstack/")) return "vendor-tanstack";
+					if (id.includes("@sentry/")) return "vendor-sentry";
+				},
+			},
+		},
 	},
 	resolve: {
 		alias: {

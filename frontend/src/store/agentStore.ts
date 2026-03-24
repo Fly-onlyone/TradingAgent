@@ -82,6 +82,8 @@ interface AgentState {
 }
 
 const MAX_MESSAGES = 100;
+const MAX_TOOL_CALLS = 200;
+const MAX_DECISIONS = 100;
 
 export const useAgentStore = create<AgentState>()(
 	persist(
@@ -200,7 +202,7 @@ export const useAgentStore = create<AgentState>()(
 
 			addToolCall: (toolCall) =>
 				set((state) => ({
-					toolCalls: [...state.toolCalls, toolCall],
+					toolCalls: [...state.toolCalls, toolCall].slice(-MAX_TOOL_CALLS),
 					currentTurnToolCalls: [...state.currentTurnToolCalls, toolCall],
 				})),
 
@@ -218,7 +220,7 @@ export const useAgentStore = create<AgentState>()(
 
 			appendDecisions: (newDecisions) =>
 				set((state) => ({
-					decisions: [...state.decisions, ...newDecisions],
+					decisions: [...state.decisions, ...newDecisions].slice(-MAX_DECISIONS),
 				})),
 
 			setDecisionSymbols: (symbols) => set({ decisionSymbols: symbols }),

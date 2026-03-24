@@ -56,7 +56,8 @@ declare module "@tanstack/react-router" {
 
 initializeFrontendLogging();
 
-const backendHealthPollMs = 5000;
+const HEALTH_POLL_FAST_MS = 3000;
+const HEALTH_POLL_SLOW_MS = 30000;
 const backendHealthUrl = `${getApiBaseUrl().replace(/\/api\/v1$/, "")}/health`;
 let hasLoggedFrontendStartup = false;
 let backendHealthMonitorStarted = false;
@@ -159,9 +160,22 @@ function ensureBackendHealthMonitor(
 	backendHealthMonitorStarted = true;
 	reportBackendStatus(setBackendStatus, "connecting", backendHealthUrl);
 	void checkBackendHealth(setBackendStatus);
-	window.setInterval(() => {
-		void checkBackendHealth(setBackendStatus);
-	}, backendHealthPollMs);
+
+	let consecutiveSuccesses = 0;
+	const poll = () => {
+		if (document.hidden) return;
+		void checkBackendHealth(setBackendStatus).then(() => {
+			consecutiveSuccesses =
+				lastBackendStatus === "online" ? consecutiveSuccesses + 1 : 0;
+		});
+	};
+
+	// Start fast, slow down once stable
+	const fastInterval = window.setInterval(poll, HEALTH_POLL_FAST_MS);
+	window.setTimeout(() => {
+		window.clearInterval(fastInterval);
+		window.setInterval(poll, HEALTH_POLL_SLOW_MS);
+	}, HEALTH_POLL_SLOW_MS);
 }
 
 function App() {

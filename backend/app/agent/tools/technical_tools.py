@@ -2,10 +2,6 @@
 
 from typing import Any
 
-import numpy as np
-import pandas as pd
-import ta
-
 from app.agent.tools.market_tools import get_candlesticks
 
 
@@ -22,6 +18,9 @@ async def get_technical_indicators(
     Returns:
         Dictionary of technical indicators
     """
+    import pandas as pd
+    import ta
+
     # Get candlestick data
     candle_data = await get_candlesticks(symbol, timeframe, limit=200)
 
@@ -175,6 +174,9 @@ async def detect_chart_patterns(
     if len(candles) < 20:
         return {"error": "Insufficient data for pattern detection"}
 
+    import numpy as np
+    import pandas as pd
+
     df = pd.DataFrame(candles)
     patterns = []
 
@@ -302,6 +304,8 @@ async def get_price_action(
     candles = candle_data.get("candles", [])
     if len(candles) < 10:
         return {"error": "Insufficient data for price action analysis"}
+
+    import pandas as pd
 
     df = pd.DataFrame(candles)
     patterns = []

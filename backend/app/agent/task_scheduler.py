@@ -103,9 +103,6 @@ class AgentTaskScheduler:
         self.scheduler.start()
         logger.info("Agent task scheduler started")
 
-        # Load and schedule all active tasks
-        await self._load_active_tasks()
-
         # Add cleanup job for expired notifications
         self.scheduler.add_job(
             self._cleanup_expired_notifications,
@@ -115,11 +112,12 @@ class AgentTaskScheduler:
             replace_existing=True,
         )
 
-        # Schedule session retention cleanup if enabled
-        await self._schedule_session_cleanup()
-
-        # Schedule strategy auto-discovery if enabled
-        await self._schedule_auto_discovery()
+        # Load tasks and schedule periodic jobs in parallel
+        await asyncio.gather(
+            self._load_active_tasks(),
+            self._schedule_session_cleanup(),
+            self._schedule_auto_discovery(),
+        )
 
     async def stop(self) -> None:
         """Stop the scheduler."""
