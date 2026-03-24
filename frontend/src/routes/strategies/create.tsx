@@ -20,6 +20,7 @@ import {
 	TextField,
 	Typography,
 } from "@mui/material";
+import * as Sentry from "@sentry/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useRef, useState } from "react";
@@ -153,7 +154,11 @@ function UrlImportTab({
 	);
 
 	const extractMutation = useMutation({
-		mutationFn: (u: string) => strategiesApi.extractFromUrl(u),
+		mutationFn: (u: string) =>
+			Sentry.startSpan(
+				{ name: "strategy.extract.url", op: "ui.action" },
+				() => strategiesApi.extractFromUrl(u),
+			),
 		onSuccess: (data: ExtractedStrategy) => {
 			setExtracted({ ...data });
 			notify.success("Strategy extracted from URL");
@@ -163,7 +168,10 @@ function UrlImportTab({
 
 	const confirmMutation = useMutation({
 		mutationFn: (data: StrategyImportConfirm) =>
-			strategiesApi.confirmImport(data),
+			Sentry.startSpan(
+				{ name: "strategy.import.confirm", op: "ui.action" },
+				() => strategiesApi.confirmImport(data),
+			),
 		onSuccess: () => {
 			void queryClient.invalidateQueries({ queryKey: ["strategies"] });
 			notify.success("Strategy imported");
@@ -262,7 +270,11 @@ function FileUploadTab({
 	);
 
 	const extractMutation = useMutation({
-		mutationFn: (file: File) => strategiesApi.extractFromFile(file),
+		mutationFn: (file: File) =>
+			Sentry.startSpan(
+				{ name: "strategy.extract.file", op: "ui.action" },
+				() => strategiesApi.extractFromFile(file),
+			),
 		onSuccess: (data: ExtractedStrategy) => {
 			setExtracted({ ...data });
 			notify.success("Strategy extracted from file");
@@ -272,7 +284,10 @@ function FileUploadTab({
 
 	const confirmMutation = useMutation({
 		mutationFn: (data: StrategyImportConfirm) =>
-			strategiesApi.confirmImport(data),
+			Sentry.startSpan(
+				{ name: "strategy.import.confirm", op: "ui.action" },
+				() => strategiesApi.confirmImport(data),
+			),
 		onSuccess: () => {
 			void queryClient.invalidateQueries({ queryKey: ["strategies"] });
 			notify.success("Strategy imported");

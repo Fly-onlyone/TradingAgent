@@ -2,6 +2,7 @@
  * Error Boundary Component
  */
 
+import * as Sentry from "@sentry/react";
 import { Component, type ReactNode } from 'react';
 import { Box, Button, Typography, Paper } from '@mui/material';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
@@ -28,6 +29,9 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    Sentry.captureException(error, {
+      contexts: { react: { componentStack: errorInfo.componentStack } },
+    });
     console.error('Error boundary caught an error:', error, errorInfo);
   }
 

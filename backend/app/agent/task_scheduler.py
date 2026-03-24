@@ -6,6 +6,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import sentry_sdk
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
@@ -166,12 +167,13 @@ class AgentTaskScheduler:
         """Execute one strategy discovery cycle."""
         from app.services.strategy_discovery import StrategyDiscoveryService
 
-        try:
-            service = StrategyDiscoveryService()
-            stats = await service.run_discovery_cycle()
-            logger.info("Strategy discovery stats: %s", stats)
-        except Exception:
-            logger.exception("Strategy auto-discovery cycle failed")
+        with sentry_sdk.start_transaction(op="task", name="strategy-discovery"):
+            try:
+                service = StrategyDiscoveryService()
+                stats = await service.run_discovery_cycle()
+                logger.info("Strategy discovery stats: %s", stats)
+            except Exception:
+                logger.exception("Strategy auto-discovery cycle failed")
 
     async def reschedule_auto_discovery(self) -> None:
         """Public method to reschedule after settings change."""
@@ -213,28 +215,33 @@ class AgentTaskScheduler:
         from app.db.models.agent_session import AgentSession
         from app.db.models.app_settings import AppSettings
 
-        try:
-            app_settings = await AppSettings.get_instance()
-            days = app_settings.session_retention_days
-            if days <= 0:
-                return
+        with sentry_sdk.start_transaction(op="task", name="session-cleanup"):
+            try:
+                app_settings = await AppSettings.get_instance()
+                days = app_settings.session_retention_days
+                if days <= 0:
+                    return
 
-            cutoff = datetime.now(UTC) - timedelta(days=days)
+                cutoff = datetime.now(UTC) - timedelta(days=days)
 
-            # Delete sessions whose last activity is before the cutoff
-            old_sessions = await AgentSession.find(
-                {"$or": [
-                    {"last_message_at": {"$lt": cutoff}},
-                    {"last_message_at": None, "started_at": {"$lt": cutoff}},
-                ]}
-            ).to_list()
+                # Delete sessions whose last activity is before the cutoff
+                old_sessions = await AgentSession.find(
+                    {
+                        "$or": [
+                            {"last_message_at": {"$lt": cutoff}},
+                            {"last_message_at": None, "started_at": {"$lt": cutoff}},
+                        ]
+                    }
+                ).to_list()
 
-            if old_sessions:
-                for session in old_sessions:
-                    await session.delete()
-                logger.info("Cleaned up %d old sessions (retention=%d days)", len(old_sessions), days)
-        except Exception:
-            logger.exception("Session cleanup failed")
+                if old_sessions:
+                    for session in old_sessions:
+                        await session.delete()
+                    logger.info(
+                        "Cleaned up %d old sessions (retention=%d days)", len(old_sessions), days
+                    )
+            except Exception:
+                logger.exception("Session cleanup failed")
 
     async def reschedule_session_cleanup(self) -> None:
         """Public method to reschedule after settings change."""
@@ -270,9 +277,7 @@ class AgentTaskScheduler:
             job_id = f"task_{task.id}_sched_{idx}"
             trigger = self._create_trigger_from_schedule(schedule, task.timezone)
             if trigger is None:
-                logger.warning(
-                    f"Could not create trigger for task {task.id} schedule {idx}"
-                )
+                logger.warning(f"Could not create trigger for task {task.id} schedule {idx}")
                 continue
 
             self.scheduler.add_job(
@@ -287,9 +292,7 @@ class AgentTaskScheduler:
             # Track earliest next fire time
             if schedule.frequency != TaskFrequency.ONCE:
                 next_fire = trigger.get_next_fire_time(now, now)
-                if next_fire and (
-                    earliest_next_run is None or next_fire < earliest_next_run
-                ):
+                if next_fire and (earliest_next_run is None or next_fire < earliest_next_run):
                     earliest_next_run = next_fire
 
         if earliest_next_run:
@@ -330,9 +333,7 @@ class AgentTaskScheduler:
             else:
                 hour, minute = 9, 0
 
-            day_of_week = (
-                schedule.day_of_week if schedule.day_of_week is not None else 0
-            )
+            day_of_week = schedule.day_of_week if schedule.day_of_week is not None else 0
             return CronTrigger(
                 day_of_week=day_of_week,
                 hour=hour,
@@ -342,9 +343,7 @@ class AgentTaskScheduler:
 
         elif schedule.frequency == TaskFrequency.CUSTOM:
             if schedule.cron_expression:
-                return CronTrigger.from_crontab(
-                    schedule.cron_expression, timezone=timezone
-                )
+                return CronTrigger.from_crontab(schedule.cron_expression, timezone=timezone)
             else:
                 logger.error("Custom frequency schedule missing cron_expression")
                 return None
@@ -355,38 +354,44 @@ class AgentTaskScheduler:
         """Execute a scheduled task."""
         logger.info(f"Executing task {task_id}")
 
-        try:
-            task = await AgentTask.get(PydanticObjectId(task_id))
-            if not task:
-                logger.error(f"Task {task_id} not found")
-                return
+        with sentry_sdk.start_transaction(op="task", name="agent-task-execution") as txn:
+            txn.set_tag("task_id", task_id)
+            try:
+                task = await AgentTask.get(PydanticObjectId(task_id))
+                if not task:
+                    logger.error(f"Task {task_id} not found")
+                    return
 
-            if task.status != TaskStatus.ACTIVE:
-                logger.info(f"Task {task_id} is not active, skipping")
-                return
+                if task.status != TaskStatus.ACTIVE:
+                    logger.info(f"Task {task_id} is not active, skipping")
+                    return
 
-            # Execute based on capability toggles (analysis is always the base)
-            if task.trading_enabled:
-                await self._execute_trading_task(task)
-            else:
-                await self._execute_analysis_task(task)
+                txn.set_tag("task_name", task.name)
+                txn.set_tag("trading_enabled", str(task.trading_enabled))
+                txn.set_tag("monitoring_enabled", str(task.monitoring_enabled))
 
-            if task.monitoring_enabled:
-                await self._execute_monitoring_task(task)
+                # Execute based on capability toggles (analysis is always the base)
+                if task.trading_enabled:
+                    await self._execute_trading_task(task)
+                else:
+                    await self._execute_analysis_task(task)
 
-            # Mark as completed if all schedules are one-time
-            all_once = all(s.frequency == TaskFrequency.ONCE for s in task.schedules)
-            if all_once:
-                task.complete()
-                await task.save()
-                self._remove_task_jobs(str(task.id))
+                if task.monitoring_enabled:
+                    await self._execute_monitoring_task(task)
 
-        except Exception as e:
-            logger.error(f"Error executing task {task_id}: {e}")
-            # Record failure
-            task = await AgentTask.get(PydanticObjectId(task_id))
-            if task:
-                task.record_execution(success=False, error=str(e))
+                # Mark as completed if all schedules are one-time
+                all_once = all(s.frequency == TaskFrequency.ONCE for s in task.schedules)
+                if all_once:
+                    task.complete()
+                    await task.save()
+                    self._remove_task_jobs(str(task.id))
+
+            except Exception as e:
+                logger.error(f"Error executing task {task_id}: {e}")
+                # Record failure
+                task = await AgentTask.get(PydanticObjectId(task_id))
+                if task:
+                    task.record_execution(success=False, error=str(e))
                 await self._check_auto_pause(task)
                 await task.save()
 
@@ -471,12 +476,12 @@ class AgentTaskScheduler:
                     from app.knowledge.retriever import get_retriever
 
                     knowledge_ctx = await get_retriever().get_relevant_context(
-                        f"{symbol} trading", max_results=6,
+                        f"{symbol} trading",
+                        max_results=6,
                     )
                     if knowledge_ctx and knowledge_ctx != "No relevant knowledge found.":
                         prompt = (
-                            f"## Historical Knowledge Context\n{knowledge_ctx}"
-                            f"\n\n---\n\n{prompt}"
+                            f"## Historical Knowledge Context\n{knowledge_ctx}\n\n---\n\n{prompt}"
                         )
                 except Exception:
                     logger.debug("Failed to inject knowledge context", exc_info=True)
@@ -528,7 +533,9 @@ class AgentTaskScheduler:
                     should_trade = False
                     decision.execution_status = ExecutionStatus.FAILED
                     decision.execution_error_code = "confidence_below_threshold"
-                    decision.execution_error_message = f"Confidence {confidence:.1f}% is below minimum {min_confidence:.1f}%"
+                    decision.execution_error_message = (
+                        f"Confidence {confidence:.1f}% is below minimum {min_confidence:.1f}%"
+                    )
 
                 if should_trade and task.max_daily_trades is not None:
                     trade_count_today = await self._get_today_trade_count(task.id)
@@ -556,9 +563,7 @@ class AgentTaskScheduler:
                         decision.status = DecisionStatus.PENDING
                         decision.expires_at = datetime.now(UTC) + timedelta(hours=1)
                         await decision.insert()
-                        await self._create_trade_confirmation_notification(
-                            task, decision
-                        )
+                        await self._create_trade_confirmation_notification(task, decision)
                 else:
                     decision.status = DecisionStatus.EXECUTED
                     await decision.insert()
@@ -593,9 +598,7 @@ class AgentTaskScheduler:
 
         # Check cooldown
         if task.last_alert_at:
-            cooldown_until = task.last_alert_at + timedelta(
-                minutes=task.alert_cooldown_minutes
-            )
+            cooldown_until = task.last_alert_at + timedelta(minutes=task.alert_cooldown_minutes)
             if datetime.now(UTC) < cooldown_until:
                 logger.info("Monitoring task %s in cooldown, skipping", task.id)
                 task.record_execution(success=True)
@@ -688,9 +691,7 @@ class AgentTaskScheduler:
                                 {
                                     "condition": ct.value,
                                     "threshold": threshold,
-                                    "current": (
-                                        volume_24h / avg_volume if avg_volume else 0
-                                    ),
+                                    "current": (volume_24h / avg_volume if avg_volume else 0),
                                 }
                             )
                     elif ct == MonitoringConditionType.CUSTOM:
@@ -704,10 +705,7 @@ class AgentTaskScheduler:
                         )
                         try:
                             ai_response = await agent.chat(prompt)
-                            if (
-                                "triggered"
-                                in ai_response.lower().split("not_triggered")[0]
-                            ):
+                            if "triggered" in ai_response.lower().split("not_triggered")[0]:
                                 triggered.append(
                                     {
                                         "condition": ct.value,
@@ -716,15 +714,11 @@ class AgentTaskScheduler:
                                     }
                                 )
                         except Exception as ai_err:
-                            logger.warning(
-                                "Custom condition AI evaluation failed: %s", ai_err
-                            )
+                            logger.warning("Custom condition AI evaluation failed: %s", ai_err)
 
                 if triggered:
                     # Create monitoring alert decision
-                    triggered_summary = ", ".join(
-                        t.get("condition", "unknown") for t in triggered
-                    )
+                    triggered_summary = ", ".join(t.get("condition", "unknown") for t in triggered)
                     decision = AgentDecision(
                         user_id=task.user_id,
                         task_id=task.id,
@@ -754,9 +748,7 @@ class AgentTaskScheduler:
                     task.last_alert_at = datetime.now(UTC)
                     task.last_decision_id = decision.id
 
-                    logger.info(
-                        "Monitoring alert for %s: %s", symbol, triggered_summary
-                    )
+                    logger.info("Monitoring alert for %s: %s", symbol, triggered_summary)
 
             except Exception as e:
                 logger.error(f"Error monitoring {symbol}: {e}")
@@ -917,30 +909,31 @@ class AgentTaskScheduler:
 
     async def _cleanup_expired_notifications(self) -> None:
         """Clean up expired pending notifications and decisions."""
-        now = datetime.now(UTC)
+        with sentry_sdk.start_transaction(op="task", name="notification-cleanup"):
+            now = datetime.now(UTC)
 
-        # Find expired decisions
-        expired_decisions = await AgentDecision.find(
-            AgentDecision.status == DecisionStatus.PENDING,
-            AgentDecision.expires_at < now,
-        ).to_list()
+            # Find expired decisions
+            expired_decisions = await AgentDecision.find(
+                AgentDecision.status == DecisionStatus.PENDING,
+                AgentDecision.expires_at < now,
+            ).to_list()
 
-        for decision in expired_decisions:
-            decision.expire()
-            await decision.save()
+            for decision in expired_decisions:
+                decision.expire()
+                await decision.save()
 
-        # Find and expire related notifications
-        expired_notifications = await Notification.find(
-            Notification.expires_at < now,
-            Notification.status == "pending",
-        ).to_list()
+            # Find and expire related notifications
+            expired_notifications = await Notification.find(
+                Notification.expires_at < now,
+                Notification.status == "pending",
+            ).to_list()
 
-        for notification in expired_notifications:
-            notification.mark_expired()
-            await notification.save()
+            for notification in expired_notifications:
+                notification.mark_expired()
+                await notification.save()
 
-        if expired_decisions:
-            logger.info(f"Expired {len(expired_decisions)} pending decisions")
+            if expired_decisions:
+                logger.info(f"Expired {len(expired_decisions)} pending decisions")
 
     async def _run_subagent_analysis(self, symbol: str, task: AgentTask) -> dict:
         """Run all 3 subagents in parallel and aggregate results."""
@@ -1147,9 +1140,7 @@ Provide:
                 {
                     "id": job.id,
                     "name": job.name,
-                    "next_run": (
-                        job.next_run_time.isoformat() if job.next_run_time else None
-                    ),
+                    "next_run": (job.next_run_time.isoformat() if job.next_run_time else None),
                 }
             )
 

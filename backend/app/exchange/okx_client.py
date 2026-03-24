@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from collections.abc import Callable
 from decimal import Decimal
 from typing import Any
 
@@ -9,6 +10,7 @@ import okx.Account as Account
 import okx.MarketData as MarketData
 import okx.PublicData as PublicData
 import okx.Trade as Trade
+import sentry_sdk
 
 from app.config import get_settings
 
@@ -37,6 +39,11 @@ class OKXClient:
         )
         self._market = MarketData.MarketAPI(flag=flag)
         self._public = PublicData.PublicAPI(flag=flag)
+
+    async def _traced(self, name: str, fn: Callable, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        """Execute an OKX SDK call in a thread with a Sentry span."""
+        with sentry_sdk.start_span(op="http.client", description=f"okx.{name}"):
+            return await asyncio.to_thread(fn, *args, **kwargs)
 
     @classmethod
     async def create(cls) -> "OKXClient":
@@ -68,15 +75,15 @@ class OKXClient:
     # Account Endpoints
     async def get_account_balance(self) -> dict[str, Any]:
         """Get account balance information."""
-        return await asyncio.to_thread(self._account.get_account_balance)
+        return await self._traced("get_account_balance", self._account.get_account_balance)
 
     async def get_positions(self, inst_type: str = "SPOT") -> dict[str, Any]:
         """Get current positions."""
-        return await asyncio.to_thread(self._account.get_positions, instType=inst_type)
+        return await self._traced("get_positions", self._account.get_positions, instType=inst_type)
 
     async def get_account_config(self) -> dict[str, Any]:
         """Get account configuration."""
-        return await asyncio.to_thread(self._account.get_account_config)
+        return await self._traced("get_account_config", self._account.get_account_config)
 
     # Trading Endpoints
     async def place_order(
@@ -100,7 +107,8 @@ class OKXClient:
             client_order_id: Custom order ID
             reduce_only: Whether to reduce position only
         """
-        return await asyncio.to_thread(
+        return await self._traced(
+            "place_order",
             self._trade.place_order,
             instId=inst_id,
             tdMode="cash",
@@ -121,7 +129,8 @@ class OKXClient:
         """Cancel an order by order ID or client order ID."""
         if not order_id and not client_order_id:
             raise ValueError("Either order_id or client_order_id must be provided")
-        return await asyncio.to_thread(
+        return await self._traced(
+            "cancel_order",
             self._trade.cancel_order,
             instId=inst_id,
             ordId=order_id or "",
@@ -135,7 +144,8 @@ class OKXClient:
         client_order_id: str | None = None,
     ) -> dict[str, Any]:
         """Get order details."""
-        return await asyncio.to_thread(
+        return await self._traced(
+            "get_order",
             self._trade.get_order,
             instId=inst_id,
             ordId=order_id or "",
@@ -148,7 +158,8 @@ class OKXClient:
         inst_id: str | None = None,
     ) -> dict[str, Any]:
         """Get list of open orders."""
-        return await asyncio.to_thread(
+        return await self._traced(
+            "get_open_orders",
             self._trade.get_order_list,
             instType=inst_type,
             instId=inst_id or "",
@@ -161,7 +172,8 @@ class OKXClient:
         limit: int = 100,
     ) -> dict[str, Any]:
         """Get order history."""
-        return await asyncio.to_thread(
+        return await self._traced(
+            "get_order_history",
             self._trade.get_orders_history,
             instType=inst_type,
             instId=inst_id or "",
@@ -171,15 +183,17 @@ class OKXClient:
     # Market Data Endpoints (Public - no auth needed)
     async def get_ticker(self, inst_id: str) -> dict[str, Any]:
         """Get ticker information for an instrument."""
-        return await asyncio.to_thread(self._market.get_ticker, instId=inst_id)
+        return await self._traced("get_ticker", self._market.get_ticker, instId=inst_id)
 
     async def get_tickers(self, inst_type: str = "SPOT") -> dict[str, Any]:
         """Get all tickers for an instrument type."""
-        return await asyncio.to_thread(self._market.get_tickers, instType=inst_type)
+        return await self._traced("get_tickers", self._market.get_tickers, instType=inst_type)
 
     async def get_orderbook(self, inst_id: str, depth: int = 20) -> dict[str, Any]:
         """Get orderbook for an instrument."""
-        return await asyncio.to_thread(self._market.get_orderbook, instId=inst_id, sz=str(depth))
+        return await self._traced(
+            "get_orderbook", self._market.get_orderbook, instId=inst_id, sz=str(depth)
+        )
 
     async def get_candlesticks(
         self,
@@ -198,7 +212,8 @@ class OKXClient:
             before: Pagination - timestamp before
             after: Pagination - timestamp after
         """
-        return await asyncio.to_thread(
+        return await self._traced(
+            "get_candlesticks",
             self._market.get_candlesticks,
             instId=inst_id,
             bar=bar,
@@ -209,4 +224,6 @@ class OKXClient:
 
     async def get_instruments(self, inst_type: str = "SPOT") -> dict[str, Any]:
         """Get available trading instruments."""
-        return await asyncio.to_thread(self._public.get_instruments, instType=inst_type)
+        return await self._traced(
+            "get_instruments", self._public.get_instruments, instType=inst_type
+        )

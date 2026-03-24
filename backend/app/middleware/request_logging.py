@@ -4,6 +4,7 @@ import logging
 import time
 import uuid
 
+import sentry_sdk
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
@@ -27,6 +28,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         # Generate and set request ID
         req_id = uuid.uuid4().hex
         request_id_var.set(req_id)
+        sentry_sdk.set_tag("request_id", req_id)
 
         # Try to extract user_id from the auth state (set by FastAPI deps)
         user_id: str | None = None

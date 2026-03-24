@@ -2,6 +2,7 @@
  * Agent Chat WebSocket Hook
  */
 
+import * as Sentry from "@sentry/react";
 import { useCallback, useRef } from "react";
 import { getAccessToken } from "@/api/client";
 import { useAgentStore } from "@/store/agentStore";
@@ -196,6 +197,7 @@ export function useAgentSocket() {
 			setThinking(false);
 		},
 		onError: (error) => {
+			Sentry.captureException(error, { tags: { component: "agent-websocket" } });
 			console.error("Agent WebSocket error:", error);
 			updateStatus("error");
 		},

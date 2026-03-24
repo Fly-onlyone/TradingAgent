@@ -1,5 +1,6 @@
 """Knowledge retriever for RAG-based strategy and lesson search using MongoDB."""
 
+import sentry_sdk
 
 from app.db.models.knowledge import StrategyKnowledge, TradeLesson, TradingPattern
 from app.knowledge.embeddings import EmbeddingService, get_embedding_service
@@ -152,11 +153,15 @@ class KnowledgeRetriever:
             query, limit_per_type, min_similarity, query_embedding=query_embedding
         )
         lessons = await self.search_lessons(
-            query, limit=limit_per_type, min_similarity=min_similarity,
+            query,
+            limit=limit_per_type,
+            min_similarity=min_similarity,
             query_embedding=query_embedding,
         )
         patterns = await self.search_patterns(
-            query, limit=limit_per_type, min_similarity=min_similarity,
+            query,
+            limit=limit_per_type,
+            min_similarity=min_similarity,
             query_embedding=query_embedding,
         )
 
@@ -172,37 +177,42 @@ class KnowledgeRetriever:
         max_results: int = 6,
     ) -> str:
         """Get relevant knowledge formatted as context for the agent."""
-        results = await self.search_all(query, limit_per_type=max_results // 3, min_similarity=0.5)
+        with sentry_sdk.start_span(
+            op="rag.context_assembly", description="rag.get_relevant_context"
+        ):
+            results = await self.search_all(
+                query, limit_per_type=max_results // 3, min_similarity=0.5
+            )
 
-        context_parts = []
+            context_parts = []
 
-        if results["strategies"]:
-            context_parts.append("## Relevant Strategies")
-            for strategy in results["strategies"]:
-                desc = strategy.description[:200] if strategy.description else "No description"
-                context_parts.append(f"- **{strategy.name}**: {desc}")
+            if results["strategies"]:
+                context_parts.append("## Relevant Strategies")
+                for strategy in results["strategies"]:
+                    desc = strategy.description[:200] if strategy.description else "No description"
+                    context_parts.append(f"- **{strategy.name}**: {desc}")
 
-        if results["lessons"]:
-            context_parts.append("\n## Relevant Trade Lessons")
-            for lesson in results["lessons"]:
-                summary = lesson.lesson_summary[:200] if lesson.lesson_summary else "No summary"
-                context_parts.append(
-                    f"- **{lesson.symbol} {lesson.side}** ({lesson.outcome}, {lesson.profit_pct}%): {summary}"
-                )
+            if results["lessons"]:
+                context_parts.append("\n## Relevant Trade Lessons")
+                for lesson in results["lessons"]:
+                    summary = lesson.lesson_summary[:200] if lesson.lesson_summary else "No summary"
+                    context_parts.append(
+                        f"- **{lesson.symbol} {lesson.side}** ({lesson.outcome}, {lesson.profit_pct}%): {summary}"
+                    )
 
-        if results["patterns"]:
-            context_parts.append("\n## Relevant Patterns")
-            for pattern in results["patterns"]:
-                desc = pattern.description[:200] if pattern.description else "No description"
-                context_parts.append(
-                    f"- **{pattern.pattern_name}** ({pattern.pattern_type}, "
-                    f"success: {pattern.success_rate}%): {desc}"
-                )
+            if results["patterns"]:
+                context_parts.append("\n## Relevant Patterns")
+                for pattern in results["patterns"]:
+                    desc = pattern.description[:200] if pattern.description else "No description"
+                    context_parts.append(
+                        f"- **{pattern.pattern_name}** ({pattern.pattern_type}, "
+                        f"success: {pattern.success_rate}%): {desc}"
+                    )
 
-        if not context_parts:
-            return "No relevant knowledge found."
+            if not context_parts:
+                return "No relevant knowledge found."
 
-        return "\n".join(context_parts)
+            return "\n".join(context_parts)
 
     async def get_strategy_by_name(self, name: str) -> StrategyKnowledge | None:
         """Get a strategy by exact name match."""

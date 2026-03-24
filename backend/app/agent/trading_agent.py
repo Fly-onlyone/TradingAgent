@@ -7,6 +7,7 @@ import uuid
 from collections.abc import Callable
 from typing import Any
 
+import sentry_sdk
 from claude_agent_sdk import (
     AssistantMessage,
     ClaudeAgentOptions,
@@ -164,46 +165,54 @@ class TradingAgent:
 
         self._tool_calls_this_turn = []
         self._thinking_content_this_turn = ""
-        await self._client.query(user_message)
 
-        final_text_parts: list[str] = []
+        with sentry_sdk.start_span(op="ai.agent.chat", description="claude.chat") as span:
+            await self._client.query(user_message)
 
-        async for message in self._client.receive_response():
-            if isinstance(message, AssistantMessage):
-                for block in message.content:
-                    if isinstance(block, ThinkingBlock):
-                        self._thinking_content_this_turn += block.thinking + "\n"
-                        if on_event:
-                            await on_event(
-                                {
-                                    "type": "thinking",
-                                    "data": {"content": block.thinking},
-                                }
-                            )
+            final_text_parts: list[str] = []
 
-                    elif isinstance(block, ToolUseBlock):
-                        tool_info = {
-                            "id": block.id,
-                            "name": block.name,
-                            "arguments": block.input,
-                        }
-                        self._tool_calls_this_turn.append(tool_info)
+            async for message in self._client.receive_response():
+                if isinstance(message, AssistantMessage):
+                    for block in message.content:
+                        if isinstance(block, ThinkingBlock):
+                            self._thinking_content_this_turn += block.thinking + "\n"
+                            if on_event:
+                                await on_event(
+                                    {
+                                        "type": "thinking",
+                                        "data": {"content": block.thinking},
+                                    }
+                                )
 
-                        if on_event:
-                            await on_event({"type": "tool_call", "data": tool_info})
+                        elif isinstance(block, ToolUseBlock):
+                            tool_info = {
+                                "id": block.id,
+                                "name": block.name,
+                                "arguments": block.input,
+                            }
+                            self._tool_calls_this_turn.append(tool_info)
 
-                        logger.info(f"Tool called: {block.name}")
+                            if on_event:
+                                await on_event({"type": "tool_call", "data": tool_info})
 
-                    elif isinstance(block, TextBlock):
-                        final_text_parts.append(block.text)
+                            logger.info(f"Tool called: {block.name}")
 
-            elif isinstance(message, ResultMessage):
-                if message.is_error:
-                    raise RuntimeError(message.result or "Agent SDK returned an error")
+                        elif isinstance(block, TextBlock):
+                            final_text_parts.append(block.text)
 
-                # Use result text as fallback if no text blocks were collected
-                if message.result and not final_text_parts:
-                    final_text_parts.append(message.result)
+                elif isinstance(message, ResultMessage):
+                    if message.is_error:
+                        raise RuntimeError(message.result or "Agent SDK returned an error")
+
+                    # Use result text as fallback if no text blocks were collected
+                    if message.result and not final_text_parts:
+                        final_text_parts.append(message.result)
+
+            span.set_data("tool_calls_count", len(self._tool_calls_this_turn))
+            span.set_data(
+                "tool_names",
+                [tc["name"] for tc in self._tool_calls_this_turn],
+            )
 
         return "".join(final_text_parts)
 
@@ -262,9 +271,7 @@ class TradingAgent:
         )
         return float(match.group(1)) if match else None
 
-    async def analyze(
-        self, user_message: str, user_id: str | None = None
-    ) -> dict[str, Any]:
+    async def analyze(self, user_message: str, user_id: str | None = None) -> dict[str, Any]:
         """Analyze market/trading prompt and normalize output for task scheduler.
 
         Prefers structured data from the submit_recommendation tool.
@@ -278,9 +285,7 @@ class TradingAgent:
         recommendation = get_pending_recommendation(request_id)
 
         if recommendation:
-            logger.info(
-                "Using structured recommendation from submit_recommendation tool"
-            )
+            logger.info("Using structured recommendation from submit_recommendation tool")
             summary = recommendation.get("summary", "")
             if len(summary) > 300:
                 summary = f"{summary[:297]}..."
@@ -348,49 +353,56 @@ class TradingAgent:
 
         from app.agent.subagents.order_executor import OrderExecutor
 
-        if action not in {"buy", "sell"}:
-            return {
-                "success": False,
-                "error": f"Unsupported trade action: {action}",
-            }
+        with sentry_sdk.start_span(
+            op="ai.trade.execute", description=f"trade.{action}.{symbol}"
+        ) as span:
+            span.set_tag("symbol", symbol)
+            span.set_tag("action", action)
 
-        try:
-            oid = PydanticObjectId(user_id)
-        except (TypeError, ValueError):
-            return {"success": False, "error": "Invalid user_id for trade execution"}
+            if action not in {"buy", "sell"}:
+                return {
+                    "success": False,
+                    "error": f"Unsupported trade action: {action}",
+                }
 
-        executor = OrderExecutor(user_id=oid)
-        normalized_idempotency_key = idempotency_key or f"agent-{uuid.uuid4().hex}"
+            try:
+                oid = PydanticObjectId(user_id)
+            except (TypeError, ValueError):
+                return {"success": False, "error": "Invalid user_id for trade execution"}
 
-        reasoning_payload = {"reasoning": reasoning} if reasoning else None
+            executor = OrderExecutor(user_id=oid)
+            normalized_idempotency_key = idempotency_key or f"agent-{uuid.uuid4().hex}"
 
-        if position_size and position_size > 0:
-            result = await executor.execute_trade(
-                symbol=symbol,
-                side=action,
-                quantity=position_size,
-                order_type="market",
-                stop_loss=stop_loss,
-                take_profit=take_profit,
-                reasoning=reasoning_payload,
-                idempotency_key=normalized_idempotency_key,
-                max_position_size=max_position_size,
-            )
-        else:
-            result = await executor.execute_with_risk_params(
-                symbol=symbol,
-                side=action,
-                risk_pct=risk_pct,
-                order_type="market",
-                reasoning=reasoning_payload,
-                idempotency_key=normalized_idempotency_key,
-                max_position_size=max_position_size,
-            )
+            reasoning_payload = {"reasoning": reasoning} if reasoning else None
 
-        if result.get("success"):
-            result.setdefault("execution_price", result.get("price"))
+            if position_size and position_size > 0:
+                result = await executor.execute_trade(
+                    symbol=symbol,
+                    side=action,
+                    quantity=position_size,
+                    order_type="market",
+                    stop_loss=stop_loss,
+                    take_profit=take_profit,
+                    reasoning=reasoning_payload,
+                    idempotency_key=normalized_idempotency_key,
+                    max_position_size=max_position_size,
+                )
+            else:
+                result = await executor.execute_with_risk_params(
+                    symbol=symbol,
+                    side=action,
+                    risk_pct=risk_pct,
+                    order_type="market",
+                    reasoning=reasoning_payload,
+                    idempotency_key=normalized_idempotency_key,
+                    max_position_size=max_position_size,
+                )
 
-        return result
+            span.set_data("success", result.get("success", False))
+            if result.get("success"):
+                result.setdefault("execution_price", result.get("price"))
+
+            return result
 
     async def analyze_market(self, symbol: str) -> str:
         """Convenience method to analyze a market."""

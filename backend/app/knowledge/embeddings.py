@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import numpy as np
+import sentry_sdk
 
 # Prevent thread over-subscription when multiple requests run concurrently
 os.environ.setdefault("OMP_NUM_THREADS", "1")
@@ -65,7 +66,9 @@ def _get_model() -> SentenceTransformer:
         active_name = _get_active_model_name()
         if _model is None or _model_name != active_name:
             config = get_model_config(active_name)
-            logger.info("Loading embedding model: %s (%dM params)", config.hf_id, config.params_millions)
+            logger.info(
+                "Loading embedding model: %s (%dM params)", config.hf_id, config.params_millions
+            )
             _model = SentenceTransformer(
                 config.hf_id,
                 trust_remote_code=True,
@@ -160,9 +163,7 @@ class EmbeddingService:
                 return [None] * len(texts)
 
             indices, batch_texts = zip(*non_empty)
-            embeddings = await loop.run_in_executor(
-                _executor, _encode_sync, list(batch_texts)
-            )
+            embeddings = await loop.run_in_executor(_executor, _encode_sync, list(batch_texts))
 
             results: list[list[float] | None] = [None] * len(texts)
             for idx, emb in zip(indices, embeddings):
@@ -175,11 +176,10 @@ class EmbeddingService:
     async def _encode_single(self, prefixed_text: str) -> list[float] | None:
         """Encode a single text string."""
         try:
-            loop = asyncio.get_running_loop()
-            embeddings = await loop.run_in_executor(
-                _executor, _encode_sync, [prefixed_text]
-            )
-            return embeddings[0].tolist()
+            with sentry_sdk.start_span(op="ai.embedding.generate", description="embedding.encode"):
+                loop = asyncio.get_running_loop()
+                embeddings = await loop.run_in_executor(_executor, _encode_sync, [prefixed_text])
+                return embeddings[0].tolist()
         except Exception:
             logger.exception("Embedding generation failed")
             return None
@@ -191,10 +191,7 @@ class EmbeddingService:
             from app.knowledge.game_detector import is_game_running, wait_for_game_exit
 
             settings = await AppSettings.get_instance()
-            if (
-                not settings.defer_embedding_when_gaming
-                or not settings.gaming_process_list
-            ):
+            if not settings.defer_embedding_when_gaming or not settings.gaming_process_list:
                 return
 
             if await is_game_running(settings.gaming_process_list):
@@ -204,9 +201,7 @@ class EmbeddingService:
                     settings.gaming_check_interval_minutes,
                 )
         except Exception:
-            logger.debug(
-                "Game detection check failed, proceeding with embedding", exc_info=True
-            )
+            logger.debug("Game detection check failed, proceeding with embedding", exc_info=True)
 
     # ── Legacy compatibility alias ──
 
@@ -293,9 +288,7 @@ class StrategyEmbeddingGenerator:
 
         return "; ".join(parts)
 
-    async def generate_strategy_embedding(
-        self, strategy: dict[str, Any]
-    ) -> list[float] | None:
+    async def generate_strategy_embedding(self, strategy: dict[str, Any]) -> list[float] | None:
         """Generate embedding for a trading strategy."""
         text = self.format_strategy_text(strategy)
         return await get_embedding_service().generate_document_embedding(text)
@@ -308,9 +301,7 @@ class TradeLessonEmbeddingGenerator:
         """Format trade lesson data into text for embedding."""
         parts = []
 
-        parts.append(
-            f"Trade: {lesson.get('symbol', 'Unknown')} {lesson.get('side', 'Unknown')}"
-        )
+        parts.append(f"Trade: {lesson.get('symbol', 'Unknown')} {lesson.get('side', 'Unknown')}")
         parts.append(f"Outcome: {lesson.get('outcome', 'Unknown')}")
         parts.append(f"Profit: {lesson.get('profit_pct', 0)}%")
 
@@ -334,9 +325,7 @@ class TradeLessonEmbeddingGenerator:
             return "Not specified"
         return ", ".join(f"{k}={v}" for k, v in context.items())
 
-    async def generate_lesson_embedding(
-        self, lesson: dict[str, Any]
-    ) -> list[float] | None:
+    async def generate_lesson_embedding(self, lesson: dict[str, Any]) -> list[float] | None:
         """Generate embedding for a trade lesson."""
         text = self.format_lesson_text(lesson)
         return await get_embedding_service().generate_document_embedding(text)
@@ -374,9 +363,7 @@ class PatternEmbeddingGenerator:
             return "Not specified"
         return ", ".join(f"{k}={v}" for k, v in conditions.items())
 
-    async def generate_pattern_embedding(
-        self, pattern: dict[str, Any]
-    ) -> list[float] | None:
+    async def generate_pattern_embedding(self, pattern: dict[str, Any]) -> list[float] | None:
         """Generate embedding for a trading pattern."""
         text = self.format_pattern_text(pattern)
         return await get_embedding_service().generate_document_embedding(text)

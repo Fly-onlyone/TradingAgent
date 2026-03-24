@@ -32,6 +32,7 @@ import {
     useMediaQuery,
     useTheme,
 } from "@mui/material";
+import * as Sentry from "@sentry/react";
 import {keepPreviousData, useMutation, useQuery, useQueryClient,} from "@tanstack/react-query";
 import {createFileRoute} from "@tanstack/react-router";
 import {AnimatePresence} from "framer-motion";
@@ -339,7 +340,10 @@ function AgentPage() {
 
     const confirmDecisionMutation = useMutation({
         mutationFn: (decisionId: string) =>
-            decisionsApi.confirmDecision(decisionId),
+            Sentry.startSpan(
+                {name: "decision.confirm", op: "ui.action"},
+                () => decisionsApi.confirmDecision(decisionId),
+            ),
         onSuccess: (decision) => {
             updateDecisionStatus(decision.id, "confirmed");
             void queryClient.invalidateQueries({queryKey: ["agent-decisions"]});
@@ -350,7 +354,11 @@ function AgentPage() {
     });
 
     const rejectDecisionMutation = useMutation({
-        mutationFn: (decisionId: string) => decisionsApi.rejectDecision(decisionId),
+        mutationFn: (decisionId: string) =>
+            Sentry.startSpan(
+                {name: "decision.reject", op: "ui.action"},
+                () => decisionsApi.rejectDecision(decisionId),
+            ),
         onSuccess: (decision) => {
             updateDecisionStatus(decision.id, "rejected");
             void queryClient.invalidateQueries({queryKey: ["agent-decisions"]});

@@ -3,6 +3,7 @@
 import logging
 from datetime import UTC, datetime
 
+import sentry_sdk
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
@@ -129,6 +130,7 @@ async def get_ticker(
         client = await OKXClient.create()
         result = await client.get_ticker(symbol_normalized)
     except Exception as exc:
+        sentry_sdk.capture_exception(exc)
         logger.warning("Failed to fetch ticker %s from OKX: %s", symbol_normalized, exc)
         result = {"code": "error", "data": []}
 
@@ -264,6 +266,7 @@ async def get_account_balance(
             error=f"OKX API error ({code}): {message}.{sandbox_hint}",
         )
     except Exception as exc:
+        sentry_sdk.capture_exception(exc)
         logger.warning("Failed to fetch account balance from OKX: %s", exc)
         sandbox_hint = (
             " Sandbox Mode is enabled; use OKX demo API credentials or disable "
@@ -322,6 +325,7 @@ async def get_market_overview(
                 most_traded=most_traded,
             )
     except Exception as exc:
+        sentry_sdk.capture_exception(exc)
         logger.warning("Failed to fetch market overview from OKX: %s", exc)
 
     return MarketOverviewResponse(

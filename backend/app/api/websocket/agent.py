@@ -5,6 +5,7 @@ import logging
 import uuid
 from datetime import UTC, datetime
 
+import sentry_sdk
 from beanie import PydanticObjectId
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from jose import JWTError, jwt
@@ -42,16 +43,12 @@ async def get_user_from_token(token: str) -> User | None:
         )
 
     try:
-        payload = jwt.decode(
-            token, settings.secret_key, algorithms=[settings.algorithm]
-        )
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         email = payload.get("sub")
         if email:
             user = await User.find_one(User.email == email)
             if user and is_token_revoked_by_password_change(user, payload):
-                logger.warning(
-                    "WebSocket token invalidated by password change for %s", email
-                )
+                logger.warning("WebSocket token invalidated by password change for %s", email)
                 return None
             return user
     except JWTError as e:
@@ -116,6 +113,7 @@ async def agent_chat_websocket(
         await websocket.close(code=4001, reason="Invalid or expired token")
         return
 
+    sentry_sdk.set_user({"id": str(user.id), "email": user.email})
     user_id_int = _get_user_id_int(user)
     channel = f"agent:chat:{user_id_int}"
     await manager.connect(websocket, channel, user_id=user_id_int)
@@ -256,6 +254,7 @@ async def agent_chat_websocket(
                     await session.save()
 
                 except Exception as e:
+                    sentry_sdk.capture_exception(e)
                     logger.error("Agent error: %s", e, exc_info=True)
                     await manager.send_personal(
                         websocket,

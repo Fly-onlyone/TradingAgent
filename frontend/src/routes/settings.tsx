@@ -24,6 +24,7 @@ import {
 	TextField,
 	Typography,
 } from "@mui/material";
+import * as Sentry from "@sentry/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
@@ -673,7 +674,11 @@ function ExchangeConfigCard() {
 	});
 
 	const testMutation = useMutation({
-		mutationFn: () => settingsApi.testExchangeConnection(),
+		mutationFn: () =>
+			Sentry.startSpan(
+				{ name: "exchange.test_connection", op: "ui.action" },
+				() => settingsApi.testExchangeConnection(),
+			),
 		onSuccess: (result) => {
 			setTestResult(result);
 			if (result.success) {

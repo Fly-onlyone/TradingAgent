@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -29,16 +30,70 @@ from app.middleware.request_logging import RequestLoggingMiddleware
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
+
+def _traces_sampler(sampling_context: dict) -> float:
+    """Custom sampler: downsample noisy endpoints, use configured rate otherwise."""
+    name = sampling_context.get("transaction_context", {}).get("name", "")
+    if name == "/api/v1/logs/frontend":
+        return 0.01  # 1% — high-volume, low-value log ingestion
+    return settings.sentry_traces_sample_rate
+
+
+_PII_PATTERNS = [
+    (
+        re.compile(r"(?i)(api[_-]?key|secret[_-]?key|passphrase|password|token)\s*[:=]\s*\S+"),
+        r"\1=***",
+    ),
+    (re.compile(r"(?i)(Bearer\s+)\S+"), r"\1***"),
+]
+
+
+def _before_send(event: dict, hint: dict) -> dict:
+    """Scrub potential PII/secrets from error event messages."""
+    if message := event.get("message"):
+        for pattern, replacement in _PII_PATTERNS:
+            message = pattern.sub(replacement, message)
+        event["message"] = message
+
+    for entry in event.get("exception", {}).get("values", []):
+        if value := entry.get("value"):
+            for pattern, replacement in _PII_PATTERNS:
+                value = pattern.sub(replacement, value)
+            entry["value"] = value
+
+    return event
+
+
+def _before_send_transaction(event: dict, hint: dict) -> dict | None:
+    """Drop noise: SPA-serving routes, malformed outbound calls, debug artifacts."""
+    name = event.get("transaction", "")
+    if not name:
+        return event
+    # Drop outbound HTTP client calls leaking as transactions (http://*/...)
+    if name.startswith("http://"):
+        return None
+    # Drop debug/test artifacts
+    if name.startswith("manual-profile-"):
+        return None
+    # Keep API, WebSocket, and health check transactions
+    if name.startswith(("/api/", "/ws/", "/health")):
+        return event
+    # Drop everything else (SPA catch-all routes: /, /agent, /settings, etc.)
+    return None
+
+
 if settings.sentry_dsn:
     sentry_sdk.init(
         dsn=settings.sentry_dsn,
-        traces_sample_rate=settings.sentry_traces_sample_rate,
+        traces_sampler=_traces_sampler,
         profiles_sample_rate=settings.sentry_profiles_sample_rate,
         environment=settings.sentry_environment
         or ("development" if settings.debug else "production"),
         release=settings.sentry_release or None,
         send_default_pii=False,
         enable_logs=settings.sentry_enable_logs,
+        before_send=_before_send,
+        before_send_transaction=_before_send_transaction,
         integrations=[
             LoggingIntegration(
                 level=logging.INFO,  # Breadcrumbs from INFO+
