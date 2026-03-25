@@ -3,7 +3,7 @@
  */
 
 import {useState} from 'react';
-import {Box, Typography, Avatar, Paper, Chip, Link} from '@mui/material';
+import {Avatar, Box, Chip, Link, Paper, Typography} from '@mui/material';
 import {AnimatePresence, motion} from 'framer-motion';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import PersonIcon from '@mui/icons-material/Person';
@@ -15,9 +15,10 @@ import {DecisionCard} from './DecisionCard';
 interface ChatMessageProps {
     message: AgentMessage;
     showThinkingContent?: boolean;
+    isStreaming?: boolean;
 }
 
-export function ChatMessage({message, showThinkingContent = true}: ChatMessageProps) {
+export function ChatMessage({message, showThinkingContent = true, isStreaming = false}: ChatMessageProps) {
     const [showReasoning, setShowReasoning] = useState(false);
     const isUser = message.role === 'user';
     const isSystem = message.role === 'system';
@@ -152,6 +153,23 @@ export function ChatMessage({message, showThinkingContent = true}: ChatMessagePr
                             }}
                         >
                             {message.content}
+                            {isStreaming && (
+                                <Box
+                                    component="span"
+                                    sx={{
+                                        display: 'inline-block',
+                                        width: 6,
+                                        height: '1.2em',
+                                        ml: 0.25,
+                                        bgcolor: 'primary.main',
+                                        verticalAlign: 'text-bottom',
+                                        animation: 'blink 1s step-end infinite',
+                                        '@keyframes blink': {
+                                            '50%': {opacity: 0},
+                                        },
+                                    }}
+                                />
+                            )}
                         </Typography>
 
                         {/* Tool Calls */}

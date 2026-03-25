@@ -118,6 +118,7 @@ function AgentPage() {
         pendingDecisionsCount,
         currentTurnToolCalls,
         thinkingContent,
+        streamingText,
         showThinkingContent,
         toggleThinkingContent,
         setCurrentSessionId,
@@ -697,6 +698,8 @@ function AgentPage() {
                             <AgentStatusBadge status={status}/>
                             <Tooltip
                                 title={showThinkingContent ? "Hide thinking" : "Show thinking"}
+                                arrow
+                                placement="bottom"
                             >
                                 <IconButton
                                     onClick={toggleThinkingContent}
@@ -706,13 +709,14 @@ function AgentPage() {
                                     <PsychologyIcon fontSize="small"/>
                                 </IconButton>
                             </Tooltip>
-                            <IconButton
-                                onClick={() => setConfigDrawerOpen(true)}
-                                size="small"
-                                title="Agent Configuration"
-                            >
-                                <SettingsIcon fontSize="small"/>
-                            </IconButton>
+                            <Tooltip title="Agent Configuration" arrow placement="bottom-end">
+                                <IconButton
+                                    onClick={() => setConfigDrawerOpen(true)}
+                                    size="small"
+                                >
+                                    <SettingsIcon fontSize="small"/>
+                                </IconButton>
+                            </Tooltip>
                         </Box>
                     </Box>
 
@@ -845,6 +849,19 @@ function AgentPage() {
                                     showThinkingContent={showThinkingContent}
                                 />
                             ))
+                        )}
+                        {streamingText && (
+                            <ChatMessage
+                                key="streaming"
+                                message={{
+                                    id: "streaming",
+                                    role: "assistant",
+                                    content: streamingText,
+                                    timestamp: Date.now(),
+                                }}
+                                showThinkingContent={false}
+                                isStreaming
+                            />
                         )}
                         <AnimatePresence>
                             {isThinking && (

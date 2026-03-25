@@ -2,83 +2,81 @@
  * Agent Chat Store with Session Management
  */
 
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import {create} from "zustand";
+import {persist} from "zustand/middleware";
+import type {AgentDecision, AgentMessage, ToolCall,} from "@/api/websocket/useAgentSocket";
 import type {
-	AgentDecision,
-	AgentMessage,
-	ToolCall,
-} from "@/api/websocket/useAgentSocket";
-import type {
-	AgentDecisionSummary,
-	AgentSession,
-	AgentStatus,
-	DecisionFilters,
-	DecisionStatus,
-	SessionsByDateGroup,
+    AgentDecisionSummary,
+    AgentSession,
+    AgentStatus,
+    DecisionFilters,
+    DecisionStatus,
+    SessionsByDateGroup,
 } from "@/types/session";
 
 interface AgentState {
-	// Session management
-	currentSessionId: string | null;
-	sessionGroups: SessionsByDateGroup[];
-	isLoadingSessions: boolean;
+    // Session management
+    currentSessionId: string | null;
+    sessionGroups: SessionsByDateGroup[];
+    isLoadingSessions: boolean;
 
-	// Chat
-	messages: AgentMessage[];
-	toolCalls: ToolCall[];
-	currentTurnToolCalls: ToolCall[];
-	thinkingContent: string;
+    // Chat
+    messages: AgentMessage[];
+    toolCalls: ToolCall[];
+    currentTurnToolCalls: ToolCall[];
+    thinkingContent: string;
+    streamingText: string;
 
-	// Decisions
-	decisions: AgentDecisionSummary[];
-	decisionSymbols: string[];
-	decisionFilters: DecisionFilters;
-	isLoadingDecisions: boolean;
-	hasMoreDecisions: boolean;
-	pendingDecisionsCount: number;
+    // Decisions
+    decisions: AgentDecisionSummary[];
+    decisionSymbols: string[];
+    decisionFilters: DecisionFilters;
+    isLoadingDecisions: boolean;
+    hasMoreDecisions: boolean;
+    pendingDecisionsCount: number;
 
-	// Status
-	status: AgentStatus;
-	isThinking: boolean;
-	lastDecision: AgentDecision | null;
+    // Status
+    status: AgentStatus;
+    isThinking: boolean;
+    lastDecision: AgentDecision | null;
 
-	// UI preferences
-	showThinkingContent: boolean;
+    // UI preferences
+    showThinkingContent: boolean;
 
-	// Session actions
-	setCurrentSessionId: (sessionId: string | null) => void;
-	setSessionGroups: (groups: SessionsByDateGroup[]) => void;
-	setIsLoadingSessions: (loading: boolean) => void;
-	addSession: (session: AgentSession) => void;
-	removeSession: (sessionId: string) => void;
-	updateSessionTitle: (sessionId: string, title: string) => void;
+    // Session actions
+    setCurrentSessionId: (sessionId: string | null) => void;
+    setSessionGroups: (groups: SessionsByDateGroup[]) => void;
+    setIsLoadingSessions: (loading: boolean) => void;
+    addSession: (session: AgentSession) => void;
+    removeSession: (sessionId: string) => void;
+    updateSessionTitle: (sessionId: string, title: string) => void;
 
-	// Chat actions
-	addMessage: (message: AgentMessage) => void;
-	setMessages: (messages: AgentMessage[]) => void;
-	clearMessages: () => void;
-	addToolCall: (toolCall: ToolCall) => void;
-	updateToolCallResult: (toolCallId: string, result: unknown) => void;
-	setThinkingContent: (content: string) => void;
+    // Chat actions
+    addMessage: (message: AgentMessage) => void;
+    setMessages: (messages: AgentMessage[]) => void;
+    clearMessages: () => void;
+    addToolCall: (toolCall: ToolCall) => void;
+    updateToolCallResult: (toolCallId: string, result: unknown) => void;
+    setThinkingContent: (content: string) => void;
+    appendStreamingText: (delta: string) => void;
 
-	// Decision actions
-	setDecisions: (decisions: AgentDecisionSummary[]) => void;
-	appendDecisions: (decisions: AgentDecisionSummary[]) => void;
-	setDecisionSymbols: (symbols: string[]) => void;
-	setDecisionFilters: (filters: DecisionFilters) => void;
-	setIsLoadingDecisions: (loading: boolean) => void;
-	setHasMoreDecisions: (hasMore: boolean) => void;
-	setPendingDecisionsCount: (count: number) => void;
-	updateDecisionStatus: (decisionId: string, status: DecisionStatus) => void;
+    // Decision actions
+    setDecisions: (decisions: AgentDecisionSummary[]) => void;
+    appendDecisions: (decisions: AgentDecisionSummary[]) => void;
+    setDecisionSymbols: (symbols: string[]) => void;
+    setDecisionFilters: (filters: DecisionFilters) => void;
+    setIsLoadingDecisions: (loading: boolean) => void;
+    setHasMoreDecisions: (hasMore: boolean) => void;
+    setPendingDecisionsCount: (count: number) => void;
+    updateDecisionStatus: (decisionId: string, status: DecisionStatus) => void;
 
-	// Status actions
-	updateStatus: (status: string) => void;
-	setThinking: (thinking: boolean) => void;
-	setLastDecision: (decision: AgentDecision | null) => void;
+    // Status actions
+    updateStatus: (status: string) => void;
+    setThinking: (thinking: boolean) => void;
+    setLastDecision: (decision: AgentDecision | null) => void;
 
-	// UI preference actions
-	toggleThinkingContent: () => void;
+    // UI preference actions
+    toggleThinkingContent: () => void;
 }
 
 const MAX_MESSAGES = 100;
@@ -86,226 +84,231 @@ const MAX_TOOL_CALLS = 200;
 const MAX_DECISIONS = 100;
 
 export const useAgentStore = create<AgentState>()(
-	persist(
-		(set) => ({
-			// Session management
-			currentSessionId: null,
-			sessionGroups: [],
-			isLoadingSessions: false,
+    persist(
+        (set) => ({
+            // Session management
+            currentSessionId: null,
+            sessionGroups: [],
+            isLoadingSessions: false,
 
-			// Chat
-			messages: [],
-			toolCalls: [],
-			currentTurnToolCalls: [],
-			thinkingContent: "",
+            // Chat
+            messages: [],
+            toolCalls: [],
+            currentTurnToolCalls: [],
+            thinkingContent: "",
+            streamingText: "",
 
-			// Decisions
-			decisions: [],
-			decisionSymbols: [],
-			decisionFilters: {},
-			isLoadingDecisions: false,
-			hasMoreDecisions: false,
-			pendingDecisionsCount: 0,
+            // Decisions
+            decisions: [],
+            decisionSymbols: [],
+            decisionFilters: {},
+            isLoadingDecisions: false,
+            hasMoreDecisions: false,
+            pendingDecisionsCount: 0,
 
-			// Status
-			status: "disconnected",
-			isThinking: false,
-			lastDecision: null,
+            // Status
+            status: "disconnected",
+            isThinking: false,
+            lastDecision: null,
 
-			// UI preferences
-			showThinkingContent: true,
+            // UI preferences
+            showThinkingContent: true,
 
-			// Session actions
-			setCurrentSessionId: (sessionId) => set({ currentSessionId: sessionId }),
+            // Session actions
+            setCurrentSessionId: (sessionId) => set({currentSessionId: sessionId}),
 
-			setSessionGroups: (groups) => set({ sessionGroups: groups }),
+            setSessionGroups: (groups) => set({sessionGroups: groups}),
 
-			setIsLoadingSessions: (loading) => set({ isLoadingSessions: loading }),
+            setIsLoadingSessions: (loading) => set({isLoadingSessions: loading}),
 
-			addSession: (session) =>
-				set((state) => {
-					// Find or create today's group
-					const today = new Date().toISOString().split("T")[0];
-					const updatedGroups = [...state.sessionGroups];
+            addSession: (session) =>
+                set((state) => {
+                    // Find or create today's group
+                    const today = new Date().toISOString().split("T")[0];
+                    const updatedGroups = [...state.sessionGroups];
 
-					const todayGroupIndex = updatedGroups.findIndex(
-						(g) => g.date === today,
-					);
-					if (todayGroupIndex >= 0) {
-						// Add to existing today group at the beginning
-						updatedGroups[todayGroupIndex] = {
-							...updatedGroups[todayGroupIndex],
-							sessions: [session, ...updatedGroups[todayGroupIndex].sessions],
-						};
-					} else {
-						// Create new today group at the beginning
-						updatedGroups.unshift({
-							date: today,
-							label: "Today",
-							sessions: [session],
-						});
-					}
+                    const todayGroupIndex = updatedGroups.findIndex(
+                        (g) => g.date === today,
+                    );
+                    if (todayGroupIndex >= 0) {
+                        // Add to existing today group at the beginning
+                        updatedGroups[todayGroupIndex] = {
+                            ...updatedGroups[todayGroupIndex],
+                            sessions: [session, ...updatedGroups[todayGroupIndex].sessions],
+                        };
+                    } else {
+                        // Create new today group at the beginning
+                        updatedGroups.unshift({
+                            date: today,
+                            label: "Today",
+                            sessions: [session],
+                        });
+                    }
 
-					return {
-						sessionGroups: updatedGroups,
-						currentSessionId: session.id,
-					};
-				}),
+                    return {
+                        sessionGroups: updatedGroups,
+                        currentSessionId: session.id,
+                    };
+                }),
 
-			removeSession: (sessionId) =>
-				set((state) => {
-					const updatedGroups = state.sessionGroups
-						.map((group) => ({
-							...group,
-							sessions: group.sessions.filter((s) => s.id !== sessionId),
-						}))
-						.filter((group) => group.sessions.length > 0);
+            removeSession: (sessionId) =>
+                set((state) => {
+                    const updatedGroups = state.sessionGroups
+                        .map((group) => ({
+                            ...group,
+                            sessions: group.sessions.filter((s) => s.id !== sessionId),
+                        }))
+                        .filter((group) => group.sessions.length > 0);
 
-					return {
-						sessionGroups: updatedGroups,
-						currentSessionId:
-							state.currentSessionId === sessionId
-								? null
-								: state.currentSessionId,
-						messages:
-							state.currentSessionId === sessionId ? [] : state.messages,
-					};
-				}),
+                    return {
+                        sessionGroups: updatedGroups,
+                        currentSessionId:
+                            state.currentSessionId === sessionId
+                                ? null
+                                : state.currentSessionId,
+                        messages:
+                            state.currentSessionId === sessionId ? [] : state.messages,
+                    };
+                }),
 
-			updateSessionTitle: (sessionId, title) =>
-				set((state) => ({
-					sessionGroups: state.sessionGroups.map((group) => ({
-						...group,
-						sessions: group.sessions.map((s) =>
-							s.id === sessionId ? { ...s, title } : s,
-						),
-					})),
-				})),
+            updateSessionTitle: (sessionId, title) =>
+                set((state) => ({
+                    sessionGroups: state.sessionGroups.map((group) => ({
+                        ...group,
+                        sessions: group.sessions.map((s) =>
+                            s.id === sessionId ? {...s, title} : s,
+                        ),
+                    })),
+                })),
 
-			// Chat actions
-			addMessage: (message) =>
-				set((state) => ({
-					messages: [...state.messages, message].slice(-MAX_MESSAGES),
-					lastDecision: message.decision || state.lastDecision,
-					isThinking: false,
-					status: state.isThinking ? "connected" : state.status,
-				})),
+            // Chat actions
+            addMessage: (message) =>
+                set((state) => ({
+                    messages: [...state.messages, message].slice(-MAX_MESSAGES),
+                    lastDecision: message.decision || state.lastDecision,
+                    isThinking: false,
+                    streamingText: "",
+                    status: state.isThinking ? "connected" : state.status,
+                })),
 
-			setMessages: (messages) => set({ messages }),
+            setMessages: (messages) => set({messages}),
 
-			clearMessages: () =>
-				set({
-					messages: [],
-					toolCalls: [],
-					lastDecision: null,
-				}),
+            clearMessages: () =>
+                set({
+                    messages: [],
+                    toolCalls: [],
+                    lastDecision: null,
+                }),
 
-			addToolCall: (toolCall) =>
-				set((state) => ({
-					toolCalls: [...state.toolCalls, toolCall].slice(-MAX_TOOL_CALLS),
-					currentTurnToolCalls: [...state.currentTurnToolCalls, toolCall],
-				})),
+            addToolCall: (toolCall) =>
+                set((state) => ({
+                    toolCalls: [...state.toolCalls, toolCall].slice(-MAX_TOOL_CALLS),
+                    currentTurnToolCalls: [...state.currentTurnToolCalls, toolCall],
+                })),
 
-			updateToolCallResult: (toolCallId, result) =>
-				set((state) => ({
-					toolCalls: state.toolCalls.map((tc) =>
-						tc.id === toolCallId ? { ...tc, result } : tc,
-					),
-				})),
+            updateToolCallResult: (toolCallId, result) =>
+                set((state) => ({
+                    toolCalls: state.toolCalls.map((tc) =>
+                        tc.id === toolCallId ? {...tc, result} : tc,
+                    ),
+                })),
 
-			setThinkingContent: (thinkingContent) => set({ thinkingContent }),
+            setThinkingContent: (thinkingContent) => set({thinkingContent}),
 
-			// Decision actions
-			setDecisions: (decisions) => set({ decisions }),
+            appendStreamingText: (delta) =>
+                set((state) => ({streamingText: state.streamingText + delta})),
 
-			appendDecisions: (newDecisions) =>
-				set((state) => ({
-					decisions: [...state.decisions, ...newDecisions].slice(-MAX_DECISIONS),
-				})),
+            // Decision actions
+            setDecisions: (decisions) => set({decisions}),
 
-			setDecisionSymbols: (symbols) => set({ decisionSymbols: symbols }),
+            appendDecisions: (newDecisions) =>
+                set((state) => ({
+                    decisions: [...state.decisions, ...newDecisions].slice(-MAX_DECISIONS),
+                })),
 
-			setDecisionFilters: (filters) => set({ decisionFilters: filters }),
+            setDecisionSymbols: (symbols) => set({decisionSymbols: symbols}),
 
-			setIsLoadingDecisions: (loading) => set({ isLoadingDecisions: loading }),
+            setDecisionFilters: (filters) => set({decisionFilters: filters}),
 
-			setHasMoreDecisions: (hasMore) => set({ hasMoreDecisions: hasMore }),
+            setIsLoadingDecisions: (loading) => set({isLoadingDecisions: loading}),
 
-			setPendingDecisionsCount: (count) =>
-				set({ pendingDecisionsCount: count }),
+            setHasMoreDecisions: (hasMore) => set({hasMoreDecisions: hasMore}),
 
-			updateDecisionStatus: (decisionId, status) =>
-				set((state) => ({
-					decisions: state.decisions.map((d) =>
-						d.id === decisionId ? { ...d, status } : d,
-					),
-					pendingDecisionsCount:
-						status !== "pending"
-							? Math.max(0, state.pendingDecisionsCount - 1)
-							: state.pendingDecisionsCount,
-				})),
+            setPendingDecisionsCount: (count) =>
+                set({pendingDecisionsCount: count}),
 
-			// Status actions
-			updateStatus: (status) =>
-				set({
-					status: status as AgentStatus,
-				}),
+            updateDecisionStatus: (decisionId, status) =>
+                set((state) => ({
+                    decisions: state.decisions.map((d) =>
+                        d.id === decisionId ? {...d, status} : d,
+                    ),
+                    pendingDecisionsCount:
+                        status !== "pending"
+                            ? Math.max(0, state.pendingDecisionsCount - 1)
+                            : state.pendingDecisionsCount,
+                })),
 
-			setThinking: (isThinking) =>
-				set((state) => ({
-					isThinking,
-					status: isThinking ? "thinking" : "connected",
-					// Reset turn state when starting a new thinking cycle
-					...(isThinking && !state.isThinking
-						? { currentTurnToolCalls: [], thinkingContent: "" }
-						: {}),
-				})),
+            // Status actions
+            updateStatus: (status) =>
+                set({
+                    status: status as AgentStatus,
+                }),
 
-			setLastDecision: (lastDecision) => set({ lastDecision }),
+            setThinking: (isThinking) =>
+                set((state) => ({
+                    isThinking,
+                    status: isThinking ? "thinking" : "connected",
+                    // Reset turn state when starting a new thinking cycle
+                    ...(isThinking && !state.isThinking
+                        ? {currentTurnToolCalls: [], thinkingContent: ""}
+                        : {}),
+                })),
 
-			// UI preference actions
-			toggleThinkingContent: () =>
-				set((state) => ({ showThinkingContent: !state.showThinkingContent })),
-		}),
-		{
-			name: "agent-store",
-			// Only persist session-related data and UI preferences
-			partialize: (state) => ({
-				showThinkingContent: state.showThinkingContent,
-			}),
-		},
-	),
+            setLastDecision: (lastDecision) => set({lastDecision}),
+
+            // UI preference actions
+            toggleThinkingContent: () =>
+                set((state) => ({showThinkingContent: !state.showThinkingContent})),
+        }),
+        {
+            name: "agent-store",
+            // Only persist session-related data and UI preferences
+            partialize: (state) => ({
+                showThinkingContent: state.showThinkingContent,
+            }),
+        },
+    ),
 );
 
 // Selectors
 export const selectRecentMessages = (state: AgentState, count = 10) =>
-	state.messages.slice(-count);
+    state.messages.slice(-count);
 
 export const selectUserMessages = (state: AgentState) =>
-	state.messages.filter((m) => m.role === "user");
+    state.messages.filter((m) => m.role === "user");
 
 export const selectAssistantMessages = (state: AgentState) =>
-	state.messages.filter((m) => m.role === "assistant");
+    state.messages.filter((m) => m.role === "assistant");
 
 export const selectDecisionMessages = (state: AgentState) =>
-	state.messages.filter((m) => m.decision);
+    state.messages.filter((m) => m.decision);
 
 export const selectCurrentSession = (
-	state: AgentState,
+    state: AgentState,
 ): AgentSession | null => {
-	if (!state.currentSessionId) return null;
+    if (!state.currentSessionId) return null;
 
-	for (const group of state.sessionGroups) {
-		const session = group.sessions.find((s) => s.id === state.currentSessionId);
-		if (session) return session;
-	}
-	return null;
+    for (const group of state.sessionGroups) {
+        const session = group.sessions.find((s) => s.id === state.currentSessionId);
+        if (session) return session;
+    }
+    return null;
 };
 
 export const selectTotalSessionCount = (state: AgentState): number =>
-	state.sessionGroups.reduce((sum, g) => sum + g.sessions.length, 0);
+    state.sessionGroups.reduce((sum, g) => sum + g.sessions.length, 0);
 
 export const selectPendingDecisions = (state: AgentState) =>
-	state.decisions.filter((d) => d.status === "pending");
+    state.decisions.filter((d) => d.status === "pending");
 
 export default useAgentStore;

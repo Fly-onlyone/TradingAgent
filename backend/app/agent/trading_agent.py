@@ -17,6 +17,7 @@ from claude_agent_sdk import (
     ThinkingBlock,
     ToolUseBlock,
 )
+from claude_agent_sdk.types import StreamEvent
 
 from app.agent.mcp_tools import (
     ALLOWED_TOOL_NAMES,
@@ -120,6 +121,7 @@ class TradingAgent:
             model=app_settings.agent_model or None,
             thinking=thinking,
             effort=app_settings.agent_effort or None,
+            include_partial_messages=True,
         )
 
         if api_key:
@@ -166,7 +168,9 @@ class TradingAgent:
         self._tool_calls_this_turn = []
         self._thinking_content_this_turn = ""
 
-        with sentry_sdk.start_span(op="ai.agent.chat", description="claude.chat") as span:
+        with sentry_sdk.start_span(
+            op="ai.agent.chat", description="claude.chat"
+        ) as span:
             await self._client.query(user_message)
 
             final_text_parts: list[str] = []
@@ -200,9 +204,36 @@ class TradingAgent:
                         elif isinstance(block, TextBlock):
                             final_text_parts.append(block.text)
 
+                elif isinstance(message, StreamEvent):
+                    event = message.event
+                    if event.get("type") == "content_block_delta":
+                        delta = event.get("delta", {})
+                        if delta.get("type") == "text_delta":
+                            text_chunk = delta.get("text", "")
+                            if text_chunk and on_event:
+                                await on_event(
+                                    {
+                                        "type": "text_delta",
+                                        "data": {"content": text_chunk},
+                                    }
+                                )
+                        elif delta.get("type") == "thinking_delta":
+                            thinking_chunk = delta.get("thinking", "")
+                            if thinking_chunk:
+                                self._thinking_content_this_turn += thinking_chunk
+                                if on_event:
+                                    await on_event(
+                                        {
+                                            "type": "thinking",
+                                            "data": {"content": thinking_chunk},
+                                        }
+                                    )
+
                 elif isinstance(message, ResultMessage):
                     if message.is_error:
-                        raise RuntimeError(message.result or "Agent SDK returned an error")
+                        raise RuntimeError(
+                            message.result or "Agent SDK returned an error"
+                        )
 
                     # Use result text as fallback if no text blocks were collected
                     if message.result and not final_text_parts:
@@ -271,7 +302,9 @@ class TradingAgent:
         )
         return float(match.group(1)) if match else None
 
-    async def analyze(self, user_message: str, user_id: str | None = None) -> dict[str, Any]:
+    async def analyze(
+        self, user_message: str, user_id: str | None = None
+    ) -> dict[str, Any]:
         """Analyze market/trading prompt and normalize output for task scheduler.
 
         Prefers structured data from the submit_recommendation tool.
@@ -285,7 +318,9 @@ class TradingAgent:
         recommendation = get_pending_recommendation(request_id)
 
         if recommendation:
-            logger.info("Using structured recommendation from submit_recommendation tool")
+            logger.info(
+                "Using structured recommendation from submit_recommendation tool"
+            )
             summary = recommendation.get("summary", "")
             if len(summary) > 300:
                 summary = f"{summary[:297]}..."
@@ -368,7 +403,10 @@ class TradingAgent:
             try:
                 oid = PydanticObjectId(user_id)
             except (TypeError, ValueError):
-                return {"success": False, "error": "Invalid user_id for trade execution"}
+                return {
+                    "success": False,
+                    "error": "Invalid user_id for trade execution",
+                }
 
             executor = OrderExecutor(user_id=oid)
             normalized_idempotency_key = idempotency_key or f"agent-{uuid.uuid4().hex}"
