@@ -21,11 +21,19 @@ export function useUIScaleZoom() {
 
     // Apply CSS zoom reactively
     useEffect(() => {
-        document.documentElement.style.setProperty("zoom", String(uiScale));
+        if (uiScale === 1) {
+            document.documentElement.style.removeProperty("zoom");
+        } else {
+            document.documentElement.style.setProperty("zoom", String(uiScale));
+        }
         document.documentElement.style.setProperty("--ui-zoom", String(uiScale));
+        document.documentElement.style.setProperty("--ui-zoom-inverse", String(1 / uiScale));
+        // Force Popper.js to recalculate tooltip/menu positions after zoom change
+        window.dispatchEvent(new Event("resize"));
         return () => {
             document.documentElement.style.removeProperty("zoom");
             document.documentElement.style.removeProperty("--ui-zoom");
+            document.documentElement.style.removeProperty("--ui-zoom-inverse");
         };
     }, [uiScale]);
 

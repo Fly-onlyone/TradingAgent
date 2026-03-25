@@ -244,7 +244,11 @@ export function createComponents(
         },
         MuiTooltip: {
             styleOverrides: {
+                popper: {
+                    zoom: "var(--ui-zoom-inverse, 1)",
+                },
                 tooltip: {
+                    zoom: "var(--ui-zoom, 1)",
                     backgroundColor: `rgba(${surface.tooltip}, 0.9)`,
                     backdropFilter: "blur(12px)",
                     WebkitBackdropFilter: "blur(12px)",
@@ -255,6 +259,13 @@ export function createComponents(
                 },
                 arrow: {
                     color: `rgba(${surface.tooltip}, 0.9)`,
+                },
+            },
+        },
+        MuiPopper: {
+            styleOverrides: {
+                root: {
+                    zoom: "var(--ui-zoom-inverse, 1)",
                 },
             },
         },
