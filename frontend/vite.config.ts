@@ -1,6 +1,7 @@
 import type { Duplex } from "node:stream";
 import { fileURLToPath, URL } from "node:url";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
+import tailwindcss from "@tailwindcss/vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
@@ -51,6 +52,7 @@ function suppressWsProxyErrors(): Plugin {
 // https://vitejs.dev/config/
 export default defineConfig({
 	plugins: [
+		tailwindcss(),
 		suppressWsProxyErrors(),
 		tanstackRouter({
 			target: "react",
