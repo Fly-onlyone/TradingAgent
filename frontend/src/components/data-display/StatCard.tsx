@@ -13,7 +13,7 @@ import {ShimmerSkeleton} from "@/components/common/ShimmerSkeleton";
 import {RollingDigits} from "@/components/effects/RollingDigits";
 import {Sparkline} from "@/components/effects/Sparkline";
 import {useTilt} from "@/hooks/useTilt";
-import {staggerCascade} from "@/utils/animations/variants";
+
 
 interface StatCardProps {
     title: string;
@@ -134,7 +134,6 @@ export function StatCard({
         >
             <Card
                 component={motion.div}
-                variants={staggerCascade.item}
                 key={flashKey || undefined}
                 animate={flashKey > 0 ? flashColors : undefined}
                 sx={{

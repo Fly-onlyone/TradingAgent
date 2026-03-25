@@ -70,7 +70,7 @@ function StatsSection({
                             title="Total Equity"
                             value={formatUSD(accountQuery.data?.totalEquity ?? 0)}
                             icon={<AccountBalanceWalletIcon/>}
-                            loading={accountQuery.isLoading}
+                            loading={accountQuery.isPending}
                             useRolling
                         />
                     </motion.div>
@@ -91,7 +91,7 @@ function StatsSection({
                             trend={
                                 (accountQuery.data?.unrealizedPnl ?? 0) >= 0 ? "up" : "down"
                             }
-                            loading={accountQuery.isLoading}
+                            loading={accountQuery.isPending}
                             useRolling
                         />
                     </motion.div>
@@ -102,7 +102,7 @@ function StatsSection({
                             title="Agent Win Rate"
                             value={formatPercent(summaryQuery.data?.winRate ?? 0, 1)}
                             icon={<AutoAwesomeIcon/>}
-                            loading={summaryQuery.isLoading}
+                            loading={summaryQuery.isPending}
                         />
                     </motion.div>
                 </Grid>
@@ -459,9 +459,9 @@ function Dashboard() {
     const decisionsCount = decisionsQuery.data?.decisions?.length ?? 0;
     const tradesCount = recentTradesQuery.data?.trades?.length ?? 0;
     const isFirstTimeUser =
-        !accountQuery.isLoading &&
-        !recentTradesQuery.isLoading &&
-        !decisionsQuery.isLoading &&
+        !accountQuery.isPending &&
+        !recentTradesQuery.isPending &&
+        !decisionsQuery.isPending &&
         tradesCount === 0 &&
         decisionsCount === 0 &&
         positions.length === 0;
