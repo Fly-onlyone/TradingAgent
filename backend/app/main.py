@@ -41,7 +41,9 @@ def _traces_sampler(sampling_context: dict) -> float:
 
 _PII_PATTERNS = [
     (
-        re.compile(r"(?i)(api[_-]?key|secret[_-]?key|passphrase|password|token)\s*[:=]\s*\S+"),
+        re.compile(
+            r"(?i)(api[_-]?key|secret[_-]?key|passphrase|password|token)\s*[:=]\s*\S+"
+        ),
         r"\1=***",
     ),
     (re.compile(r"(?i)(Bearer\s+)\S+"), r"\1***"),
@@ -111,7 +113,10 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     await init_db()
 
     scheduler = get_scheduler()
-    await scheduler.start()
+    if settings.debug:
+        asyncio.create_task(scheduler.start())
+    else:
+        await scheduler.start()
 
     # Warm embeddings in the background so API startup doesn't block on model download/cache issues.
     asyncio.create_task(preload_embedding_model())

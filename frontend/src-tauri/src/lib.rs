@@ -220,11 +220,16 @@ fn backend_command(project_root: &std::path::Path) -> (PathBuf, Vec<String>) {
         project_root.join(".venv").join("bin").join("python")
     };
 
+    // Dev builds: --watch for auto-reload on Python file changes
+    // Release builds: --serve for direct uvicorn without reload
+    let mode = if cfg!(debug_assertions) {
+        "--watch"
+    } else {
+        "--serve"
+    };
+
     if python_path.exists() {
-        return (
-            python_path,
-            vec!["run.py".to_string(), "--serve".to_string()],
-        );
+        return (python_path, vec!["run.py".to_string(), mode.to_string()]);
     }
 
     (
@@ -233,7 +238,7 @@ fn backend_command(project_root: &std::path::Path) -> (PathBuf, Vec<String>) {
             "run".to_string(),
             "python".to_string(),
             "run.py".to_string(),
-            "--serve".to_string(),
+            mode.to_string(),
         ],
     )
 }

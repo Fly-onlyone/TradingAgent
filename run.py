@@ -89,8 +89,47 @@ def _run_server() -> int:
     return 0
 
 
+def _run_with_watch() -> int:
+    """Serve with auto-reload on Python file changes (for Tauri dev)."""
+    from watchfiles import watch
+
+    backend_proc: subprocess.Popen | None = None
+
+    def _start() -> subprocess.Popen:
+        if not _wait_for_port_free(BACKEND_HOST, BACKEND_PORT, timeout_seconds=8.0):
+            raise RuntimeError(f"[watch] Port {BACKEND_PORT} is still in use")
+        return subprocess.Popen(
+            [sys.executable, os.path.join(PROJECT_DIR, "run.py"), "--serve"],
+            cwd=PROJECT_DIR,
+        )
+
+    try:
+        backend_proc = _start()
+        print("[watch] Backend started. Watching backend/ for changes...")
+
+        for changes in watch(
+            os.path.join(PROJECT_DIR, "backend"),
+            watch_filter=lambda _, path: path.endswith(".py"),
+            force_polling=True,
+            poll_delay_ms=500,
+        ):
+            changed_files = [os.path.basename(p) for _, p in changes]
+            print(f"[watch] Reloading — changed: {', '.join(changed_files)}")
+            _terminate_process(backend_proc)
+            backend_proc = _start()
+
+    except KeyboardInterrupt:
+        pass
+    finally:
+        _terminate_process(backend_proc)
+    return 0
+
+
 if __name__ == "__main__":
-    if "--serve" in sys.argv:
+    if "--watch" in sys.argv:
+        # ── Watch mode: serve + auto-reload (for Tauri dev) ────────────
+        sys.exit(_run_with_watch())
+    elif "--serve" in sys.argv:
         # ── Direct mode: called by the file watcher or by user ─────────
         # ProactorEventLoopPolicy is already set above (module-level).
         # uvicorn runs without reload → no multiprocessing → no policy override.
