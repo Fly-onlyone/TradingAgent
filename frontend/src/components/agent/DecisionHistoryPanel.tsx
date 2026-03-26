@@ -34,13 +34,13 @@ import {
     InputLabel,
     LinearProgress,
     MenuItem,
-    Select,
     Skeleton,
     Stack,
     Typography,
 } from "@mui/material";
 import {AnimatePresence, motion} from "framer-motion";
 import {useState} from "react";
+import {ZoomAwareSelect} from "@/components/common/ZoomAwareSelect";
 import type {
     AgentDecisionSummary,
     DecisionAction,
@@ -395,7 +395,7 @@ export function DecisionHistoryPanel({
                     <Stack spacing={2}>
                         <FormControl size="small" fullWidth>
                             <InputLabel>Type</InputLabel>
-                            <Select
+                            <ZoomAwareSelect
                                 value={filters.decisionType || ""}
                                 label="Type"
                                 onChange={(e) =>
@@ -412,12 +412,12 @@ export function DecisionHistoryPanel({
                                 <MenuItem value="risk_alert">Risk Alert</MenuItem>
                                 <MenuItem value="news_insight">News</MenuItem>
                                 <MenuItem value="monitoring_alert">Alert</MenuItem>
-                            </Select>
+                            </ZoomAwareSelect>
                         </FormControl>
 
                         <FormControl size="small" fullWidth>
                             <InputLabel>Symbol</InputLabel>
-                            <Select
+                            <ZoomAwareSelect
                                 value={filters.symbol || ""}
                                 label="Symbol"
                                 onChange={(e) => handleFilterChange("symbol", e.target.value)}
@@ -428,12 +428,12 @@ export function DecisionHistoryPanel({
                                         {symbol}
                                     </MenuItem>
                                 ))}
-                            </Select>
+                            </ZoomAwareSelect>
                         </FormControl>
 
                         <FormControl size="small" fullWidth>
                             <InputLabel>Action</InputLabel>
-                            <Select
+                            <ZoomAwareSelect
                                 value={filters.action || ""}
                                 label="Action"
                                 onChange={(e) =>
@@ -446,12 +446,12 @@ export function DecisionHistoryPanel({
                                 <MenuItem value="hold">Hold</MenuItem>
                                 <MenuItem value="wait">Wait</MenuItem>
                                 <MenuItem value="close">Close</MenuItem>
-                            </Select>
+                            </ZoomAwareSelect>
                         </FormControl>
 
                         <FormControl size="small" fullWidth>
                             <InputLabel>Status</InputLabel>
-                            <Select
+                            <ZoomAwareSelect
                                 value={filters.status || ""}
                                 label="Status"
                                 onChange={(e) =>
@@ -464,7 +464,7 @@ export function DecisionHistoryPanel({
                                 <MenuItem value="executed">Executed</MenuItem>
                                 <MenuItem value="rejected">Rejected</MenuItem>
                                 <MenuItem value="expired">Expired</MenuItem>
-                            </Select>
+                            </ZoomAwareSelect>
                         </FormControl>
 
                         {activeFilterCount > 0 && (

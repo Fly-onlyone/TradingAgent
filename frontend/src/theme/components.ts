@@ -266,6 +266,9 @@ export function createComponents(
             styleOverrides: {
                 root: {
                     zoom: "var(--ui-zoom-inverse, 1)",
+                    "& > *": {
+                        zoom: "var(--ui-zoom, 1)",
+                    },
                 },
             },
         },

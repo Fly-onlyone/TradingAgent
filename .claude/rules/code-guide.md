@@ -2,25 +2,47 @@
 
 ## Code Patterns
 
-### Pattern: MCP Tool Registration
+### Pattern: CSS Zoom Handling
 
-**When to Apply**: Agent tools in `backend/app/agent/mcp_tools.py`.
+**When to Apply**: Any frontend component using MUI `<Select>`, `<Menu>`, popovers, or mouse
+coordinates — the app uses CSS `zoom` for UI scaling, which breaks `getBoundingClientRect()`-based
+positioning.
 
-Tools are plain async functions in `backend/app/agent/tools/`, wrapped as MCP tools via
-`claude_agent_sdk`'s `@tool` decorator in `mcp_tools.py`:
+**Quick reference:**
 
-```python
-from claude_agent_sdk import tool
+| Component Type | Solution | Import |
+|---|---|---|
+| `<Select>` dropdown | Use `<ZoomAwareSelect>` (drop-in replacement) | `@/components/common/ZoomAwareSelect` |
+| `<Menu>` anchored to button | Use `useZoomAwareMenu()` hook | `@/hooks/useZoomAwareMenu` |
+| Popover (manual) | Divide `getBoundingClientRect()` coords by `uiScale` | `@/store/uiStore` |
+| Mouse position for effects | Divide `e.clientX`/`e.clientY` by `uiScale` | `@/store/uiStore` |
+| Framer Motion `MotionValue` cursor | `useTransform(x, v => v / uiScale)` before `useSpring` | `framer-motion` + `@/store/uiStore` |
 
+**Key rules:**
 
-@tool(
-    "get_ticker", "Get current ticker/price data for a trading symbol", {"symbol": str}
-)
-async def mcp_get_ticker(args: dict[str, Any]) -> dict[str, Any]:
-    from app.agent.tools.market_tools import get_ticker
+- **Never** use plain MUI `<Select>` or `anchorEl`-based `<Menu>` — always use the zoom-aware variants
+- Global theme overrides handle `MuiPopper` (with child re-zoom) and `MuiTooltip` automatically
+- CSS vars `--ui-zoom` / `--ui-zoom-inverse` are available for custom overrides
+- **Safe patterns** (no fix needed): ratio math like `(clientX - rect.left) / rect.width`, offsets within same parent
 
-    result = await get_ticker(symbol=args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(result)}]}
+**Minimal example (`useZoomAwareMenu` for Menu):**
+
+```tsx
+import {Menu, MenuItem} from "@mui/material";
+import {useZoomAwareMenu} from "@/hooks/useZoomAwareMenu";
+
+function MyMenu() {
+    const {anchorRef, open, handleOpen, handleClose, menuProps} = useZoomAwareMenu();
+
+    return (
+        <div ref={anchorRef}>
+            <button onClick={handleOpen}>Open</button>
+            <Menu open={open} onClose={handleClose} {...menuProps}>
+                <MenuItem onClick={handleClose}>Option A</MenuItem>
+            </Menu>
+        </div>
+    );
+}
 ```
 
 ### Pattern: Frontend Component Animations

@@ -28,6 +28,7 @@ import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {createFileRoute, Link, useNavigate} from "@tanstack/react-router";
 import {motion} from "framer-motion";
 import {useMemo, useState} from "react";
+import {useZoomAwareMenu} from "@/hooks/useZoomAwareMenu";
 import {strategiesApi} from "@/api/endpoints/strategies";
 import {PerformanceGauge} from "@/components/charts/PerformanceGauge";
 import {ConfirmDialog} from "@/components/common/ConfirmDialog";
@@ -268,7 +269,7 @@ function StrategyCard({
     onDelete: () => void;
     onViewDetails: () => void;
 }) {
-    const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+    const {anchorRef, handleClose, handleOpen, menuProps, open} = useZoomAwareMenu();
 
     const winRate = strategy.backtestResults?.winRate || 0;
 
@@ -318,20 +319,22 @@ function StrategyCard({
                             </Typography>
                         )}
                     </Box>
-                    <IconButton
-                        size="small"
-                        onClick={(e) => setAnchorEl(e.currentTarget)}
-                    >
-                        <MoreVertIcon/>
-                    </IconButton>
+                    <Box ref={anchorRef}>
+                        <IconButton
+                            size="small"
+                            onClick={handleOpen}
+                        >
+                            <MoreVertIcon/>
+                        </IconButton>
+                    </Box>
                     <Menu
-                        anchorEl={anchorEl}
-                        open={Boolean(anchorEl)}
-                        onClose={() => setAnchorEl(null)}
+                        open={open}
+                        onClose={handleClose}
+                        {...menuProps}
                     >
                         <MenuItem
                             onClick={() => {
-                                setAnchorEl(null);
+                                handleClose();
                                 onViewDetails();
                             }}
                         >
@@ -339,7 +342,7 @@ function StrategyCard({
                         </MenuItem>
                         <MenuItem
                             onClick={() => {
-                                setAnchorEl(null);
+                                handleClose();
                                 onToggle();
                             }}
                         >
@@ -356,7 +359,7 @@ function StrategyCard({
                         <MenuItem
                             sx={{color: "error.main"}}
                             onClick={() => {
-                                setAnchorEl(null);
+                                handleClose();
                                 onDelete();
                             }}
                         >

@@ -22,6 +22,8 @@ import {
     Grid2 as Grid,
     IconButton,
     InputAdornment,
+    MenuItem,
+    Select,
     Switch,
     Tab,
     Tabs,
@@ -31,7 +33,7 @@ import {
 import * as Sentry from "@sentry/react";
 import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {createFileRoute} from "@tanstack/react-router";
-import {useState} from "react";
+import {useEffect, useState} from "react";
 import {Controller, useForm} from "react-hook-form";
 import {authApi} from "@/api/endpoints/auth";
 import type {
@@ -42,11 +44,11 @@ import type {
 } from "@/api/endpoints/settings";
 import {settingsApi} from "@/api/endpoints/settings";
 import {AgentConfigPanel} from "@/components/agent/AgentConfigPanel";
-import {MetricRow} from "@/components/common/MetricRow";
 import {PageTransition} from "@/components/common/PageTransition";
 import {SectionHeader} from "@/components/common/SectionHeader";
 import {ThemeSelector} from "@/components/common/ThemeSelector";
 import {useAuth} from "@/hooks/useAuth";
+import {useZoomAwareMenu} from "@/hooks/useZoomAwareMenu";
 import {useAuthStore} from "@/store/authStore";
 import {notify, useUIStore} from "@/store/uiStore";
 import {getErrorMessage} from "@/utils/errors";
@@ -425,7 +427,15 @@ function AuthConfigCard() {
     const {user} = useAuthStore();
     const isSuperuser = user?.isSuperuser ?? false;
     const queryClient = useQueryClient();
-    const [expireInput, setExpireInput] = useState<number | "">("");
+    const [expireInput, setExpireInput] = useState<number | "">(0);
+    const [expiryUnit, setExpiryUnit] = useState<"minutes" | "hours" | "days">("minutes");
+    const {
+        anchorRef: expiryAnchorRef,
+        handleClose: handleExpiryMenuClose,
+        handleOpen: handleExpiryMenuOpen,
+        menuProps: expiryMenuProps,
+        open: expiryMenuOpen
+    } = useZoomAwareMenu();
 
     const configQuery = useQuery({
         queryKey: ["auth-config"],
@@ -440,7 +450,6 @@ function AuthConfigCard() {
         onSuccess: () => {
             queryClient.invalidateQueries({queryKey: ["auth-config"]});
             notify.success("Token expiry updated");
-            setExpireInput("");
         },
         onError: (error) => {
             notify.error("Failed to update token expiry", getErrorMessage(error));
@@ -451,16 +460,25 @@ function AuthConfigCard() {
 
     const config = configQuery.data;
 
+    useEffect(() => {
+        if (!config) return;
+        const minutes = config.accessTokenExpireMinutes;
+        if (minutes !== 0 && minutes % 1440 === 0) {
+            setExpiryUnit("days");
+            setExpireInput(minutes / 1440);
+        } else if (minutes !== 0 && minutes % 60 === 0) {
+            setExpiryUnit("hours");
+            setExpireInput(minutes / 60);
+        } else {
+            setExpiryUnit("minutes");
+            setExpireInput(minutes);
+        }
+    }, [config]);
+
     const handleSave = () => {
         if (expireInput === "") return;
-        updateMutation.mutate({accessTokenExpireMinutes: expireInput});
-    };
-
-    const formatExpiry = (minutes: number): string => {
-        if (minutes === 0) return "Never (no expiry)";
-        if (minutes < 60) return `${minutes} minutes`;
-        if (minutes < 1440) return `${(minutes / 60).toFixed(1)} hours`;
-        return `${(minutes / 1440).toFixed(1)} days`;
+        const multiplier = expiryUnit === "days" ? 1440 : expiryUnit === "hours" ? 60 : 1;
+        updateMutation.mutate({accessTokenExpireMinutes: expireInput * multiplier});
     };
 
     return (
@@ -479,29 +497,44 @@ function AuthConfigCard() {
                 ) : config ? (
                     <Box sx={{display: "flex", flexDirection: "column", gap: 2}}>
                         <Box sx={{display: "flex", alignItems: "center", gap: 1.5}}>
-                            <Typography variant="subtitle2">Current:</Typography>
-                            <Chip
-                                label={formatExpiry(config.accessTokenExpireMinutes)}
-                                size="small"
-                                variant="outlined"
-                                color={
-                                    config.accessTokenExpireMinutes > 0 ? "success" : "default"
-                                }
-                            />
-                        </Box>
-
-                        <Box sx={{display: "flex", alignItems: "center", gap: 1.5}}>
                             <TextField
                                 size="small"
                                 type="number"
-                                label="Expire after (minutes)"
+                                label="Expire after"
                                 value={expireInput}
                                 onChange={(e) => {
                                     const val = e.target.value;
                                     setExpireInput(val === "" ? "" : Number(val));
                                 }}
-                                slotProps={{htmlInput: {min: 0}}}
-                                sx={{width: 200}}
+                                onFocus={(e) => e.target.select()}
+                                fullWidth
+                                slotProps={{
+                                    htmlInput: {min: 0},
+                                    input: {
+                                        endAdornment: (
+                                            <InputAdornment position="end" ref={expiryAnchorRef}>
+                                                <Select
+                                                    variant="standard"
+                                                    disableUnderline
+                                                    size="small"
+                                                    value={expiryUnit}
+                                                    open={expiryMenuOpen}
+                                                    onOpen={handleExpiryMenuOpen}
+                                                    onClose={handleExpiryMenuClose}
+                                                    onChange={(e) =>
+                                                        setExpiryUnit(e.target.value as "minutes" | "hours" | "days")
+                                                    }
+                                                    MenuProps={expiryMenuProps}
+                                                    sx={{ml: 1}}
+                                                >
+                                                    <MenuItem value="minutes">min</MenuItem>
+                                                    <MenuItem value="hours">hrs</MenuItem>
+                                                    <MenuItem value="days">days</MenuItem>
+                                                </Select>
+                                            </InputAdornment>
+                                        ),
+                                    },
+                                }}
                             />
                             <Button
                                 variant="outlined"
@@ -513,8 +546,7 @@ function AuthConfigCard() {
                         </Box>
 
                         <Typography variant="body2" color="text.secondary">
-                            0 = never expire. Common values: 60 (1h), 1440 (1 day), 10080 (7
-                            days)
+                            0 = never expire
                         </Typography>
                     </Box>
                 ) : null}
@@ -528,6 +560,14 @@ function SessionRetentionCard() {
     const isSuperuser = user?.isSuperuser ?? false;
     const queryClient = useQueryClient();
     const [daysInput, setDaysInput] = useState<number | "">("");
+    const [retentionUnit, setRetentionUnit] = useState<"days" | "weeks" | "months">("days");
+    const {
+        anchorRef: retentionAnchorRef,
+        handleClose: handleRetentionMenuClose,
+        handleOpen: handleRetentionMenuOpen,
+        menuProps: retentionMenuProps,
+        open: retentionMenuOpen
+    } = useZoomAwareMenu();
 
     const configQuery = useQuery({
         queryKey: ["session-retention-config"],
@@ -542,7 +582,6 @@ function SessionRetentionCard() {
         onSuccess: () => {
             queryClient.invalidateQueries({queryKey: ["session-retention-config"]});
             notify.success("Session retention updated");
-            setDaysInput("");
         },
         onError: (error) => {
             notify.error(
@@ -556,15 +595,25 @@ function SessionRetentionCard() {
 
     const config = configQuery.data;
 
+    useEffect(() => {
+        if (!config) return;
+        const days = config.sessionRetentionDays;
+        if (days !== 0 && days % 30 === 0) {
+            setRetentionUnit("months");
+            setDaysInput(days / 30);
+        } else if (days !== 0 && days % 7 === 0) {
+            setRetentionUnit("weeks");
+            setDaysInput(days / 7);
+        } else {
+            setRetentionUnit("days");
+            setDaysInput(days);
+        }
+    }, [config]);
+
     const handleSave = () => {
         if (daysInput === "") return;
-        updateMutation.mutate({sessionRetentionDays: daysInput});
-    };
-
-    const formatRetention = (days: number): string => {
-        if (days === 0) return "Keep forever";
-        if (days === 1) return "1 day";
-        return `${days} days`;
+        const multiplier = retentionUnit === "months" ? 30 : retentionUnit === "weeks" ? 7 : 1;
+        updateMutation.mutate({sessionRetentionDays: daysInput * multiplier});
     };
 
     return (
@@ -585,27 +634,44 @@ function SessionRetentionCard() {
                 ) : config ? (
                     <Box sx={{display: "flex", flexDirection: "column", gap: 2}}>
                         <Box sx={{display: "flex", alignItems: "center", gap: 1.5}}>
-                            <Typography variant="subtitle2">Current:</Typography>
-                            <Chip
-                                label={formatRetention(config.sessionRetentionDays)}
-                                size="small"
-                                variant="outlined"
-                                color={config.sessionRetentionDays > 0 ? "success" : "default"}
-                            />
-                        </Box>
-
-                        <Box sx={{display: "flex", alignItems: "center", gap: 1.5}}>
                             <TextField
                                 size="small"
                                 type="number"
-                                label="Retention (days)"
+                                label="Retention"
                                 value={daysInput}
                                 onChange={(e) => {
                                     const val = e.target.value;
                                     setDaysInput(val === "" ? "" : Number(val));
                                 }}
-                                slotProps={{htmlInput: {min: 0}}}
-                                sx={{width: 200}}
+                                onFocus={(e) => e.target.select()}
+                                fullWidth
+                                slotProps={{
+                                    htmlInput: {min: 0},
+                                    input: {
+                                        endAdornment: (
+                                            <InputAdornment position="end" ref={retentionAnchorRef}>
+                                                <Select
+                                                    variant="standard"
+                                                    disableUnderline
+                                                    size="small"
+                                                    value={retentionUnit}
+                                                    open={retentionMenuOpen}
+                                                    onOpen={handleRetentionMenuOpen}
+                                                    onClose={handleRetentionMenuClose}
+                                                    onChange={(e) =>
+                                                        setRetentionUnit(e.target.value as "days" | "weeks" | "months")
+                                                    }
+                                                    MenuProps={retentionMenuProps}
+                                                    sx={{ml: 1}}
+                                                >
+                                                    <MenuItem value="days">days</MenuItem>
+                                                    <MenuItem value="weeks">weeks</MenuItem>
+                                                    <MenuItem value="months">months</MenuItem>
+                                                </Select>
+                                            </InputAdornment>
+                                        ),
+                                    },
+                                }}
                             />
                             <Button
                                 variant="outlined"
@@ -617,8 +683,7 @@ function SessionRetentionCard() {
                         </Box>
 
                         <Typography variant="body2" color="text.secondary">
-                            0 = keep forever. Chat sessions older than this will be
-                            automatically deleted.
+                            0 = keep forever. Older chat sessions are automatically deleted.
                         </Typography>
                     </Box>
                 ) : null}

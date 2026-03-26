@@ -20,10 +20,12 @@ import {
     DialogActions,
     DialogContent,
     DialogTitle,
+    FormControl,
     FormControlLabel,
     Grid2 as Grid,
     IconButton,
     InputAdornment,
+    InputLabel,
     MenuItem,
     Paper,
     Switch,
@@ -38,6 +40,7 @@ import {
     Tooltip,
     Typography,
 } from "@mui/material";
+import {ZoomAwareSelect} from "@/components/common/ZoomAwareSelect";
 import {keepPreviousData, useQuery} from "@tanstack/react-query";
 import {createFileRoute} from "@tanstack/react-router";
 import {format} from "date-fns";
@@ -220,21 +223,21 @@ function LogViewerPage() {
                                 alignItems: "center",
                             }}
                         >
-                            <TextField
-                                size="small"
-                                select
-                                label="Level"
-                                value={store.filters.level || ""}
-                                onChange={(e) => handleLevelChange(e.target.value)}
-                                sx={{minWidth: 140}}
-                            >
-                                <MenuItem value="">All Levels</MenuItem>
-                                {LEVEL_OPTIONS.filter(Boolean).map((level) => (
-                                    <MenuItem key={level} value={level}>
-                                        {level}
-                                    </MenuItem>
-                                ))}
-                            </TextField>
+                            <FormControl size="small" sx={{minWidth: 140}}>
+                                <InputLabel>Level</InputLabel>
+                                <ZoomAwareSelect
+                                    value={store.filters.level || ""}
+                                    label="Level"
+                                    onChange={(e) => handleLevelChange(e.target.value as string)}
+                                >
+                                    <MenuItem value="">All Levels</MenuItem>
+                                    {LEVEL_OPTIONS.filter(Boolean).map((level) => (
+                                        <MenuItem key={level} value={level}>
+                                            {level}
+                                        </MenuItem>
+                                    ))}
+                                </ZoomAwareSelect>
+                            </FormControl>
 
                             <TextField
                                 size="small"

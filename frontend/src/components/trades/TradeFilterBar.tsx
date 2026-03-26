@@ -8,14 +8,14 @@ import {
     Box,
     FormControl,
     InputLabel,
-    Select,
     MenuItem,
     TextField,
     Button,
     ToggleButton,
     ToggleButtonGroup,
-    type SelectChangeEvent,
 } from '@mui/material';
+import type {SelectChangeEvent} from '@mui/material/Select';
+import {ZoomAwareSelect} from '@/components/common/ZoomAwareSelect';
 import TableRowsIcon from '@mui/icons-material/TableRows';
 import ViewListIcon from '@mui/icons-material/ViewList';
 import FilterAltOffIcon from '@mui/icons-material/FilterAltOff';
@@ -114,32 +114,32 @@ export function TradeFilterBar({
         >
             <FormControl size="small" sx={{minWidth: 140}}>
                 <InputLabel>Symbol</InputLabel>
-                <Select value={filters.symbol || ''} onChange={handleSymbolChange} label="Symbol">
+                <ZoomAwareSelect value={filters.symbol || ''} onChange={handleSymbolChange} label="Symbol">
                     <MenuItem value="">All Symbols</MenuItem>
                     {symbols.map((symbol) => (
                         <MenuItem key={symbol} value={symbol}>
                             {symbol}
                         </MenuItem>
                     ))}
-                </Select>
+                </ZoomAwareSelect>
             </FormControl>
 
             <FormControl size="small" sx={{minWidth: 100}}>
                 <InputLabel>Side</InputLabel>
-                <Select value={filters.side || ''} onChange={handleSideChange} label="Side">
+                <ZoomAwareSelect value={filters.side || ''} onChange={handleSideChange} label="Side">
                     <MenuItem value="">All</MenuItem>
                     <MenuItem value="buy">Buy</MenuItem>
                     <MenuItem value="sell">Sell</MenuItem>
-                </Select>
+                </ZoomAwareSelect>
             </FormControl>
 
             <FormControl size="small" sx={{minWidth: 120}}>
                 <InputLabel>Status</InputLabel>
-                <Select value={filters.status || ''} onChange={handleStatusChange} label="Status">
+                <ZoomAwareSelect value={filters.status || ''} onChange={handleStatusChange} label="Status">
                     <MenuItem value="">All</MenuItem>
                     <MenuItem value="open">Open</MenuItem>
                     <MenuItem value="closed">Closed</MenuItem>
-                </Select>
+                </ZoomAwareSelect>
             </FormControl>
 
             <TextField

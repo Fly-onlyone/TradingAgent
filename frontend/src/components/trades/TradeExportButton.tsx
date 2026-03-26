@@ -5,6 +5,7 @@
 
 import {useState} from 'react';
 import {
+    Box,
     Button,
     Menu,
     MenuItem,
@@ -12,6 +13,7 @@ import {
     ListItemText,
     CircularProgress,
 } from '@mui/material';
+import {useZoomAwareMenu} from '@/hooks/useZoomAwareMenu';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import TableChartIcon from '@mui/icons-material/TableChart';
 import CodeIcon from '@mui/icons-material/Code';
@@ -36,17 +38,8 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 export function TradeExportButton({startDate, endDate, disabled}: TradeExportButtonProps) {
-    const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+    const {anchorRef, handleClose, handleOpen, menuProps, open} = useZoomAwareMenu();
     const [isExporting, setIsExporting] = useState(false);
-    const open = Boolean(anchorEl);
-
-    const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-        setAnchorEl(event.currentTarget);
-    };
-
-    const handleClose = () => {
-        setAnchorEl(null);
-    };
 
     const handleExport = async (format: ExportFormat) => {
         handleClose();
@@ -66,15 +59,17 @@ export function TradeExportButton({startDate, endDate, disabled}: TradeExportBut
 
     return (
         <>
-            <Button
-                variant="outlined"
-                startIcon={isExporting ? <CircularProgress size={16}/> : <FileDownloadIcon/>}
-                onClick={handleClick}
-                disabled={disabled || isExporting}
-            >
-                Export
-            </Button>
-            <Menu anchorEl={anchorEl} open={open} onClose={handleClose}>
+            <Box ref={anchorRef}>
+                <Button
+                    variant="outlined"
+                    startIcon={isExporting ? <CircularProgress size={16}/> : <FileDownloadIcon/>}
+                    onClick={handleOpen}
+                    disabled={disabled || isExporting}
+                >
+                    Export
+                </Button>
+            </Box>
+            <Menu open={open} onClose={handleClose} {...menuProps}>
                 <MenuItem onClick={() => handleExport('csv')}>
                     <ListItemIcon>
                         <TableChartIcon fontSize="small"/>
