@@ -2,141 +2,174 @@
  * Decision Card Component
  */
 
-import {Box, Button, Card, CardContent, Chip, Divider, LinearProgress, Typography,} from '@mui/material';
-import {motion} from 'framer-motion';
-import TrendingUpIcon from '@mui/icons-material/TrendingUp';
-import TrendingDownIcon from '@mui/icons-material/TrendingDown';
-import PauseCircleIcon from '@mui/icons-material/PauseCircle';
-import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
-import type {AgentDecision} from '@/api/websocket/useAgentSocket';
+import {
+	Hourglass,
+	PauseCircle,
+	TrendingDown,
+	TrendingUp,
+} from "lucide-react";
+import { motion } from "framer-motion";
+import type { AgentDecision } from "@/api/websocket/useAgentSocket";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 
 interface DecisionCardProps {
-    decision: AgentDecision;
-    onExecute?: () => void;
-    isExecuting?: boolean;
+	decision: AgentDecision;
+	onExecute?: () => void;
+	isExecuting?: boolean;
 }
 
 const actionConfig = {
-    buy: {
-        label: 'BUY',
-        color: 'success' as const,
-        semanticKey: 'success' as const,
-        icon: TrendingUpIcon,
-    },
-    sell: {
-        label: 'SELL',
-        color: 'error' as const,
-        semanticKey: 'error' as const,
-        icon: TrendingDownIcon,
-    },
-    hold: {
-        label: 'HOLD',
-        color: 'info' as const,
-        semanticKey: 'info' as const,
-        icon: PauseCircleIcon,
-    },
-    wait: {
-        label: 'WAIT',
-        color: 'warning' as const,
-        semanticKey: 'warning' as const,
-        icon: HourglassEmptyIcon,
-    },
+	buy: {
+		label: "BUY",
+		colorClass: "text-emerald-500",
+		bgClass: "bg-emerald-500/15 border-emerald-500",
+		buttonVariant: "default" as const,
+		buttonClass: "bg-emerald-600 hover:bg-emerald-700 text-white",
+		icon: TrendingUp,
+	},
+	sell: {
+		label: "SELL",
+		colorClass: "text-red-500",
+		bgClass: "bg-red-500/15 border-red-500",
+		buttonVariant: "destructive" as const,
+		buttonClass: "",
+		icon: TrendingDown,
+	},
+	hold: {
+		label: "HOLD",
+		colorClass: "text-sky-500",
+		bgClass: "bg-sky-500/15 border-sky-500",
+		buttonVariant: "default" as const,
+		buttonClass: "",
+		icon: PauseCircle,
+	},
+	wait: {
+		label: "WAIT",
+		colorClass: "text-amber-500",
+		bgClass: "bg-amber-500/15 border-amber-500",
+		buttonVariant: "default" as const,
+		buttonClass: "",
+		icon: Hourglass,
+	},
 };
 
-export function DecisionCard({decision, onExecute, isExecuting = false}: DecisionCardProps) {
-    const config = actionConfig[decision.action];
-    const Icon = config.icon;
+export function DecisionCard({
+	decision,
+	onExecute,
+	isExecuting = false,
+}: DecisionCardProps) {
+	const config = actionConfig[decision.action];
+	const Icon = config.icon;
 
-    const confidenceColor =
-        decision.confidence >= 0.7
-            ? 'success'
-            : decision.confidence >= 0.4
-                ? 'warning'
-                : 'error';
+	const confidenceColorClass =
+		decision.confidence >= 0.7
+			? "text-emerald-500"
+			: decision.confidence >= 0.4
+				? "text-amber-500"
+				: "text-red-500";
 
-    return (
-        <Card
-            component={motion.div}
-            initial={{opacity: 0, scale: 0.95}}
-            animate={{opacity: 1, scale: 1}}
-            sx={{
-                bgcolor: (theme) => `rgba(${theme.trading.semanticRgb[config.semanticKey]}, 0.15)`,
-                border: '1px solid',
-                borderColor: `${config.color}.main`,
-            }}
-        >
-            <CardContent>
-                {/* Header */}
-                <Box sx={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2}}>
-                    <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
-                        <Icon sx={{color: `${config.color}.main`, fontSize: 28}}/>
-                        <Typography variant="h6" fontWeight={700} color={`${config.color}.main`}>
-                            {config.label}
-                        </Typography>
-                        {decision.symbol && (
-                            <Chip label={decision.symbol} size="small" variant="outlined"/>
-                        )}
-                    </Box>
-                </Box>
+	const progressColorClass =
+		decision.confidence >= 0.7
+			? "[&_[data-slot=progress-indicator]]:bg-emerald-500"
+			: decision.confidence >= 0.4
+				? "[&_[data-slot=progress-indicator]]:bg-amber-500"
+				: "[&_[data-slot=progress-indicator]]:bg-red-500";
 
-                {/* Confidence */}
-                <Box sx={{mb: 2}}>
-                    <Box sx={{display: 'flex', justifyContent: 'space-between', mb: 0.5}}>
-                        <Typography variant="body2" color="text.secondary">
-                            Confidence
-                        </Typography>
-                        <Typography variant="body2" fontWeight={600} color={`${confidenceColor}.main`}>
-                            {(decision.confidence * 100).toFixed(0)}%
-                        </Typography>
-                    </Box>
-                    <LinearProgress
-                        variant="determinate"
-                        value={decision.confidence * 100}
-                        color={confidenceColor}
-                        sx={{height: 8, borderRadius: 4}}
-                    />
-                </Box>
+	return (
+		<motion.div
+			initial={{ opacity: 0, scale: 0.95 }}
+			animate={{ opacity: 1, scale: 1 }}
+		>
+			<Card className={cn("border", config.bgClass)}>
+				<CardContent className="space-y-4">
+					{/* Header */}
+					<div className="flex items-center justify-between">
+						<div className="flex items-center gap-2">
+							<Icon className={cn("size-7", config.colorClass)} />
+							<span
+								className={cn(
+									"text-lg font-bold",
+									config.colorClass,
+								)}
+							>
+								{config.label}
+							</span>
+							{decision.symbol && (
+								<Badge variant="outline">{decision.symbol}</Badge>
+							)}
+						</div>
+					</div>
 
-                <Divider sx={{my: 2}}/>
+					{/* Confidence */}
+					<div>
+						<div className="mb-1 flex justify-between">
+							<span className="text-sm text-muted-foreground">
+								Confidence
+							</span>
+							<span
+								className={cn(
+									"text-sm font-semibold",
+									confidenceColorClass,
+								)}
+							>
+								{(decision.confidence * 100).toFixed(0)}%
+							</span>
+						</div>
+						<Progress
+							value={decision.confidence * 100}
+							className={cn(
+								"[&_[data-slot=progress-track]]:h-2 [&_[data-slot=progress-track]]:rounded-full",
+								progressColorClass,
+							)}
+						/>
+					</div>
 
-                {/* Reasoning */}
-                <Box sx={{mb: 2}}>
-                    <Typography variant="subtitle2" gutterBottom>
-                        Reasoning
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        {decision.reasoning}
-                    </Typography>
-                </Box>
+					<Separator />
 
-                {/* Risk Assessment */}
-                {decision.riskAssessment && (
-                    <Box sx={{mb: 2}}>
-                        <Typography variant="subtitle2" gutterBottom>
-                            Risk Assessment
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            {decision.riskAssessment}
-                        </Typography>
-                    </Box>
-                )}
+					{/* Reasoning */}
+					<div>
+						<h4 className="mb-1 text-sm font-semibold">Reasoning</h4>
+						<p className="text-sm text-muted-foreground">
+							{decision.reasoning}
+						</p>
+					</div>
 
-                {/* Execute Button */}
-                {onExecute && (decision.action === 'buy' || decision.action === 'sell') && (
-                    <Button
-                        variant="contained"
-                        fullWidth
-                        color={config.color}
-                        onClick={onExecute}
-                        disabled={isExecuting}
-                        sx={{mt: 1}}
-                    >
-                        {isExecuting ? 'Executing...' : `Execute ${config.label}`}
-                    </Button>
-                )}
-            </CardContent>
-        </Card>
-    );
+					{/* Risk Assessment */}
+					{decision.riskAssessment && (
+						<div>
+							<h4 className="mb-1 text-sm font-semibold">
+								Risk Assessment
+							</h4>
+							<p className="text-sm text-muted-foreground">
+								{decision.riskAssessment}
+							</p>
+						</div>
+					)}
+
+					{/* Execute Button */}
+					{onExecute &&
+						(decision.action === "buy" ||
+							decision.action === "sell") && (
+							<Button
+								className={cn("mt-2 w-full", config.buttonClass)}
+								variant={config.buttonVariant}
+								onClick={onExecute}
+								disabled={isExecuting}
+							>
+								{isExecuting
+									? "Executing..."
+									: `Execute ${config.label}`}
+							</Button>
+						)}
+				</CardContent>
+			</Card>
+		</motion.div>
+	);
 }
 
 export default DecisionCard;

@@ -2,18 +2,12 @@
  * Chat Input Component
  */
 
-import LightbulbIcon from "@mui/icons-material/Lightbulb";
-import SendIcon from "@mui/icons-material/Send";
-import ShowChartIcon from "@mui/icons-material/ShowChart";
-import {
-	Box,
-	Button,
-	CircularProgress,
-	IconButton,
-	TextField,
-	Tooltip,
-} from "@mui/material";
+import { Lightbulb, LineChart, Loader2, Send } from "lucide-react";
 import { type KeyboardEvent, useCallback, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 interface ChatInputProps {
 	onSendMessage: (message: string) => void;
@@ -39,7 +33,7 @@ export function ChatInput({
 		}
 	}, [message, isThinking, disabled, onSendMessage]);
 
-	const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+	const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
 		if (e.key === "Enter" && !e.shiftKey) {
 			e.preventDefault();
 			handleSend();
@@ -47,47 +41,51 @@ export function ChatInput({
 	};
 
 	return (
-		<Box>
+		<div>
 			{/* Quick Actions */}
-			<Box sx={{ display: "flex", gap: 1, mb: 2 }}>
+			<div className="mb-4 flex gap-2">
 				{onRequestAnalysis && (
-					<Tooltip title="Request market analysis">
-						<span>
-							<Button
-								size="small"
-								variant="outlined"
-								startIcon={<ShowChartIcon />}
-								onClick={() => onRequestAnalysis()}
-								disabled={isThinking || disabled}
-							>
-								Analyze
-							</Button>
-						</span>
+					<Tooltip>
+						<TooltipTrigger
+							render={
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() => onRequestAnalysis()}
+									disabled={isThinking || disabled}
+								>
+									<LineChart data-icon="inline-start" />
+									Analyze
+								</Button>
+							}
+						/>
+						<TooltipContent>Request market analysis</TooltipContent>
 					</Tooltip>
 				)}
 				{onRequestRecommendation && (
-					<Tooltip title="Get trading recommendation">
-						<span>
-							<Button
-								size="small"
-								variant="outlined"
-								startIcon={<LightbulbIcon />}
-								onClick={onRequestRecommendation}
-								disabled={isThinking || disabled}
-							>
-								Recommend
-							</Button>
-						</span>
+					<Tooltip>
+						<TooltipTrigger
+							render={
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={onRequestRecommendation}
+									disabled={isThinking || disabled}
+								>
+									<Lightbulb data-icon="inline-start" />
+									Recommend
+								</Button>
+							}
+						/>
+						<TooltipContent>Get trading recommendation</TooltipContent>
 					</Tooltip>
 				)}
-			</Box>
+			</div>
 
 			{/* Input Field */}
-			<Box sx={{ display: "flex", gap: 1, alignItems: "flex-end" }}>
-				<TextField
-					fullWidth
-					multiline
-					maxRows={4}
+			<div className="flex items-end gap-2">
+				<Textarea
+					className="min-h-10 max-h-32 flex-1 resize-none rounded-lg"
 					placeholder={
 						isThinking ? "Agent is thinking..." : "Type your message..."
 					}
@@ -95,35 +93,27 @@ export function ChatInput({
 					onChange={(e) => setMessage(e.target.value)}
 					onKeyDown={handleKeyDown}
 					disabled={isThinking || disabled}
-					sx={{
-						"& .MuiOutlinedInput-root": {
-							borderRadius: 2,
-						},
-					}}
+					rows={1}
 				/>
-				<IconButton
-					color="primary"
+				<Button
+					size="icon"
 					onClick={handleSend}
 					disabled={!message.trim() || isThinking || disabled}
-					sx={{
-						bgcolor: "primary.main",
-						color: "white",
-						"&:hover": {
-							bgcolor: "primary.dark",
-						},
-						"&.Mui-disabled": {
-							bgcolor: "action.disabledBackground",
-						},
-					}}
+					className={cn(
+						"shrink-0",
+						!message.trim() || isThinking || disabled
+							? "opacity-50"
+							: "",
+					)}
 				>
 					{isThinking ? (
-						<CircularProgress size={24} color="inherit" />
+						<Loader2 className="size-4 animate-spin" />
 					) : (
-						<SendIcon />
+						<Send className="size-4" />
 					)}
-				</IconButton>
-			</Box>
-		</Box>
+				</Button>
+			</div>
+		</div>
 	);
 }
 

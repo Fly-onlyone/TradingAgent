@@ -2,34 +2,38 @@
  * Session List Component for Chat History Sidebar
  */
 
-import AddIcon from "@mui/icons-material/Add";
-import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
-import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
-import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import MoreVertIcon from "@mui/icons-material/MoreVert";
 import {
-	Box,
-	Chip,
-	Collapse,
-	Divider,
-	IconButton,
-	List,
-	ListItem,
-	ListItemButton,
-	ListItemIcon,
-	ListItemText,
-	Menu,
-	MenuItem,
-	Skeleton,
-	Tooltip,
-	Typography,
-} from "@mui/material";
-import type { PopoverPosition } from "@mui/material/Popover";
+	ChevronDown,
+	ChevronUp,
+	MessageCircle,
+	MoreVertical,
+	Pencil,
+	Plus,
+	Trash2,
+} from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { type MouseEvent, useState } from "react";
-import { useUIStore } from "@/store/uiStore";
+import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+	Collapsible,
+	CollapsibleContent,
+	CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import type { AgentSession, SessionsByDateGroup } from "@/types/session";
 
 interface SessionListProps {
@@ -57,32 +61,11 @@ function SessionItem({
 	onDelete,
 	onRename,
 }: SessionItemProps) {
-	const [anchorPosition, setAnchorPosition] = useState<PopoverPosition | null>(
-		null,
-	);
-	const uiScale = useUIStore((s) => s.uiScale);
-
-	const handleMenuOpen = (event: MouseEvent<HTMLElement>) => {
-		event.stopPropagation();
-		const rect = event.currentTarget.getBoundingClientRect();
-		const zoom = uiScale || 1;
-		setAnchorPosition({
-			top: (rect.top + rect.height / 2) / zoom,
-			left: rect.right / zoom,
-		});
-	};
-
-	const handleMenuClose = () => {
-		setAnchorPosition(null);
-	};
-
 	const handleDelete = () => {
-		handleMenuClose();
 		onDelete?.();
 	};
 
 	const handleRename = () => {
-		handleMenuClose();
 		const newTitle = prompt("Enter new title:", session.title || "");
 		if (newTitle && newTitle !== session.title) {
 			onRename?.(newTitle);
@@ -95,110 +78,83 @@ function SessionItem({
 	const hasDecisions = session.decisionsMade > 0;
 
 	return (
-		<ListItem
-			component={motion.li}
+		<motion.div
 			initial={{ opacity: 0, x: -20 }}
 			animate={{ opacity: 1, x: 0 }}
-			disablePadding
-			sx={{ mb: 0.5 }}
+			className="mb-1"
 		>
-			<ListItemButton
-				selected={isSelected}
+			<div
+				role="button"
+				tabIndex={0}
 				onClick={onSelect}
-				sx={{
-					borderRadius: 1,
-					py: 1,
-					"&.Mui-selected": {
-						bgcolor: "action.selected",
-						"&:hover": {
-							bgcolor: "action.selected",
-						},
-					},
+				onKeyDown={(e) => {
+					if (e.key === "Enter" || e.key === " ") onSelect();
 				}}
+				className={cn(
+					"flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 transition-colors hover:bg-muted",
+					isSelected && "bg-muted",
+				)}
 			>
-				<ListItemIcon sx={{ minWidth: 36 }}>
-					<ChatBubbleOutlineIcon
-						fontSize="small"
-						color={isSelected ? "primary" : "action"}
-					/>
-				</ListItemIcon>
-				<ListItemText
-					primary={
-						<Typography
-							variant="body2"
-							noWrap
-							sx={{
-								fontWeight: isSelected ? 600 : 400,
-								maxWidth: 160,
-							}}
-						>
-							{displayTitle}
-						</Typography>
-					}
-					slotProps={{ secondary: { component: "span" } }}
-					secondary={
-						<Box
-							component="span"
-							sx={{
-								display: "inline-flex",
-								alignItems: "center",
-								gap: 0.5,
-								mt: 0.25,
-							}}
-						>
-							<Typography
-								component="span"
-								variant="caption"
-								color="text.secondary"
-							>
-								{messageCount} messages
-							</Typography>
-							{hasDecisions && (
-								<Chip
-									label={`${session.decisionsMade} decisions`}
-									size="small"
-									variant="outlined"
-									sx={{
-										height: 16,
-										fontSize: "0.65rem",
-										"& .MuiChip-label": { px: 0.5 },
-									}}
-								/>
-							)}
-						</Box>
-					}
+				<MessageCircle
+					className={cn(
+						"size-4 shrink-0",
+						isSelected
+							? "text-[var(--primary)]"
+							: "text-muted-foreground",
+					)}
 				/>
-				<IconButton
-					edge="end"
-					size="small"
-					onClick={handleMenuOpen}
-					sx={{ ml: 1, opacity: 0.6, "&:hover": { opacity: 1 } }}
-				>
-					<MoreVertIcon fontSize="small" />
-				</IconButton>
-			</ListItemButton>
-
-			<Menu
-				open={Boolean(anchorPosition)}
-				onClose={handleMenuClose}
-				anchorReference="anchorPosition"
-				anchorPosition={anchorPosition ?? undefined}
-				transformOrigin={{ vertical: "center", horizontal: "left" }}
-			>
-				<MenuItem onClick={handleRename} dense>
-					<ListItemIcon>
-						<EditOutlinedIcon fontSize="small" />
-					</ListItemIcon>
-					<ListItemText>Rename</ListItemText>
-				</MenuItem>
-				<MenuItem onClick={handleDelete} dense sx={{ color: "error.main" }}>
-					<ListItemIcon>
-						<DeleteOutlineIcon fontSize="small" color="error" />
-					</ListItemIcon>
-					<ListItemText>Delete</ListItemText>
-				</MenuItem>
-			</Menu>
-		</ListItem>
+				<div className="min-w-0 flex-1">
+					<p
+						className={cn(
+							"max-w-[160px] truncate text-sm",
+							isSelected ? "font-semibold" : "font-normal",
+						)}
+					>
+						{displayTitle}
+					</p>
+					<div className="mt-0.5 flex items-center gap-1">
+						<span className="text-xs text-muted-foreground">
+							{messageCount} messages
+						</span>
+						{hasDecisions && (
+							<Badge
+								variant="outline"
+								className="h-4 px-1 text-[0.65rem]"
+							>
+								{session.decisionsMade} decisions
+							</Badge>
+						)}
+					</div>
+				</div>
+				<DropdownMenu>
+					<DropdownMenuTrigger
+						render={
+							<Button
+								variant="ghost"
+								size="icon-xs"
+								className="ml-1 opacity-60 hover:opacity-100"
+								onClick={(e) => e.stopPropagation()}
+							/>
+						}
+					>
+						<MoreVertical className="size-3.5" />
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end" side="right">
+						<DropdownMenuItem onClick={handleRename}>
+							<Pencil className="size-3.5" />
+							Rename
+						</DropdownMenuItem>
+						<DropdownMenuItem
+							variant="destructive"
+							onClick={handleDelete}
+						>
+							<Trash2 className="size-3.5" />
+							Delete
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			</div>
+		</motion.div>
 	);
 }
 
@@ -220,36 +176,29 @@ function DateGroup({
 	const [isExpanded, setIsExpanded] = useState(true);
 
 	return (
-		<Box sx={{ mb: 1 }}>
-			<ListItemButton
-				onClick={() => setIsExpanded(!isExpanded)}
-				sx={{
-					py: 0.5,
-					px: 1,
-					borderRadius: 1,
-					"&:hover": { bgcolor: "action.hover" },
-				}}
+		<Collapsible
+			open={isExpanded}
+			onOpenChange={setIsExpanded}
+			className="mb-2"
+		>
+			<CollapsibleTrigger
+				className="flex w-full items-center rounded-md px-2 py-1 hover:bg-muted"
 			>
-				<Typography
-					variant="caption"
-					fontWeight={600}
-					color="text.secondary"
-					sx={{ flexGrow: 1, textTransform: "uppercase", letterSpacing: 0.5 }}
-				>
+				<span className="flex-1 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
 					{group.label}
-				</Typography>
-				<Typography variant="caption" color="text.disabled" sx={{ mr: 0.5 }}>
+				</span>
+				<span className="mr-1 text-xs text-muted-foreground/60">
 					{group.sessions.length}
-				</Typography>
+				</span>
 				{isExpanded ? (
-					<ExpandLessIcon fontSize="small" color="action" />
+					<ChevronUp className="size-4 text-muted-foreground" />
 				) : (
-					<ExpandMoreIcon fontSize="small" color="action" />
+					<ChevronDown className="size-4 text-muted-foreground" />
 				)}
-			</ListItemButton>
+			</CollapsibleTrigger>
 
-			<Collapse in={isExpanded}>
-				<List dense disablePadding sx={{ pl: 1 }}>
+			<CollapsibleContent>
+				<nav className="pl-2">
 					<AnimatePresence>
 						{group.sessions.map((session) => (
 							<SessionItem
@@ -264,45 +213,43 @@ function DateGroup({
 								}
 								onRename={
 									onRenameSession
-										? (newTitle) => onRenameSession(session.id, newTitle)
+										? (newTitle) =>
+												onRenameSession(
+													session.id,
+													newTitle,
+												)
 										: undefined
 								}
 							/>
 						))}
 					</AnimatePresence>
-				</List>
-			</Collapse>
-		</Box>
+				</nav>
+			</CollapsibleContent>
+		</Collapsible>
 	);
 }
 
 function SessionListSkeleton() {
 	return (
-		<Box sx={{ px: 1 }}>
+		<div className="px-2">
 			{[1, 2, 3].map((i) => (
-				<Box key={i} sx={{ mb: 2 }}>
-					<Skeleton variant="text" width={80} height={20} sx={{ mb: 1 }} />
+				<div key={i} className="mb-4">
+					<Skeleton className="mb-2 h-5 w-20" />
 					{[1, 2].map((j) => (
-						<Box
+						<div
 							key={j}
-							sx={{
-								display: "flex",
-								alignItems: "center",
-								gap: 1,
-								mb: 1,
-								pl: 1,
-							}}
+							className="mb-2 flex items-center gap-2 pl-2"
 						>
-							<Skeleton variant="circular" width={20} height={20} />
-							<Box sx={{ flexGrow: 1 }}>
-								<Skeleton variant="text" width="80%" height={18} />
-								<Skeleton variant="text" width="50%" height={14} />
-							</Box>
-						</Box>
+							<Skeleton className="size-5 rounded-full" />
+							<div className="flex-1">
+								<Skeleton className="mb-1 h-4.5 w-[80%]" />
+								<Skeleton className="h-3.5 w-[50%]" />
+							</div>
+						</div>
 					))}
-				</Box>
+				</div>
 			))}
-		</Box>
+		</div>
 	);
 }
 
@@ -316,62 +263,41 @@ export function SessionList({
 	onRenameSession,
 }: SessionListProps) {
 	return (
-		<Box
-			sx={{
-				height: "100%",
-				display: "flex",
-				flexDirection: "column",
-			}}
-		>
+		<div className="flex h-full flex-col">
 			{/* Header */}
-			<Box
-				sx={{
-					p: 2,
-					display: "flex",
-					alignItems: "center",
-					justifyContent: "space-between",
-					borderBottom: 1,
-					borderColor: "divider",
-				}}
-			>
-				<Typography variant="subtitle1" fontWeight={600}>
-					Chat History
-				</Typography>
-				<Tooltip title="New Chat">
-					<IconButton size="small" onClick={onNewSession} color="primary">
-						<AddIcon />
-					</IconButton>
+			<div className="flex items-center justify-between border-b border-border p-4">
+				<h3 className="text-sm font-semibold">Chat History</h3>
+				<Tooltip>
+					<TooltipTrigger
+						render={
+							<Button
+								variant="ghost"
+								size="icon-sm"
+								onClick={onNewSession}
+								className="text-[var(--primary)]"
+							/>
+						}
+					>
+						<Plus className="size-4" />
+					</TooltipTrigger>
+					<TooltipContent>New Chat</TooltipContent>
 				</Tooltip>
-			</Box>
+			</div>
 
 			{/* Session List */}
-			<Box sx={{ flexGrow: 1, overflow: "auto", p: 1 }}>
+			<div className="flex-1 overflow-auto p-2">
 				{isLoading ? (
 					<SessionListSkeleton />
 				) : groups.length === 0 ? (
-					<Box
-						sx={{
-							display: "flex",
-							flexDirection: "column",
-							alignItems: "center",
-							justifyContent: "center",
-							height: "100%",
-							color: "text.secondary",
-							p: 2,
-						}}
-					>
-						<ChatBubbleOutlineIcon sx={{ fontSize: 48, mb: 1, opacity: 0.5 }} />
-						<Typography variant="body2" textAlign="center">
+					<div className="flex h-full flex-col items-center justify-center p-4 text-muted-foreground">
+						<MessageCircle className="mb-2 size-12 opacity-50" />
+						<p className="text-center text-sm">
 							No chat history yet
-						</Typography>
-						<Typography
-							variant="caption"
-							textAlign="center"
-							color="text.disabled"
-						>
+						</p>
+						<p className="text-center text-xs text-muted-foreground/60">
 							Start a new conversation to begin
-						</Typography>
-					</Box>
+						</p>
+					</div>
 				) : (
 					<AnimatePresence>
 						{groups.map((group) => (
@@ -386,21 +312,17 @@ export function SessionList({
 						))}
 					</AnimatePresence>
 				)}
-			</Box>
+			</div>
 
 			{/* Footer */}
-			<Divider />
-			<Box sx={{ p: 1.5 }}>
-				<Typography
-					variant="caption"
-					color="text.disabled"
-					textAlign="center"
-					display="block"
-				>
-					{groups.reduce((sum, g) => sum + g.sessions.length, 0)} conversations
-				</Typography>
-			</Box>
-		</Box>
+			<Separator />
+			<div className="p-3">
+				<p className="text-center text-xs text-muted-foreground/60">
+					{groups.reduce((sum, g) => sum + g.sessions.length, 0)}{" "}
+					conversations
+				</p>
+			</div>
+		</div>
 	);
 }
 
