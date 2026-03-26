@@ -173,8 +173,8 @@ export function RecentOrderActivity({
 						</p>
 					)}
 				</CardContent>
-			</motion.div>
-		</Card>
+			</Card>
+		</motion.div>
 	);
 }
 

@@ -1,5 +1,3 @@
-import CssBaseline from "@mui/material/CssBaseline";
-import { ThemeProvider } from "@mui/material/styles";
 import * as Sentry from "@sentry/react";
 import {
 	onlineManager,
@@ -10,7 +8,6 @@ import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode, useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import { ZoomIndicator } from "./components/common/ZoomIndicator";
-import { useAppTheme } from "./hooks/useAppTheme";
 import { useUIScaleZoom } from "./hooks/useUIScaleZoom";
 import { setTheme } from "./lib/theme";
 // Import the generated route tree
@@ -202,7 +199,6 @@ function ensureBackendHealthMonitor(
 }
 
 function App() {
-	const theme = useAppTheme();
 	const themeId = useUIStore((s) => s.themeId);
 	const { uiScale, visible } = useUIScaleZoom();
 	const setBackendStatus = useUIStore((s) => s.setBackendStatus);
@@ -222,11 +218,10 @@ function App() {
 	}, [setBackendStatus]);
 
 	return (
-		<ThemeProvider theme={theme}>
-			<CssBaseline />
+		<>
 			<RouterProvider router={router} />
 			<ZoomIndicator uiScale={uiScale} visible={visible} />
-		</ThemeProvider>
+		</>
 	);
 }
 

@@ -140,8 +140,8 @@ export default defineConfig({
 		rollupOptions: {
 			output: {
 				manualChunks: (id: string) => {
-					if (id.includes("@mui/") || id.includes("@emotion/"))
-						return "vendor-mui";
+					if (id.includes("@radix-ui/") || id.includes("@base-ui/"))
+						return "vendor-radix";
 					if (id.includes("framer-motion")) return "vendor-motion";
 					if (id.includes("@tanstack/")) return "vendor-tanstack";
 					if (id.includes("@sentry/")) return "vendor-sentry";
