@@ -2,29 +2,16 @@
  * Knowledge Base Page
  */
 
-import PatternIcon from "@mui/icons-material/AutoGraph";
-import SchoolIcon from "@mui/icons-material/School";
-import SearchIcon from "@mui/icons-material/Search";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
-import {
-	Box,
-	Card,
-	CardContent,
-	Chip,
-	CircularProgress,
-	Dialog,
-	DialogContent,
-	DialogTitle,
-	Grid2 as Grid,
-	InputAdornment,
-	Tab,
-	Tabs,
-	TextField,
-	Typography,
-} from "@mui/material";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
+import {
+	GraduationCap,
+	LineChart,
+	Loader2,
+	Search,
+	TrendingUp,
+} from "lucide-react";
 import { useState } from "react";
 import { knowledgeApi } from "@/api/endpoints/knowledge";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -32,6 +19,17 @@ import { MetricRow } from "@/components/common/MetricRow";
 import { PageTransition } from "@/components/common/PageTransition";
 import { SectionHeader } from "@/components/common/SectionHeader";
 import { ShimmerSkeleton } from "@/components/common/ShimmerSkeleton";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+	Dialog,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 import { useDebounce } from "@/hooks/useDebounce";
 import type { StrategyKnowledge, TradeLesson, TradingPattern } from "@/types";
 import { staggerCascade, tabSwitch } from "@/utils/animations/variants";
@@ -44,7 +42,7 @@ export const Route = createFileRoute("/knowledge/")({
 });
 
 function KnowledgePage() {
-	const [tabValue, setTabValue] = useState(0);
+	const [tabValue, setTabValue] = useState("strategies");
 	const [searchQuery, setSearchQuery] = useState("");
 	const debouncedQuery = useDebounce(searchQuery, 300);
 	const [selectedItem, setSelectedItem] = useState<
@@ -64,19 +62,19 @@ function KnowledgePage() {
 	const { data: strategies, isLoading: loadingStrategies } = useQuery({
 		queryKey: ["knowledge-strategies"],
 		queryFn: () => knowledgeApi.getStrategies(20),
-		enabled: tabValue === 0 && !debouncedQuery,
+		enabled: tabValue === "strategies" && !debouncedQuery,
 	});
 
 	const { data: lessons, isLoading: loadingLessons } = useQuery({
 		queryKey: ["knowledge-lessons"],
 		queryFn: () => knowledgeApi.getLessons({ limit: 20 }),
-		enabled: tabValue === 1 && !debouncedQuery,
+		enabled: tabValue === "lessons" && !debouncedQuery,
 	});
 
 	const { data: patterns, isLoading: loadingPatterns } = useQuery({
 		queryKey: ["knowledge-patterns"],
 		queryFn: () => knowledgeApi.getPatterns({ limit: 20 }),
-		enabled: tabValue === 2 && !debouncedQuery,
+		enabled: tabValue === "patterns" && !debouncedQuery,
 	});
 
 	const isLoading =
@@ -91,210 +89,202 @@ function KnowledgePage() {
 
 	return (
 		<PageTransition pageKey="knowledge">
-			<Box>
+			<div>
 				<SectionHeader
 					title="Knowledge Base"
 					subtitle="Strategies, lessons, and patterns learned by the agent"
 				/>
 
 				{/* Search */}
-				<TextField
-					fullWidth
-					placeholder="Search knowledge base..."
-					value={searchQuery}
-					onChange={(e) => setSearchQuery(e.target.value)}
-					slotProps={{
-						input: {
-							startAdornment: (
-								<InputAdornment position="start">
-									<SearchIcon />
-								</InputAdornment>
-							),
-							endAdornment: searching ? (
-								<InputAdornment position="end">
-									<CircularProgress size={18} />
-								</InputAdornment>
-							) : undefined,
-						},
-					}}
-					sx={{ mb: 3 }}
-				/>
+				<div className="relative mb-6">
+					<Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+					<Input
+						className="pl-10"
+						placeholder="Search knowledge base..."
+						value={searchQuery}
+						onChange={(e) => setSearchQuery(e.target.value)}
+					/>
+					{searching && (
+						<Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+					)}
+				</div>
 
 				{/* Tabs */}
-				<Tabs
-					value={tabValue}
-					onChange={(_, v) => setTabValue(v)}
-					sx={{ mb: 3 }}
-				>
-					<Tab
-						icon={<SchoolIcon />}
-						iconPosition="start"
-						label={`Strategies (${displayStrategies?.length || 0})`}
-					/>
-					<Tab
-						icon={<TrendingUpIcon />}
-						iconPosition="start"
-						label={`Lessons (${displayLessons?.length || 0})`}
-					/>
-					<Tab
-						icon={<PatternIcon />}
-						iconPosition="start"
-						label={`Patterns (${displayPatterns?.length || 0})`}
-					/>
-				</Tabs>
+				<Tabs value={tabValue} onValueChange={setTabValue}>
+					<TabsList className="mb-6">
+						<TabsTrigger value="strategies">
+							<GraduationCap className="size-4" />
+							Strategies ({displayStrategies?.length || 0})
+						</TabsTrigger>
+						<TabsTrigger value="lessons">
+							<TrendingUp className="size-4" />
+							Lessons ({displayLessons?.length || 0})
+						</TabsTrigger>
+						<TabsTrigger value="patterns">
+							<LineChart className="size-4" />
+							Patterns ({displayPatterns?.length || 0})
+						</TabsTrigger>
+					</TabsList>
 
-				{/* Content */}
-				{isLoading ? (
-					<Grid container spacing={2}>
-						{Array.from({ length: 6 }).map((_, i) => (
-							<Grid key={i} size={{ xs: 12, md: 6, lg: 4 }}>
-								<ShimmerSkeleton shimmerVariant="card" sx={{ height: 180 }} />
-							</Grid>
-						))}
-					</Grid>
-				) : (
-					<AnimatePresence mode="wait">
-						<motion.div
-							key={tabValue}
-							variants={tabSwitch}
-							initial="initial"
-							animate="animate"
-							exit="exit"
-						>
+					{/* Content */}
+					{isLoading ? (
+						<div className="grid grid-cols-12 gap-4">
+							{Array.from({ length: 6 }).map((_, i) => (
+								<div key={i} className="col-span-12 md:col-span-6 lg:col-span-4">
+									<ShimmerSkeleton shimmerVariant="card" sx={{ height: 180 }} />
+								</div>
+							))}
+						</div>
+					) : (
+						<AnimatePresence mode="wait">
 							<motion.div
-								variants={staggerCascade.container}
-								initial="hidden"
-								animate="visible"
+								key={tabValue}
+								variants={tabSwitch}
+								initial="initial"
+								animate="animate"
+								exit="exit"
 							>
-								<Grid container spacing={2}>
-									{/* Strategies Tab */}
-									{tabValue === 0 &&
-										(displayStrategies &&
-										displayStrategies.length > 0 ? (
-											displayStrategies.map((strategy) => (
-												<Grid
-													key={strategy.id}
-													size={{ xs: 12, md: 6, lg: 4 }}
-												>
-													<motion.div
-														variants={staggerCascade.item}
+								<motion.div
+									variants={staggerCascade.container}
+									initial="hidden"
+									animate="visible"
+								>
+									<TabsContent value="strategies">
+										<div className="grid grid-cols-12 gap-4">
+											{displayStrategies &&
+											displayStrategies.length > 0 ? (
+												displayStrategies.map((strategy) => (
+													<div
+														key={strategy.id}
+														className="col-span-12 md:col-span-6 lg:col-span-4"
 													>
-														<StrategyCard
-															strategy={strategy}
-															onClick={() => {
-																setSelectedItem(strategy);
-																setDetailType("strategy");
-															}}
-														/>
-													</motion.div>
-												</Grid>
-											))
-										) : (
-											<Grid size={{ xs: 12 }}>
-												<EmptyState
-													icon={<SchoolIcon />}
-													title="No strategies found"
-													description={
-														debouncedQuery
-															? "Try a different search term"
-															: "Add strategies to your knowledge base"
-													}
-												/>
-											</Grid>
-										))}
+														<motion.div
+															variants={staggerCascade.item}
+														>
+															<StrategyCard
+																strategy={strategy}
+																onClick={() => {
+																	setSelectedItem(strategy);
+																	setDetailType("strategy");
+																}}
+															/>
+														</motion.div>
+													</div>
+												))
+											) : (
+												<div className="col-span-12">
+													<EmptyState
+														icon={<GraduationCap className="size-6" />}
+														title="No strategies found"
+														description={
+															debouncedQuery
+																? "Try a different search term"
+																: "Add strategies to your knowledge base"
+														}
+													/>
+												</div>
+											)}
+										</div>
+									</TabsContent>
 
-									{/* Lessons Tab */}
-									{tabValue === 1 &&
-										(displayLessons && displayLessons.length > 0 ? (
-											displayLessons.map((lesson) => (
-												<Grid
-													key={lesson.id}
-													size={{ xs: 12, md: 6 }}
-												>
-													<motion.div
-														variants={staggerCascade.item}
+									<TabsContent value="lessons">
+										<div className="grid grid-cols-12 gap-4">
+											{displayLessons && displayLessons.length > 0 ? (
+												displayLessons.map((lesson) => (
+													<div
+														key={lesson.id}
+														className="col-span-12 md:col-span-6"
 													>
-														<LessonCard
-															lesson={lesson}
-															onClick={() => {
-																setSelectedItem(lesson);
-																setDetailType("lesson");
-															}}
-														/>
-													</motion.div>
-												</Grid>
-											))
-										) : (
-											<Grid size={{ xs: 12 }}>
-												<EmptyState
-													icon={<TrendingUpIcon />}
-													title="No lessons found"
-													description="Trade lessons will appear here after completing trades"
-												/>
-											</Grid>
-										))}
+														<motion.div
+															variants={staggerCascade.item}
+														>
+															<LessonCard
+																lesson={lesson}
+																onClick={() => {
+																	setSelectedItem(lesson);
+																	setDetailType("lesson");
+																}}
+															/>
+														</motion.div>
+													</div>
+												))
+											) : (
+												<div className="col-span-12">
+													<EmptyState
+														icon={<TrendingUp className="size-6" />}
+														title="No lessons found"
+														description="Trade lessons will appear here after completing trades"
+													/>
+												</div>
+											)}
+										</div>
+									</TabsContent>
 
-									{/* Patterns Tab */}
-									{tabValue === 2 &&
-										(displayPatterns &&
-										displayPatterns.length > 0 ? (
-											displayPatterns.map((pattern) => (
-												<Grid
-													key={pattern.id}
-													size={{ xs: 12, md: 6, lg: 4 }}
-												>
-													<motion.div
-														variants={staggerCascade.item}
+									<TabsContent value="patterns">
+										<div className="grid grid-cols-12 gap-4">
+											{displayPatterns &&
+											displayPatterns.length > 0 ? (
+												displayPatterns.map((pattern) => (
+													<div
+														key={pattern.id}
+														className="col-span-12 md:col-span-6 lg:col-span-4"
 													>
-														<PatternCard
-															pattern={pattern}
-															onClick={() => {
-																setSelectedItem(pattern);
-																setDetailType("pattern");
-															}}
-														/>
-													</motion.div>
-												</Grid>
-											))
-										) : (
-											<Grid size={{ xs: 12 }}>
-												<EmptyState
-													icon={<PatternIcon />}
-													title="No patterns found"
-													description="Trading patterns will be discovered as you trade"
-												/>
-											</Grid>
-										))}
-								</Grid>
+														<motion.div
+															variants={staggerCascade.item}
+														>
+															<PatternCard
+																pattern={pattern}
+																onClick={() => {
+																	setSelectedItem(pattern);
+																	setDetailType("pattern");
+																}}
+															/>
+														</motion.div>
+													</div>
+												))
+											) : (
+												<div className="col-span-12">
+													<EmptyState
+														icon={<LineChart className="size-6" />}
+														title="No patterns found"
+														description="Trading patterns will be discovered as you trade"
+													/>
+												</div>
+											)}
+										</div>
+									</TabsContent>
+								</motion.div>
 							</motion.div>
-						</motion.div>
-					</AnimatePresence>
-				)}
+						</AnimatePresence>
+					)}
+				</Tabs>
 
 				{/* Detail Dialog */}
 				<Dialog
 					open={!!selectedItem}
-					onClose={() => setSelectedItem(null)}
-					maxWidth="sm"
-					fullWidth
+					onOpenChange={(open) => {
+						if (!open) setSelectedItem(null);
+					}}
 				>
-					<DialogTitle>
-						{selectedItem && "name" in selectedItem
-							? selectedItem.name
-							: selectedItem && "patternName" in selectedItem
-								? selectedItem.patternName
-								: selectedItem && "symbol" in selectedItem
-									? selectedItem.symbol
-									: "Details"}
-					</DialogTitle>
-					<DialogContent>
+					<DialogContent className="sm:max-w-sm">
+						<DialogHeader>
+							<DialogTitle>
+								{selectedItem && "name" in selectedItem
+									? selectedItem.name
+									: selectedItem && "patternName" in selectedItem
+										? selectedItem.patternName
+										: selectedItem && "symbol" in selectedItem
+											? selectedItem.symbol
+											: "Details"}
+							</DialogTitle>
+						</DialogHeader>
 						{detailType === "strategy" &&
 							selectedItem &&
 							"name" in selectedItem && (
 								<>
-									<Typography variant="body2" sx={{ mb: 2 }}>
+									<p className="mb-4 text-sm">
 										{(selectedItem as StrategyKnowledge).description}
-									</Typography>
+									</p>
 									{(selectedItem as StrategyKnowledge).winRate !=
 										null && (
 										<MetricRow
@@ -326,12 +316,12 @@ function KnowledgePage() {
 											(selectedItem as TradeLesson).outcome
 										}
 									/>
-									<Typography variant="body2" sx={{ mt: 2 }}>
+									<p className="mt-4 text-sm">
 										{
 											(selectedItem as TradeLesson)
 												.lessonSummary
 										}
-									</Typography>
+									</p>
 								</>
 							)}
 						{detailType === "pattern" &&
@@ -349,17 +339,17 @@ function KnowledgePage() {
 										label="Success Rate"
 										value={`${(selectedItem as TradingPattern).successRate.toFixed(1)}%`}
 									/>
-									<Typography variant="body2" sx={{ mt: 2 }}>
+									<p className="mt-4 text-sm">
 										{
 											(selectedItem as TradingPattern)
 												.description
 										}
-									</Typography>
+									</p>
 								</>
 							)}
 					</DialogContent>
 				</Dialog>
-			</Box>
+			</div>
 		</PageTransition>
 	);
 }
@@ -369,24 +359,27 @@ function StrategyCard({
 	onClick,
 }: { strategy: StrategyKnowledge; onClick?: () => void }) {
 	return (
-		<Card onClick={onClick} sx={{ cursor: onClick ? "pointer" : "default" }}>
+		<Card
+			className={cn("cursor-pointer", !onClick && "cursor-default")}
+			onClick={onClick}
+		>
 			<CardContent>
-				<Typography variant="h6" fontWeight={600} gutterBottom>
+				<h3 className="mb-1 text-base font-semibold">
 					{strategy.name}
-				</Typography>
-				<Typography
-					variant="body2"
-					color="text.secondary"
-					sx={{ mb: 2, minHeight: 48 }}
-				>
+				</h3>
+				<p className="mb-4 min-h-[48px] text-sm text-muted-foreground">
 					{strategy.description?.slice(0, 100) || "No description"}...
-				</Typography>
+				</p>
 				{strategy.winRate && (
-					<Chip
-						label={`Win Rate: ${strategy.winRate.toFixed(1)}%`}
-						size="small"
-						color={strategy.winRate >= 50 ? "success" : "error"}
-					/>
+					<Badge
+						className={cn(
+							strategy.winRate >= 50
+								? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+								: "bg-red-500/20 text-red-400 border-red-500/30",
+						)}
+					>
+						Win Rate: {strategy.winRate.toFixed(1)}%
+					</Badge>
 				)}
 			</CardContent>
 		</Card>
@@ -397,37 +390,43 @@ function LessonCard({
 	lesson,
 	onClick,
 }: { lesson: TradeLesson; onClick?: () => void }) {
-	const outcomeColor =
-		lesson.outcome === "profit"
-			? "success"
-			: lesson.outcome === "loss"
-				? "error"
-				: "default";
-
 	return (
-		<Card onClick={onClick} sx={{ cursor: onClick ? "pointer" : "default" }}>
+		<Card
+			className={cn("cursor-pointer", !onClick && "cursor-default")}
+			onClick={onClick}
+		>
 			<CardContent>
-				<Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
-					<Box sx={{ display: "flex", gap: 1 }}>
-						<Chip label={lesson.symbol} size="small" />
-						<Chip
-							label={lesson.side.toUpperCase()}
-							size="small"
-							color={lesson.side === "buy" ? "success" : "error"}
-						/>
-					</Box>
-					<Chip
-						label={`${lesson.outcome} ${formatPercent(lesson.profitPercent)}`}
-						size="small"
-						color={outcomeColor}
-					/>
-				</Box>
-				<Typography variant="body2" sx={{ mb: 1 }}>
+				<div className="mb-2 flex justify-between">
+					<div className="flex gap-2">
+						<Badge variant="secondary">{lesson.symbol}</Badge>
+						<Badge
+							className={cn(
+								lesson.side === "buy"
+									? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+									: "bg-red-500/20 text-red-400 border-red-500/30",
+							)}
+						>
+							{lesson.side.toUpperCase()}
+						</Badge>
+					</div>
+					<Badge
+						className={cn(
+							lesson.outcome === "profit"
+								? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+								: lesson.outcome === "loss"
+									? "bg-red-500/20 text-red-400 border-red-500/30"
+									: "",
+						)}
+					>
+						{lesson.outcome} {formatPercent(lesson.profitPercent)}
+					</Badge>
+				</div>
+				<p className="mb-2 text-sm">
 					{lesson.lessonSummary}
-				</Typography>
-				<Typography variant="caption" color="text.secondary">
+				</p>
+				<p className="text-xs text-muted-foreground">
 					{formatRelativeTime(lesson.createdAt)}
-				</Typography>
+				</p>
 			</CardContent>
 		</Card>
 	);
@@ -438,39 +437,36 @@ function PatternCard({
 	onClick,
 }: { pattern: TradingPattern; onClick?: () => void }) {
 	return (
-		<Card onClick={onClick} sx={{ cursor: onClick ? "pointer" : "default" }}>
+		<Card
+			className={cn("cursor-pointer", !onClick && "cursor-default")}
+			onClick={onClick}
+		>
 			<CardContent>
-				<Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
-					<Typography variant="h6" fontWeight={600}>
+				<div className="mb-2 flex items-center justify-between">
+					<h3 className="text-base font-semibold">
 						{pattern.patternName}
-					</Typography>
-					<Chip label={pattern.patternType} size="small" variant="outlined" />
-				</Box>
-				<Typography
-					variant="body2"
-					color="text.secondary"
-					sx={{ mb: 2, minHeight: 48 }}
-				>
+					</h3>
+					<Badge variant="outline">{pattern.patternType}</Badge>
+				</div>
+				<p className="mb-4 min-h-[48px] text-sm text-muted-foreground">
 					{pattern.description?.slice(0, 100) || "No description"}...
-				</Typography>
-				<Box sx={{ display: "flex", gap: 1 }}>
-					<Chip
-						label={`Success: ${pattern.successRate.toFixed(1)}%`}
-						size="small"
-						color={
+				</p>
+				<div className="flex gap-2">
+					<Badge
+						className={cn(
 							pattern.successRate >= 60
-								? "success"
+								? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
 								: pattern.successRate >= 40
-									? "warning"
-									: "error"
-						}
-					/>
-					<Chip
-						label={`Avg Return: ${formatPercent(pattern.avgReturn)}`}
-						size="small"
-						variant="outlined"
-					/>
-				</Box>
+									? "bg-amber-500/20 text-amber-400 border-amber-500/30"
+									: "bg-red-500/20 text-red-400 border-red-500/30",
+						)}
+					>
+						Success: {pattern.successRate.toFixed(1)}%
+					</Badge>
+					<Badge variant="outline">
+						Avg Return: {formatPercent(pattern.avgReturn)}
+					</Badge>
+				</div>
 			</CardContent>
 		</Card>
 	);
