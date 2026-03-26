@@ -880,6 +880,95 @@ async def test_exchange_connection(
         return {"success": False, "message": f"Connection failed: {e}"}
 
 
+# ── Brave Search Configuration ──────────────────────────────────
+
+
+class BraveSearchConfigResponse(BaseModel):
+    has_api_key: bool
+    masked_api_key: str
+
+
+class BraveSearchConfigUpdate(BaseModel):
+    api_key: str | None = None
+
+
+def _resolve_brave_search_api_key(app_settings: AppSettings) -> str:
+    return app_settings.get_brave_search_api_key() or settings.brave_search_api_key
+
+
+def _build_brave_search_response(app_settings: AppSettings) -> dict:
+    api_key = _resolve_brave_search_api_key(app_settings)
+    return {
+        "has_api_key": bool(api_key),
+        "masked_api_key": _mask_key(api_key),
+    }
+
+
+@router.get("/brave-search", response_model=BraveSearchConfigResponse)
+async def get_brave_search_config(
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Get current Brave Search configuration."""
+    app_settings = await AppSettings.get_instance()
+    return _build_brave_search_response(app_settings)
+
+
+@router.post("/brave-search/reveal")
+async def reveal_brave_search_credentials(
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Reveal decrypted Brave Search API key (superuser only)."""
+    app_settings = await AppSettings.get_instance()
+    return {"api_key": _resolve_brave_search_api_key(app_settings)}
+
+
+@router.put("/brave-search", response_model=BraveSearchConfigResponse)
+async def update_brave_search_config(
+    body: BraveSearchConfigUpdate,
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Update Brave Search configuration."""
+    app_settings = await AppSettings.get_instance()
+
+    if body.api_key is not None:
+        _ensure_encryption_available()
+        app_settings.set_brave_search_api_key(body.api_key)
+
+    await app_settings.save_with_timestamp()
+    logger.info("Brave Search config updated")
+
+    return _build_brave_search_response(app_settings)
+
+
+@router.post("/brave-search/test", response_model=TestConnectionResponse)
+async def test_brave_search_connection(
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Test the Brave Search API connection with current key."""
+    import httpx
+
+    app_settings = await AppSettings.get_instance()
+    api_key = _resolve_brave_search_api_key(app_settings)
+    if not api_key:
+        return {"success": False, "message": "Brave Search API key not configured"}
+
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                "https://api.search.brave.com/res/v1/web/search",
+                params={"q": "test", "count": "1"},
+                headers={"X-Subscription-Token": api_key},
+                timeout=10.0,
+            )
+        if resp.status_code == 200:
+            return {"success": True, "message": "Brave Search API connected successfully"}
+        if resp.status_code == 401:
+            return {"success": False, "message": "Invalid API key (401 Unauthorized)"}
+        return {"success": False, "message": f"Brave API error: HTTP {resp.status_code}"}
+    except Exception as e:
+        return {"success": False, "message": f"Connection failed: {e}"}
+
+
 # ── Auth / Token Expiry Configuration ──────────────────────────
 
 

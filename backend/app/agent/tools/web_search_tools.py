@@ -24,8 +24,11 @@ _CACHE_TTL = 300  # 5 minutes
 _CACHE_MAX_SIZE = 100
 
 
-def _get_api_key() -> str | None:
-    key = get_settings().brave_search_api_key
+async def _get_api_key() -> str | None:
+    from app.db.models.app_settings import AppSettings
+
+    app_settings = await AppSettings.get_instance()
+    key = app_settings.get_brave_search_api_key() or get_settings().brave_search_api_key
     return key if key else None
 
 
@@ -67,7 +70,7 @@ async def search_web(
     Returns:
         Dict with query, results list, and count. On failure, includes error key.
     """
-    api_key = _get_api_key()
+    api_key = await _get_api_key()
     if not api_key:
         return {
             "query": query,
@@ -148,7 +151,7 @@ async def search_news(
     Returns:
         Dict with query, articles list, and count. On failure, includes error key.
     """
-    api_key = _get_api_key()
+    api_key = await _get_api_key()
     if not api_key:
         return {
             "query": query,

@@ -42,6 +42,7 @@ class AppSettings(Document):
         "okx_api_key",
         "okx_secret_key",
         "okx_passphrase",
+        "brave_search_api_key",
     )
 
     singleton_key: str = SINGLETON_KEY
@@ -59,6 +60,9 @@ class AppSettings(Document):
     okx_secret_key: str = ""
     okx_passphrase: str = ""
     okx_sandbox: bool = True
+
+    # Brave Search configuration
+    brave_search_api_key: str = ""
 
     # Auth / token settings
     access_token_expire_minutes: int = 0  # 0 = use env var fallback, then no expiry
@@ -224,6 +228,14 @@ class AppSettings(Document):
     def set_okx_passphrase(self, value: str) -> None:
         """Set OKX passphrase in encrypted storage format."""
         self._set_secret_value("okx_passphrase", value)
+
+    def get_brave_search_api_key(self) -> str:
+        """Get decrypted Brave Search API key."""
+        return self._get_secret_value("brave_search_api_key")
+
+    def set_brave_search_api_key(self, value: str) -> None:
+        """Set Brave Search API key in encrypted storage format."""
+        self._set_secret_value("brave_search_api_key", value)
 
     def has_persisted_secret_values(self) -> bool:
         """Return True when any secret field has a non-empty stored value."""
