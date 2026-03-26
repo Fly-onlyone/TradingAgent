@@ -2,14 +2,15 @@
  * Mouse-following ambient radial glow effect.
  */
 
-import { useTheme } from "@mui/material/styles";
 import { motion, useReducedMotion, useSpring } from "framer-motion";
+
 import { useCursorPosition } from "@/hooks/useCursorPosition";
+import { useThemePreset } from "@/lib/theme";
 
 export function CursorGlow() {
 	const { x, y } = useCursorPosition();
 	const prefersReduced = useReducedMotion();
-	const theme = useTheme();
+	const preset = useThemePreset();
 
 	const springConfig = { stiffness: 50, damping: 30 };
 	const smoothX = useSpring(x, springConfig);
@@ -17,7 +18,7 @@ export function CursorGlow() {
 
 	if (prefersReduced) return null;
 
-	const rgb = theme.trading.primaryRgb;
+	const rgb = preset.primaryRgb;
 
 	return (
 		<motion.div
