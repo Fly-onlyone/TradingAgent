@@ -2,31 +2,27 @@
  * Strategy Auto-Discovery configuration card for the Tasks page.
  */
 
-import PlayArrowIcon from "@mui/icons-material/PlayArrow";
-import SearchIcon from "@mui/icons-material/Search";
-import {
-	Alert,
-	Box,
-	Button,
-	Card,
-	CardContent,
-	Chip,
-	CircularProgress,
-	FormControl,
-	FormControlLabel,
-	InputLabel,
-	MenuItem,
-	Slider,
-	Switch,
-	Typography,
-} from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Loader2, Play, Search } from "lucide-react";
 import { useState } from "react";
 import {
 	type StrategyDiscoveryConfig,
 	settingsApi,
 } from "@/api/endpoints/settings";
-import { ZoomAwareSelect } from "@/components/common/ZoomAwareSelect";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { useAuthStore } from "@/store/authStore";
 import { notify } from "@/store/uiStore";
 
@@ -80,130 +76,108 @@ export function StrategyDiscoveryCard() {
 	const config = configQuery.data;
 
 	return (
-		<Card sx={{ mb: 3 }}>
+		<Card className="mb-6">
 			<CardContent>
-				<Box
-					sx={{
-						display: "flex",
-						justifyContent: "space-between",
-						alignItems: "center",
-						mb: 2,
-					}}
-				>
-					<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-						<SearchIcon color="primary" />
-						<Typography variant="h6" fontWeight={600}>
+				<div className="mb-4 flex items-center justify-between">
+					<div className="flex items-center gap-2">
+						<Search className="size-5 text-primary" />
+						<h3 className="text-base font-semibold">
 							Strategy Auto-Discovery
-						</Typography>
-					</Box>
+						</h3>
+					</div>
 					{config && (
-						<FormControlLabel
-							control={
-								<Switch
-									checked={config.enabled}
-									onChange={(_, checked) =>
-										updateMutation.mutate({ enabled: checked })
-									}
-								/>
-							}
-							label={config.enabled ? "Enabled" : "Disabled"}
-						/>
+						<div className="flex items-center gap-2">
+							<Switch
+								checked={config.enabled}
+								onCheckedChange={(checked) =>
+									updateMutation.mutate({ enabled: checked })
+								}
+							/>
+							<Label>{config.enabled ? "Enabled" : "Disabled"}</Label>
+						</div>
 					)}
-				</Box>
+				</div>
 
-				<Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+				<p className="mb-4 text-sm text-muted-foreground">
 					Automatically crawl news sources and extract trading strategies using
 					AI. Discovered strategies are saved to the knowledge base (RAG).
-				</Typography>
+				</p>
 
-				{configQuery.isLoading && <CircularProgress size={24} />}
+				{configQuery.isLoading && (
+					<Loader2 className="size-5 animate-spin text-muted-foreground" />
+				)}
 
 				{config && (
-					<Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
-						<FormControl size="small" sx={{ maxWidth: 250 }}>
-							<InputLabel>Check Interval</InputLabel>
-							<ZoomAwareSelect
-								value={config.intervalHours}
-								label="Check Interval"
-								onChange={(e) =>
+					<div className="flex flex-col gap-5">
+						<div className="max-w-[250px] space-y-1.5">
+							<Label>Check Interval</Label>
+							<Select
+								value={String(config.intervalHours)}
+								onValueChange={(val) =>
 									updateMutation.mutate({
-										intervalHours: e.target.value as number,
+										intervalHours: Number(val),
 									})
 								}
 								disabled={!config.enabled}
 							>
-								{INTERVAL_OPTIONS.map((opt) => (
-									<MenuItem key={opt.value} value={opt.value}>
-										{opt.label}
-									</MenuItem>
-								))}
-							</ZoomAwareSelect>
-						</FormControl>
+								<SelectTrigger size="sm">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									{INTERVAL_OPTIONS.map((opt) => (
+										<SelectItem key={opt.value} value={String(opt.value)}>
+											{opt.label}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
 
-						<Box sx={{ maxWidth: 350 }}>
-							<Typography variant="body2" gutterBottom>
+						<div className="max-w-[350px]">
+							<p className="mb-2 text-sm">
 								Min. Extraction Confidence:{" "}
 								{(config.minConfidence * 100).toFixed(0)}%
-							</Typography>
+							</p>
 							<Slider
-								value={config.minConfidence}
-								onChange={(_, val) =>
+								value={config.minConfidence * 100}
+								onValueChange={(val) =>
 									updateMutation.mutate({
-										minConfidence: val as number,
+										minConfidence: (val as number) / 100,
 									})
 								}
-								min={0.1}
-								max={1.0}
-								step={0.05}
+								min={10}
+								max={100}
+								step={5}
 								disabled={!config.enabled}
-								valueLabelDisplay="auto"
-								valueLabelFormat={(v) => `${(v * 100).toFixed(0)}%`}
 							/>
-						</Box>
+						</div>
 
 						{/* Sources with strategy extraction enabled */}
-						<Box>
-							<Typography variant="body2" fontWeight={600} gutterBottom>
+						<div>
+							<p className="mb-2 text-sm font-semibold">
 								Sources ({config.sources.length})
-							</Typography>
+							</p>
 							{config.sources.length > 0 ? (
-								<Box
-									sx={{
-										display: "flex",
-										flexWrap: "wrap",
-										gap: 1,
-									}}
-								>
+								<div className="flex flex-wrap gap-1.5">
 									{config.sources.map((source) => (
-										<Chip
-											key={source.id}
-											label={source.name}
-											variant="outlined"
-											size="small"
-											color="primary"
-										/>
+										<Badge key={source.id} variant="outline">
+											{source.name}
+										</Badge>
 									))}
-								</Box>
+								</div>
 							) : (
-								<Typography variant="body2" color="text.secondary">
+								<p className="text-sm text-muted-foreground">
 									No sources have strategy extraction enabled. Enable it on news
 									sources in the News page.
-								</Typography>
+								</p>
 							)}
-						</Box>
+						</div>
 
 						{/* Run Now button */}
-						<Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+						<div className="flex items-center gap-3">
 							<Button
-								variant="outlined"
-								size="small"
-								startIcon={
-									runNowMutation.isPending ? (
-										<CircularProgress size={16} />
-									) : (
-										<PlayArrowIcon />
-									)
-								}
+								variant="outline"
+								size="sm"
 								onClick={() => {
 									setRunResult(null);
 									runNowMutation.mutate();
@@ -212,15 +186,20 @@ export function StrategyDiscoveryCard() {
 									runNowMutation.isPending || config.sources.length === 0
 								}
 							>
+								{runNowMutation.isPending ? (
+									<Loader2 className="size-3.5 animate-spin" />
+								) : (
+									<Play className="size-3.5" />
+								)}
 								{runNowMutation.isPending ? "Running..." : "Run Now"}
 							</Button>
 							{runResult && (
-								<Alert severity="info" sx={{ py: 0 }}>
-									{runResult}
+								<Alert className="py-1">
+									<AlertDescription>{runResult}</AlertDescription>
 								</Alert>
 							)}
-						</Box>
-					</Box>
+						</div>
+					</div>
 				)}
 			</CardContent>
 		</Card>

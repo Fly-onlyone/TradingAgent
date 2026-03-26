@@ -2,49 +2,56 @@
  * Tasks Page - Single task with multiple toggleable schedules
  */
 
-import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
-import AutoModeIcon from "@mui/icons-material/AutoMode";
-import DeleteIcon from "@mui/icons-material/Delete";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import NotificationsIcon from "@mui/icons-material/Notifications";
-import PauseIcon from "@mui/icons-material/Pause";
-import PlayArrowIcon from "@mui/icons-material/PlayArrow";
-import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
-import {
-	Accordion,
-	AccordionDetails,
-	AccordionSummary,
-	Alert,
-	Box,
-	Button,
-	Card,
-	CardContent,
-	Chip,
-	CircularProgress,
-	FormControl,
-	FormControlLabel,
-	IconButton,
-	InputLabel,
-	MenuItem,
-	Slider,
-	Switch,
-	TextField,
-	Tooltip,
-	Typography,
-} from "@mui/material";
-import { LocalizationProvider, TimePicker } from "@mui/x-date-pickers";
-import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { format, parse } from "date-fns";
+import {
+	Bell,
+	ChevronDown,
+	Clock,
+	Loader2,
+	MinusCircle,
+	Pause,
+	Play,
+	PlusCircle,
+	RotateCw,
+	Trash2,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { tasksApi } from "@/api/endpoints/tasks";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { PageTransition } from "@/components/common/PageTransition";
 import { SectionHeader } from "@/components/common/SectionHeader";
-import { ZoomAwareSelect } from "@/components/common/ZoomAwareSelect";
-import { type Column, DataTable } from "@/components/data-display/DataTable";
 import { StrategyDiscoveryCard } from "@/components/tasks/StrategyDiscoveryCard";
+import {
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { type Column, DataTable } from "@/components/data-display/DataTable";
+import { cn } from "@/lib/utils";
 import { useUIStore } from "@/store/uiStore";
 import type {
 	AgentMode,
@@ -364,25 +371,36 @@ function TasksPage() {
 		});
 	};
 
-	const riskMarks = [
-		{ value: 0, label: "Conservative" },
-		{ value: 1, label: "Moderate" },
-		{ value: 2, label: "Aggressive" },
-	];
 	const riskValues: RiskLevel[] = ["conservative", "moderate", "aggressive"];
 
-	const getStatusChip = (status: string) => {
+	const getStatusBadge = (status: string) => {
 		const config: Record<
 			string,
-			{ color: "success" | "warning" | "error" | "default"; label: string }
+			{
+				variant: "default" | "secondary" | "destructive" | "outline";
+				className?: string;
+				label: string;
+			}
 		> = {
-			active: { color: "success", label: "Active" },
-			paused: { color: "warning", label: "Paused" },
-			completed: { color: "default", label: "Completed" },
-			failed: { color: "error", label: "Failed" },
+			active: {
+				variant: "default",
+				className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+				label: "Active",
+			},
+			paused: {
+				variant: "default",
+				className: "bg-amber-500/20 text-amber-400 border-amber-500/30",
+				label: "Paused",
+			},
+			completed: { variant: "secondary", label: "Completed" },
+			failed: { variant: "destructive", label: "Failed" },
 		};
-		const c = config[status] || { color: "default", label: status };
-		return <Chip label={c.label} size="small" color={c.color} />;
+		const c = config[status] || { variant: "secondary" as const, label: status };
+		return (
+			<Badge variant={c.variant} className={c.className}>
+				{c.label}
+			</Badge>
+		);
 	};
 
 	const historyColumns: Column<TaskExecution>[] = [
@@ -397,17 +415,18 @@ function TasksPage() {
 			label: "Action",
 			render: (row) =>
 				row.action ? (
-					<Chip
-						label={row.action.toUpperCase()}
-						size="small"
-						color={
+					<Badge
+						variant="default"
+						className={cn(
 							row.action === "buy"
-								? "success"
+								? "bg-emerald-500/20 text-emerald-400"
 								: row.action === "sell"
-									? "error"
-									: "default"
-						}
-					/>
+									? "bg-red-500/20 text-red-400"
+									: "",
+						)}
+					>
+						{row.action.toUpperCase()}
+					</Badge>
 				) : (
 					"-"
 				),
@@ -421,720 +440,662 @@ function TasksPage() {
 		{
 			id: "status",
 			label: "Status",
-			render: (row) => getStatusChip(row.status),
+			render: (row) => getStatusBadge(row.status),
 		},
 	];
 
 	const isSaving = createTaskMutation.isPending || updateTaskMutation.isPending;
+
+	const handleSymbolToggle = (symbol: string) => {
+		const current = formData.symbols;
+		const updated = current.includes(symbol)
+			? current.filter((s) => s !== symbol)
+			: [...current, symbol];
+		setFormData({ ...formData, symbols: updated });
+	};
+
 	return (
-		<LocalizationProvider dateAdapter={AdapterDateFns}>
-			<PageTransition pageKey="tasks">
-				<Box>
-					{/* Header with title + task-level actions */}
-					<SectionHeader
-						title="Automated Tasks"
-						subtitle="Configure and manage scheduled agent trading tasks"
-						action={task ? getStatusChip(task.status) : undefined}
-					/>
-					{existingTaskId && (
-						<Box sx={{ display: "flex", gap: 1, mb: 2 }}>
-							{task?.status === "active" && (
-								<>
-									<Tooltip title="Run Now">
-										<span>
+		<PageTransition pageKey="tasks">
+			<div>
+				{/* Header with title + task-level actions */}
+				<SectionHeader
+					title="Automated Tasks"
+					subtitle="Configure and manage scheduled agent trading tasks"
+					action={task ? getStatusBadge(task.status) : undefined}
+				/>
+				{existingTaskId && (
+					<div className="mb-4 flex gap-2">
+						{task?.status === "active" && (
+							<>
+								<Tooltip>
+									<TooltipTrigger
+										render={
 											<Button
-												variant="outlined"
-												size="small"
-												startIcon={<PlayArrowIcon />}
+												variant="outline"
+												size="sm"
 												onClick={handleRunNow}
 												disabled={runTaskMutation.isPending}
-											>
-												Run Now
-											</Button>
-										</span>
-									</Tooltip>
-									<Tooltip title="Pause">
-										<span>
+											/>
+										}
+									>
+										<Play className="size-3.5" />
+										Run Now
+									</TooltipTrigger>
+									<TooltipContent>Run Now</TooltipContent>
+								</Tooltip>
+								<Tooltip>
+									<TooltipTrigger
+										render={
 											<Button
-												variant="outlined"
-												size="small"
-												color="warning"
-												startIcon={<PauseIcon />}
+												variant="outline"
+												size="sm"
+												className="text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
 												onClick={handlePause}
 												disabled={pauseTaskMutation.isPending}
-											>
-												Pause
-											</Button>
-										</span>
-									</Tooltip>
-								</>
-							)}
-							{task?.status === "paused" && (
-								<Tooltip title="Resume">
-									<span>
+											/>
+										}
+									>
+										<Pause className="size-3.5" />
+										Pause
+									</TooltipTrigger>
+									<TooltipContent>Pause</TooltipContent>
+								</Tooltip>
+							</>
+						)}
+						{task?.status === "paused" && (
+							<Tooltip>
+								<TooltipTrigger
+									render={
 										<Button
-											variant="outlined"
-											size="small"
-											color="success"
-											startIcon={<PlayArrowIcon />}
+											variant="outline"
+											size="sm"
+											className="text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
 											onClick={handleResume}
 											disabled={resumeTaskMutation.isPending}
-										>
-											Resume
-										</Button>
-									</span>
-								</Tooltip>
-							)}
-							<Tooltip title="Delete">
-								<span>
+										/>
+									}
+								>
+									<Play className="size-3.5" />
+									Resume
+								</TooltipTrigger>
+								<TooltipContent>Resume</TooltipContent>
+							</Tooltip>
+						)}
+						<Tooltip>
+							<TooltipTrigger
+								render={
 									<Button
-										variant="outlined"
-										size="small"
-										color="error"
-										startIcon={<DeleteIcon />}
+										variant="destructive"
+										size="sm"
 										onClick={handleDelete}
 										disabled={deleteTaskMutation.isPending}
-									>
-										Delete
-									</Button>
-								</span>
-							</Tooltip>
-						</Box>
-					)}
+									/>
+								}
+							>
+								<Trash2 className="size-3.5" />
+								Delete
+							</TooltipTrigger>
+							<TooltipContent>Delete</TooltipContent>
+						</Tooltip>
+					</div>
+				)}
 
-					{(error || (tasksQuery.isError && !isWaitingForBackend)) && (
-						<Alert
-							severity="error"
-							onClose={() => setError(null)}
-							sx={{ mb: 2 }}
-						>
+				{(error || (tasksQuery.isError && !isWaitingForBackend)) && (
+					<Alert variant="destructive" className="mb-4">
+						<AlertDescription>
 							{error ?? "Failed to load tasks"}
-						</Alert>
-					)}
+						</AlertDescription>
+					</Alert>
+				)}
 
-					<StrategyDiscoveryCard />
+				<StrategyDiscoveryCard />
 
-					{isLoadingTasks ? (
-						<Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-							<CircularProgress />
-						</Box>
-					) : (
-						<>
-							{/* Inline task form */}
-							<Card sx={{ mb: 3 }}>
-								<CardContent>
-									<Box
-										sx={{
-											display: "flex",
-											flexDirection: "column",
-											gap: 2,
-										}}
+				{isLoadingTasks ? (
+					<div className="flex justify-center py-8">
+						<Loader2 className="size-6 animate-spin text-muted-foreground" />
+					</div>
+				) : (
+					<>
+						{/* Inline task form */}
+						<Card className="mb-6">
+							<CardContent className="flex flex-col gap-4">
+								<div className="space-y-1.5">
+									<Label htmlFor="task-name">Task Name</Label>
+									<Input
+										id="task-name"
+										value={formData.name}
+										onChange={(e) =>
+											setFormData({ ...formData, name: e.target.value })
+										}
+										required
+									/>
+								</div>
+
+								<div className="space-y-1.5">
+									<Label htmlFor="task-description">Description</Label>
+									<Textarea
+										id="task-description"
+										value={formData.description || ""}
+										onChange={(e) =>
+											setFormData({
+												...formData,
+												description: e.target.value,
+											})
+										}
+										rows={2}
+									/>
+								</div>
+
+								<div className="space-y-1.5">
+									<Label>Symbols</Label>
+									<div className="flex flex-wrap gap-1.5">
+										{AVAILABLE_SYMBOLS.map((symbol) => (
+											<Badge
+												key={symbol}
+												variant={
+													formData.symbols.includes(symbol)
+														? "default"
+														: "outline"
+												}
+												className="cursor-pointer"
+												onClick={() => handleSymbolToggle(symbol)}
+											>
+												{symbol}
+											</Badge>
+										))}
+									</div>
+								</div>
+
+								<p className="mt-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+									Schedule Configuration
+								</p>
+
+								{formData.schedules.map((schedule, idx) => (
+									<div
+										key={scheduleKeys[idx] as string}
+										className={cn(
+											"flex flex-col gap-2 rounded-lg border border-border p-3",
+											schedule.enabled === false && "opacity-50",
+										)}
 									>
-										<TextField
-											label="Task Name"
-											value={formData.name}
-											onChange={(e) =>
-												setFormData({ ...formData, name: e.target.value })
-											}
-											fullWidth
-											required
-										/>
+										<div className="flex flex-wrap items-center gap-2">
+											<Switch
+												checked={schedule.enabled !== false}
+												onCheckedChange={(checked) =>
+													updateSchedule(idx, { enabled: checked })
+												}
+												size="sm"
+											/>
 
-										<TextField
-											label="Description"
-											value={formData.description || ""}
-											onChange={(e) =>
+											<Select
+												value={schedule.frequency}
+												onValueChange={(val) =>
+													updateSchedule(idx, {
+														frequency: val as TaskFrequency,
+													})
+												}
+											>
+												<SelectTrigger size="sm" className="min-w-[130px]">
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent>
+													<SelectItem value="once">Once</SelectItem>
+													<SelectItem value="hourly">Hourly</SelectItem>
+													<SelectItem value="daily">Daily</SelectItem>
+													<SelectItem value="weekly">Weekly</SelectItem>
+													<SelectItem value="custom">Custom</SelectItem>
+												</SelectContent>
+											</Select>
+
+											{(schedule.frequency === "daily" ||
+												schedule.frequency === "weekly") && (
+												<div className="flex items-center gap-1.5">
+													<Clock className="size-3.5 text-muted-foreground" />
+													<input
+														type="time"
+														className="rounded-md border border-input bg-transparent px-3 py-1.5 text-sm text-foreground"
+														value={schedule.scheduledTime || "09:00"}
+														onChange={(e) =>
+															updateSchedule(idx, {
+																scheduledTime: e.target.value,
+															})
+														}
+													/>
+												</div>
+											)}
+
+											{schedule.frequency === "weekly" && (
+												<Select
+													value={String(schedule.dayOfWeek ?? 0)}
+													onValueChange={(val) =>
+														updateSchedule(idx, {
+															dayOfWeek: Number(val),
+														})
+													}
+												>
+													<SelectTrigger size="sm" className="min-w-[120px]">
+														<SelectValue />
+													</SelectTrigger>
+													<SelectContent>
+														{DAYS_OF_WEEK.map((day) => (
+															<SelectItem
+																key={day.value}
+																value={String(day.value)}
+															>
+																{day.label}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
+											)}
+
+											{schedule.frequency === "custom" && (
+												<Input
+													value={schedule.cronExpression || ""}
+													onChange={(e) =>
+														updateSchedule(idx, {
+															cronExpression: e.target.value,
+														})
+													}
+													placeholder="0 9 * * *"
+													className="flex-1"
+												/>
+											)}
+
+											{formData.schedules.length > 1 && (
+												<Tooltip>
+													<TooltipTrigger
+														render={
+															<Button
+																variant="ghost"
+																size="icon-xs"
+																className="text-destructive"
+																onClick={() => removeSchedule(idx)}
+															/>
+														}
+													>
+														<MinusCircle className="size-4" />
+													</TooltipTrigger>
+													<TooltipContent>Remove schedule</TooltipContent>
+												</Tooltip>
+											)}
+										</div>
+									</div>
+								))}
+
+								<Button
+									variant="ghost"
+									size="sm"
+									onClick={addSchedule}
+									className="self-start"
+								>
+									<PlusCircle className="size-3.5" />
+									Add Schedule
+								</Button>
+
+								{/* Risk Level */}
+								<p className="mt-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+									Risk & Analysis
+								</p>
+								<div className="px-4">
+									<p className="mb-3 text-sm text-foreground">Risk Level</p>
+									<Slider
+										value={riskValues.indexOf(formData.riskLevel)}
+										onValueChange={(val) =>
+											setFormData({
+												...formData,
+												riskLevel: riskValues[val as number],
+											})
+										}
+										step={1}
+										min={0}
+										max={2}
+									/>
+									<div className="mt-1 flex justify-between text-xs text-muted-foreground">
+										<span>Conservative</span>
+										<span>Moderate</span>
+										<span>Aggressive</span>
+									</div>
+								</div>
+
+								{/* Deep Analysis toggle */}
+								<Tooltip>
+									<TooltipTrigger className="flex items-center gap-2 self-start">
+										<Switch
+											checked={formData.useSubagents ?? false}
+											onCheckedChange={(checked) =>
 												setFormData({
 													...formData,
-													description: e.target.value,
+													useSubagents: checked,
 												})
 											}
-											fullWidth
-											multiline
-											rows={2}
 										/>
+										<Label>Deep Analysis (Subagents)</Label>
+									</TooltipTrigger>
+									<TooltipContent>
+										Run specialized subagents (Technical, Fundamental, News)
+										before main analysis. More thorough but uses more API
+										credits.
+									</TooltipContent>
+								</Tooltip>
 
-										<FormControl fullWidth>
-											<InputLabel>Symbols</InputLabel>
-											<ZoomAwareSelect
-												multiple
-												value={formData.symbols}
-												label="Symbols"
+								<p className="mt-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+									Trading Configuration
+								</p>
+								<div className="flex items-center gap-2">
+									<Switch
+										checked={formData.tradingEnabled}
+										onCheckedChange={(checked) =>
+											setFormData({
+												...formData,
+												tradingEnabled: checked,
+											})
+										}
+									/>
+									<Label>Enable Trading</Label>
+								</div>
+
+								{formData.tradingEnabled && (
+									<>
+										<div className="space-y-1.5">
+											<Label>Agent Mode</Label>
+											<Select
+												value={formData.agentMode}
+												onValueChange={(val) =>
+													setFormData({
+														...formData,
+														agentMode: val as AgentMode,
+													})
+												}
+											>
+												<SelectTrigger className="w-full">
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent>
+													<SelectItem value="ask">
+														<div className="flex items-center gap-1.5">
+															<Bell className="size-3.5" />
+															Ask - Notify for confirmation
+														</div>
+													</SelectItem>
+													<SelectItem value="auto">
+														<div className="flex items-center gap-1.5">
+															<RotateCw className="size-3.5" />
+															Auto - Execute automatically
+														</div>
+													</SelectItem>
+												</SelectContent>
+											</Select>
+										</div>
+
+										<div className="space-y-1.5">
+											<Label htmlFor="max-position">
+												Max Position Size (USDT)
+											</Label>
+											<Input
+												id="max-position"
+												type="number"
+												value={formData.maxPositionSize || ""}
 												onChange={(e) =>
 													setFormData({
 														...formData,
-														symbols: e.target.value as string[],
+														maxPositionSize: e.target.value
+															? Number(e.target.value)
+															: undefined,
 													})
 												}
-												renderValue={(selected) => (
-													<Box
-														sx={{
-															display: "flex",
-															flexWrap: "wrap",
-															gap: 0.5,
+											/>
+										</div>
+									</>
+								)}
+
+								<p className="mt-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+									Monitoring
+								</p>
+								<div className="flex items-center gap-2">
+									<Switch
+										checked={formData.monitoringEnabled}
+										onCheckedChange={(checked) =>
+											setFormData({
+												...formData,
+												monitoringEnabled: checked,
+											})
+										}
+									/>
+									<Label>Enable Monitoring</Label>
+								</div>
+
+								{formData.monitoringEnabled && (
+									<>
+										{(formData.monitoringConditions ?? []).map(
+											(condition, index) => (
+												<div
+													key={monitoringConditionKeys[index] as string}
+													className="flex flex-wrap items-start gap-2"
+												>
+													<Select
+														value={condition.conditionType}
+														onValueChange={(val) => {
+															const updated = [
+																...(formData.monitoringConditions ?? []),
+															];
+															updated[index] = {
+																...updated[index],
+																conditionType:
+																	val as MonitoringConditionType,
+															};
+															setFormData({
+																...formData,
+																monitoringConditions: updated,
+															});
 														}}
 													>
-														{selected.map((value) => (
-															<Chip key={value} label={value} size="small" />
-														))}
-													</Box>
-												)}
-											>
-												{AVAILABLE_SYMBOLS.map((symbol) => (
-													<MenuItem key={symbol} value={symbol}>
-														{symbol}
-													</MenuItem>
-												))}
-											</ZoomAwareSelect>
-										</FormControl>
+														<SelectTrigger
+															size="sm"
+															className="min-w-[160px]"
+														>
+															<SelectValue />
+														</SelectTrigger>
+														<SelectContent>
+															{(
+																Object.keys(
+																	MONITORING_CONDITION_CONFIG,
+																) as MonitoringConditionType[]
+															).map((type) => (
+																<SelectItem key={type} value={type}>
+																	{MONITORING_CONDITION_CONFIG[type].label}
+																</SelectItem>
+															))}
+														</SelectContent>
+													</Select>
 
-										<Typography
-											variant="overline"
-											color="text.secondary"
-											sx={{ mt: 1, display: "block" }}
-										>
-											Schedule Configuration
-										</Typography>
-
-										{formData.schedules.map((schedule, idx) => (
-											<Box
-												key={scheduleKeys[idx] as string}
-												sx={{
-													display: "flex",
-													flexDirection: "column",
-													gap: 1,
-													p: 1.5,
-													border: 1,
-													borderColor: "divider",
-													borderRadius: 1,
-													opacity: schedule.enabled === false ? 0.5 : 1,
-												}}
-											>
-												<Box
-													sx={{
-														display: "flex",
-														gap: 1,
-														alignItems: "center",
-													}}
-												>
-													<Switch
-														checked={schedule.enabled !== false}
-														onChange={(e) =>
-															updateSchedule(idx, {
-																enabled: e.target.checked,
-															})
-														}
-														size="small"
+													<Input
+														type="number"
+														placeholder={`Threshold (${MONITORING_CONDITION_CONFIG[condition.conditionType]?.unit || ""})`}
+														value={condition.threshold}
+														onChange={(e) => {
+															const updated = [
+																...(formData.monitoringConditions ?? []),
+															];
+															updated[index] = {
+																...updated[index],
+																threshold: Number(e.target.value),
+															};
+															setFormData({
+																...formData,
+																monitoringConditions: updated,
+															});
+														}}
+														className="w-[140px]"
 													/>
 
-													<FormControl sx={{ minWidth: 130 }}>
-														<InputLabel>Frequency</InputLabel>
-														<ZoomAwareSelect
-															value={schedule.frequency}
-															label="Frequency"
-															size="small"
-															onChange={(e) =>
-																updateSchedule(idx, {
-																	frequency: e.target.value as TaskFrequency,
-																})
-															}
+													{condition.conditionType === "custom" ? (
+														<Input
+															placeholder="Description"
+															value={condition.description ?? ""}
+															onChange={(e) => {
+																const updated = [
+																	...(formData.monitoringConditions ?? []),
+																];
+																updated[index] = {
+																	...updated[index],
+																	description: e.target.value,
+																};
+																setFormData({
+																	...formData,
+																	monitoringConditions: updated,
+																});
+															}}
+															className="flex-1"
+														/>
+													) : (
+														<Select
+															value={condition.timeframe ?? ""}
+															onValueChange={(val) => {
+																const updated = [
+																	...(formData.monitoringConditions ?? []),
+																];
+																updated[index] = {
+																	...updated[index],
+																	timeframe: val || undefined,
+																};
+																setFormData({
+																	...formData,
+																	monitoringConditions: updated,
+																});
+															}}
 														>
-															<MenuItem value="once">Once</MenuItem>
-															<MenuItem value="hourly">Hourly</MenuItem>
-															<MenuItem value="daily">Daily</MenuItem>
-															<MenuItem value="weekly">Weekly</MenuItem>
-															<MenuItem value="custom">Custom</MenuItem>
-														</ZoomAwareSelect>
-													</FormControl>
-
-													{(schedule.frequency === "daily" ||
-														schedule.frequency === "weekly") && (
-														<TimePicker
-															label="Time"
-															value={parse(
-																schedule.scheduledTime || "09:00",
-																"HH:mm",
-																new Date(),
-															)}
-															onChange={(val) => {
-																if (val) {
-																	updateSchedule(idx, {
-																		scheduledTime: format(val, "HH:mm"),
-																	});
-																}
-															}}
-															slotProps={{
-																textField: { size: "small" },
-															}}
-															slots={{
-																openPickerButton: (props) => (
-																	<Tooltip title="Pick time">
-																		<IconButton {...props} />
-																	</Tooltip>
-																),
-															}}
-															sx={{ width: 170 }}
-														/>
-													)}
-
-													{schedule.frequency === "weekly" && (
-														<FormControl size="small" sx={{ minWidth: 120 }}>
-															<InputLabel>Day</InputLabel>
-															<ZoomAwareSelect
-																value={schedule.dayOfWeek ?? 0}
-																label="Day"
-																onChange={(e) =>
-																	updateSchedule(idx, {
-																		dayOfWeek: e.target.value as number,
-																	})
-																}
+															<SelectTrigger
+																size="sm"
+																className="min-w-[90px]"
 															>
-																{DAYS_OF_WEEK.map((day) => (
-																	<MenuItem key={day.value} value={day.value}>
-																		{day.label}
-																	</MenuItem>
-																))}
-															</ZoomAwareSelect>
-														</FormControl>
+																<SelectValue placeholder="Timeframe" />
+															</SelectTrigger>
+															<SelectContent>
+																<SelectItem value="">-</SelectItem>
+																<SelectItem value="1H">1H</SelectItem>
+																<SelectItem value="4H">4H</SelectItem>
+																<SelectItem value="1D">1D</SelectItem>
+															</SelectContent>
+														</Select>
 													)}
 
-													{schedule.frequency === "custom" && (
-														<TextField
-															label="Cron"
-															size="small"
-															value={schedule.cronExpression || ""}
-															onChange={(e) =>
-																updateSchedule(idx, {
-																	cronExpression: e.target.value,
-																})
-															}
-															placeholder="0 9 * * *"
-															sx={{ flex: 1 }}
-														/>
-													)}
-
-													{formData.schedules.length > 1 && (
-														<Tooltip title="Remove schedule">
-															<IconButton
-																size="small"
-																color="error"
-																onClick={() => removeSchedule(idx)}
-															>
-																<RemoveCircleOutlineIcon />
-															</IconButton>
-														</Tooltip>
-													)}
-												</Box>
-											</Box>
-										))}
+													<Button
+														variant="ghost"
+														size="icon-xs"
+														className="text-destructive"
+														onClick={() => {
+															setMonitoringConditionKeys((prev) =>
+																prev.filter((_, i) => i !== index),
+															);
+															const updated = (
+																formData.monitoringConditions ?? []
+															).filter((_, i) => i !== index);
+															setFormData({
+																...formData,
+																monitoringConditions: updated,
+															});
+														}}
+													>
+														<MinusCircle className="size-4" />
+													</Button>
+												</div>
+											),
+										)}
 
 										<Button
-											size="small"
-											startIcon={<AddCircleOutlineIcon />}
-											onClick={addSchedule}
-										>
-											Add Schedule
-										</Button>
-
-										{/* Risk Level */}
-										<Typography
-											variant="overline"
-											color="text.secondary"
-											sx={{ mt: 1, display: "block" }}
-										>
-											Risk & Analysis
-										</Typography>
-										<Box sx={{ px: 4 }}>
-											<Typography gutterBottom>Risk Level</Typography>
-											<Slider
-												value={riskValues.indexOf(formData.riskLevel)}
-												onChange={(_, value) =>
-													setFormData({
-														...formData,
-														riskLevel: riskValues[value as number],
-													})
-												}
-												step={1}
-												marks={riskMarks}
-												min={0}
-												max={2}
-												sx={{
-													"& .MuiSlider-markLabel": {
-														fontSize: "0.75rem",
-													},
-												}}
-											/>
-										</Box>
-
-										{/* Deep Analysis toggle */}
-										<Tooltip title="Run specialized subagents (Technical, Fundamental, News) before main analysis. More thorough but uses more API credits.">
-											<FormControlLabel
-												control={
-													<Switch
-														checked={formData.useSubagents ?? false}
-														onChange={(e) =>
-															setFormData({
-																...formData,
-																useSubagents: e.target.checked,
-															})
-														}
-													/>
-												}
-												label="Deep Analysis (Subagents)"
-											/>
-										</Tooltip>
-
-										<Typography
-											variant="overline"
-											color="text.secondary"
-											sx={{ mt: 1, display: "block" }}
-										>
-											Trading Configuration
-										</Typography>
-										<FormControlLabel
-											control={
-												<Switch
-													checked={formData.tradingEnabled}
-													onChange={(e) =>
-														setFormData({
-															...formData,
-															tradingEnabled: e.target.checked,
-														})
-													}
-												/>
-											}
-											label="Enable Trading"
-										/>
-
-										{formData.tradingEnabled && (
-											<>
-												<FormControl fullWidth>
-													<InputLabel>Agent Mode</InputLabel>
-													<ZoomAwareSelect
-														value={formData.agentMode}
-														label="Agent Mode"
-														onChange={(e) =>
-															setFormData({
-																...formData,
-																agentMode: e.target.value as AgentMode,
-															})
-														}
-													>
-														<MenuItem value="ask">
-															<Box
-																sx={{
-																	display: "flex",
-																	alignItems: "center",
-																	gap: 1,
-																}}
-															>
-																<NotificationsIcon fontSize="small" />
-																Ask - Notify for confirmation
-															</Box>
-														</MenuItem>
-														<MenuItem value="auto">
-															<Box
-																sx={{
-																	display: "flex",
-																	alignItems: "center",
-																	gap: 1,
-																}}
-															>
-																<AutoModeIcon fontSize="small" />
-																Auto - Execute automatically
-															</Box>
-														</MenuItem>
-													</ZoomAwareSelect>
-												</FormControl>
-
-												<TextField
-													label="Max Position Size (USDT)"
-													type="number"
-													value={formData.maxPositionSize || ""}
-													onChange={(e) =>
-														setFormData({
-															...formData,
-															maxPositionSize: e.target.value
-																? Number(e.target.value)
-																: undefined,
-														})
-													}
-													fullWidth
-												/>
-											</>
-										)}
-
-										<Typography
-											variant="overline"
-											color="text.secondary"
-											sx={{ mt: 1, display: "block" }}
-										>
-											Monitoring
-										</Typography>
-										<FormControlLabel
-											control={
-												<Switch
-													checked={formData.monitoringEnabled}
-													onChange={(e) =>
-														setFormData({
-															...formData,
-															monitoringEnabled: e.target.checked,
-														})
-													}
-												/>
-											}
-											label="Enable Monitoring"
-										/>
-
-										{formData.monitoringEnabled && (
-											<>
-												{(formData.monitoringConditions ?? []).map(
-													(condition, index) => (
-														<Box
-															key={monitoringConditionKeys[index] as string}
-															sx={{
-																display: "flex",
-																gap: 1,
-																alignItems: "flex-start",
-															}}
-														>
-															<FormControl sx={{ minWidth: 160 }}>
-																<InputLabel>Condition</InputLabel>
-																<ZoomAwareSelect
-																	value={condition.conditionType}
-																	label="Condition"
-																	size="small"
-																	onChange={(e) => {
-																		const updated = [
-																			...(formData.monitoringConditions ?? []),
-																		];
-																		updated[index] = {
-																			...updated[index],
-																			conditionType: e.target
-																				.value as MonitoringConditionType,
-																		};
-																		setFormData({
-																			...formData,
-																			monitoringConditions: updated,
-																		});
-																	}}
-																>
-																	{(
-																		Object.keys(
-																			MONITORING_CONDITION_CONFIG,
-																		) as MonitoringConditionType[]
-																	).map((type) => (
-																		<MenuItem key={type} value={type}>
-																			{MONITORING_CONDITION_CONFIG[type].label}
-																		</MenuItem>
-																	))}
-																</ZoomAwareSelect>
-															</FormControl>
-
-															<TextField
-																label={`Threshold (${MONITORING_CONDITION_CONFIG[condition.conditionType]?.unit || ""})`}
-																type="number"
-																size="small"
-																value={condition.threshold}
-																onChange={(e) => {
-																	const updated = [
-																		...(formData.monitoringConditions ?? []),
-																	];
-																	updated[index] = {
-																		...updated[index],
-																		threshold: Number(e.target.value),
-																	};
-																	setFormData({
-																		...formData,
-																		monitoringConditions: updated,
-																	});
-																}}
-																sx={{ width: 140 }}
-															/>
-
-															{condition.conditionType === "custom" ? (
-																<TextField
-																	label="Description"
-																	size="small"
-																	value={condition.description ?? ""}
-																	onChange={(e) => {
-																		const updated = [
-																			...(formData.monitoringConditions ?? []),
-																		];
-																		updated[index] = {
-																			...updated[index],
-																			description: e.target.value,
-																		};
-																		setFormData({
-																			...formData,
-																			monitoringConditions: updated,
-																		});
-																	}}
-																	sx={{ flex: 1 }}
-																/>
-															) : (
-																<FormControl size="small" sx={{ minWidth: 90 }}>
-																	<InputLabel>Timeframe</InputLabel>
-																	<ZoomAwareSelect
-																		value={condition.timeframe ?? ""}
-																		label="Timeframe"
-																		onChange={(e) => {
-																			const updated = [
-																				...(formData.monitoringConditions ??
-																					[]),
-																			];
-																			updated[index] = {
-																				...updated[index],
-																				timeframe: e.target.value || undefined,
-																			};
-																			setFormData({
-																				...formData,
-																				monitoringConditions: updated,
-																			});
-																		}}
-																	>
-																		<MenuItem value="">-</MenuItem>
-																		<MenuItem value="1H">1H</MenuItem>
-																		<MenuItem value="4H">4H</MenuItem>
-																		<MenuItem value="1D">1D</MenuItem>
-																	</ZoomAwareSelect>
-																</FormControl>
-															)}
-
-															<IconButton
-																size="small"
-																color="error"
-																onClick={() => {
-																	setMonitoringConditionKeys((prev) =>
-																		prev.filter((_, i) => i !== index),
-																	);
-																	const updated = (
-																		formData.monitoringConditions ?? []
-																	).filter((_, i) => i !== index);
-																	setFormData({
-																		...formData,
-																		monitoringConditions: updated,
-																	});
-																}}
-															>
-																<RemoveCircleOutlineIcon />
-															</IconButton>
-														</Box>
-													),
-												)}
-
-												<Button
-													size="small"
-													startIcon={<AddCircleOutlineIcon />}
-													onClick={() => {
-														const newCondition: MonitoringCondition = {
-															conditionType: "price_above",
-															threshold: 0,
-														};
-														setMonitoringConditionKeys((prev) => [
-															...prev,
-															createUiKey(),
-														]);
-														setFormData({
-															...formData,
-															monitoringConditions: [
-																...(formData.monitoringConditions ?? []),
-																newCondition,
-															],
-														});
-													}}
-												>
-													Add Condition
-												</Button>
-
-												<Box sx={{ px: 1 }}>
-													<Typography gutterBottom variant="body2">
-														Alert Cooldown:{" "}
-														{formData.alertCooldownMinutes ?? 60} minutes
-													</Typography>
-													<Slider
-														value={formData.alertCooldownMinutes ?? 60}
-														onChange={(_, value) =>
-															setFormData({
-																...formData,
-																alertCooldownMinutes: value as number,
-															})
-														}
-														min={5}
-														max={1440}
-														step={5}
-														marks={[
-															{ value: 15, label: "15m" },
-															{ value: 60, label: "1h" },
-															{ value: 360, label: "6h" },
-															{ value: 1440, label: "24h" },
-														]}
-														valueLabelDisplay="auto"
-														valueLabelFormat={(v) =>
-															v >= 60
-																? `${Math.floor(v / 60)}h${v % 60 ? ` ${v % 60}m` : ""}`
-																: `${v}m`
-														}
-														sx={{
-															"& .MuiSlider-markLabel": {
-																fontSize: "0.7rem",
-															},
-														}}
-													/>
-												</Box>
-											</>
-										)}
-
-										<Typography
-											variant="overline"
-											color="text.secondary"
-											sx={{ mt: 1, display: "block" }}
-										>
-											Additional Settings
-										</Typography>
-										<TextField
-											label="Custom Instructions"
-											value={formData.customInstructions || ""}
-											onChange={(e) =>
+											variant="ghost"
+											size="sm"
+											onClick={() => {
+												const newCondition: MonitoringCondition = {
+													conditionType: "price_above",
+													threshold: 0,
+												};
+												setMonitoringConditionKeys((prev) => [
+													...prev,
+													createUiKey(),
+												]);
 												setFormData({
 													...formData,
-													customInstructions: e.target.value,
-												})
-											}
-											fullWidth
-											multiline
-											rows={3}
-											placeholder="Additional instructions for the agent..."
-										/>
-
-										{/* Save button */}
-										<Box
-											sx={{
-												display: "flex",
-												justifyContent: "flex-end",
+													monitoringConditions: [
+														...(formData.monitoringConditions ?? []),
+														newCondition,
+													],
+												});
 											}}
+											className="self-start"
 										>
-											<Button
-												variant="contained"
-												onClick={handleSave}
-												disabled={isSaving}
-											>
-												{isSaving ? "Saving..." : "Save"}
-											</Button>
-										</Box>
-									</Box>
-								</CardContent>
-							</Card>
+											<PlusCircle className="size-3.5" />
+											Add Condition
+										</Button>
 
-							{/* History accordion */}
-							{existingTaskId && (
-								<Accordion defaultExpanded={false}>
-									<AccordionSummary expandIcon={<ExpandMoreIcon />}>
-										<Typography variant="h6">
+										<div className="px-2">
+											<p className="mb-2 text-sm">
+												Alert Cooldown:{" "}
+												{formData.alertCooldownMinutes ?? 60} minutes
+											</p>
+											<Slider
+												value={formData.alertCooldownMinutes ?? 60}
+												onValueChange={(val) =>
+													setFormData({
+														...formData,
+														alertCooldownMinutes: val as number,
+													})
+												}
+												min={5}
+												max={1440}
+												step={5}
+											/>
+											<div className="mt-1 flex justify-between text-xs text-muted-foreground">
+												<span>15m</span>
+												<span>1h</span>
+												<span>6h</span>
+												<span>24h</span>
+											</div>
+										</div>
+									</>
+								)}
+
+								<p className="mt-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+									Additional Settings
+								</p>
+								<div className="space-y-1.5">
+									<Label htmlFor="custom-instructions">
+										Custom Instructions
+									</Label>
+									<Textarea
+										id="custom-instructions"
+										value={formData.customInstructions || ""}
+										onChange={(e) =>
+											setFormData({
+												...formData,
+												customInstructions: e.target.value,
+											})
+										}
+										rows={3}
+										placeholder="Additional instructions for the agent..."
+									/>
+								</div>
+
+								{/* Save button */}
+								<div className="flex justify-end">
+									<Button onClick={handleSave} disabled={isSaving}>
+										{isSaving ? "Saving..." : "Save"}
+									</Button>
+								</div>
+							</CardContent>
+						</Card>
+
+						{/* History accordion */}
+						{existingTaskId && (
+							<Accordion>
+								<AccordionItem value="history">
+									<AccordionTrigger>
+										<h3 className="text-base font-semibold">
 											Recent Executions - {task?.name}
-										</Typography>
-									</AccordionSummary>
-									<AccordionDetails>
+										</h3>
+									</AccordionTrigger>
+									<AccordionContent>
 										<DataTable
 											columns={historyColumns}
 											rows={taskHistory}
@@ -1143,23 +1104,23 @@ function TasksPage() {
 											emptyMessage="No executions yet"
 											maxHeight={400}
 										/>
-									</AccordionDetails>
-								</Accordion>
-							)}
-						</>
-					)}
-				</Box>
-				<ConfirmDialog
-					open={showDeleteConfirm}
-					title="Delete Task"
-					message="Are you sure you want to delete this task? This action cannot be undone."
-					confirmLabel="Delete"
-					destructive
-					loading={deleteTaskMutation.isPending}
-					onConfirm={handleConfirmDelete}
-					onCancel={() => setShowDeleteConfirm(false)}
-				/>
-			</PageTransition>
-		</LocalizationProvider>
+									</AccordionContent>
+								</AccordionItem>
+							</Accordion>
+						)}
+					</>
+				)}
+			</div>
+			<ConfirmDialog
+				open={showDeleteConfirm}
+				title="Delete Task"
+				message="Are you sure you want to delete this task? This action cannot be undone."
+				confirmLabel="Delete"
+				destructive
+				loading={deleteTaskMutation.isPending}
+				onConfirm={handleConfirmDelete}
+				onCancel={() => setShowDeleteConfirm(false)}
+			/>
+		</PageTransition>
 	);
 }

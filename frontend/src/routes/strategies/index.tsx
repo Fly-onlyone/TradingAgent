@@ -2,443 +2,392 @@
  * Strategies List Page
  */
 
-import AddIcon from "@mui/icons-material/Add";
-import DeleteIcon from "@mui/icons-material/Delete";
-import InfoIcon from "@mui/icons-material/Info";
-import MoreVertIcon from "@mui/icons-material/MoreVert";
-import PlayArrowIcon from "@mui/icons-material/PlayArrow";
-import StopIcon from "@mui/icons-material/Stop";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { motion } from "framer-motion";
 import {
-    Box,
-    Button,
-    Card,
-    CardContent,
-    Chip,
-    Dialog,
-    DialogContent,
-    DialogTitle,
-    Grid2 as Grid,
-    IconButton,
-    Menu,
-    MenuItem,
-    Switch,
-    Typography,
-} from "@mui/material";
-import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
-import {createFileRoute, Link, useNavigate} from "@tanstack/react-router";
-import {motion} from "framer-motion";
-import {useMemo, useState} from "react";
-import {strategiesApi} from "@/api/endpoints/strategies";
-import {PerformanceGauge} from "@/components/charts/PerformanceGauge";
-import {ConfirmDialog} from "@/components/common/ConfirmDialog";
-import {EmptyState} from "@/components/common/EmptyState";
-import {PageTransition} from "@/components/common/PageTransition";
-import {SectionHeader} from "@/components/common/SectionHeader";
-import {ShimmerSkeleton} from "@/components/common/ShimmerSkeleton";
-import {notify} from "@/store/uiStore";
-import type {Strategy} from "@/types";
-import {staggerCascade} from "@/utils/animations/variants";
-import {formatPercent} from "@/utils/formatters";
-import {requireAuth} from "../-guards";
+	Info,
+	MoreVertical,
+	Play,
+	Plus,
+	Square,
+	Trash2,
+} from "lucide-react";
+import { useMemo, useState } from "react";
+import { strategiesApi } from "@/api/endpoints/strategies";
+import { PerformanceGauge } from "@/components/charts/PerformanceGauge";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { EmptyState } from "@/components/common/EmptyState";
+import { PageTransition } from "@/components/common/PageTransition";
+import { SectionHeader } from "@/components/common/SectionHeader";
+import { ShimmerSkeleton } from "@/components/common/ShimmerSkeleton";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+	Dialog,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
+import { notify } from "@/store/uiStore";
+import type { Strategy } from "@/types";
+import { staggerCascade } from "@/utils/animations/variants";
+import { formatPercent } from "@/utils/formatters";
+import { requireAuth } from "../-guards";
 
 export const Route = createFileRoute("/strategies/")({
-    beforeLoad: requireAuth,
-    component: StrategiesPage,
+	beforeLoad: requireAuth,
+	component: StrategiesPage,
 });
 
 function StrategiesPage() {
-    const navigate = useNavigate();
-    const queryClient = useQueryClient();
-    const {
-        data: strategies,
-        isLoading,
-        refetch,
-    } = useQuery({
-        queryKey: ["strategies"],
-        queryFn: () => strategiesApi.getStrategies(),
-    });
+	const navigate = useNavigate();
+	const queryClient = useQueryClient();
+	const {
+		data: strategies,
+		isLoading,
+		refetch,
+	} = useQuery({
+		queryKey: ["strategies"],
+		queryFn: () => strategiesApi.getStrategies(),
+	});
 
-    const [filter, setFilter] = useState<"all" | "active" | "inactive">("all");
-    const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-    const [detailsTarget, setDetailsTarget] = useState<Strategy | null>(null);
+	const [filter, setFilter] = useState<"all" | "active" | "inactive">("all");
+	const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+	const [detailsTarget, setDetailsTarget] = useState<Strategy | null>(null);
 
-    const deleteMutation = useMutation({
-        mutationFn: (strategyId: string) =>
-            strategiesApi.deleteStrategy(strategyId),
-        onSuccess: async () => {
-            notify.success("Strategy deleted");
-            await queryClient.invalidateQueries({queryKey: ["strategies"]});
-        },
-        onError: () => {
-            notify.error("Failed to delete strategy");
-        },
-    });
+	const deleteMutation = useMutation({
+		mutationFn: (strategyId: string) =>
+			strategiesApi.deleteStrategy(strategyId),
+		onSuccess: async () => {
+			notify.success("Strategy deleted");
+			await queryClient.invalidateQueries({ queryKey: ["strategies"] });
+		},
+		onError: () => {
+			notify.error("Failed to delete strategy");
+		},
+	});
 
-    const filteredStrategies = useMemo(() => {
-        if (!strategies) return [];
-        if (filter === "active") return strategies.filter((s) => s.isActive);
-        if (filter === "inactive") return strategies.filter((s) => !s.isActive);
-        return strategies;
-    }, [strategies, filter]);
+	const filteredStrategies = useMemo(() => {
+		if (!strategies) return [];
+		if (filter === "active") return strategies.filter((s) => s.isActive);
+		if (filter === "inactive") return strategies.filter((s) => !s.isActive);
+		return strategies;
+	}, [strategies, filter]);
 
-    const handleToggleActive = async (strategy: Strategy) => {
-        try {
-            await strategiesApi.toggleStrategy(strategy.id, !strategy.isActive);
-            void refetch();
-            notify.success(
-                strategy.isActive ? "Strategy deactivated" : "Strategy activated",
-                strategy.name,
-            );
-        } catch (_error) {
-            notify.error("Failed to update strategy");
-        }
-    };
+	const handleToggleActive = async (strategy: Strategy) => {
+		try {
+			await strategiesApi.toggleStrategy(strategy.id, !strategy.isActive);
+			void refetch();
+			notify.success(
+				strategy.isActive ? "Strategy deactivated" : "Strategy activated",
+				strategy.name,
+			);
+		} catch (_error) {
+			notify.error("Failed to update strategy");
+		}
+	};
 
-    return (
-        <PageTransition pageKey="strategies">
-            <Box>
-                <SectionHeader
-                    title="Strategies"
-                    subtitle="Manage automated trading strategies for the agent"
-                    action={
-                        <Button
-                            component={Link}
-                            to="/strategies/create"
-                            variant="contained"
-                            startIcon={<AddIcon/>}
-                        >
-                            Import Strategy
-                        </Button>
-                    }
-                />
+	return (
+		<PageTransition pageKey="strategies">
+			<div>
+				<SectionHeader
+					title="Strategies"
+					subtitle="Manage automated trading strategies for the agent"
+					action={
+						<Button render={<Link to="/strategies/create" />}>
+							<Plus className="size-4" />
+							Import Strategy
+						</Button>
+					}
+				/>
 
-                <Box
-                    sx={{
-                        display: "flex",
-                        gap: 2,
-                        mb: 3,
-                        flexWrap: "wrap",
-                        alignItems: "center",
-                    }}
-                >
-                    <Chip
-                        label="All"
-                        variant={filter === "all" ? "filled" : "outlined"}
-                        onClick={() => setFilter("all")}
-                    />
-                    <Chip
-                        label="Active"
-                        color="success"
-                        variant={filter === "active" ? "filled" : "outlined"}
-                        onClick={() => setFilter("active")}
-                    />
-                    <Chip
-                        label="Inactive"
-                        variant={filter === "inactive" ? "filled" : "outlined"}
-                        onClick={() => setFilter("inactive")}
-                    />
-                </Box>
+				<div className="mb-6 flex flex-wrap items-center gap-2">
+					<Badge
+						variant={filter === "all" ? "default" : "outline"}
+						className="cursor-pointer"
+						onClick={() => setFilter("all")}
+					>
+						All
+					</Badge>
+					<Badge
+						variant={filter === "active" ? "default" : "outline"}
+						className={cn(
+							"cursor-pointer",
+							filter === "active" &&
+								"bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+						)}
+						onClick={() => setFilter("active")}
+					>
+						Active
+					</Badge>
+					<Badge
+						variant={filter === "inactive" ? "default" : "outline"}
+						className="cursor-pointer"
+						onClick={() => setFilter("inactive")}
+					>
+						Inactive
+					</Badge>
+				</div>
 
-                {isLoading ? (
-                    <Grid container spacing={3}>
-                        {Array.from({length: 3}).map((_, i) => (
-                            <Grid key={i} size={{xs: 12, md: 6, lg: 4}}>
-                                <ShimmerSkeleton shimmerVariant="card" sx={{height: 250}}/>
-                            </Grid>
-                        ))}
-                    </Grid>
-                ) : filteredStrategies.length > 0 ? (
-                    <motion.div
-                        variants={staggerCascade.container}
-                        initial="hidden"
-                        animate="visible"
-                    >
-                        <Grid container spacing={3}>
-                            {filteredStrategies.map((strategy) => (
-                                <Grid key={strategy.id} size={{xs: 12, md: 6, lg: 4}}>
-                                    <motion.div variants={staggerCascade.item}>
-                                        <StrategyCard
-                                            strategy={strategy}
-                                            onToggle={() => handleToggleActive(strategy)}
-                                            onDelete={() => setDeleteTarget(strategy.id)}
-                                            onViewDetails={() => setDetailsTarget(strategy)}
-                                        />
-                                    </motion.div>
-                                </Grid>
-                            ))}
-                        </Grid>
-                    </motion.div>
-                ) : (
-                    <EmptyState
-                        title="No strategies yet"
-                        description="Create your first automated trading strategy to get started"
-                        action={{
-                            label: "Import Strategy",
-                            onClick: () => navigate({to: "/strategies/create"}),
-                        }}
-                    />
-                )}
+				{isLoading ? (
+					<div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+						{Array.from({ length: 3 }).map((_, i) => (
+							<ShimmerSkeleton key={i} shimmerVariant="card" sx={{ height: 250 }} />
+						))}
+					</div>
+				) : filteredStrategies.length > 0 ? (
+					<motion.div
+						variants={staggerCascade.container}
+						initial="hidden"
+						animate="visible"
+					>
+						<div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+							{filteredStrategies.map((strategy) => (
+								<motion.div key={strategy.id} variants={staggerCascade.item}>
+									<StrategyCard
+										strategy={strategy}
+										onToggle={() => handleToggleActive(strategy)}
+										onDelete={() => setDeleteTarget(strategy.id)}
+										onViewDetails={() => setDetailsTarget(strategy)}
+									/>
+								</motion.div>
+							))}
+						</div>
+					</motion.div>
+				) : (
+					<EmptyState
+						title="No strategies yet"
+						description="Create your first automated trading strategy to get started"
+						action={{
+							label: "Import Strategy",
+							onClick: () => navigate({ to: "/strategies/create" }),
+						}}
+					/>
+				)}
 
-                <ConfirmDialog
-                    open={!!deleteTarget}
-                    title="Delete Strategy"
-                    message="Are you sure you want to delete this strategy? This action cannot be undone."
-                    confirmLabel="Delete"
-                    destructive
-                    loading={deleteMutation.isPending}
-                    onConfirm={() => {
-                        if (deleteTarget) {
-                            deleteMutation.mutate(deleteTarget);
-                            setDeleteTarget(null);
-                        }
-                    }}
-                    onCancel={() => setDeleteTarget(null)}
-                />
+				<ConfirmDialog
+					open={!!deleteTarget}
+					title="Delete Strategy"
+					message="Are you sure you want to delete this strategy? This action cannot be undone."
+					confirmLabel="Delete"
+					destructive
+					loading={deleteMutation.isPending}
+					onConfirm={() => {
+						if (deleteTarget) {
+							deleteMutation.mutate(deleteTarget);
+							setDeleteTarget(null);
+						}
+					}}
+					onCancel={() => setDeleteTarget(null)}
+				/>
 
-                <Dialog
-                    open={!!detailsTarget}
-                    onClose={() => setDetailsTarget(null)}
-                    maxWidth="sm"
-                    fullWidth
-                >
-                    {detailsTarget && (
-                        <>
-                            <DialogTitle>{detailsTarget.name}</DialogTitle>
-                            <DialogContent>
-                                <Typography variant="body2" color="text.secondary" gutterBottom>
-                                    {detailsTarget.description || "No description"}
-                                </Typography>
-                                {detailsTarget.symbol && (
-                                    <Typography variant="body2" sx={{mt: 1}}>
-                                        <strong>Symbol:</strong> {detailsTarget.symbol}
-                                    </Typography>
-                                )}
-                                {detailsTarget.timeframe && (
-                                    <Typography variant="body2">
-                                        <strong>Timeframe:</strong> {detailsTarget.timeframe}
-                                    </Typography>
-                                )}
-                                <Typography variant="body2">
-                                    <strong>Status:</strong>{" "}
-                                    {detailsTarget.isActive ? "Active" : "Inactive"}
-                                </Typography>
-                                {detailsTarget.backtestResults && (
-                                    <Box sx={{mt: 2}}>
-                                        <Typography variant="subtitle2" gutterBottom>
-                                            Backtest Results
-                                        </Typography>
-                                        <Typography variant="body2">
-                                            Win Rate:{" "}
-                                            {formatPercent(detailsTarget.backtestResults.winRate)}
-                                        </Typography>
-                                        <Typography variant="body2">
-                                            Total Trades: {detailsTarget.backtestResults.totalTrades}
-                                        </Typography>
-                                        <Typography variant="body2">
-                                            P&L:{" "}
-                                            {formatPercent(
-                                                detailsTarget.backtestResults.totalPnlPercent,
-                                            )}
-                                        </Typography>
-                                        <Typography variant="body2">
-                                            Max Drawdown:{" "}
-                                            {formatPercent(
-                                                -detailsTarget.backtestResults.maxDrawdown,
-                                            )}
-                                        </Typography>
-                                    </Box>
-                                )}
-                            </DialogContent>
-                        </>
-                    )}
-                </Dialog>
-            </Box>
-        </PageTransition>
-    );
+				<Dialog
+					open={!!detailsTarget}
+					onOpenChange={(open) => {
+						if (!open) setDetailsTarget(null);
+					}}
+				>
+					{detailsTarget && (
+						<DialogContent className="sm:max-w-md">
+							<DialogHeader>
+								<DialogTitle>{detailsTarget.name}</DialogTitle>
+							</DialogHeader>
+							<div className="flex flex-col gap-2">
+								<p className="text-sm text-muted-foreground">
+									{detailsTarget.description || "No description"}
+								</p>
+								{detailsTarget.symbol && (
+									<p className="mt-1 text-sm">
+										<strong>Symbol:</strong> {detailsTarget.symbol}
+									</p>
+								)}
+								{detailsTarget.timeframe && (
+									<p className="text-sm">
+										<strong>Timeframe:</strong> {detailsTarget.timeframe}
+									</p>
+								)}
+								<p className="text-sm">
+									<strong>Status:</strong>{" "}
+									{detailsTarget.isActive ? "Active" : "Inactive"}
+								</p>
+								{detailsTarget.backtestResults && (
+									<div className="mt-3">
+										<h4 className="mb-1 text-sm font-semibold">
+											Backtest Results
+										</h4>
+										<p className="text-sm">
+											Win Rate:{" "}
+											{formatPercent(detailsTarget.backtestResults.winRate)}
+										</p>
+										<p className="text-sm">
+											Total Trades:{" "}
+											{detailsTarget.backtestResults.totalTrades}
+										</p>
+										<p className="text-sm">
+											P&L:{" "}
+											{formatPercent(
+												detailsTarget.backtestResults.totalPnlPercent,
+											)}
+										</p>
+										<p className="text-sm">
+											Max Drawdown:{" "}
+											{formatPercent(
+												-detailsTarget.backtestResults.maxDrawdown,
+											)}
+										</p>
+									</div>
+								)}
+							</div>
+						</DialogContent>
+					)}
+				</Dialog>
+			</div>
+		</PageTransition>
+	);
 }
 
 function StrategyCard({
-                          strategy,
-                          onToggle,
-                          onDelete,
-                          onViewDetails,
-                      }: {
-    strategy: Strategy;
-    onToggle: () => void;
-    onDelete: () => void;
-    onViewDetails: () => void;
+	strategy,
+	onToggle,
+	onDelete,
+	onViewDetails,
+}: {
+	strategy: Strategy;
+	onToggle: () => void;
+	onDelete: () => void;
+	onViewDetails: () => void;
 }) {
-    const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+	const winRate = strategy.backtestResults?.winRate || 0;
 
-    const winRate = strategy.backtestResults?.winRate || 0;
+	return (
+		<Card
+			className={cn(
+				"h-full transition-shadow",
+				strategy.isActive &&
+					"border-emerald-500/50 shadow-[0_0_12px_rgba(var(--color-emerald-500),0.2)]",
+			)}
+		>
+			<motion.div
+				whileHover={{
+					y: -6,
+					transition: { type: "spring", stiffness: 400, damping: 30 },
+				}}
+				whileTap={{ scale: 0.98 }}
+			>
+				<CardContent>
+					<div className="mb-3 flex items-start justify-between">
+						<div>
+							<div className="mb-1 flex items-center gap-2">
+								<h3 className="text-base font-semibold">{strategy.name}</h3>
+								<Badge
+									variant={strategy.isActive ? "default" : "secondary"}
+									className={
+										strategy.isActive
+											? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+											: ""
+									}
+								>
+									{strategy.isActive ? "Active" : "Inactive"}
+								</Badge>
+							</div>
+							{strategy.symbol && (
+								<p className="text-sm text-muted-foreground">
+									{strategy.symbol} | {strategy.timeframe}
+								</p>
+							)}
+						</div>
+						<DropdownMenu>
+							<DropdownMenuTrigger
+								render={<Button variant="ghost" size="icon-xs" />}
+							>
+								<MoreVertical className="size-4" />
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="end">
+								<DropdownMenuItem onClick={onViewDetails}>
+									<Info className="size-4" /> View Details
+								</DropdownMenuItem>
+								<DropdownMenuItem onClick={onToggle}>
+									{strategy.isActive ? (
+										<>
+											<Square className="size-4" /> Deactivate
+										</>
+									) : (
+										<>
+											<Play className="size-4" /> Activate
+										</>
+									)}
+								</DropdownMenuItem>
+								<DropdownMenuItem variant="destructive" onClick={onDelete}>
+									<Trash2 className="size-4" /> Delete
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
+					</div>
 
-    return (
-        <Card
-            component={motion.div}
-            whileHover={{
-                y: -6,
-                transition: {type: "spring", stiffness: 400, damping: 30},
-            }}
-            whileTap={{scale: 0.98}}
-            sx={{
-                height: "100%",
-                border: strategy.isActive ? "1px solid" : "none",
-                borderColor: "success.main",
-                boxShadow: strategy.isActive
-                    ? (theme) =>
-                        `0 0 12px rgba(${theme.trading.semanticRgb.success}, 0.2)`
-                    : "none",
-            }}
-        >
-            <CardContent>
-                <Box
-                    sx={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "flex-start",
-                        mb: 2,
-                    }}
-                >
-                    <Box>
-                        <Box
-                            sx={{display: "flex", alignItems: "center", gap: 1, mb: 0.5}}
-                        >
-                            <Typography variant="h6" fontWeight={600}>
-                                {strategy.name}
-                            </Typography>
-                            <Chip
-                                label={strategy.isActive ? "Active" : "Inactive"}
-                                size="small"
-                                color={strategy.isActive ? "success" : "default"}
-                            />
-                        </Box>
-                        {strategy.symbol && (
-                            <Typography variant="body2" color="text.secondary">
-                                {strategy.symbol} | {strategy.timeframe}
-                            </Typography>
-                        )}
-                    </Box>
-                    <IconButton
-                        size="small"
-                        onClick={(e) => setAnchorEl(e.currentTarget)}
-                    >
-                        <MoreVertIcon/>
-                    </IconButton>
-                    <Menu
-                        anchorEl={anchorEl}
-                        open={Boolean(anchorEl)}
-                        onClose={() => setAnchorEl(null)}
-                    >
-                        <MenuItem
-                            onClick={() => {
-                                setAnchorEl(null);
-                                onViewDetails();
-                            }}
-                        >
-                            <InfoIcon sx={{mr: 1, fontSize: 18}}/> View Details
-                        </MenuItem>
-                        <MenuItem
-                            onClick={() => {
-                                setAnchorEl(null);
-                                onToggle();
-                            }}
-                        >
-                            {strategy.isActive ? (
-                                <>
-                                    <StopIcon sx={{mr: 1, fontSize: 18}}/> Deactivate
-                                </>
-                            ) : (
-                                <>
-                                    <PlayArrowIcon sx={{mr: 1, fontSize: 18}}/> Activate
-                                </>
-                            )}
-                        </MenuItem>
-                        <MenuItem
-                            sx={{color: "error.main"}}
-                            onClick={() => {
-                                setAnchorEl(null);
-                                onDelete();
-                            }}
-                        >
-                            <DeleteIcon sx={{mr: 1, fontSize: 18}}/> Delete
-                        </MenuItem>
-                    </Menu>
-                </Box>
+					<p className="mb-3 min-h-[40px] text-sm text-muted-foreground">
+						{strategy.description || "No description"}
+					</p>
 
-                <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{mb: 2, minHeight: 40}}
-                >
-                    {strategy.description || "No description"}
-                </Typography>
+					{/* Performance */}
+					<div className="mb-3 flex justify-around">
+						<PerformanceGauge
+							value={winRate}
+							label="Win Rate"
+							size={80}
+							thickness={6}
+						/>
+					</div>
 
-                {/* Performance */}
-                <Box sx={{display: "flex", justifyContent: "space-around", mb: 2}}>
-                    <PerformanceGauge
-                        value={winRate}
-                        label="Win Rate"
-                        size={80}
-                        thickness={6}
-                    />
-                </Box>
+					{/* Stats */}
+					{strategy.backtestResults && (
+						<div className="grid grid-cols-3 gap-2 rounded-lg bg-muted/50 p-3">
+							<div className="text-center">
+								<p className="text-xs text-muted-foreground">Trades</p>
+								<p className="text-sm font-semibold">
+									{strategy.backtestResults.totalTrades}
+								</p>
+							</div>
+							<div className="text-center">
+								<p className="text-xs text-muted-foreground">P&L</p>
+								<p
+									className={cn(
+										"text-sm font-semibold",
+										strategy.backtestResults.totalPnlPercent >= 0
+											? "text-emerald-400"
+											: "text-red-400",
+									)}
+								>
+									{formatPercent(strategy.backtestResults.totalPnlPercent)}
+								</p>
+							</div>
+							<div className="text-center">
+								<p className="text-xs text-muted-foreground">Max DD</p>
+								<p className="text-sm font-semibold text-red-400">
+									{formatPercent(-strategy.backtestResults.maxDrawdown)}
+								</p>
+							</div>
+						</div>
+					)}
 
-                {/* Stats */}
-                {strategy.backtestResults && (
-                    <Box
-                        sx={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(3, 1fr)",
-                            gap: 1,
-                            p: 1.5,
-                            bgcolor: "background.default",
-                            borderRadius: 1,
-                        }}
-                    >
-                        <Box sx={{textAlign: "center"}}>
-                            <Typography variant="caption" color="text.secondary">
-                                Trades
-                            </Typography>
-                            <Typography variant="body2" fontWeight={600}>
-                                {strategy.backtestResults.totalTrades}
-                            </Typography>
-                        </Box>
-                        <Box sx={{textAlign: "center"}}>
-                            <Typography variant="caption" color="text.secondary">
-                                P&L
-                            </Typography>
-                            <Typography
-                                variant="body2"
-                                fontWeight={600}
-                                color={
-                                    strategy.backtestResults.totalPnlPercent >= 0
-                                        ? "success.main"
-                                        : "error.main"
-                                }
-                            >
-                                {formatPercent(strategy.backtestResults.totalPnlPercent)}
-                            </Typography>
-                        </Box>
-                        <Box sx={{textAlign: "center"}}>
-                            <Typography variant="caption" color="text.secondary">
-                                Max DD
-                            </Typography>
-                            <Typography variant="body2" fontWeight={600} color="error.main">
-                                {formatPercent(-strategy.backtestResults.maxDrawdown)}
-                            </Typography>
-                        </Box>
-                    </Box>
-                )}
-
-                {/* Toggle */}
-                <Box sx={{display: "flex", justifyContent: "flex-end", mt: 2}}>
-                    <Switch
-                        checked={strategy.isActive}
-                        onChange={onToggle}
-                        color="success"
-                    />
-                </Box>
-            </CardContent>
-        </Card>
-    );
+					{/* Toggle */}
+					<div className="mt-3 flex justify-end">
+						<Switch
+							checked={strategy.isActive}
+							onCheckedChange={onToggle}
+						/>
+					</div>
+				</CardContent>
+			</motion.div>
+		</Card>
+	);
 }
