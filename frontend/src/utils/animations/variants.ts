@@ -117,9 +117,6 @@ export const createCardHover = (primaryRgb = "249, 115, 22") => ({
     },
 });
 
-/** @deprecated Use createCardHover() for theme-aware glow */
-export const cardHover = createCardHover();
-
 // ============ List Stagger (table rows) ============
 
 export const listStagger = {
@@ -139,53 +136,6 @@ export const listStagger = {
         },
     } as Variants,
 };
-
-// ============ Price Flash ============
-
-export const priceFlash = (
-    isUp: boolean,
-    bullishRgb = "16, 185, 129",
-    bearishRgb = "239, 68, 68",
-) => {
-    const rgb = isUp ? bullishRgb : bearishRgb;
-    return {
-        flash: {
-            backgroundColor: [
-                `rgba(${rgb}, 0)`,
-                `rgba(${rgb}, 0.3)`,
-                `rgba(${rgb}, 0)`,
-            ],
-            boxShadow: [
-                `0 0 0px rgba(${rgb}, 0)`,
-                `0 0 12px rgba(${rgb}, 0.4)`,
-                `0 0 0px rgba(${rgb}, 0)`,
-            ],
-            transition: {duration: 0.6},
-        },
-    };
-};
-
-// ============ Pulse Alive (live indicators) ============
-
-export const pulseAlive: Variants = {
-    animate: {
-        scale: [1, 1.02, 1],
-        transition: {duration: 3, repeat: Infinity, ease: "easeInOut"},
-    },
-};
-
-// ============ Glow Pulse (attention elements) ============
-
-export const glowPulse = (color = "249, 115, 22"): Variants => ({
-    animate: {
-        boxShadow: [
-            `0 0 10px rgba(${color}, 0.2)`,
-            `0 0 25px rgba(${color}, 0.5), 0 0 50px rgba(${color}, 0.2)`,
-            `0 0 10px rgba(${color}, 0.2)`,
-        ],
-        transition: {duration: 2.5, repeat: Infinity, ease: "easeInOut"},
-    },
-});
 
 // ============ Scroll Reveal (directional) ============
 
@@ -224,26 +174,6 @@ export const scrollReveal = {
     } as Variants,
 };
 
-// ============ Magnetic Return ============
-
-export const magneticReturn: Variants = {
-    rest: {x: 0, y: 0},
-    hover: {
-        transition: {type: "spring", stiffness: 200, damping: 20},
-    },
-};
-
-// ============ Ripple Expand ============
-
-export const rippleExpand: Variants = {
-    initial: {scale: 0, opacity: 0.3},
-    animate: {
-        scale: 4,
-        opacity: 0,
-        transition: {duration: 0.6, ease: "easeOut"},
-    },
-};
-
 // ============ Fade In Up (single-element entry) ============
 
 export const fadeInUp = {
@@ -268,27 +198,6 @@ export const tabSwitch: Variants = {
         opacity: 0,
         y: -10,
         transition: {duration: 0.15},
-    },
-};
-
-// ============ Number Change (scale pulse for updating numbers) ============
-
-export const numberChange = {
-    animate: {
-        scale: [1, 1.05, 1],
-        transition: {duration: 0.3, ease: "easeInOut"},
-    },
-};
-
-// ============ Container Reveal (clip-overflow y-translate reveal) ============
-
-export const containerReveal = {
-    hidden: {opacity: 0, y: 30, clipPath: "inset(10% 0% 0% 0%)"},
-    visible: {
-        opacity: 1,
-        y: 0,
-        clipPath: "inset(0% 0% 0% 0%)",
-        transition: {type: "spring", ...spring.gentle, duration: 0.5},
     },
 };
 

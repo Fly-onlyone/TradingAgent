@@ -7,7 +7,6 @@ import type {
     MarketSentimentSummary,
     NewsArticle,
     NewsFilter,
-    NewsSentiment,
     NewsSource,
     PaginatedResponse,
     PaginationParams,
@@ -87,38 +86,6 @@ export const newsApi = {
     },
 
     /**
-     * Get article by ID
-     */
-    async getArticle(articleId: string): Promise<NewsArticle> {
-        const response = await apiClient.get<Record<string, unknown>>(`/news/articles/${articleId}`);
-        return transformNewsArticle(response.data);
-    },
-
-    /**
-     * Get news sources
-     */
-    async getSources(): Promise<NewsSource[]> {
-        const response = await apiClient.get<NewsSource[]>('/news/sources');
-        return response.data;
-    },
-
-    /**
-     * Get source by ID
-     */
-    async getSource(sourceId: string): Promise<NewsSource> {
-        const response = await apiClient.get<NewsSource>(`/news/sources/${sourceId}`);
-        return response.data;
-    },
-
-    /**
-     * Get sentiment for asset
-     */
-    async getSentiment(asset: string): Promise<NewsSentiment> {
-        const response = await apiClient.get<NewsSentiment>(`/news/sentiment/${asset}`);
-        return response.data;
-    },
-
-    /**
      * Get market sentiment summary
      */
     async getMarketSentiment(): Promise<MarketSentimentSummary> {
@@ -136,15 +103,6 @@ export const newsApi = {
         return (response.data || []).map(transformNewsArticle);
     },
 
-    /**
-     * Get breaking news
-     */
-    async getBreakingNews(hours?: number): Promise<NewsArticle[]> {
-        const response = await apiClient.get<Record<string, unknown>[]>('/news/breaking', {
-            params: {hours},
-        });
-        return (response.data || []).map(transformNewsArticle);
-    },
 };
 
 export default newsApi;

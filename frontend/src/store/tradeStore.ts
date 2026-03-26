@@ -106,9 +106,4 @@ export const useTradeStore = create<TradeState>()(
 	),
 );
 
-export const selectFilters = (state: TradeState) => state.filters;
-export const selectViewMode = (state: TradeState) => state.viewMode;
-export const selectIsSymbolExpanded = (symbol: string) => (state: TradeState) =>
-	state.expandedSymbols.has(symbol);
-
 export default useTradeStore;

@@ -4,11 +4,6 @@
 
 export { useWebSocket, type UseWebSocketOptions, type UseWebSocketReturn } from './useWebSocket';
 export {
-  useMarketSocket,
-  useTickerSubscription,
-  useOrderBookSubscription,
-} from './useMarketSocket';
-export {
   useAgentSocket,
   type AgentMessage,
   type ToolCall,

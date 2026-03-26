@@ -280,35 +280,4 @@ export const useAgentStore = create<AgentState>()(
     ),
 );
 
-// Selectors
-export const selectRecentMessages = (state: AgentState, count = 10) =>
-    state.messages.slice(-count);
-
-export const selectUserMessages = (state: AgentState) =>
-    state.messages.filter((m) => m.role === "user");
-
-export const selectAssistantMessages = (state: AgentState) =>
-    state.messages.filter((m) => m.role === "assistant");
-
-export const selectDecisionMessages = (state: AgentState) =>
-    state.messages.filter((m) => m.decision);
-
-export const selectCurrentSession = (
-    state: AgentState,
-): AgentSession | null => {
-    if (!state.currentSessionId) return null;
-
-    for (const group of state.sessionGroups) {
-        const session = group.sessions.find((s) => s.id === state.currentSessionId);
-        if (session) return session;
-    }
-    return null;
-};
-
-export const selectTotalSessionCount = (state: AgentState): number =>
-    state.sessionGroups.reduce((sum, g) => sum + g.sessions.length, 0);
-
-export const selectPendingDecisions = (state: AgentState) =>
-    state.decisions.filter((d) => d.status === "pending");
-
 export default useAgentStore;

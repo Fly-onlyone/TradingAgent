@@ -6,7 +6,7 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ErrorIcon from "@mui/icons-material/Error";
 import SyncIcon from "@mui/icons-material/Sync";
 import WifiOffIcon from "@mui/icons-material/WifiOff";
-import {Box, Chip, useTheme} from "@mui/material";
+import {Chip} from "@mui/material";
 import {AnimatePresence, motion} from "framer-motion";
 import type {AgentStatus} from "@/types/session";
 
@@ -103,60 +103,6 @@ export function AgentStatusBadge({
                 />
             </motion.div>
         </AnimatePresence>
-    );
-}
-
-// Animated pulse indicator for online status
-export function OnlineIndicator({isOnline}: { isOnline: boolean }) {
-    const theme = useTheme();
-    const onlineColor = theme.trading.status.online;
-
-    return (
-        <Box sx={{position: "relative", display: "inline-flex"}}>
-            <Box
-                sx={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    bgcolor: isOnline ? "success.main" : "error.main",
-                }}
-            />
-            {isOnline && (
-                <>
-                    <motion.div
-                        animate={{scale: [1, 2.5], opacity: [0.7, 0]}}
-                        transition={{duration: 2, repeat: Infinity, ease: "easeOut"}}
-                        style={{
-                            position: "absolute",
-                            top: 0,
-                            left: 0,
-                            width: 8,
-                            height: 8,
-                            borderRadius: "50%",
-                            backgroundColor: onlineColor,
-                        }}
-                    />
-                    <motion.div
-                        animate={{scale: [1, 2.5], opacity: [0.5, 0]}}
-                        transition={{
-                            duration: 2,
-                            repeat: Infinity,
-                            ease: "easeOut",
-                            delay: 0.6,
-                        }}
-                        style={{
-                            position: "absolute",
-                            top: 0,
-                            left: 0,
-                            width: 8,
-                            height: 8,
-                            borderRadius: "50%",
-                            backgroundColor: onlineColor,
-                        }}
-                    />
-                </>
-            )}
-        </Box>
     );
 }
 

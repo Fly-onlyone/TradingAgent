@@ -290,32 +290,6 @@ async def close_trade(
     return order
 
 
-async def link_closing_order(
-    entry_order_id: PydanticObjectId,
-    closing_order_id: PydanticObjectId,
-    fees: float = 0.0,
-) -> Optional[Order]:
-    """Link a closing order to an entry order and calculate P&L."""
-    entry_order = await Order.get(entry_order_id)
-    closing_order = await Order.get(closing_order_id)
-
-    if not entry_order or not closing_order:
-        return None
-
-    # Mark closing order
-    closing_order.is_closing_order = True
-    closing_order.related_order_id = entry_order_id
-    await closing_order.save()
-
-    # Link and calculate P&L on entry order
-    entry_order.related_order_id = closing_order_id
-    exit_price = closing_order.avg_fill_price or closing_order.price or 0.0
-    entry_order.calculate_pnl(exit_price, fees)
-    await entry_order.save()
-
-    return entry_order
-
-
 async def export_trades(
     user_id: PydanticObjectId,
     format: str = "json",

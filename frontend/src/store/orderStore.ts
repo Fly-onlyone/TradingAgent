@@ -79,20 +79,4 @@ export const useOrderStore = create<OrderState>((set) => ({
 		}),
 }));
 
-// Selectors
-export const selectOpenOrders = (state: OrderState) =>
-	state.orders.filter((o) => o.status === "open" || o.status === "pending");
-
-export const selectFilledOrders = (state: OrderState) =>
-	state.orders.filter((o) => o.status === "filled");
-
-export const selectOrdersBySymbol = (state: OrderState, symbol: string) =>
-	state.orders.filter((o) => o.symbol === symbol);
-
-export const selectPositionBySymbol = (state: OrderState, symbol: string) =>
-	state.positions.find((p) => p.symbol === symbol);
-
-export const selectTotalUnrealizedPnl = (state: OrderState) =>
-	state.positions.reduce((sum, p) => sum + p.unrealizedPnl, 0);
-
 export default useOrderStore;

@@ -16,7 +16,4 @@ export const useTaskStore = create<TaskUiState>((set) => ({
 	reset: () => set({ selectedTaskId: null }),
 }));
 
-export const selectSelectedTaskId = (state: TaskUiState) =>
-	state.selectedTaskId;
-
 export default useTaskStore;

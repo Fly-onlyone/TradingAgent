@@ -113,7 +113,7 @@ export async function preloadNavigationTarget(
             }));
             tasks.push(queryClient.prefetchQuery({
                 queryKey: ["news", ""],
-                queryFn: () => newsApi.getArticles({pageSize: 20}),
+                queryFn: () => newsApi.getArticles({pageSize: 20}).then((r) => r.items ?? []),
                 staleTime: STALE
             }));
             break;
