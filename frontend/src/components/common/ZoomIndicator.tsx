@@ -1,8 +1,7 @@
 /**
- * Transient zoom percentage indicator — appears on Ctrl+Wheel, fades out after idle.
+ * Transient zoom percentage indicator -- appears on Ctrl+Wheel, fades out after idle.
  */
 
-import { Box, Typography } from "@mui/material";
 import { AnimatePresence, motion } from "framer-motion";
 
 interface ZoomIndicatorProps {
@@ -16,45 +15,17 @@ export function ZoomIndicator({ uiScale, visible }: ZoomIndicatorProps) {
 	return (
 		<AnimatePresence>
 			{visible && (
-				<Box
-					component={motion.div}
+				<motion.div
 					initial={{ opacity: 0, y: 12 }}
 					animate={{ opacity: 1, y: 0 }}
 					exit={{ opacity: 0, y: 12 }}
 					transition={{ duration: 0.18, ease: "easeOut" }}
-					sx={{
-						position: "fixed",
-						bottom: 24,
-						left: "50%",
-						transform: "translateX(-50%)",
-						zIndex: (theme) => theme.zIndex.tooltip - 1,
-						pointerEvents: "none",
-						px: 2,
-						py: 0.5,
-						borderRadius: 2,
-						backdropFilter: "blur(12px)",
-						background: (theme) =>
-							theme.trading.glass.header.background.replace(
-								/[\d.]+\)$/,
-								"0.75)",
-							),
-						border: (theme) =>
-							`1px solid rgba(${theme.trading.primaryRgb}, 0.25)`,
-						boxShadow: (theme) =>
-							`0 0 12px rgba(${theme.trading.primaryRgb}, 0.15)`,
-					}}
+					className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[1499] pointer-events-none px-4 py-1 rounded-lg backdrop-blur-[12px] bg-[var(--glass-header-bg)] border border-[rgba(var(--primary-rgb),0.25)] shadow-[0_0_12px_rgba(var(--primary-rgb),0.15)]"
 				>
-					<Typography
-						variant="caption"
-						sx={{
-							fontWeight: 600,
-							color: "text.primary",
-							fontVariantNumeric: "tabular-nums",
-						}}
-					>
+					<span className="text-xs font-semibold tabular-nums">
 						{percent}%
-					</Typography>
-				</Box>
+					</span>
+				</motion.div>
 			)}
 		</AnimatePresence>
 	);

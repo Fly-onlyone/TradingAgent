@@ -1,206 +1,145 @@
 /**
- * Theme palette selector — popover with 2x2 gradient preview cards.
+ * Theme palette selector -- popover with 2x2 gradient preview cards.
  */
 
-import CheckIcon from "@mui/icons-material/Check";
-import PaletteOutlinedIcon from "@mui/icons-material/PaletteOutlined";
-import {Box, IconButton, Popover, Tooltip, Typography, useTheme,} from "@mui/material";
-import type {PopoverPosition} from "@mui/material/Popover";
-import {motion} from "framer-motion";
-import {useCallback, useEffect, useRef, useState} from "react";
-import {useUIStore} from "@/store/uiStore";
-import type {ThemeId} from "@/theme/presets";
-import {themeList} from "@/theme/presets";
-import {useReducedMotion} from "@/utils/animations/hooks";
-import {spring, staggerCascade} from "@/utils/animations/variants";
+import { Check, Palette } from "lucide-react";
+import { motion } from "framer-motion";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { useThemePreset } from "@/lib/theme";
+import { useUIStore } from "@/store/uiStore";
+import type { ThemeId } from "@/theme/presets";
+import { themeList } from "@/theme/presets";
+import { useReducedMotion } from "@/utils/animations/hooks";
+import { spring, staggerCascade } from "@/utils/animations/variants";
 
 export function ThemeSelector() {
-    const buttonRef = useRef<HTMLButtonElement | null>(null);
-    const [anchorPosition, setAnchorPosition] = useState<PopoverPosition | null>(
-        null,
-    );
-    const themeId = useUIStore((s) => s.themeId);
-    const uiScale = useUIStore((s) => s.uiScale);
-    const setThemeId = useUIStore((s) => s.setThemeId);
-    const open = Boolean(anchorPosition);
-    const theme = useTheme();
-    const reducedMotion = useReducedMotion();
+	const themeId = useUIStore((s) => s.themeId);
+	const setThemeId = useUIStore((s) => s.setThemeId);
+	const preset = useThemePreset();
+	const reducedMotion = useReducedMotion();
+	const [open, setOpen] = useState(false);
 
-    const updateAnchorPosition = useCallback(() => {
-        const button = buttonRef.current;
-        if (!button) return;
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<Tooltip>
+				<TooltipTrigger
+					render={
+						<PopoverTrigger
+							render={
+								<Button variant="ghost" size="icon" />
+							}
+						/>
+					}
+				>
+					<Palette />
+				</TooltipTrigger>
+				<TooltipContent>Theme</TooltipContent>
+			</Tooltip>
 
-        const rect = button.getBoundingClientRect();
-        const zoom = uiScale || 1;
-        setAnchorPosition({
-            top: rect.bottom / zoom,
-            left: (rect.left + rect.width / 2) / zoom,
-        });
-    }, [uiScale]);
+			<PopoverContent
+				className="w-auto p-3 backdrop-blur-[24px] bg-[var(--glass-card-bg)] border border-[var(--border-subtle)]"
+				style={{
+					borderRadius: `${preset.glass.borderRadius}px`,
+				}}
+			>
+				<motion.div
+					variants={reducedMotion ? undefined : staggerCascade.container}
+					initial="hidden"
+					animate="visible"
+					className="grid grid-cols-2 gap-2"
+				>
+					{themeList.map((item) => {
+						const isActive = item.id === themeId;
+						return (
+							<motion.div
+								key={item.id}
+								variants={
+									reducedMotion ? undefined : staggerCascade.item
+								}
+								whileHover={
+									reducedMotion ? undefined : { scale: 1.05 }
+								}
+								whileTap={
+									reducedMotion ? undefined : { scale: 0.95 }
+								}
+								transition={spring.snappy}
+								onClick={() => {
+									setThemeId(item.id as ThemeId);
+									setOpen(false);
+								}}
+								style={{ cursor: "pointer" }}
+							>
+								<div
+									className="flex w-[110px] flex-col items-center gap-1.5 p-2 transition-[border-color,box-shadow,background] duration-200 ease-out"
+									style={{
+										borderRadius: `${preset.glass.borderRadius}px`,
+										background: isActive
+											? `rgba(${item.primaryRgb}, 0.12)`
+											: `rgba(${item.primaryRgb}, 0.04)`,
+										border: isActive
+											? `1.5px solid ${item.primary.main}`
+											: "1.5px solid transparent",
+										boxShadow: isActive
+											? `0 0 16px rgba(${item.primaryRgb}, 0.3), inset 0 0 12px rgba(${item.primaryRgb}, 0.08)`
+											: "none",
+									}}
+									onMouseEnter={(e) => {
+										if (!isActive) {
+											e.currentTarget.style.background = `rgba(${item.primaryRgb}, 0.1)`;
+											e.currentTarget.style.boxShadow = `0 0 12px rgba(${item.primaryRgb}, 0.2)`;
+										}
+									}}
+									onMouseLeave={(e) => {
+										if (!isActive) {
+											e.currentTarget.style.background = `rgba(${item.primaryRgb}, 0.04)`;
+											e.currentTarget.style.boxShadow = "none";
+										}
+									}}
+								>
+									{/* Gradient preview bar */}
+									<div
+										className="relative w-full h-6 overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-br after:from-white/15 after:to-transparent"
+										style={{
+											borderRadius: `${Math.max(preset.glass.borderRadius - 2, 4)}px`,
+											background: `linear-gradient(135deg, ${item.primary.main} 0%, ${item.secondary.main} 50%, ${item.accent.main} 100%)`,
+										}}
+									>
+										{isActive && (
+											<div className="absolute inset-0 z-[1] flex items-center justify-center">
+												<Check className="size-4 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]" />
+											</div>
+										)}
+									</div>
 
-    useEffect(() => {
-        if (!open) return;
-
-        const handleLayoutChange = () => {
-            window.requestAnimationFrame(updateAnchorPosition);
-        };
-
-        handleLayoutChange();
-        window.addEventListener("resize", handleLayoutChange);
-        window.addEventListener("scroll", handleLayoutChange, true);
-
-        return () => {
-            window.removeEventListener("resize", handleLayoutChange);
-            window.removeEventListener("scroll", handleLayoutChange, true);
-        };
-    }, [open, updateAnchorPosition]);
-
-    return (
-        <>
-            <Tooltip title="Theme">
-                <IconButton
-                    ref={buttonRef}
-                    color="inherit"
-                    onClick={updateAnchorPosition}
-                >
-                    <PaletteOutlinedIcon/>
-                </IconButton>
-            </Tooltip>
-
-            <Popover
-                open={open}
-                anchorReference="anchorPosition"
-                anchorPosition={anchorPosition ?? undefined}
-                onClose={() => setAnchorPosition(null)}
-                transformOrigin={{vertical: "top", horizontal: "center"}}
-                slotProps={{
-                    paper: {
-                        sx: {
-                            p: 1.5,
-                            mt: 1,
-                            background: theme.trading.glass.card.background,
-                            backdropFilter: "blur(24px)",
-                            WebkitBackdropFilter: "blur(24px)",
-                            border: `1px solid ${theme.trading.border.subtle}`,
-                            borderRadius: theme.trading.glass.card.borderRadius,
-                            overflow: "visible",
-                        },
-                    },
-                }}
-            >
-                <motion.div
-                    variants={reducedMotion ? undefined : staggerCascade.container}
-                    initial="hidden"
-                    animate="visible"
-                    style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: 8,
-                    }}
-                >
-                    {themeList.map((preset) => {
-                        const isActive = preset.id === themeId;
-                        return (
-                            <motion.div
-                                key={preset.id}
-                                variants={reducedMotion ? undefined : staggerCascade.item}
-                                whileHover={reducedMotion ? undefined : {scale: 1.05}}
-                                whileTap={reducedMotion ? undefined : {scale: 0.95}}
-                                transition={spring.snappy}
-                                onClick={() => {
-                                    setThemeId(preset.id as ThemeId);
-                                    setAnchorPosition(null);
-                                }}
-                                style={{cursor: "pointer"}}
-                            >
-                                <Box
-                                    sx={{
-                                        width: 110,
-                                        p: 1,
-                                        borderRadius: theme.trading.glass.card.borderRadius,
-                                        background: isActive
-                                            ? `rgba(${preset.primaryRgb}, 0.12)`
-                                            : `rgba(${preset.primaryRgb}, 0.04)`,
-                                        border: isActive
-                                            ? `1.5px solid ${preset.primary.main}`
-                                            : "1.5px solid transparent",
-                                        boxShadow: isActive
-                                            ? `0 0 16px rgba(${preset.primaryRgb}, 0.3), inset 0 0 12px rgba(${preset.primaryRgb}, 0.08)`
-                                            : "none",
-                                        transition:
-                                            "border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease",
-                                        "&:hover": {
-                                            background: `rgba(${preset.primaryRgb}, 0.1)`,
-                                            boxShadow: `0 0 12px rgba(${preset.primaryRgb}, 0.2)`,
-                                        },
-                                        display: "flex",
-                                        flexDirection: "column",
-                                        alignItems: "center",
-                                        gap: 0.75,
-                                    }}
-                                >
-                                    {/* Gradient preview bar */}
-                                    <Box
-                                        sx={{
-                                            width: "100%",
-                                            height: 24,
-                                            borderRadius: `${Math.max(theme.trading.glass.borderRadius - 2, 4)}px`,
-                                            background: `linear-gradient(135deg, ${preset.primary.main} 0%, ${preset.secondary.main} 50%, ${preset.accent.main} 100%)`,
-                                            position: "relative",
-                                            overflow: "hidden",
-                                            "&::after": {
-                                                content: '""',
-                                                position: "absolute",
-                                                inset: 0,
-                                                background:
-                                                    "linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0) 50%)",
-                                            },
-                                        }}
-                                    >
-                                        {isActive && (
-                                            <Box
-                                                sx={{
-                                                    position: "absolute",
-                                                    inset: 0,
-                                                    display: "flex",
-                                                    alignItems: "center",
-                                                    justifyContent: "center",
-                                                    zIndex: 1,
-                                                }}
-                                            >
-                                                <CheckIcon
-                                                    sx={{
-                                                        fontSize: 16,
-                                                        color: "#fff",
-                                                        filter:
-                                                            "drop-shadow(0 1px 2px rgba(0,0,0,0.5))",
-                                                    }}
-                                                />
-                                            </Box>
-                                        )}
-                                    </Box>
-
-                                    {/* Theme name */}
-                                    <Typography
-                                        variant="caption"
-                                        sx={{
-                                            fontWeight: isActive ? 700 : 500,
-                                            color: isActive
-                                                ? preset.primary.main
-                                                : "text.secondary",
-                                            fontSize: "0.7rem",
-                                            letterSpacing: "0.03em",
-                                            transition: "color 0.2s ease",
-                                        }}
-                                    >
-                                        {preset.label}
-                                    </Typography>
-                                </Box>
-                            </motion.div>
-                        );
-                    })}
-                </motion.div>
-            </Popover>
-        </>
-    );
+									{/* Theme name */}
+									<span
+										className="text-[0.7rem] tracking-wide transition-colors duration-200"
+										style={{
+											fontWeight: isActive ? 700 : 500,
+											color: isActive
+												? item.primary.main
+												: "var(--text-secondary)",
+										}}
+									>
+										{item.label}
+									</span>
+								</div>
+							</motion.div>
+						);
+					})}
+				</motion.div>
+			</PopoverContent>
+		</Popover>
+	);
 }

@@ -1,48 +1,39 @@
-import {Box, type SxProps, type Theme, Typography} from "@mui/material";
-import {motion} from "framer-motion";
-import {type ReactNode} from "react";
-import {fadeInUp} from "@/utils/animations/variants";
+import { motion } from "framer-motion";
+import { type ReactNode } from "react";
+import { cn } from "@/lib/utils";
+import { fadeInUp } from "@/utils/animations/variants";
 
 interface SectionHeaderProps {
-    title: string;
-    subtitle?: string;
-    action?: ReactNode;
-    sx?: SxProps<Theme>;
+	title: string;
+	subtitle?: string;
+	action?: ReactNode;
+	className?: string;
 }
 
 export function SectionHeader({
-                                  title,
-                                  subtitle,
-                                  action,
-                                  sx,
-                              }: SectionHeaderProps) {
-    return (
-        <motion.div variants={fadeInUp} initial="hidden" animate="visible">
-            <Box
-                sx={{
-                    display: "flex",
-                    alignItems: "flex-start",
-                    justifyContent: "space-between",
-                    mb: 3,
-                    ...sx,
-                }}
-            >
-                <Box>
-                    <Typography variant="h4" fontWeight={700}>
-                        {title}
-                    </Typography>
-                    {subtitle && (
-                        <Typography
-                            variant="body2"
-                            color="text.secondary"
-                            sx={{mt: 0.5}}
-                        >
-                            {subtitle}
-                        </Typography>
-                    )}
-                </Box>
-                {action && <Box sx={{ml: 2, flexShrink: 0}}>{action}</Box>}
-            </Box>
-        </motion.div>
-    );
+	title,
+	subtitle,
+	action,
+	className,
+}: SectionHeaderProps) {
+	return (
+		<motion.div variants={fadeInUp} initial="hidden" animate="visible">
+			<div
+				className={cn(
+					"flex items-start justify-between mb-6",
+					className,
+				)}
+			>
+				<div>
+					<h4 className="text-2xl font-bold">{title}</h4>
+					{subtitle && (
+						<p className="mt-1 text-sm text-[var(--text-secondary)]">
+							{subtitle}
+						</p>
+					)}
+				</div>
+				{action && <div className="ml-4 shrink-0">{action}</div>}
+			</div>
+		</motion.div>
+	);
 }

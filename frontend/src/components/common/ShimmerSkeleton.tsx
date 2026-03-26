@@ -1,61 +1,37 @@
 /**
  * Shimmer loading skeleton with diagonal gradient sweep.
- * Colors are now driven by MuiSkeleton theme overrides.
+ * Uses shadcn Skeleton with shimmer animation via Tailwind.
  */
 
-import { Skeleton, type SkeletonProps } from "@mui/material";
-import type { SxProps, Theme } from "@mui/material/styles";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
-const shimmerSx: SxProps<Theme> = {
-	backgroundSize: "200% 100%",
+const variantMap: Record<string, string> = {
+	card: "w-full h-40 rounded-lg",
+	stat: "w-full h-[100px] rounded-lg",
+	"table-row": "w-full h-10 rounded mb-1",
+	chart: "w-full h-[300px] rounded-lg",
 };
 
-const variantMap: Record<string, SkeletonProps & { sx?: SxProps<Theme> }> = {
-	card: {
-		variant: "rounded",
-		sx: { width: "100%", height: 160, borderRadius: 2, ...shimmerSx },
-	},
-	stat: {
-		variant: "rounded",
-		sx: { width: "100%", height: 100, borderRadius: 2, ...shimmerSx },
-	},
-	"table-row": {
-		variant: "rounded",
-		sx: {
-			width: "100%",
-			height: 40,
-			borderRadius: 1,
-			mb: 0.5,
-			...shimmerSx,
-		},
-	},
-	chart: {
-		variant: "rounded",
-		sx: { width: "100%", height: 300, borderRadius: 2, ...shimmerSx },
-	},
-};
-
-interface ShimmerSkeletonProps extends SkeletonProps {
+interface ShimmerSkeletonProps extends React.ComponentProps<"div"> {
 	shimmerVariant?: "card" | "stat" | "table-row" | "chart";
 }
 
 export function ShimmerSkeleton({
 	shimmerVariant,
-	sx,
+	className,
 	...rest
 }: ShimmerSkeletonProps) {
 	if (shimmerVariant && variantMap[shimmerVariant]) {
-		const preset = variantMap[shimmerVariant];
 		return (
 			<Skeleton
-				{...preset}
+				className={cn(variantMap[shimmerVariant], className)}
 				{...rest}
-				sx={{ ...preset.sx, ...sx } as SxProps<Theme>}
 			/>
 		);
 	}
 
-	return <Skeleton {...rest} sx={{ ...shimmerSx, ...sx } as SxProps<Theme>} />;
+	return <Skeleton className={className} {...rest} />;
 }
 
 export default ShimmerSkeleton;

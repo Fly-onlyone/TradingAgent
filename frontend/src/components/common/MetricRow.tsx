@@ -1,40 +1,22 @@
-import {Box, type SxProps, type Theme, Typography} from "@mui/material";
-import type {ReactNode} from "react";
+import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 
 interface MetricRowProps {
-    label: string;
-    value: ReactNode;
-    sx?: SxProps<Theme>;
+	label: string;
+	value: ReactNode;
+	className?: string;
 }
 
-export function MetricRow({label, value, sx}: MetricRowProps) {
-    return (
-        <Box
-            sx={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                py: 1.5,
-                px: 0,
-                borderBottom: (theme) => `1px solid ${theme.trading.border.subtle}`,
-                "&:last-child": {borderBottom: "none"},
-                ...sx,
-            }}
-        >
-            <Typography variant="body2" color="text.secondary">
-                {label}
-            </Typography>
-            <Box
-                sx={{
-                    color: "text.primary",
-                    fontSize: (theme) => theme.typography.body2.fontSize,
-                    fontWeight: 500,
-                    lineHeight: (theme) => theme.typography.body2.lineHeight,
-                    textAlign: "right",
-                }}
-            >
-                {value}
-            </Box>
-        </Box>
-    );
+export function MetricRow({ label, value, className }: MetricRowProps) {
+	return (
+		<div
+			className={cn(
+				"flex items-center justify-between py-3 border-b border-[var(--border-subtle)] last:border-b-0",
+				className,
+			)}
+		>
+			<span className="text-sm text-[var(--text-secondary)]">{label}</span>
+			<span className="text-sm font-medium text-right">{value}</span>
+		</div>
+	);
 }
