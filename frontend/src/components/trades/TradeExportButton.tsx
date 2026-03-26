@@ -3,93 +3,87 @@
  * Provides export functionality for trades data
  */
 
-import {useState} from 'react';
+import { Code, Download, Sheet } from "lucide-react";
+import { useState } from "react";
+import { tradesApi } from "@/api/endpoints/trades";
+import { Button } from "@/components/ui/button";
 import {
-    Button,
-    Menu,
-    MenuItem,
-    ListItemIcon,
-    ListItemText,
-    CircularProgress,
-} from '@mui/material';
-import FileDownloadIcon from '@mui/icons-material/FileDownload';
-import TableChartIcon from '@mui/icons-material/TableChart';
-import CodeIcon from '@mui/icons-material/Code';
-import {tradesApi} from '@/api/endpoints/trades';
-import type {ExportFormat} from '@/types';
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import type { ExportFormat } from "@/types";
 
 interface TradeExportButtonProps {
-    startDate?: string;
-    endDate?: string;
-    disabled?: boolean;
+	startDate?: string;
+	endDate?: string;
+	disabled?: boolean;
 }
 
 function downloadBlob(blob: Blob, filename: string) {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+	const url = URL.createObjectURL(blob);
+	const link = document.createElement("a");
+	link.href = url;
+	link.download = filename;
+	document.body.appendChild(link);
+	link.click();
+	document.body.removeChild(link);
+	URL.revokeObjectURL(url);
 }
 
-export function TradeExportButton({startDate, endDate, disabled}: TradeExportButtonProps) {
-    const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-    const [isExporting, setIsExporting] = useState(false);
-    const open = Boolean(anchorEl);
+export function TradeExportButton({
+	startDate,
+	endDate,
+	disabled,
+}: TradeExportButtonProps) {
+	const [isExporting, setIsExporting] = useState(false);
 
-    const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-        setAnchorEl(event.currentTarget);
-    };
+	const handleExport = async (format: ExportFormat) => {
+		setIsExporting(true);
 
-    const handleClose = () => {
-        setAnchorEl(null);
-    };
+		try {
+			const blob = await tradesApi.exportTrades(format, {
+				startDate,
+				endDate,
+			});
+			const timestamp = new Date().toISOString().split("T")[0];
+			const filename = `trades_export_${timestamp}.${format}`;
+			downloadBlob(blob, filename);
+		} catch (error) {
+			console.error("Export failed:", error);
+		} finally {
+			setIsExporting(false);
+		}
+	};
 
-    const handleExport = async (format: ExportFormat) => {
-        handleClose();
-        setIsExporting(true);
-
-        try {
-            const blob = await tradesApi.exportTrades(format, {startDate, endDate});
-            const timestamp = new Date().toISOString().split('T')[0];
-            const filename = `trades_export_${timestamp}.${format}`;
-            downloadBlob(blob, filename);
-        } catch (error) {
-            console.error('Export failed:', error);
-        } finally {
-            setIsExporting(false);
-        }
-    };
-
-    return (
-        <>
-            <Button
-                variant="outlined"
-                startIcon={isExporting ? <CircularProgress size={16}/> : <FileDownloadIcon/>}
-                onClick={handleClick}
-                disabled={disabled || isExporting}
-            >
-                Export
-            </Button>
-            <Menu anchorEl={anchorEl} open={open} onClose={handleClose}>
-                <MenuItem onClick={() => handleExport('csv')}>
-                    <ListItemIcon>
-                        <TableChartIcon fontSize="small"/>
-                    </ListItemIcon>
-                    <ListItemText>Export as CSV</ListItemText>
-                </MenuItem>
-                <MenuItem onClick={() => handleExport('json')}>
-                    <ListItemIcon>
-                        <CodeIcon fontSize="small"/>
-                    </ListItemIcon>
-                    <ListItemText>Export as JSON</ListItemText>
-                </MenuItem>
-            </Menu>
-        </>
-    );
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger
+				disabled={disabled || isExporting}
+				render={
+					<Button variant="outline" disabled={disabled || isExporting}>
+						{isExporting ? (
+							<span className="mr-1 size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+						) : (
+							<Download className="mr-1 size-4" />
+						)}
+						Export
+					</Button>
+				}
+			/>
+			<DropdownMenuContent>
+				<DropdownMenuItem onClick={() => handleExport("csv")}>
+					<Sheet className="size-4" />
+					Export as CSV
+				</DropdownMenuItem>
+				<DropdownMenuItem onClick={() => handleExport("json")}>
+					<Code className="size-4" />
+					Export as JSON
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
 }
 
 export default TradeExportButton;

@@ -3,7 +3,6 @@
  * Displays trade history with profit/loss analysis
  */
 
-import { Alert, Box, Card, CardContent, Typography } from "@mui/material";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
@@ -17,6 +16,8 @@ import {
 	TradesBySymbolAccordion,
 	TradeTable,
 } from "@/components/trades";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Card, CardContent } from "@/components/ui/card";
 import { useTradeStore } from "@/store/tradeStore";
 import { tabSwitch } from "@/utils/animations/variants";
 import { requireAuth } from "../-guards";
@@ -76,7 +77,7 @@ function TradesPage() {
 
 	return (
 		<PageTransition pageKey="trades">
-			<Box>
+			<div>
 				<SectionHeader
 					title="Trade History"
 					subtitle="Review agent-executed trades and P&L performance"
@@ -84,46 +85,41 @@ function TradesPage() {
 						<TradeExportButton
 							startDate={filters.startDate}
 							endDate={filters.endDate}
-							disabled={isLoading || !tradesQuery.data?.trades.length}
+							disabled={
+								isLoading ||
+								!tradesQuery.data?.trades.length
+							}
 						/>
 					}
 				/>
 
 				{error && (
-					<Alert severity="error" sx={{ mb: 3 }}>
-						Failed to load trade data. Please try again.
+					<Alert variant="destructive" className="mb-6">
+						<AlertDescription>
+							Failed to load trade data. Please try again.
+						</AlertDescription>
 					</Alert>
 				)}
 
 				{/* Summary Cards */}
-				<Box sx={{ mb: 3 }}>
+				<div className="mb-6">
 					<TradeSummaryCards
 						summary={summaryQuery.data ?? null}
 						isLoading={summaryQuery.isLoading}
 					/>
-				</Box>
+				</div>
 
 				{/* P&L Chart Placeholder */}
-				<Card sx={{ mb: 3 }}>
+				<Card className="mb-6">
 					<CardContent>
-						<Typography variant="h6" sx={{ mb: 2 }}>
+						<h3 className="mb-3 text-base font-semibold">
 							P&L Performance
-						</Typography>
-						<Box
-							sx={{
-								height: 200,
-								display: "flex",
-								alignItems: "center",
-								justifyContent: "center",
-								border: (theme) =>
-									`1px dashed ${theme.trading.border.subtle}`,
-								borderRadius: 1,
-							}}
-						>
-							<Typography variant="body2" color="text.secondary">
+						</h3>
+						<div className="flex h-[200px] items-center justify-center rounded-lg border border-dashed border-foreground/20">
+							<span className="text-sm text-muted-foreground">
 								P&L chart — coming soon
-							</Typography>
-						</Box>
+							</span>
+						</div>
 					</CardContent>
 				</Card>
 
@@ -173,7 +169,7 @@ function TradesPage() {
 						)}
 					</motion.div>
 				</AnimatePresence>
-			</Box>
+			</div>
 		</PageTransition>
 	);
 }

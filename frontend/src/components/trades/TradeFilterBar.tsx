@@ -3,195 +3,212 @@
  * Provides filtering options for trades
  */
 
-import {useState} from 'react';
+import { FilterX, List, Table as TableIcon } from "lucide-react";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
-    Box,
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
-    TextField,
-    Button,
-    ToggleButton,
-    ToggleButtonGroup,
-    type SelectChangeEvent,
-} from '@mui/material';
-import TableRowsIcon from '@mui/icons-material/TableRows';
-import ViewListIcon from '@mui/icons-material/ViewList';
-import FilterAltOffIcon from '@mui/icons-material/FilterAltOff';
-import type {TradesFilter, TradeViewMode} from '@/types';
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import type { TradesFilter, TradeViewMode } from "@/types";
 
 interface TradeFilterBarProps {
-    filters: TradesFilter;
-    viewMode: TradeViewMode;
-    onFilterChange: (filters: Partial<TradesFilter>) => void;
-    onViewModeChange: (mode: TradeViewMode) => void;
-    onResetFilters: () => void;
-    symbols?: string[];
+	filters: TradesFilter;
+	viewMode: TradeViewMode;
+	onFilterChange: (filters: Partial<TradesFilter>) => void;
+	onViewModeChange: (mode: TradeViewMode) => void;
+	onResetFilters: () => void;
+	symbols?: string[];
 }
 
 const COMMON_SYMBOLS = [
-    'BTC-USDT',
-    'ETH-USDT',
-    'SOL-USDT',
-    'XRP-USDT',
-    'DOGE-USDT',
-    'ADA-USDT',
-    'AVAX-USDT',
-    'DOT-USDT',
+	"BTC-USDT",
+	"ETH-USDT",
+	"SOL-USDT",
+	"XRP-USDT",
+	"DOGE-USDT",
+	"ADA-USDT",
+	"AVAX-USDT",
+	"DOT-USDT",
 ];
 
 export function TradeFilterBar({
-                                   filters,
-                                   viewMode,
-                                   onFilterChange,
-                                   onViewModeChange,
-                                   onResetFilters,
-                                   symbols = COMMON_SYMBOLS,
-                               }: TradeFilterBarProps) {
-    const [localStartDate, setLocalStartDate] = useState(filters.startDate || '');
-    const [localEndDate, setLocalEndDate] = useState(filters.endDate || '');
+	filters,
+	viewMode,
+	onFilterChange,
+	onViewModeChange,
+	onResetFilters,
+	symbols = COMMON_SYMBOLS,
+}: TradeFilterBarProps) {
+	const [localStartDate, setLocalStartDate] = useState(
+		filters.startDate || "",
+	);
+	const [localEndDate, setLocalEndDate] = useState(filters.endDate || "");
 
-    const handleSymbolChange = (event: SelectChangeEvent) => {
-        const value = event.target.value;
-        onFilterChange({symbol: value || undefined});
-    };
+	const handleSymbolChange = (value: string | null) => {
+		onFilterChange({ symbol: value || undefined });
+	};
 
-    const handleSideChange = (event: SelectChangeEvent) => {
-        const value = event.target.value as 'buy' | 'sell' | '';
-        onFilterChange({side: value || undefined});
-    };
+	const handleSideChange = (value: string | null) => {
+		onFilterChange({ side: (value as "buy" | "sell") || undefined });
+	};
 
-    const handleStatusChange = (event: SelectChangeEvent) => {
-        const value = event.target.value as 'open' | 'closed' | '';
-        onFilterChange({status: value || undefined});
-    };
+	const handleStatusChange = (value: string | null) => {
+		onFilterChange({ status: (value as "open" | "closed") || undefined });
+	};
 
-    const handleStartDateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const value = event.target.value;
-        setLocalStartDate(value);
-        if (value) {
-            onFilterChange({startDate: new Date(value).toISOString()});
-        } else {
-            onFilterChange({startDate: undefined});
-        }
-    };
+	const handleStartDateChange = (
+		event: React.ChangeEvent<HTMLInputElement>,
+	) => {
+		const value = event.target.value;
+		setLocalStartDate(value);
+		if (value) {
+			onFilterChange({ startDate: new Date(value).toISOString() });
+		} else {
+			onFilterChange({ startDate: undefined });
+		}
+	};
 
-    const handleEndDateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const value = event.target.value;
-        setLocalEndDate(value);
-        if (value) {
-            onFilterChange({endDate: new Date(value).toISOString()});
-        } else {
-            onFilterChange({endDate: undefined});
-        }
-    };
+	const handleEndDateChange = (
+		event: React.ChangeEvent<HTMLInputElement>,
+	) => {
+		const value = event.target.value;
+		setLocalEndDate(value);
+		if (value) {
+			onFilterChange({ endDate: new Date(value).toISOString() });
+		} else {
+			onFilterChange({ endDate: undefined });
+		}
+	};
 
-    const handleViewModeChange = (_: React.MouseEvent<HTMLElement>, newMode: TradeViewMode | null) => {
-        if (newMode) {
-            onViewModeChange(newMode);
-        }
-    };
+	const handleViewModeChange = (value: string[]) => {
+		const selected = value[0] as TradeViewMode | undefined;
+		if (selected) {
+			onViewModeChange(selected);
+		}
+	};
 
-    const handleReset = () => {
-        setLocalStartDate('');
-        setLocalEndDate('');
-        onResetFilters();
-    };
+	const handleReset = () => {
+		setLocalStartDate("");
+		setLocalEndDate("");
+		onResetFilters();
+	};
 
-    const hasActiveFilters =
-        filters.symbol || filters.side || filters.status || filters.startDate || filters.endDate;
+	const hasActiveFilters =
+		filters.symbol ||
+		filters.side ||
+		filters.status ||
+		filters.startDate ||
+		filters.endDate;
 
-    return (
-        <Box
-            sx={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 2,
-                alignItems: 'center',
-                mb: 3,
-            }}
-        >
-            <FormControl size="small" sx={{minWidth: 140}}>
-                <InputLabel>Symbol</InputLabel>
-                <Select value={filters.symbol || ''} onChange={handleSymbolChange} label="Symbol">
-                    <MenuItem value="">All Symbols</MenuItem>
-                    {symbols.map((symbol) => (
-                        <MenuItem key={symbol} value={symbol}>
-                            {symbol}
-                        </MenuItem>
-                    ))}
-                </Select>
-            </FormControl>
+	return (
+		<div className="mb-6 flex flex-wrap items-center gap-3">
+			<div className="min-w-[140px]">
+				<Select
+					value={filters.symbol ?? null}
+					onValueChange={handleSymbolChange}
+				>
+					<SelectTrigger>
+						<SelectValue placeholder="All Symbols" />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value={null as unknown as string}>
+							All Symbols
+						</SelectItem>
+						{symbols.map((symbol) => (
+							<SelectItem key={symbol} value={symbol}>
+								{symbol}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+			</div>
 
-            <FormControl size="small" sx={{minWidth: 100}}>
-                <InputLabel>Side</InputLabel>
-                <Select value={filters.side || ''} onChange={handleSideChange} label="Side">
-                    <MenuItem value="">All</MenuItem>
-                    <MenuItem value="buy">Buy</MenuItem>
-                    <MenuItem value="sell">Sell</MenuItem>
-                </Select>
-            </FormControl>
+			<div className="min-w-[100px]">
+				<Select
+					value={filters.side ?? null}
+					onValueChange={handleSideChange}
+				>
+					<SelectTrigger>
+						<SelectValue placeholder="All" />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value={null as unknown as string}>
+							All
+						</SelectItem>
+						<SelectItem value="buy">Buy</SelectItem>
+						<SelectItem value="sell">Sell</SelectItem>
+					</SelectContent>
+				</Select>
+			</div>
 
-            <FormControl size="small" sx={{minWidth: 120}}>
-                <InputLabel>Status</InputLabel>
-                <Select value={filters.status || ''} onChange={handleStatusChange} label="Status">
-                    <MenuItem value="">All</MenuItem>
-                    <MenuItem value="open">Open</MenuItem>
-                    <MenuItem value="closed">Closed</MenuItem>
-                </Select>
-            </FormControl>
+			<div className="min-w-[120px]">
+				<Select
+					value={filters.status ?? null}
+					onValueChange={handleStatusChange}
+				>
+					<SelectTrigger>
+						<SelectValue placeholder="All" />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value={null as unknown as string}>
+							All
+						</SelectItem>
+						<SelectItem value="open">Open</SelectItem>
+						<SelectItem value="closed">Closed</SelectItem>
+					</SelectContent>
+				</Select>
+			</div>
 
-            <TextField
-                type="date"
-                size="small"
-                label="From"
-                value={localStartDate}
-                onChange={handleStartDateChange}
-                slotProps={{inputLabel: {shrink: true}}}
-                sx={{width: 160}}
-            />
+			<div className="flex w-[160px] flex-col gap-1">
+				<Label className="text-xs text-muted-foreground">From</Label>
+				<Input
+					type="date"
+					value={localStartDate}
+					onChange={handleStartDateChange}
+				/>
+			</div>
 
-            <TextField
-                type="date"
-                size="small"
-                label="To"
-                value={localEndDate}
-                onChange={handleEndDateChange}
-                slotProps={{inputLabel: {shrink: true}}}
-                sx={{width: 160}}
-            />
+			<div className="flex w-[160px] flex-col gap-1">
+				<Label className="text-xs text-muted-foreground">To</Label>
+				<Input
+					type="date"
+					value={localEndDate}
+					onChange={handleEndDateChange}
+				/>
+			</div>
 
-            {hasActiveFilters && (
-                <Button
-                    variant="outlined"
-                    size="small"
-                    startIcon={<FilterAltOffIcon/>}
-                    onClick={handleReset}
-                >
-                    Clear
-                </Button>
-            )}
+			{hasActiveFilters && (
+				<Button variant="outline" size="sm" onClick={handleReset}>
+					<FilterX className="mr-1 size-3.5" />
+					Clear
+				</Button>
+			)}
 
-            <Box sx={{flexGrow: 1}}/>
+			<div className="flex-grow" />
 
-            <ToggleButtonGroup
-                value={viewMode}
-                exclusive
-                onChange={handleViewModeChange}
-                size="small"
-            >
-                <ToggleButton value="table">
-                    <TableRowsIcon fontSize="small" sx={{mr: 0.5}}/>
-                    Table
-                </ToggleButton>
-                <ToggleButton value="grouped">
-                    <ViewListIcon fontSize="small" sx={{mr: 0.5}}/>
-                    Grouped
-                </ToggleButton>
-            </ToggleButtonGroup>
-        </Box>
-    );
+			<ToggleGroup
+				value={[viewMode]}
+				onValueChange={handleViewModeChange}
+				variant="outline"
+			>
+				<ToggleGroupItem value="table" aria-label="Table view">
+					<TableIcon className="mr-1 size-3.5" />
+					Table
+				</ToggleGroupItem>
+				<ToggleGroupItem value="grouped" aria-label="Grouped view">
+					<List className="mr-1 size-3.5" />
+					Grouped
+				</ToggleGroupItem>
+			</ToggleGroup>
+		</div>
+	);
 }
 
 export default TradeFilterBar;
