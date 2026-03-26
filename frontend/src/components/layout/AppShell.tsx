@@ -45,9 +45,13 @@ interface AppShellProps {
 	children: ReactNode;
 }
 
+const SIDEBAR_EXPANDED_WIDTH = 220;
+const SIDEBAR_COLLAPSED_WIDTH = 56;
+
 export function AppShell({ children }: AppShellProps) {
 	const isMobile = useMediaQuery("(max-width: 767px)");
-	const { notifications, removeNotification, effectsEnabled } = useUIStore();
+	const { notifications, removeNotification, effectsEnabled, sidebarState } =
+		useUIStore();
 	const reducedMotion = useReducedMotion();
 	const theme = useThemePreset();
 	const currentPath = useRouterState({
@@ -96,8 +100,18 @@ export function AppShell({ children }: AppShellProps) {
 			<main
 				className={cn(
 					"flex-1 min-h-0 flex flex-col overflow-hidden relative z-[1]",
-					"transition-[width] duration-[225ms] ease-[cubic-bezier(0.4,0,0.6,1)]",
+					"transition-[margin] duration-[225ms] ease-[cubic-bezier(0.4,0,0.6,1)]",
 				)}
+				style={
+					showLayout && !isMobile
+						? {
+								marginLeft:
+									sidebarState === "expanded"
+										? SIDEBAR_EXPANDED_WIDTH
+										: SIDEBAR_COLLAPSED_WIDTH,
+							}
+						: undefined
+				}
 			>
 				{/* Toolbar spacer for header */}
 				{showLayout && <div className="h-[52px] shrink-0" />}
