@@ -1,83 +1,61 @@
 /**
- * Mobile Bottom Navigation — shown below md breakpoint
+ * Mobile Bottom Navigation -- shown below md breakpoint
  */
 
-import DashboardIcon from "@mui/icons-material/Dashboard";
-import ListAltIcon from "@mui/icons-material/ListAlt";
-import MonitorIcon from "@mui/icons-material/Monitor";
-import SettingsIcon from "@mui/icons-material/Settings";
-import SmartToyIcon from "@mui/icons-material/SmartToy";
-import {BottomNavigation, BottomNavigationAction, Paper, useMediaQuery, useTheme,} from "@mui/material";
-import {Link, useRouterState} from "@tanstack/react-router";
+import { Bot, LayoutDashboard, List, Monitor, Settings } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { Link, useRouterState } from "@tanstack/react-router";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { cn } from "@/lib/utils";
 
-const navItems = [
-    {path: "/", label: "Dashboard", icon: <DashboardIcon/>},
-    {path: "/agent", label: "Agent", icon: <SmartToyIcon/>},
-    {path: "/trading", label: "Monitor", icon: <MonitorIcon/>},
-    {path: "/orders", label: "Orders", icon: <ListAltIcon/>},
-    {path: "/settings", label: "Settings", icon: <SettingsIcon/>},
+const navItems: { path: string; label: string; icon: LucideIcon }[] = [
+	{ path: "/", label: "Dashboard", icon: LayoutDashboard },
+	{ path: "/agent", label: "Agent", icon: Bot },
+	{ path: "/trading", label: "Monitor", icon: Monitor },
+	{ path: "/orders", label: "Orders", icon: List },
+	{ path: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function BottomNav() {
-    const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down("md"));
-    const currentPath = useRouterState({
-        select: (state) => state.location.pathname,
-    });
+	const isMobile = useMediaQuery("(max-width: 767px)");
+	const currentPath = useRouterState({
+		select: (state) => state.location.pathname,
+	});
 
-    if (!isMobile) return null;
+	if (!isMobile) return null;
 
-    const currentValue = navItems.findIndex((item) =>
-        item.path === "/" ? currentPath === "/" : currentPath.startsWith(item.path),
-    );
+	return (
+		<nav
+			className={cn(
+				"fixed bottom-0 left-0 right-0 z-50 flex justify-around items-center h-14",
+				"glass-card border-t border-[var(--border-subtle)] border-x-0 border-b-0 rounded-none",
+			)}
+		>
+			{navItems.map((item) => {
+				const isActive =
+					item.path === "/"
+						? currentPath === "/"
+						: currentPath.startsWith(item.path);
+				const Icon = item.icon;
 
-    return (
-        <Paper
-            sx={{
-                position: "fixed",
-                bottom: 0,
-                left: 0,
-                right: 0,
-                zIndex: theme.zIndex.appBar + 1,
-                background: theme.trading.glass.header.background,
-                backdropFilter: "blur(20px)",
-                WebkitBackdropFilter: "blur(20px)",
-                borderTop: `1px solid ${theme.trading.border.subtle}`,
-            }}
-            elevation={0}
-        >
-            <BottomNavigation
-                value={currentValue === -1 ? false : currentValue}
-                sx={{
-                    background: "transparent",
-                    height: 56,
-                    "& .MuiBottomNavigationAction-root": {
-                        color: "text.secondary",
-                        minWidth: 0,
-                        padding: "6px 0",
-                        "&.Mui-selected": {
-                            color: "primary.main",
-                        },
-                    },
-                    "& .MuiBottomNavigationAction-label": {
-                        fontSize: "0.625rem",
-                        "&.Mui-selected": {
-                            fontSize: "0.625rem",
-                        },
-                    },
-                }}
-            >
-                {navItems.map((item) => (
-                    <BottomNavigationAction
-                        key={item.path}
-                        component={Link}
-                        to={item.path}
-                        label={item.label}
-                        icon={item.icon}
-                        showLabel
-                    />
-                ))}
-            </BottomNavigation>
-        </Paper>
-    );
+				return (
+					<Link
+						key={item.path}
+						to={item.path}
+						className={cn(
+							"flex flex-col items-center gap-1 p-2 min-w-0 no-underline transition-colors duration-200",
+							isActive
+								? "text-[var(--primary)]"
+								: "text-[var(--text-secondary)]",
+						)}
+					>
+						<Icon className="size-5" />
+						<span className="text-[0.625rem] leading-none">
+							{item.label}
+						</span>
+					</Link>
+				);
+			})}
+		</nav>
+	);
 }

@@ -552,6 +552,22 @@
   to { transform: scale(1); opacity: 1; }
 }
 
+@keyframes gradientSlide {
+  0% { background-position: 0% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes brandShine {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes toastCountdown {
+  0% { transform: scaleX(1); transform-origin: left; }
+  100% { transform: scaleX(0); transform-origin: left; }
+}
+
 /* ── Scrollbar ── */
 ::-webkit-scrollbar {
   width: 6px;
