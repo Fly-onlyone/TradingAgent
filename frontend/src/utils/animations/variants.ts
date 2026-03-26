@@ -18,6 +18,16 @@ export const spring = {
     gentle: {type: "spring", stiffness: 200, damping: 25} as Transition,
 };
 
+// ============ Page Instant (near-instant opacity fade) ============
+
+export const pageInstant: Variants = {
+    initial: {opacity: 0},
+    animate: {
+        opacity: 1,
+        transition: {duration: 0.1, ease: "easeOut"},
+    },
+};
+
 // ============ Page Entrance ============
 
 export const pageEntrance: Variants = {
