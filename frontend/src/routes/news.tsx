@@ -2,308 +2,291 @@
  * News Page
  */
 
-import OpenInNewIcon from "@mui/icons-material/OpenInNew";
-import SearchIcon from "@mui/icons-material/Search";
-import {
-    Box,
-    Card,
-    CardContent,
-    Chip,
-    Grid2 as Grid,
-    InputAdornment,
-    Link as MuiLink,
-    TextField,
-    Typography,
-} from "@mui/material";
-import {useQuery} from "@tanstack/react-query";
-import {createFileRoute} from "@tanstack/react-router";
-import {motion} from "framer-motion";
-import {useMemo, useState} from "react";
-import {newsApi} from "@/api/endpoints/news";
-import {EmptyState} from "@/components/common/EmptyState";
-import {PageTransition} from "@/components/common/PageTransition";
-import {SectionHeader} from "@/components/common/SectionHeader";
-import {ShimmerSkeleton} from "@/components/common/ShimmerSkeleton";
-import {SentimentBadge} from "@/components/data-display/SentimentBadge";
-import {StatCard} from "@/components/data-display/StatCard";
-import {useDebounce} from "@/hooks/useDebounce";
-import type {NewsArticle} from "@/types";
-import {spring} from "@/utils/animations/variants";
-import {formatRelativeTime} from "@/utils/formatters";
-import {requireAuth} from "./-guards";
+import { ExternalLink, Search } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
+import { motion } from "framer-motion";
+import { useMemo, useState } from "react";
+import { newsApi } from "@/api/endpoints/news";
+import { EmptyState } from "@/components/common/EmptyState";
+import { PageTransition } from "@/components/common/PageTransition";
+import { SectionHeader } from "@/components/common/SectionHeader";
+import { ShimmerSkeleton } from "@/components/common/ShimmerSkeleton";
+import { SentimentBadge } from "@/components/data-display/SentimentBadge";
+import { StatCard } from "@/components/data-display/StatCard";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { useDebounce } from "@/hooks/useDebounce";
+import type { NewsArticle } from "@/types";
+import { spring } from "@/utils/animations/variants";
+import { formatRelativeTime } from "@/utils/formatters";
+import { requireAuth } from "./-guards";
 
 export const Route = createFileRoute("/news")({
-    beforeLoad: requireAuth,
-    component: NewsPage,
+	beforeLoad: requireAuth,
+	component: NewsPage,
 });
 
 function NewsPage() {
-    const [searchQuery, setSearchQuery] = useState("");
-    const [sourceFilter, setSourceFilter] = useState<string | null>(null);
-    const debouncedQuery = useDebounce(searchQuery, 300);
+	const [searchQuery, setSearchQuery] = useState("");
+	const [sourceFilter, setSourceFilter] = useState<string | null>(null);
+	const debouncedQuery = useDebounce(searchQuery, 300);
 
-    const {data: marketSentiment, isLoading: loadingSentiment} = useQuery({
-        queryKey: ["marketSentiment"],
-        queryFn: () => newsApi.getMarketSentiment(),
-    });
+	const { data: marketSentiment, isLoading: loadingSentiment } = useQuery({
+		queryKey: ["marketSentiment"],
+		queryFn: () => newsApi.getMarketSentiment(),
+	});
 
-    const {data: articles, isLoading: loadingArticles} = useQuery({
-        queryKey: ["news", debouncedQuery],
-        queryFn: () =>
-            debouncedQuery
-                ? newsApi.searchNews(debouncedQuery, 20)
-                : newsApi.getArticles({pageSize: 20}).then((r) => r.items ?? []),
-    });
+	const { data: articles, isLoading: loadingArticles } = useQuery({
+		queryKey: ["news", debouncedQuery],
+		queryFn: () =>
+			debouncedQuery
+				? newsApi.searchNews(debouncedQuery, 20)
+				: newsApi.getArticles({ pageSize: 20 }).then((r) => r.items ?? []),
+	});
 
-    const sentimentScore = marketSentiment?.overallMarketSentiment ?? null;
+	const sentimentScore = marketSentiment?.overallMarketSentiment ?? null;
 
-    const uniqueSources = useMemo(() => {
-        if (!articles) return [];
-        const sources = new Set<string>();
-        for (const article of articles) {
-            const name = article.source?.name;
-            if (name) sources.add(name);
-        }
-        return Array.from(sources).sort();
-    }, [articles]);
+	const uniqueSources = useMemo(() => {
+		if (!articles) return [];
+		const sources = new Set<string>();
+		for (const article of articles) {
+			const name = article.source?.name;
+			if (name) sources.add(name);
+		}
+		return Array.from(sources).sort();
+	}, [articles]);
 
-    const filteredArticles = useMemo(() => {
-        if (!articles) return [];
-        if (!sourceFilter) return articles;
-        return articles.filter((a) => a.source?.name === sourceFilter);
-    }, [articles, sourceFilter]);
+	const filteredArticles = useMemo(() => {
+		if (!articles) return [];
+		if (!sourceFilter) return articles;
+		return articles.filter((a) => a.source?.name === sourceFilter);
+	}, [articles, sourceFilter]);
 
-    return (
-        <PageTransition pageKey="news">
-            <Box>
-                <SectionHeader
-                    title="News & Sentiment"
-                    subtitle="Market news and sentiment analysis used by the agent"
-                />
+	return (
+		<PageTransition pageKey="news">
+			<div>
+				<SectionHeader
+					title="News & Sentiment"
+					subtitle="Market news and sentiment analysis used by the agent"
+				/>
 
-                {/* Market Sentiment Overview */}
-                <Grid container spacing={3} sx={{mb: 4}}>
-                    <Grid size={{xs: 12, md: 4}}>
-                        <Card sx={{p: 2}}>
-                            <Typography variant="subtitle2" color="text.secondary" sx={{mb: 1.5}}>
-                                Overall Market Sentiment
-                            </Typography>
-                            {loadingSentiment ? (
-                                <ShimmerSkeleton shimmerVariant="text"/>
-                            ) : (
-                                <>
-                                    <Box sx={{
-                                        position: "relative",
-                                        height: 8,
-                                        borderRadius: 4,
-                                        overflow: "hidden",
-                                        bgcolor: "rgba(255,255,255,0.06)"
-                                    }}>
-                                        <Box
-                                            sx={{
-                                                position: "absolute",
-                                                left: 0,
-                                                top: 0,
-                                                bottom: 0,
-                                                width: `${Math.max(5, Math.min(100, ((sentimentScore ?? 0) + 1) / 2 * 100))}%`,
-                                                borderRadius: 4,
-                                                background: (sentimentScore ?? 0) > 0.2
-                                                    ? (theme) => theme.palette.success.main
-                                                    : (sentimentScore ?? 0) < -0.2
-                                                        ? (theme) => theme.palette.error.main
-                                                        : (theme) => theme.palette.warning.main,
-                                                transition: "width 0.5s ease, background 0.3s ease",
-                                            }}
-                                        />
-                                    </Box>
-                                    <Box sx={{display: "flex", justifyContent: "space-between", mt: 0.75}}>
-                                        <Typography variant="caption" color="error.main">Bearish</Typography>
-                                        <Typography variant="caption" fontWeight={600}>
-                                            {sentimentScore != null ? sentimentScore.toFixed(2) : "N/A"}
-                                        </Typography>
-                                        <Typography variant="caption" color="success.main">Bullish</Typography>
-                                    </Box>
-                                </>
-                            )}
-                        </Card>
-                    </Grid>
-                    <Grid size={{xs: 12, md: 4}}>
-                        <StatCard
-                            title="Bullish Assets"
-                            value={
-                                loadingSentiment
-                                    ? ""
-                                    : marketSentiment?.bullishOutliers.length
-                                        ? marketSentiment.bullishOutliers.join(", ")
-                                        : "None"
-                            }
-                            loading={loadingSentiment}
-                        />
-                    </Grid>
-                    <Grid size={{xs: 12, md: 4}}>
-                        <StatCard
-                            title="Bearish Assets"
-                            value={
-                                loadingSentiment
-                                    ? ""
-                                    : marketSentiment?.bearishOutliers.length
-                                        ? marketSentiment.bearishOutliers.join(", ")
-                                        : "None"
-                            }
-                            loading={loadingSentiment}
-                        />
-                    </Grid>
-                </Grid>
+				{/* Market Sentiment Overview */}
+				<div className="mb-8 grid grid-cols-12 gap-6">
+					<div className="col-span-12 md:col-span-4">
+						<Card className="p-4">
+							<span className="mb-3 block text-sm font-medium text-[var(--text-secondary)]">
+								Overall Market Sentiment
+							</span>
+							{loadingSentiment ? (
+								<ShimmerSkeleton shimmerVariant="text" />
+							) : (
+								<>
+									<div className="relative h-2 overflow-hidden rounded-full bg-white/[0.06]">
+										<div
+											className="absolute inset-y-0 left-0 rounded-full transition-all duration-500"
+											style={{
+												width: `${Math.max(5, Math.min(100, ((sentimentScore ?? 0) + 1) / 2 * 100))}%`,
+												background:
+													(sentimentScore ?? 0) > 0.2
+														? "var(--color-success, #22c55e)"
+														: (sentimentScore ?? 0) < -0.2
+															? "var(--color-error, #ef4444)"
+															: "var(--color-warning, #f59e0b)",
+											}}
+										/>
+									</div>
+									<div className="mt-1.5 flex justify-between">
+										<span className="text-xs text-red-500">Bearish</span>
+										<span className="text-xs font-semibold">
+											{sentimentScore != null
+												? sentimentScore.toFixed(2)
+												: "N/A"}
+										</span>
+										<span className="text-xs text-green-500">Bullish</span>
+									</div>
+								</>
+							)}
+						</Card>
+					</div>
+					<div className="col-span-12 md:col-span-4">
+						<StatCard
+							title="Bullish Assets"
+							value={
+								loadingSentiment
+									? ""
+									: marketSentiment?.bullishOutliers.length
+										? marketSentiment.bullishOutliers.join(", ")
+										: "None"
+							}
+							loading={loadingSentiment}
+						/>
+					</div>
+					<div className="col-span-12 md:col-span-4">
+						<StatCard
+							title="Bearish Assets"
+							value={
+								loadingSentiment
+									? ""
+									: marketSentiment?.bearishOutliers.length
+										? marketSentiment.bearishOutliers.join(", ")
+										: "None"
+							}
+							loading={loadingSentiment}
+						/>
+					</div>
+				</div>
 
-                {/* Search */}
-                <TextField
-                    fullWidth
-                    placeholder="Search news..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    slotProps={{
-                        input: {
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <SearchIcon/>
-                                </InputAdornment>
-                            ),
-                        },
-                    }}
-                    sx={{mb: 2}}
-                />
+				{/* Search */}
+				<div className="relative mb-4">
+					<Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-secondary)]" />
+					<Input
+						placeholder="Search news..."
+						value={searchQuery}
+						onChange={(e) => setSearchQuery(e.target.value)}
+						className="pl-10"
+					/>
+				</div>
 
-                {/* Source filter chips */}
-                <Box sx={{display: "flex", gap: 1, mb: 3, flexWrap: "wrap"}}>
-                    <Chip label="All" variant={!sourceFilter ? "filled" : "outlined"}
-                          onClick={() => setSourceFilter(null)} size="small"/>
-                    {uniqueSources.map((source) => (
-                        <Chip
-                            key={source}
-                            label={source}
-                            variant={sourceFilter === source ? "filled" : "outlined"}
-                            onClick={() => setSourceFilter(source === sourceFilter ? null : source)}
-                            size="small"
-                        />
-                    ))}
-                </Box>
+				{/* Source filter chips */}
+				<div className="mb-6 flex flex-wrap gap-2">
+					<Badge
+						variant={!sourceFilter ? "default" : "outline"}
+						className="cursor-pointer"
+						onClick={() => setSourceFilter(null)}
+					>
+						All
+					</Badge>
+					{uniqueSources.map((source) => (
+						<Badge
+							key={source}
+							variant={sourceFilter === source ? "default" : "outline"}
+							className="cursor-pointer"
+							onClick={() =>
+								setSourceFilter(source === sourceFilter ? null : source)
+							}
+						>
+							{source}
+						</Badge>
+					))}
+				</div>
 
-                {/* News Articles */}
-                <Grid container spacing={2}>
-                    {loadingArticles ? (
-                        Array.from({length: 6}).map((_, i) => (
-                            <Grid key={i} size={{xs: 12, md: 6, lg: 4}}>
-                                <ShimmerSkeleton shimmerVariant="card"/>
-                            </Grid>
-                        ))
-                    ) : filteredArticles.length > 0 ? (
-                        filteredArticles.map((article, index) => (
-                            <Grid key={article.id} size={{xs: 12, sm: index === 0 ? 12 : 6, md: index === 0 ? 12 : 4}}>
-                                <motion.div
-                                    initial={{opacity: 0, y: 40, scale: 0.95}}
-                                    animate={{opacity: 1, y: 0, scale: 1}}
-                                    transition={{...spring.snappy, delay: index * 0.06}}
-                                >
-                                    <NewsCard article={article} featured={index === 0}/>
-                                </motion.div>
-                            </Grid>
-                        ))
-                    ) : (
-                        <Grid size={{xs: 12}}>
-                            <EmptyState
-                                title="No news found"
-                                description={
-                                    searchQuery
-                                        ? "Try a different search term"
-                                        : sourceFilter
-                                            ? "No articles from this source"
-                                            : "No news articles available"
-                                }
-                            />
-                        </Grid>
-                    )}
-                </Grid>
-            </Box>
-        </PageTransition>
-    );
+				{/* News Articles */}
+				<div className="grid grid-cols-12 gap-4">
+					{loadingArticles ? (
+						Array.from({ length: 6 }).map((_, i) => (
+							<div key={i} className="col-span-12 md:col-span-6 lg:col-span-4">
+								<ShimmerSkeleton shimmerVariant="card" />
+							</div>
+						))
+					) : filteredArticles.length > 0 ? (
+						filteredArticles.map((article, index) => (
+							<div
+								key={article.id}
+								className={cn(
+									"col-span-12",
+									index === 0
+										? "sm:col-span-12 md:col-span-12"
+										: "sm:col-span-6 md:col-span-4",
+								)}
+							>
+								<motion.div
+									initial={{ opacity: 0, y: 40, scale: 0.95 }}
+									animate={{ opacity: 1, y: 0, scale: 1 }}
+									transition={{ ...spring.snappy, delay: index * 0.06 }}
+								>
+									<NewsCard article={article} featured={index === 0} />
+								</motion.div>
+							</div>
+						))
+					) : (
+						<div className="col-span-12">
+							<EmptyState
+								title="No news found"
+								description={
+									searchQuery
+										? "Try a different search term"
+										: sourceFilter
+											? "No articles from this source"
+											: "No news articles available"
+								}
+							/>
+						</div>
+					)}
+				</div>
+			</div>
+		</PageTransition>
+	);
 }
 
-function NewsCard({article, featured = false}: { article: NewsArticle; featured?: boolean }) {
-    return (
-        <Card
-            component={motion.div}
-            whileHover={{
-                y: -6,
-                transition: {type: "spring", stiffness: 400, damping: 30},
-            }}
-            whileTap={{scale: 0.98}}
-            sx={{
-                height: "100%",
-                display: "flex",
-                flexDirection: "column",
-                cursor: "pointer",
-                "&:hover": {
-                    borderColor: "primary.main",
-                },
-            }}
-        >
-            <CardContent sx={{flex: 1}}>
-                <Box
-                    sx={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "flex-start",
-                        mb: 1,
-                    }}
-                >
-                    <Typography variant="caption" color="text.secondary">
-                        {article.source?.name || "Unknown Source"}
-                    </Typography>
-                    {article.sentimentScore !== null &&
-                        article.sentimentScore !== undefined && (
-                            <SentimentBadge score={article.sentimentScore} size="small"/>
-                        )}
-                </Box>
+function NewsCard({
+	article,
+	featured = false,
+}: { article: NewsArticle; featured?: boolean }) {
+	return (
+		<motion.div
+			whileHover={{
+				y: -6,
+				transition: { type: "spring", stiffness: 400, damping: 30 },
+			}}
+			whileTap={{ scale: 0.98 }}
+			className="h-full"
+		>
+			<Card className="flex h-full cursor-pointer flex-col transition-colors hover:ring-[var(--primary)]">
+				<CardContent className="flex-1">
+					<div className="mb-2 flex items-start justify-between">
+						<span className="text-xs text-[var(--text-secondary)]">
+							{article.source?.name || "Unknown Source"}
+						</span>
+						{article.sentimentScore !== null &&
+							article.sentimentScore !== undefined && (
+								<SentimentBadge score={article.sentimentScore} size="small" />
+							)}
+					</div>
 
-                <Typography variant={featured ? "h5" : "subtitle1"} fontWeight={600} gutterBottom>
-                    {article.title}
-                </Typography>
+					<h6
+						className={cn(
+							"mb-2 font-semibold",
+							featured ? "text-xl" : "text-base",
+						)}
+					>
+						{article.title}
+					</h6>
 
-                <Typography variant="body2" color="text.secondary" sx={{mb: 2}}>
-                    {article.summary || article.content.slice(0, 150)}...
-                </Typography>
+					<p className="mb-4 text-sm text-[var(--text-secondary)]">
+						{article.summary || article.content.slice(0, 150)}...
+					</p>
 
-                {/* Mentioned Assets */}
-                {article.mentionedAssets && article.mentionedAssets.length > 0 && (
-                    <Box sx={{display: "flex", gap: 0.5, flexWrap: "wrap", mb: 2}}>
-                        {article.mentionedAssets.slice(0, 5).map((asset) => (
-                            <Chip key={asset} label={asset} size="small" variant="outlined"/>
-                        ))}
-                    </Box>
-                )}
+					{/* Mentioned Assets */}
+					{article.mentionedAssets && article.mentionedAssets.length > 0 && (
+						<div className="mb-4 flex flex-wrap gap-1">
+							{article.mentionedAssets.slice(0, 5).map((asset) => (
+								<Badge key={asset} variant="outline">
+									{asset}
+								</Badge>
+							))}
+						</div>
+					)}
 
-                <Box
-                    sx={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                    }}
-                >
-                    <Typography variant="caption" color="text.secondary">
-                        {article.publishedAt
-                            ? formatRelativeTime(article.publishedAt)
-                            : "Unknown date"}
-                    </Typography>
-                    <MuiLink
-                        href={article.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        sx={{display: "flex", alignItems: "center", gap: 0.5}}
-                    >
-                        Read more <OpenInNewIcon fontSize="small"/>
-                    </MuiLink>
-                </Box>
-            </CardContent>
-        </Card>
-    );
+					<div className="flex items-center justify-between">
+						<span className="text-xs text-[var(--text-secondary)]">
+							{article.publishedAt
+								? formatRelativeTime(article.publishedAt)
+								: "Unknown date"}
+						</span>
+						<a
+							href={article.url}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="inline-flex items-center gap-1 text-sm text-[var(--primary)] hover:underline"
+						>
+							Read more <ExternalLink className="size-3.5" />
+						</a>
+					</div>
+				</CardContent>
+			</Card>
+		</motion.div>
+	);
 }
