@@ -2,31 +2,21 @@
  * Create Strategy Page — Manual, URL Import, or File Upload
  */
 
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
-import CloudUploadIcon from "@mui/icons-material/CloudUpload";
-import LinkIcon from "@mui/icons-material/Link";
-import {
-	Alert,
-	Box,
-	Button,
-	Card,
-	CardContent,
-	Chip,
-	CircularProgress,
-	IconButton,
-	Tab,
-	Tabs,
-	TextField,
-	Typography,
-} from "@mui/material";
 import * as Sentry from "@sentry/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { ArrowLeft, Link, Loader2, Sparkles, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import { strategiesApi } from "@/api/endpoints/strategies";
 import { PageTransition } from "@/components/common/PageTransition";
 import { SectionHeader } from "@/components/common/SectionHeader";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { notify } from "@/store/uiStore";
 import type { ExtractedStrategy, StrategyImportConfirm } from "@/types";
 import { requireAuth } from "../-guards";
@@ -53,60 +43,63 @@ const EMPTY_FORM: StrategyImportConfirm = {
 function CreateStrategyPage() {
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
-	const [tab, setTab] = useState(0);
 
 	return (
 		<PageTransition pageKey="strategies-create">
-			<Box>
-				<Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-					<IconButton onClick={() => navigate({ to: "/strategies" })}>
-						<ArrowBackIcon />
-					</IconButton>
+			<div>
+				<div className="mb-2 flex items-center gap-2">
+					<Button
+						variant="ghost"
+						size="icon"
+						onClick={() => navigate({ to: "/strategies" })}
+					>
+						<ArrowLeft className="size-4" />
+					</Button>
 					<SectionHeader
 						title="Import Strategy"
 						subtitle="Add a trading strategy for the agent via URL, file upload, or manual entry"
 						sx={{ mb: 0 }}
 					/>
-				</Box>
+				</div>
 
-				<Tabs
-					value={tab}
-					onChange={(_, v) => setTab(v)}
-					sx={{ mb: 3, borderBottom: 1, borderColor: "divider" }}
-				>
-					<Tab label="Manual" />
-					<Tab label="URL Import" icon={<LinkIcon />} iconPosition="start" />
-					<Tab
-						label="File Upload"
-						icon={<CloudUploadIcon />}
-						iconPosition="start"
-					/>
+				<Tabs defaultValue="manual">
+					<TabsList className="mb-6">
+						<TabsTrigger value="manual">Manual</TabsTrigger>
+						<TabsTrigger value="url">
+							<Link className="size-4" />
+							URL Import
+						</TabsTrigger>
+						<TabsTrigger value="file">
+							<Upload className="size-4" />
+							File Upload
+						</TabsTrigger>
+					</TabsList>
+
+					<TabsContent value="manual">
+						<ManualTab
+							queryClient={queryClient}
+							onSuccess={() => navigate({ to: "/strategies" })}
+						/>
+					</TabsContent>
+					<TabsContent value="url">
+						<UrlImportTab
+							queryClient={queryClient}
+							onSuccess={() => navigate({ to: "/strategies" })}
+						/>
+					</TabsContent>
+					<TabsContent value="file">
+						<FileUploadTab
+							queryClient={queryClient}
+							onSuccess={() => navigate({ to: "/strategies" })}
+						/>
+					</TabsContent>
 				</Tabs>
-
-				{tab === 0 && (
-					<ManualTab
-						queryClient={queryClient}
-						onSuccess={() => navigate({ to: "/strategies" })}
-					/>
-				)}
-				{tab === 1 && (
-					<UrlImportTab
-						queryClient={queryClient}
-						onSuccess={() => navigate({ to: "/strategies" })}
-					/>
-				)}
-				{tab === 2 && (
-					<FileUploadTab
-						queryClient={queryClient}
-						onSuccess={() => navigate({ to: "/strategies" })}
-					/>
-				)}
-			</Box>
+			</div>
 		</PageTransition>
 	);
 }
 
-// ── Manual Tab ──────────────────────────────────────────────
+// -- Manual Tab --
 
 function ManualTab({
 	queryClient,
@@ -139,7 +132,7 @@ function ManualTab({
 	);
 }
 
-// ── URL Import Tab ──────────────────────────────────────────
+// -- URL Import Tab --
 
 function UrlImportTab({
 	queryClient,
@@ -182,26 +175,11 @@ function UrlImportTab({
 
 	if (extracted) {
 		return (
-			<Card
-				sx={{
-					mt: 3,
-					p: 3,
-					border: (theme) =>
-						`1px solid ${theme.trading.border.medium}`,
-				}}
-			>
-				<Typography
-					variant="h6"
-					sx={{
-						mb: 2,
-						display: "flex",
-						alignItems: "center",
-						gap: 1,
-					}}
-				>
-					<AutoAwesomeIcon color="primary" />
+			<Card className="mt-6 border border-[var(--border-medium)] p-6">
+				<h3 className="mb-4 flex items-center gap-2 text-lg font-semibold">
+					<Sparkles className="size-5 text-primary" />
 					AI Extraction Preview
-				</Typography>
+				</h3>
 				<SourceChip label={url} type="url" />
 				<StrategyForm
 					form={extracted}
@@ -217,36 +195,42 @@ function UrlImportTab({
 
 	return (
 		<Card>
-			<CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-				<Typography variant="body2" color="text.secondary">
+			<CardContent className="flex flex-col gap-4">
+				<p className="text-sm text-muted-foreground">
 					Enter a URL to a trading strategy article, blog post, or research
 					paper. AI will extract the strategy details.
-				</Typography>
-				<TextField
-					label="URL"
-					placeholder="https://example.com/strategy-article"
-					value={url}
-					onChange={(e) => setUrl(e.target.value)}
-					fullWidth
-				/>
+				</p>
+				<div>
+					<label
+						htmlFor="url-input"
+						className="mb-1.5 block text-sm font-medium"
+					>
+						URL
+					</label>
+					<Input
+						id="url-input"
+						placeholder="https://example.com/strategy-article"
+						value={url}
+						onChange={(e) => setUrl(e.target.value)}
+					/>
+				</div>
 				<Button
-					variant="contained"
+					className="self-start"
 					onClick={() => extractMutation.mutate(url)}
 					disabled={!url.trim() || extractMutation.isPending}
-					startIcon={
-						extractMutation.isPending ? (
-							<CircularProgress size={18} />
-						) : (
-							<LinkIcon />
-						)
-					}
-					sx={{ alignSelf: "flex-start" }}
 				>
+					{extractMutation.isPending ? (
+						<Loader2 className="size-4 animate-spin" />
+					) : (
+						<Link className="size-4" />
+					)}
 					{extractMutation.isPending ? "Extracting..." : "Extract Strategy"}
 				</Button>
 				{extractMutation.isError && (
-					<Alert severity="error">
-						Failed to extract strategy. Check the URL and try again.
+					<Alert variant="destructive">
+						<AlertDescription>
+							Failed to extract strategy. Check the URL and try again.
+						</AlertDescription>
 					</Alert>
 				)}
 			</CardContent>
@@ -254,7 +238,7 @@ function UrlImportTab({
 	);
 }
 
-// ── File Upload Tab ─────────────────────────────────────────
+// -- File Upload Tab --
 
 function FileUploadTab({
 	queryClient,
@@ -305,26 +289,11 @@ function FileUploadTab({
 
 	if (extracted) {
 		return (
-			<Card
-				sx={{
-					mt: 3,
-					p: 3,
-					border: (theme) =>
-						`1px solid ${theme.trading.border.medium}`,
-				}}
-			>
-				<Typography
-					variant="h6"
-					sx={{
-						mb: 2,
-						display: "flex",
-						alignItems: "center",
-						gap: 1,
-					}}
-				>
-					<AutoAwesomeIcon color="primary" />
+			<Card className="mt-6 border border-[var(--border-medium)] p-6">
+				<h3 className="mb-4 flex items-center gap-2 text-lg font-semibold">
+					<Sparkles className="size-5 text-primary" />
 					AI Extraction Preview
-				</Typography>
+				</h3>
 				<SourceChip label={selectedFile?.name || "file"} type="file" />
 				<StrategyForm
 					form={extracted}
@@ -340,73 +309,59 @@ function FileUploadTab({
 
 	return (
 		<Card>
-			<CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-				<Typography variant="body2" color="text.secondary">
+			<CardContent className="flex flex-col gap-4">
+				<p className="text-sm text-muted-foreground">
 					Upload a strategy file (.txt, .json, .yaml, .pdf). AI will extract the
 					strategy details.
-				</Typography>
+				</p>
 				<input
 					ref={fileInputRef}
 					type="file"
 					accept={ALLOWED_EXTENSIONS}
 					onChange={handleFileSelect}
-					style={{ display: "none" }}
+					className="hidden"
 				/>
-				<Box
+				<div
 					onClick={() => fileInputRef.current?.click()}
-					sx={{
-						border: (theme) =>
-							`2px dashed ${theme.trading.border.medium}`,
-						borderRadius: 2,
-						p: 4,
-						textAlign: "center",
-						cursor: "pointer",
-						transition: "border-color 0.2s, background-color 0.2s",
-						"&:hover": {
-							borderColor: "primary.main",
-							backgroundColor: (theme) =>
-								`rgba(${theme.trading.primaryRgb}, 0.05)`,
-						},
+					onKeyDown={(e) => {
+						if (e.key === "Enter" || e.key === " ")
+							fileInputRef.current?.click();
 					}}
+					role="button"
+					tabIndex={0}
+					className="cursor-pointer rounded-lg border-2 border-dashed border-[var(--border-medium)] p-8 text-center transition-colors hover:border-primary hover:bg-primary/5"
 				>
-					<CloudUploadIcon
-						sx={{ fontSize: 48, color: "text.secondary", mb: 2 }}
-					/>
-					<Typography variant="body1" fontWeight={500}>
+					<Upload className="mx-auto mb-4 size-12 text-muted-foreground" />
+					<p className="font-medium">
 						Drop a file here or click to browse
-					</Typography>
-					<Typography variant="caption" color="text.secondary">
+					</p>
+					<p className="text-xs text-muted-foreground">
 						Supports PDF, TXT, MD files
-					</Typography>
+					</p>
 					{selectedFile && (
-						<Typography
-							variant="body2"
-							color="text.secondary"
-							sx={{ mt: 1 }}
-						>
+						<p className="mt-2 text-sm text-muted-foreground">
 							{selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)}{" "}
 							KB)
-						</Typography>
+						</p>
 					)}
-				</Box>
+				</div>
 				<Button
-					variant="contained"
+					className="self-start"
 					onClick={() => selectedFile && extractMutation.mutate(selectedFile)}
 					disabled={!selectedFile || extractMutation.isPending}
-					startIcon={
-						extractMutation.isPending ? (
-							<CircularProgress size={18} />
-						) : (
-							<CloudUploadIcon />
-						)
-					}
-					sx={{ alignSelf: "flex-start" }}
 				>
+					{extractMutation.isPending ? (
+						<Loader2 className="size-4 animate-spin" />
+					) : (
+						<Upload className="size-4" />
+					)}
 					{extractMutation.isPending ? "Extracting..." : "Extract Strategy"}
 				</Button>
 				{extractMutation.isError && (
-					<Alert severity="error">
-						Failed to extract strategy. Check the file format and try again.
+					<Alert variant="destructive">
+						<AlertDescription>
+							Failed to extract strategy. Check the file format and try again.
+						</AlertDescription>
 					</Alert>
 				)}
 			</CardContent>
@@ -414,7 +369,7 @@ function FileUploadTab({
 	);
 }
 
-// ── Shared Strategy Form ────────────────────────────────────
+// -- Shared Strategy Form --
 
 function StrategyForm({
 	form,
@@ -440,165 +395,219 @@ function StrategyForm({
 
 	return (
 		<Card>
-			<CardContent sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
-				<TextField
-					label="Name"
-					value={form.name}
-					onChange={(e) => updateField("name", e.target.value)}
-					required
-					fullWidth
-				/>
-				<TextField
-					label="Description"
-					value={form.description}
-					onChange={(e) => updateField("description", e.target.value)}
-					multiline
-					rows={3}
-					fullWidth
-				/>
-				<TextField
-					label="Entry Rules (JSON)"
-					value={JSON.stringify(form.entryRules, null, 2)}
-					onChange={(e) => {
-						try {
-							updateField("entryRules", JSON.parse(e.target.value));
-						} catch {
-							/* let user keep typing */
+			<CardContent className="flex flex-col gap-5">
+				<div>
+					<label
+						htmlFor="strategy-name"
+						className="mb-1.5 block text-sm font-medium"
+					>
+						Name *
+					</label>
+					<Input
+						id="strategy-name"
+						value={form.name}
+						onChange={(e) => updateField("name", e.target.value)}
+						required
+					/>
+				</div>
+				<div>
+					<label
+						htmlFor="strategy-description"
+						className="mb-1.5 block text-sm font-medium"
+					>
+						Description
+					</label>
+					<Textarea
+						id="strategy-description"
+						value={form.description}
+						onChange={(e) => updateField("description", e.target.value)}
+						rows={3}
+					/>
+				</div>
+				<div>
+					<label
+						htmlFor="entry-rules"
+						className="mb-1.5 block text-sm font-medium"
+					>
+						Entry Rules (JSON)
+					</label>
+					<Textarea
+						id="entry-rules"
+						className="font-mono text-[13px]"
+						value={JSON.stringify(form.entryRules, null, 2)}
+						onChange={(e) => {
+							try {
+								updateField("entryRules", JSON.parse(e.target.value));
+							} catch {
+								/* let user keep typing */
+							}
+						}}
+						rows={4}
+					/>
+				</div>
+				<div>
+					<label
+						htmlFor="exit-rules"
+						className="mb-1.5 block text-sm font-medium"
+					>
+						Exit Rules (JSON)
+					</label>
+					<Textarea
+						id="exit-rules"
+						className="font-mono text-[13px]"
+						value={JSON.stringify(form.exitRules, null, 2)}
+						onChange={(e) => {
+							try {
+								updateField("exitRules", JSON.parse(e.target.value));
+							} catch {
+								/* let user keep typing */
+							}
+						}}
+						rows={4}
+					/>
+				</div>
+				<div>
+					<label
+						htmlFor="risk-params"
+						className="mb-1.5 block text-sm font-medium"
+					>
+						Risk Parameters (JSON)
+					</label>
+					<Textarea
+						id="risk-params"
+						className="font-mono text-[13px]"
+						value={JSON.stringify(form.riskParams, null, 2)}
+						onChange={(e) => {
+							try {
+								updateField("riskParams", JSON.parse(e.target.value));
+							} catch {
+								/* let user keep typing */
+							}
+						}}
+						rows={3}
+					/>
+				</div>
+				<div>
+					<label
+						htmlFor="symbols"
+						className="mb-1.5 block text-sm font-medium"
+					>
+						Symbols (comma-separated)
+					</label>
+					<Input
+						id="symbols"
+						value={form.symbols.join(", ")}
+						onChange={(e) =>
+							updateField(
+								"symbols",
+								e.target.value
+									.split(",")
+									.map((s) => s.trim())
+									.filter(Boolean),
+							)
 						}
-					}}
-					multiline
-					rows={4}
-					fullWidth
-					slotProps={{
-						input: { sx: { fontFamily: "monospace", fontSize: 13 } },
-					}}
-				/>
-				<TextField
-					label="Exit Rules (JSON)"
-					value={JSON.stringify(form.exitRules, null, 2)}
-					onChange={(e) => {
-						try {
-							updateField("exitRules", JSON.parse(e.target.value));
-						} catch {
-							/* let user keep typing */
+						placeholder="BTC-USDT, ETH-USDT"
+					/>
+				</div>
+				<div>
+					<label
+						htmlFor="timeframes"
+						className="mb-1.5 block text-sm font-medium"
+					>
+						Timeframes (comma-separated)
+					</label>
+					<Input
+						id="timeframes"
+						value={form.timeframes.join(", ")}
+						onChange={(e) =>
+							updateField(
+								"timeframes",
+								e.target.value
+									.split(",")
+									.map((s) => s.trim())
+									.filter(Boolean),
+							)
 						}
-					}}
-					multiline
-					rows={4}
-					fullWidth
-					slotProps={{
-						input: { sx: { fontFamily: "monospace", fontSize: 13 } },
-					}}
-				/>
-				<TextField
-					label="Risk Parameters (JSON)"
-					value={JSON.stringify(form.riskParams, null, 2)}
-					onChange={(e) => {
-						try {
-							updateField("riskParams", JSON.parse(e.target.value));
-						} catch {
-							/* let user keep typing */
+						placeholder="1H, 4H, 1D"
+					/>
+				</div>
+				<div>
+					<label
+						htmlFor="market-conditions"
+						className="mb-1.5 block text-sm font-medium"
+					>
+						Market Conditions (comma-separated)
+					</label>
+					<Input
+						id="market-conditions"
+						value={form.marketConditions.join(", ")}
+						onChange={(e) =>
+							updateField(
+								"marketConditions",
+								e.target.value
+									.split(",")
+									.map((s) => s.trim())
+									.filter(Boolean),
+							)
 						}
-					}}
-					multiline
-					rows={3}
-					fullWidth
-					slotProps={{
-						input: { sx: { fontFamily: "monospace", fontSize: 13 } },
-					}}
-				/>
-				<TextField
-					label="Symbols (comma-separated)"
-					value={form.symbols.join(", ")}
-					onChange={(e) =>
-						updateField(
-							"symbols",
-							e.target.value
-								.split(",")
-								.map((s) => s.trim())
-								.filter(Boolean),
-						)
-					}
-					placeholder="BTC-USDT, ETH-USDT"
-					fullWidth
-				/>
-				<TextField
-					label="Timeframes (comma-separated)"
-					value={form.timeframes.join(", ")}
-					onChange={(e) =>
-						updateField(
-							"timeframes",
-							e.target.value
-								.split(",")
-								.map((s) => s.trim())
-								.filter(Boolean),
-						)
-					}
-					placeholder="1H, 4H, 1D"
-					fullWidth
-				/>
-				<TextField
-					label="Market Conditions (comma-separated)"
-					value={form.marketConditions.join(", ")}
-					onChange={(e) =>
-						updateField(
-							"marketConditions",
-							e.target.value
-								.split(",")
-								.map((s) => s.trim())
-								.filter(Boolean),
-						)
-					}
-					placeholder="trending, high_volatility"
-					fullWidth
-				/>
-				<TextField
-					label="Asset Classes (comma-separated)"
-					value={form.assetClasses.join(", ")}
-					onChange={(e) =>
-						updateField(
-							"assetClasses",
-							e.target.value
-								.split(",")
-								.map((s) => s.trim())
-								.filter(Boolean),
-						)
-					}
-					placeholder="crypto, major_pairs"
-					fullWidth
-				/>
+						placeholder="trending, high_volatility"
+					/>
+				</div>
+				<div>
+					<label
+						htmlFor="asset-classes"
+						className="mb-1.5 block text-sm font-medium"
+					>
+						Asset Classes (comma-separated)
+					</label>
+					<Input
+						id="asset-classes"
+						value={form.assetClasses.join(", ")}
+						onChange={(e) =>
+							updateField(
+								"assetClasses",
+								e.target.value
+									.split(",")
+									.map((s) => s.trim())
+									.filter(Boolean),
+							)
+						}
+						placeholder="crypto, major_pairs"
+					/>
+				</div>
 
-				<Box sx={{ display: "flex", gap: 2, mt: 1 }}>
+				<div className="mt-2 flex gap-4">
 					{onBack && (
-						<Button variant="outlined" onClick={onBack}>
+						<Button variant="outline" onClick={onBack}>
 							Back
 						</Button>
 					)}
 					<Button
-						variant="contained"
 						onClick={onSubmit}
 						disabled={!form.name.trim() || isLoading}
-						startIcon={isLoading ? <CircularProgress size={18} /> : undefined}
 					>
+						{isLoading && <Loader2 className="size-4 animate-spin" />}
 						{isLoading ? "Saving..." : submitLabel}
 					</Button>
-				</Box>
+				</div>
 			</CardContent>
 		</Card>
 	);
 }
 
-// ── Source Indicator ─────────────────────────────────────────
+// -- Source Indicator --
 
 function SourceChip({ label, type }: { label: string; type: "url" | "file" }) {
 	return (
-		<Box sx={{ mb: 2 }}>
-			<Chip
-				icon={type === "url" ? <LinkIcon /> : <CloudUploadIcon />}
-				label={`Imported from: ${label}`}
-				variant="outlined"
-				size="small"
-			/>
-		</Box>
+		<div className="mb-4">
+			<Badge variant="outline">
+				{type === "url" ? (
+					<Link className="size-3" />
+				) : (
+					<Upload className="size-3" />
+				)}
+				Imported from: {label}
+			</Badge>
+		</div>
 	);
 }
