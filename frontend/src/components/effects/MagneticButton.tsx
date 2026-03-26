@@ -2,16 +2,19 @@
  * Button that magnetically attracts toward cursor on hover.
  */
 
-import type { ButtonProps } from "@mui/material";
-import { Button } from "@mui/material";
 import { motion, useReducedMotion } from "framer-motion";
 import { forwardRef, useRef } from "react";
+
+import { Button, type buttonVariants } from "@/components/ui/button";
 import { useMagneticHover } from "@/hooks/useMagneticHover";
 
-type MagneticButtonProps = ButtonProps & {
-	strength?: number;
-	radius?: number;
-};
+import type { VariantProps } from "class-variance-authority";
+
+type MagneticButtonProps = React.ComponentProps<typeof Button> &
+	VariantProps<typeof buttonVariants> & {
+		strength?: number;
+		radius?: number;
+	};
 
 export const MagneticButton = forwardRef<
 	HTMLButtonElement,

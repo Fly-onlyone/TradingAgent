@@ -1,11 +1,12 @@
 /**
  * Rotating conic-gradient card border.
- * Uses CSS @property animation (compositor thread — zero JS cost).
+ * Uses CSS @property animation (compositor thread -- zero JS cost).
  */
 
-import { useTheme } from "@mui/material/styles";
 import { useReducedMotion } from "framer-motion";
 import type { ReactNode } from "react";
+
+import { useThemePreset } from "@/lib/theme";
 
 interface AnimatedGradientBorderProps {
 	children: ReactNode;
@@ -26,13 +27,13 @@ export function AnimatedGradientBorder({
 }: AnimatedGradientBorderProps) {
 	const prefersReduced = useReducedMotion();
 	const isStatic = disabled || prefersReduced;
-	const theme = useTheme();
+	const preset = useThemePreset();
 
 	const resolvedColors = colors ?? [
-		theme.palette.primary.main,
-		theme.palette.primary.light,
-		theme.palette.primary.dark,
-		theme.palette.primary.main,
+		preset.primary.main,
+		preset.primary.light,
+		preset.primary.dark,
+		preset.primary.main,
 	];
 
 	return (
