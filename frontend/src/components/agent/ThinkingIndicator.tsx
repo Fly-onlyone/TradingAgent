@@ -1,16 +1,16 @@
 /**
- * Thinking Indicator — shown inline while the agent processes a request.
+ * Thinking Indicator -- shown inline while the agent processes a request.
  *
  * Displays animated dots, collapsible reasoning text, and tool-call chips
  * that animate in as tools are invoked.
  */
 
-import BuildIcon from "@mui/icons-material/Build";
-import SmartToyIcon from "@mui/icons-material/SmartToy";
-import { Avatar, Box, Chip, Link, Paper, Typography } from "@mui/material";
+import { Bot, Wrench } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import type { ToolCall } from "@/api/websocket/useAgentSocket";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { spring } from "@/utils/animations/variants";
 
 /** Strip MCP prefix and convert snake_case tool names to human labels. */
@@ -56,42 +56,27 @@ export function ThinkingIndicator({
 			exit={{ opacity: 0, y: -5 }}
 			transition={{ duration: 0.15 }}
 		>
-			<Box sx={{ display: "flex", gap: 1.5, mb: 2 }}>
-				<Avatar
-					sx={{
-						width: 36,
-						height: 36,
-						bgcolor: "secondary.main",
-						flexShrink: 0,
-					}}
-				>
-					<SmartToyIcon />
+			<div className="mb-4 flex gap-3">
+				<Avatar size="sm" className="shrink-0 bg-[var(--secondary)]">
+					<AvatarFallback className="bg-[var(--secondary)] text-white">
+						<Bot className="size-4" />
+					</AvatarFallback>
 				</Avatar>
 
-				<Box sx={{ maxWidth: "80%", minWidth: 0 }}>
-					<Box sx={{ display: "flex", gap: 1, mb: 0.5, alignItems: "center" }}>
-						<Typography variant="caption" fontWeight={600}>
-							Agent
-						</Typography>
-					</Box>
+				<div className="max-w-[80%] min-w-0">
+					<div className="mb-1 flex items-center gap-2">
+						<span className="text-xs font-semibold">Agent</span>
+					</div>
 
-					<Paper
-						sx={{
-							p: 2,
-							bgcolor: "background.paper",
-							borderRadius: 2,
-							borderTopLeftRadius: 4,
-							borderTopRightRadius: 16,
-						}}
-					>
+					<div className="rounded-lg rounded-tl-[4px] rounded-tr-2xl bg-card p-4">
 						{/* Animated dots */}
-						<Box
-							sx={{
-								display: "flex",
-								gap: 0.5,
-								alignItems: "flex-end",
-								mb: thinkingContent || toolCalls.length > 0 ? 1.5 : 0,
-							}}
+						<div
+							className={
+								"flex items-end gap-1" +
+								(thinkingContent || toolCalls.length > 0
+									? " mb-3"
+									: "")
+							}
 						>
 							{[0, 1, 2].map((i) => (
 								<motion.div
@@ -104,121 +89,113 @@ export function ThinkingIndicator({
 										ease: "easeInOut",
 									}}
 								>
-									<Box
-										sx={{
-											width: 8,
-											height: 8,
-											borderRadius: "50%",
-											bgcolor: "primary.main",
-										}}
-									/>
+									<div className="size-2 rounded-full bg-[var(--primary)]" />
 								</motion.div>
 							))}
-							<Typography
-								variant="caption"
-								color="text.secondary"
-								sx={{ ml: 1 }}
-							>
+							<span className="ml-2 text-xs text-muted-foreground">
 								Thinking...
-							</Typography>
-						</Box>
+							</span>
+						</div>
 
 						{/* Shimmer bar */}
-						<Box
-							sx={{
-								height: 2,
-								borderRadius: 1,
-								mb: thinkingContent || toolCalls.length > 0 ? 1 : 0,
-								background: (theme: any) =>
-									`linear-gradient(90deg, transparent 0%, ${theme.palette.primary.main}66 50%, transparent 100%)`,
+						<div
+							className={
+								"h-0.5 rounded-full" +
+								(thinkingContent || toolCalls.length > 0
+									? " mb-2"
+									: "")
+							}
+							style={{
+								background:
+									"linear-gradient(90deg, transparent 0%, rgba(var(--primary-rgb), 0.4) 50%, transparent 100%)",
 								backgroundSize: "200% 100%",
-								animation: "shimmerSlide 1.5s ease-in-out infinite",
-								"@keyframes shimmerSlide": {
-									"0%": { backgroundPosition: "200% 0" },
-									"100%": { backgroundPosition: "-200% 0" },
-								},
+								animation:
+									"shimmerSlide 1.5s ease-in-out infinite",
 							}}
 						/>
 
 						{/* Thinking / reasoning text */}
 						{thinkingContent && showThinkingContent && (
-							<Box sx={{ mb: toolCalls.length > 0 ? 1.5 : 0 }}>
-								<Link
-									component="button"
-									variant="caption"
-									underline="hover"
-									onClick={() => setShowReasoning((v) => !v)}
-									sx={{ color: "text.secondary", cursor: "pointer" }}
+							<div
+								className={
+									toolCalls.length > 0 ? "mb-3" : ""
+								}
+							>
+								<button
+									type="button"
+									className="cursor-pointer text-xs text-muted-foreground underline-offset-2 hover:underline"
+									onClick={() =>
+										setShowReasoning((v) => !v)
+									}
 								>
-									{showReasoning ? "Hide reasoning" : "Show reasoning"}
-								</Link>
+									{showReasoning
+										? "Hide reasoning"
+										: "Show reasoning"}
+								</button>
 
 								<AnimatePresence>
 									{showReasoning && (
 										<motion.div
-											initial={{ height: 0, opacity: 0 }}
-											animate={{ height: "auto", opacity: 1 }}
-											exit={{ height: 0, opacity: 0 }}
+											initial={{
+												height: 0,
+												opacity: 0,
+											}}
+											animate={{
+												height: "auto",
+												opacity: 1,
+											}}
+											exit={{
+												height: 0,
+												opacity: 0,
+											}}
 											transition={{ duration: 0.2 }}
 											style={{ overflow: "hidden" }}
 										>
-											<Box
-												sx={{
-													mt: 1,
-													p: 1.5,
-													maxHeight: 200,
-													overflow: "auto",
-													bgcolor: "action.hover",
-													borderRadius: 1,
-												}}
-											>
-												<Typography
-													variant="body2"
-													sx={{
-														whiteSpace: "pre-wrap",
-														color: "text.secondary",
-														fontSize: "0.8rem",
-														lineHeight: 1.6,
-													}}
-												>
+											<div className="mt-2 max-h-[200px] overflow-auto rounded bg-muted p-3">
+												<p className="whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
 													{thinkingContent}
-												</Typography>
-											</Box>
+												</p>
+											</div>
 										</motion.div>
 									)}
 								</AnimatePresence>
-							</Box>
+							</div>
 						)}
 
 						{/* Tool call chips */}
 						{toolCalls.length > 0 && (
-							<Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+							<div className="flex flex-wrap gap-1">
 								<AnimatePresence>
 									{toolCalls.map((tc) => (
 										<motion.div
 											key={tc.id}
-											initial={{ opacity: 0, scale: 0.5, x: -20 }}
-											animate={{ opacity: 1, scale: 1, x: 0 }}
+											initial={{
+												opacity: 0,
+												scale: 0.5,
+												x: -20,
+											}}
+											animate={{
+												opacity: 1,
+												scale: 1,
+												x: 0,
+											}}
 											transition={spring.bouncy}
 										>
-											<Chip
-												icon={
-													<BuildIcon sx={{ fontSize: "0.85rem !important" }} />
-												}
-												label={humanizeToolName(tc.name)}
-												size="small"
-												color="secondary"
-												variant="outlined"
-												sx={{ fontSize: "0.7rem" }}
-											/>
+											<Badge
+												variant="secondary"
+												className="gap-1 text-[0.7rem]"
+											>
+												<Wrench className="size-3" />
+												{humanizeToolName(tc.name)}
+											</Badge>
 										</motion.div>
 									))}
 								</AnimatePresence>
-							</Box>
+							</div>
 						)}
-					</Paper>
-				</Box>
-			</Box>
+					</div>
+				</div>
+			</div>
 		</motion.div>
 	);
 }

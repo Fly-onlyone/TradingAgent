@@ -3,535 +3,572 @@
  * Filterable list of agent decisions with expandable details
  */
 
-import AnalyticsIcon from "@mui/icons-material/Analytics";
-import ArticleIcon from "@mui/icons-material/Article";
-import CloseIcon from "@mui/icons-material/Close";
-import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import FilterListIcon from "@mui/icons-material/FilterList";
-import HourglassEmptyIcon from "@mui/icons-material/HourglassEmpty";
-import LightbulbIcon from "@mui/icons-material/Lightbulb";
-import NotificationsIcon from "@mui/icons-material/Notifications";
-import OpenInNewIcon from "@mui/icons-material/OpenInNew";
-import PauseCircleIcon from "@mui/icons-material/PauseCircle";
-import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
-import ThumbDownIcon from "@mui/icons-material/ThumbDown";
-import ThumbUpIcon from "@mui/icons-material/ThumbUp";
-import TrendingDownIcon from "@mui/icons-material/TrendingDown";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
-import WarningIcon from "@mui/icons-material/Warning";
 import {
-    Badge,
-    Box,
-    Button,
-    Card,
-    CardContent,
-    Chip,
-    Collapse,
-    Divider,
-    FormControl,
-    IconButton,
-    InputLabel,
-    LinearProgress,
-    MenuItem,
-    Select,
-    Skeleton,
-    Stack,
-    Typography,
-} from "@mui/material";
-import {AnimatePresence, motion} from "framer-motion";
-import {useState} from "react";
+	AlertTriangle,
+	ArrowLeftRight,
+	BarChart3,
+	Bell,
+	ChevronDown,
+	ChevronUp,
+	ExternalLink,
+	FileText,
+	Filter,
+	Hourglass,
+	Lightbulb,
+	PauseCircle,
+	ThumbsDown,
+	ThumbsUp,
+	TrendingDown,
+	TrendingUp,
+	X,
+} from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { useState } from "react";
 import type {
-    AgentDecisionSummary,
-    DecisionAction,
-    DecisionFilters,
-    DecisionStatus,
-    DecisionType,
+	AgentDecisionSummary,
+	DecisionAction,
+	DecisionFilters,
+	DecisionStatus,
+	DecisionType,
 } from "@/types/session";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+	Collapsible,
+	CollapsibleContent,
+	CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Progress } from "@/components/ui/progress";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 // Icon mappings
 const actionIcons: Record<DecisionAction, React.ElementType> = {
-    buy: TrendingUpIcon,
-    sell: TrendingDownIcon,
-    hold: PauseCircleIcon,
-    wait: HourglassEmptyIcon,
-    close: CloseIcon,
+	buy: TrendingUp,
+	sell: TrendingDown,
+	hold: PauseCircle,
+	wait: Hourglass,
+	close: X,
 };
 
 const typeIcons: Record<DecisionType, React.ElementType> = {
-    analysis: AnalyticsIcon,
-    recommendation: LightbulbIcon,
-    trade_execution: SwapHorizIcon,
-    risk_alert: WarningIcon,
-    news_insight: ArticleIcon,
-    monitoring_alert: NotificationsIcon,
+	analysis: BarChart3,
+	recommendation: Lightbulb,
+	trade_execution: ArrowLeftRight,
+	risk_alert: AlertTriangle,
+	news_insight: FileText,
+	monitoring_alert: Bell,
 };
 
 interface DecisionHistoryPanelProps {
-    decisions: AgentDecisionSummary[];
-    symbols: string[];
-    isLoading?: boolean;
-    onLoadMore?: () => void;
-    hasMore?: boolean;
-    onDecisionClick?: (decisionId: string) => void;
-    onConfirmDecision?: (decisionId: string) => void;
-    onRejectDecision?: (decisionId: string) => void;
-    onFeedback?: (
-        decisionId: string,
-        feedback: "thumbs_up" | "thumbs_down",
-    ) => void;
-    filters: DecisionFilters;
-    onFiltersChange: (filters: DecisionFilters) => void;
+	decisions: AgentDecisionSummary[];
+	symbols: string[];
+	isLoading?: boolean;
+	onLoadMore?: () => void;
+	hasMore?: boolean;
+	onDecisionClick?: (decisionId: string) => void;
+	onConfirmDecision?: (decisionId: string) => void;
+	onRejectDecision?: (decisionId: string) => void;
+	onFeedback?: (
+		decisionId: string,
+		feedback: "thumbs_up" | "thumbs_down",
+	) => void;
+	filters: DecisionFilters;
+	onFiltersChange: (filters: DecisionFilters) => void;
 }
 
 interface DecisionCardProps {
-    decision: AgentDecisionSummary;
-    onExpand?: () => void;
-    onConfirm?: () => void;
-    onReject?: () => void;
-    onFeedback?: (feedback: "thumbs_up" | "thumbs_down") => void;
+	decision: AgentDecisionSummary;
+	onExpand?: () => void;
+	onConfirm?: () => void;
+	onReject?: () => void;
+	onFeedback?: (feedback: "thumbs_up" | "thumbs_down") => void;
 }
 
+const getActionColorClass = (action?: DecisionAction) => {
+	switch (action) {
+		case "buy":
+			return "bg-emerald-500 text-white";
+		case "sell":
+			return "bg-red-500 text-white";
+		case "hold":
+			return "bg-sky-500 text-white";
+		case "wait":
+			return "bg-amber-500 text-white";
+		case "close":
+			return "bg-muted text-muted-foreground";
+		default:
+			return "bg-muted text-muted-foreground";
+	}
+};
+
+const getStatusVariant = (status: DecisionStatus) => {
+	switch (status) {
+		case "pending":
+			return "border-amber-500/50 text-amber-500";
+		case "confirmed":
+			return "border-sky-500/50 text-sky-500";
+		case "executed":
+			return "border-emerald-500/50 text-emerald-500";
+		case "rejected":
+			return "border-red-500/50 text-red-500";
+		case "expired":
+			return "border-muted-foreground/40 text-muted-foreground";
+		default:
+			return "border-muted-foreground/40 text-muted-foreground";
+	}
+};
+
 function DecisionHistoryCard({
-                                 decision,
-                                 onExpand,
-                                 onConfirm,
-                                 onReject,
-                                 onFeedback,
-                             }: DecisionCardProps) {
-    const [isExpanded, setIsExpanded] = useState(false);
+	decision,
+	onExpand,
+	onConfirm,
+	onReject,
+	onFeedback,
+}: DecisionCardProps) {
+	const [isExpanded, setIsExpanded] = useState(false);
 
-    const TypeIcon = typeIcons[decision.decisionType] || AnalyticsIcon;
-    const ActionIcon = decision.action ? actionIcons[decision.action] : null;
+	const TypeIcon = typeIcons[decision.decisionType] || BarChart3;
+	const ActionIcon = decision.action ? actionIcons[decision.action] : null;
+	const isPending = decision.status === "pending";
 
-    // Color based on action
-    const getActionColor = (action?: DecisionAction) => {
-        switch (action) {
-            case "buy":
-                return "success";
-            case "sell":
-                return "error";
-            case "hold":
-                return "info";
-            case "wait":
-                return "warning";
-            case "close":
-                return "secondary";
-            default:
-                return "default";
-        }
-    };
+	const confidenceColor =
+		decision.confidence !== undefined
+			? decision.confidence >= 70
+				? "text-emerald-500"
+				: decision.confidence >= 40
+					? "text-amber-500"
+					: "text-red-500"
+			: "";
 
-    const getStatusColor = (status: DecisionStatus) => {
-        switch (status) {
-            case "pending":
-                return "warning";
-            case "confirmed":
-                return "info";
-            case "executed":
-                return "success";
-            case "rejected":
-                return "error";
-            case "expired":
-                return "default";
-            default:
-                return "default";
-        }
-    };
+	const progressColorClass =
+		decision.confidence !== undefined
+			? decision.confidence >= 70
+				? "[&_[data-slot=progress-indicator]]:bg-emerald-500"
+				: decision.confidence >= 40
+					? "[&_[data-slot=progress-indicator]]:bg-amber-500"
+					: "[&_[data-slot=progress-indicator]]:bg-red-500"
+			: "";
 
-    const actionColor = getActionColor(decision.action);
-    const isPending = decision.status === "pending";
+	return (
+		<Card
+			className={cn(
+				"mb-3",
+				isPending
+					? "border-2 border-amber-500 bg-[rgba(var(--trading-warning-rgb),0.05)]"
+					: "",
+			)}
+		>
+			<motion.div
+				initial={{ opacity: 0, y: 10 }}
+				animate={{ opacity: 1, y: 0 }}
+			>
+				<CardContent className="space-y-2 py-3">
+					{/* Header Row */}
+					<div className="flex items-center gap-2">
+						<TypeIcon className="size-4 text-muted-foreground" />
 
-    return (
-        <Card
-            component={motion.div}
-            initial={{opacity: 0, y: 10}}
-            animate={{opacity: 1, y: 0}}
-            sx={{
-                mb: 1.5,
-                border: isPending ? 2 : 1,
-                borderColor: isPending ? "warning.main" : "divider",
-                bgcolor: isPending ? (theme) => `rgba(${theme.trading.semanticRgb.warning}, 0.05)` : "background.paper",
-            }}
-        >
-            <CardContent sx={{py: 1.5, "&:last-child": {pb: 1.5}}}>
-                {/* Header Row */}
-                <Box sx={{display: "flex", alignItems: "center", gap: 1, mb: 1}}>
-                    <TypeIcon fontSize="small" color="action"/>
+						{decision.symbol && (
+							<Badge variant="outline">{decision.symbol}</Badge>
+						)}
 
-                    {decision.symbol && (
-                        <Chip label={decision.symbol} size="small" variant="outlined"/>
-                    )}
+						{decision.action && ActionIcon && (
+							<Badge
+								className={cn(
+									"gap-1",
+									getActionColorClass(decision.action),
+								)}
+							>
+								<ActionIcon className="size-3" />
+								{decision.action.toUpperCase()}
+							</Badge>
+						)}
 
-                    {decision.action && ActionIcon && (
-                        <Chip
-                            icon={<ActionIcon fontSize="small"/>}
-                            label={decision.action.toUpperCase()}
-                            size="small"
-                            color={actionColor as any}
-                            variant="filled"
-                        />
-                    )}
+						<Badge
+							variant="outline"
+							className={cn(
+								"ml-auto",
+								getStatusVariant(decision.status),
+							)}
+						>
+							{decision.status}
+						</Badge>
 
-                    <Chip
-                        label={decision.status}
-                        size="small"
-                        color={getStatusColor(decision.status) as any}
-                        variant="outlined"
-                        sx={{ml: "auto"}}
-                    />
+						<Button
+							variant="ghost"
+							size="icon-xs"
+							onClick={() => setIsExpanded(!isExpanded)}
+						>
+							{isExpanded ? (
+								<ChevronUp className="size-4" />
+							) : (
+								<ChevronDown className="size-4" />
+							)}
+						</Button>
+					</div>
 
-                    <IconButton size="small" onClick={() => setIsExpanded(!isExpanded)}>
-                        {isExpanded ? <ExpandLessIcon/> : <ExpandMoreIcon/>}
-                    </IconButton>
-                </Box>
+					{/* Summary */}
+					<p className="text-sm">{decision.summary}</p>
 
-                {/* Summary */}
-                <Typography variant="body2" color="text.primary" sx={{mb: 1}}>
-                    {decision.summary}
-                </Typography>
+					{/* Confidence Bar */}
+					{decision.confidence !== undefined && (
+						<div>
+							<div className="mb-0.5 flex justify-between">
+								<span className="text-xs text-muted-foreground">
+									Confidence
+								</span>
+								<span
+									className={cn(
+										"text-xs font-semibold",
+										confidenceColor,
+									)}
+								>
+									{decision.confidence.toFixed(0)}%
+								</span>
+							</div>
+							<Progress
+								value={decision.confidence}
+								className={cn(
+									"[&_[data-slot=progress-track]]:h-1 [&_[data-slot=progress-track]]:rounded-full",
+									progressColorClass,
+								)}
+							/>
+						</div>
+					)}
 
-                {/* Confidence Bar */}
-                {decision.confidence !== undefined && (
-                    <Box sx={{mb: 1}}>
-                        <Box
-                            sx={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                mb: 0.25,
-                            }}
-                        >
-                            <Typography variant="caption" color="text.secondary">
-                                Confidence
-                            </Typography>
-                            <Typography
-                                variant="caption"
-                                fontWeight={600}
-                                color={
-                                    decision.confidence >= 70
-                                        ? "success.main"
-                                        : decision.confidence >= 40
-                                            ? "warning.main"
-                                            : "error.main"
-                                }
-                            >
-                                {decision.confidence.toFixed(0)}%
-                            </Typography>
-                        </Box>
-                        <LinearProgress
-                            variant="determinate"
-                            value={decision.confidence}
-                            color={
-                                decision.confidence >= 70
-                                    ? "success"
-                                    : decision.confidence >= 40
-                                        ? "warning"
-                                        : "error"
-                            }
-                            sx={{height: 4, borderRadius: 2}}
-                        />
-                    </Box>
-                )}
+					{/* Timestamp */}
+					<p className="text-xs text-muted-foreground/60">
+						{new Date(decision.createdAt).toLocaleString()}
+					</p>
 
-                {/* Timestamp */}
-                <Typography variant="caption" color="text.disabled">
-                    {new Date(decision.createdAt).toLocaleString()}
-                </Typography>
+					{/* Expanded Details */}
+					{isExpanded && (
+						<div>
+							<Separator className="my-3" />
 
-                {/* Expanded Details */}
-                <Collapse in={isExpanded}>
-                    <Divider sx={{my: 1.5}}/>
+							{/* Action buttons for pending decisions */}
+							{isPending && (
+								<div className="mb-3 flex gap-2">
+									<Button
+										size="sm"
+										className="flex-1 bg-emerald-600 text-white hover:bg-emerald-700"
+										onClick={onConfirm}
+									>
+										Confirm
+									</Button>
+									<Button
+										variant="destructive"
+										size="sm"
+										className="flex-1"
+										onClick={onReject}
+									>
+										Reject
+									</Button>
+								</div>
+							)}
 
-                    {/* Action buttons for pending decisions */}
-                    {isPending && (
-                        <Stack direction="row" spacing={1} sx={{mb: 1.5}}>
-                            <Button
-                                variant="contained"
-                                color="success"
-                                size="small"
-                                onClick={onConfirm}
-                                fullWidth
-                            >
-                                Confirm
-                            </Button>
-                            <Button
-                                variant="outlined"
-                                color="error"
-                                size="small"
-                                onClick={onReject}
-                                fullWidth
-                            >
-                                Reject
-                            </Button>
-                        </Stack>
-                    )}
+							{/* Feedback buttons */}
+							{decision.status === "executed" && onFeedback && (
+								<div className="mb-2 flex items-center gap-2">
+									<span className="text-xs text-muted-foreground">
+										Was this helpful?
+									</span>
+									<Button
+										variant="ghost"
+										size="icon-xs"
+										onClick={() =>
+											onFeedback("thumbs_up")
+										}
+										className="text-emerald-500 hover:text-emerald-600"
+									>
+										<ThumbsUp className="size-3.5" />
+									</Button>
+									<Button
+										variant="ghost"
+										size="icon-xs"
+										onClick={() =>
+											onFeedback("thumbs_down")
+										}
+										className="text-red-500 hover:text-red-600"
+									>
+										<ThumbsDown className="size-3.5" />
+									</Button>
+								</div>
+							)}
 
-                    {/* Feedback buttons */}
-                    {decision.status === "executed" && onFeedback && (
-                        <Box sx={{display: "flex", gap: 1, mb: 1}}>
-                            <Typography
-                                variant="caption"
-                                color="text.secondary"
-                                sx={{alignSelf: "center"}}
-                            >
-                                Was this helpful?
-                            </Typography>
-                            <IconButton
-                                size="small"
-                                onClick={() => onFeedback("thumbs_up")}
-                                color="success"
-                            >
-                                <ThumbUpIcon fontSize="small"/>
-                            </IconButton>
-                            <IconButton
-                                size="small"
-                                onClick={() => onFeedback("thumbs_down")}
-                                color="error"
-                            >
-                                <ThumbDownIcon fontSize="small"/>
-                            </IconButton>
-                        </Box>
-                    )}
-
-                    {/* View full details link */}
-                    <Button
-                        size="small"
-                        endIcon={<OpenInNewIcon fontSize="small"/>}
-                        onClick={onExpand}
-                        sx={{mt: 0.5}}
-                    >
-                        View Full Details
-                    </Button>
-                </Collapse>
-            </CardContent>
-        </Card>
-    );
+							{/* View full details link */}
+							<Button
+								variant="link"
+								size="sm"
+								onClick={onExpand}
+								className="mt-1 px-0"
+							>
+								View Full Details
+								<ExternalLink className="ml-1 size-3" />
+							</Button>
+						</div>
+					)}
+				</CardContent>
+			</motion.div>
+		</Card>
+	);
 }
 
 function DecisionHistorySkeleton() {
-    return (
-        <>
-            {[1, 2, 3].map((i) => (
-                <Card key={i} sx={{mb: 1.5}}>
-                    <CardContent sx={{py: 1.5}}>
-                        <Box sx={{display: "flex", gap: 1, mb: 1}}>
-                            <Skeleton variant="circular" width={24} height={24}/>
-                            <Skeleton variant="rounded" width={60} height={24}/>
-                            <Skeleton variant="rounded" width={50} height={24}/>
-                            <Skeleton
-                                variant="rounded"
-                                width={70}
-                                height={24}
-                                sx={{ml: "auto"}}
-                            />
-                        </Box>
-                        <Skeleton variant="text" width="90%"/>
-                        <Skeleton variant="text" width="60%"/>
-                        <Skeleton variant="rounded" height={4} sx={{mt: 1}}/>
-                    </CardContent>
-                </Card>
-            ))}
-        </>
-    );
+	return (
+		<>
+			{[1, 2, 3].map((i) => (
+				<Card key={i} className="mb-3">
+					<CardContent className="space-y-2 py-3">
+						<div className="flex gap-2">
+							<Skeleton className="size-6 rounded-full" />
+							<Skeleton className="h-6 w-15 rounded" />
+							<Skeleton className="h-6 w-12 rounded" />
+							<Skeleton className="ml-auto h-6 w-18 rounded" />
+						</div>
+						<Skeleton className="h-4 w-[90%]" />
+						<Skeleton className="h-4 w-[60%]" />
+						<Skeleton className="mt-2 h-1 w-full rounded" />
+					</CardContent>
+				</Card>
+			))}
+		</>
+	);
 }
 
 export function DecisionHistoryPanel({
-                                         decisions,
-                                         symbols,
-                                         isLoading = false,
-                                         onLoadMore,
-                                         hasMore = false,
-                                         onDecisionClick,
-                                         onConfirmDecision,
-                                         onRejectDecision,
-                                         onFeedback,
-                                         filters,
-                                         onFiltersChange,
-                                     }: DecisionHistoryPanelProps) {
-    const [showFilters, setShowFilters] = useState(false);
+	decisions,
+	symbols,
+	isLoading = false,
+	onLoadMore,
+	hasMore = false,
+	onDecisionClick,
+	onConfirmDecision,
+	onRejectDecision,
+	onFeedback,
+	filters,
+	onFiltersChange,
+}: DecisionHistoryPanelProps) {
+	const [showFilters, setShowFilters] = useState(false);
 
-    const activeFilterCount = Object.values(filters).filter(Boolean).length;
+	const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
-    const handleFilterChange = (
-        key: keyof DecisionFilters,
-        value: string | undefined,
-    ) => {
-        onFiltersChange({
-            ...filters,
-            [key]: value || undefined,
-        });
-    };
+	const handleFilterChange = (
+		key: keyof DecisionFilters,
+		value: string | undefined,
+	) => {
+		onFiltersChange({
+			...filters,
+			[key]: value || undefined,
+		});
+	};
 
-    const clearFilters = () => {
-        onFiltersChange({});
-    };
+	const clearFilters = () => {
+		onFiltersChange({});
+	};
 
-    return (
-        <Box sx={{height: "100%", display: "flex", flexDirection: "column"}}>
-            {/* Header */}
-            <Box
-                sx={{
-                    p: 2,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    borderBottom: 1,
-                    borderColor: "divider",
-                }}
-            >
-                <Typography variant="subtitle1" fontWeight={600}>
-                    Decision History
-                </Typography>
-                <Badge badgeContent={activeFilterCount} color="primary">
-                    <IconButton size="small" onClick={() => setShowFilters(!showFilters)}>
-                        <FilterListIcon/>
-                    </IconButton>
-                </Badge>
-            </Box>
+	return (
+		<div className="flex h-full flex-col">
+			{/* Header */}
+			<div className="flex items-center justify-between border-b border-border p-4">
+				<h3 className="text-sm font-semibold">Decision History</h3>
+				<div className="relative">
+					<Button
+						variant="ghost"
+						size="icon-sm"
+						onClick={() => setShowFilters(!showFilters)}
+					>
+						<Filter className="size-4" />
+					</Button>
+					{activeFilterCount > 0 && (
+						<span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-[var(--primary)] text-[10px] font-bold text-white">
+							{activeFilterCount}
+						</span>
+					)}
+				</div>
+			</div>
 
-            {/* Filters */}
-            <Collapse in={showFilters}>
-                <Box sx={{p: 2, bgcolor: "action.hover"}}>
-                    <Stack spacing={2}>
-                        <FormControl size="small" fullWidth>
-                            <InputLabel>Type</InputLabel>
-                            <Select
-                                value={filters.decisionType || ""}
-                                label="Type"
-                                onChange={(e) =>
-                                    handleFilterChange(
-                                        "decisionType",
-                                        e.target.value as DecisionType,
-                                    )
-                                }
-                            >
-                                <MenuItem value="">All Types</MenuItem>
-                                <MenuItem value="analysis">Analysis</MenuItem>
-                                <MenuItem value="recommendation">Recommendation</MenuItem>
-                                <MenuItem value="trade_execution">Trade</MenuItem>
-                                <MenuItem value="risk_alert">Risk Alert</MenuItem>
-                                <MenuItem value="news_insight">News</MenuItem>
-                                <MenuItem value="monitoring_alert">Alert</MenuItem>
-                            </Select>
-                        </FormControl>
+			{/* Filters */}
+			<Collapsible open={showFilters} onOpenChange={setShowFilters}>
+				<CollapsibleContent>
+					<div className="space-y-3 bg-muted/50 p-4">
+						<Select
+							value={filters.decisionType || "all"}
+							onValueChange={(v) =>
+								handleFilterChange(
+									"decisionType",
+									v === "all" ? undefined : (v as DecisionType),
+								)
+							}
+						>
+							<SelectTrigger className="w-full">
+								<SelectValue placeholder="All Types" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">All Types</SelectItem>
+								<SelectItem value="analysis">Analysis</SelectItem>
+								<SelectItem value="recommendation">
+									Recommendation
+								</SelectItem>
+								<SelectItem value="trade_execution">
+									Trade
+								</SelectItem>
+								<SelectItem value="risk_alert">
+									Risk Alert
+								</SelectItem>
+								<SelectItem value="news_insight">News</SelectItem>
+								<SelectItem value="monitoring_alert">
+									Alert
+								</SelectItem>
+							</SelectContent>
+						</Select>
 
-                        <FormControl size="small" fullWidth>
-                            <InputLabel>Symbol</InputLabel>
-                            <Select
-                                value={filters.symbol || ""}
-                                label="Symbol"
-                                onChange={(e) => handleFilterChange("symbol", e.target.value)}
-                            >
-                                <MenuItem value="">All Symbols</MenuItem>
-                                {symbols.map((symbol) => (
-                                    <MenuItem key={symbol} value={symbol}>
-                                        {symbol}
-                                    </MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
+						<Select
+							value={filters.symbol || "all"}
+							onValueChange={(v) =>
+								handleFilterChange(
+									"symbol",
+									v === "all" ? undefined : v,
+								)
+							}
+						>
+							<SelectTrigger className="w-full">
+								<SelectValue placeholder="All Symbols" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">All Symbols</SelectItem>
+								{symbols.map((symbol) => (
+									<SelectItem key={symbol} value={symbol}>
+										{symbol}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
 
-                        <FormControl size="small" fullWidth>
-                            <InputLabel>Action</InputLabel>
-                            <Select
-                                value={filters.action || ""}
-                                label="Action"
-                                onChange={(e) =>
-                                    handleFilterChange("action", e.target.value as DecisionAction)
-                                }
-                            >
-                                <MenuItem value="">All Actions</MenuItem>
-                                <MenuItem value="buy">Buy</MenuItem>
-                                <MenuItem value="sell">Sell</MenuItem>
-                                <MenuItem value="hold">Hold</MenuItem>
-                                <MenuItem value="wait">Wait</MenuItem>
-                                <MenuItem value="close">Close</MenuItem>
-                            </Select>
-                        </FormControl>
+						<Select
+							value={filters.action || "all"}
+							onValueChange={(v) =>
+								handleFilterChange(
+									"action",
+									v === "all"
+										? undefined
+										: (v as DecisionAction),
+								)
+							}
+						>
+							<SelectTrigger className="w-full">
+								<SelectValue placeholder="All Actions" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">All Actions</SelectItem>
+								<SelectItem value="buy">Buy</SelectItem>
+								<SelectItem value="sell">Sell</SelectItem>
+								<SelectItem value="hold">Hold</SelectItem>
+								<SelectItem value="wait">Wait</SelectItem>
+								<SelectItem value="close">Close</SelectItem>
+							</SelectContent>
+						</Select>
 
-                        <FormControl size="small" fullWidth>
-                            <InputLabel>Status</InputLabel>
-                            <Select
-                                value={filters.status || ""}
-                                label="Status"
-                                onChange={(e) =>
-                                    handleFilterChange("status", e.target.value as DecisionStatus)
-                                }
-                            >
-                                <MenuItem value="">All Statuses</MenuItem>
-                                <MenuItem value="pending">Pending</MenuItem>
-                                <MenuItem value="confirmed">Confirmed</MenuItem>
-                                <MenuItem value="executed">Executed</MenuItem>
-                                <MenuItem value="rejected">Rejected</MenuItem>
-                                <MenuItem value="expired">Expired</MenuItem>
-                            </Select>
-                        </FormControl>
+						<Select
+							value={filters.status || "all"}
+							onValueChange={(v) =>
+								handleFilterChange(
+									"status",
+									v === "all"
+										? undefined
+										: (v as DecisionStatus),
+								)
+							}
+						>
+							<SelectTrigger className="w-full">
+								<SelectValue placeholder="All Statuses" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">All Statuses</SelectItem>
+								<SelectItem value="pending">Pending</SelectItem>
+								<SelectItem value="confirmed">
+									Confirmed
+								</SelectItem>
+								<SelectItem value="executed">Executed</SelectItem>
+								<SelectItem value="rejected">Rejected</SelectItem>
+								<SelectItem value="expired">Expired</SelectItem>
+							</SelectContent>
+						</Select>
 
-                        {activeFilterCount > 0 && (
-                            <Button size="small" onClick={clearFilters}>
-                                Clear Filters
-                            </Button>
-                        )}
-                    </Stack>
-                </Box>
-                <Divider/>
-            </Collapse>
+						{activeFilterCount > 0 && (
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={clearFilters}
+								className="w-full"
+							>
+								Clear Filters
+							</Button>
+						)}
+					</div>
+					<Separator />
+				</CollapsibleContent>
+			</Collapsible>
 
-            {/* Decision List */}
-            <Box sx={{flexGrow: 1, overflow: "auto", p: 2}}>
-                {isLoading ? (
-                    <DecisionHistorySkeleton/>
-                ) : decisions.length === 0 ? (
-                    <Box
-                        sx={{
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            height: "100%",
-                            color: "text.secondary",
-                        }}
-                    >
-                        <AnalyticsIcon sx={{fontSize: 48, mb: 1, opacity: 0.5}}/>
-                        <Typography variant="body2" textAlign="center">
-                            No decisions found
-                        </Typography>
-                        {activeFilterCount > 0 && (
-                            <Typography
-                                variant="caption"
-                                textAlign="center"
-                                color="text.disabled"
-                            >
-                                Try adjusting your filters
-                            </Typography>
-                        )}
-                    </Box>
-                ) : (
-                    <AnimatePresence>
-                        {decisions.map((decision) => (
-                            <DecisionHistoryCard
-                                key={decision.id}
-                                decision={decision}
-                                onExpand={() => onDecisionClick?.(decision.id)}
-                                onConfirm={() => onConfirmDecision?.(decision.id)}
-                                onReject={() => onRejectDecision?.(decision.id)}
-                                onFeedback={(feedback) => onFeedback?.(decision.id, feedback)}
-                            />
-                        ))}
-                    </AnimatePresence>
-                )}
+			{/* Decision List */}
+			<div className="flex-1 overflow-auto p-4">
+				{isLoading ? (
+					<DecisionHistorySkeleton />
+				) : decisions.length === 0 ? (
+					<div className="flex h-full flex-col items-center justify-center text-muted-foreground">
+						<BarChart3 className="mb-2 size-12 opacity-50" />
+						<p className="text-center text-sm">
+							No decisions found
+						</p>
+						{activeFilterCount > 0 && (
+							<p className="text-center text-xs text-muted-foreground/60">
+								Try adjusting your filters
+							</p>
+						)}
+					</div>
+				) : (
+					<AnimatePresence>
+						{decisions.map((decision) => (
+							<DecisionHistoryCard
+								key={decision.id}
+								decision={decision}
+								onExpand={() =>
+									onDecisionClick?.(decision.id)
+								}
+								onConfirm={() =>
+									onConfirmDecision?.(decision.id)
+								}
+								onReject={() =>
+									onRejectDecision?.(decision.id)
+								}
+								onFeedback={(feedback) =>
+									onFeedback?.(decision.id, feedback)
+								}
+							/>
+						))}
+					</AnimatePresence>
+				)}
 
-                {/* Load More */}
-                {hasMore && !isLoading && (
-                    <Box sx={{textAlign: "center", mt: 2}}>
-                        <Button variant="outlined" size="small" onClick={onLoadMore}>
-                            Load More
-                        </Button>
-                    </Box>
-                )}
-            </Box>
-        </Box>
-    );
+				{/* Load More */}
+				{hasMore && !isLoading && (
+					<div className="mt-4 text-center">
+						<Button variant="outline" size="sm" onClick={onLoadMore}>
+							Load More
+						</Button>
+					</div>
+				)}
+			</div>
+		</div>
+	);
 }
 
 export default DecisionHistoryPanel;
