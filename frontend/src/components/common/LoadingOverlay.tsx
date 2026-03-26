@@ -1,27 +1,16 @@
-import {Box, CircularProgress, Typography} from "@mui/material";
+import { Loader2 } from "lucide-react";
 
 interface LoadingOverlayProps {
-    message?: string;
+	message?: string;
 }
 
-export function LoadingOverlay({message}: LoadingOverlayProps) {
-    return (
-        <Box
-            sx={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                py: 6,
-                gap: 2,
-            }}
-        >
-            <CircularProgress size={36}/>
-            {message && (
-                <Typography variant="body2" color="text.secondary">
-                    {message}
-                </Typography>
-            )}
-        </Box>
-    );
+export function LoadingOverlay({ message }: LoadingOverlayProps) {
+	return (
+		<div className="flex flex-col items-center justify-center py-12 gap-4">
+			<Loader2 className="size-9 animate-spin text-[var(--primary)]" />
+			{message && (
+				<p className="text-sm text-[var(--text-secondary)]">{message}</p>
+			)}
+		</div>
+	);
 }

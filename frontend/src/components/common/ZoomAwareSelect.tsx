@@ -1,74 +1,50 @@
 /**
  * Select wrapper that compensates for the app-wide CSS zoom when positioning menus.
+ *
+ * With shadcn/base-ui Select the positioner handles anchor alignment natively,
+ * so the zoom compensation is lighter than the old MUI approach.
  */
 
-import { Box, Select, type SelectProps } from "@mui/material";
-import { useCallback } from "react";
-import { useZoomAwareMenu } from "@/hooks/useZoomAwareMenu";
+import type { ComponentProps } from "react";
+import {
+	Select,
+	SelectContent,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 
-type ZoomAwareSelectProps<Value = unknown> = SelectProps<Value>;
+type SelectRootProps = ComponentProps<typeof Select>;
+type SelectTriggerProps = ComponentProps<typeof SelectTrigger>;
 
-export function ZoomAwareSelect<Value = unknown>({
-	MenuProps,
-	onClose,
-	onOpen,
+interface ZoomAwareSelectProps extends SelectRootProps {
+	/** Props forwarded to the SelectTrigger */
+	triggerProps?: Omit<SelectTriggerProps, "children">;
+	/** Placeholder text for SelectValue */
+	placeholder?: string;
+	/** Content (SelectItems) */
+	children: React.ReactNode;
+	fullWidth?: boolean;
+}
+
+export function ZoomAwareSelect({
+	triggerProps,
+	placeholder,
+	children,
 	fullWidth = true,
-	...props
-}: ZoomAwareSelectProps<Value>) {
-	const { anchorRef, handleClose, handleOpen, menuProps, open } =
-		useZoomAwareMenu();
-
-	const handleOpenWithEvent = useCallback(
-		(event: React.SyntheticEvent) => {
-			handleOpen();
-			onOpen?.(event);
-		},
-		[handleOpen, onOpen],
-	);
-
-	const handleCloseWithEvent = useCallback(
-		(event: React.SyntheticEvent) => {
-			handleClose();
-			onClose?.(event);
-		},
-		[handleClose, onClose],
-	);
-
+	...rootProps
+}: ZoomAwareSelectProps) {
 	return (
-		<Box ref={anchorRef} sx={{ width: "100%" }}>
-			<Select
-				{...props}
-				fullWidth={fullWidth}
-				open={open}
-				onOpen={handleOpenWithEvent}
-				onClose={handleCloseWithEvent}
-				MenuProps={{
-					...menuProps,
-					...MenuProps,
-					anchorReference: menuProps.anchorReference,
-					anchorPosition: menuProps.anchorPosition,
-					transformOrigin: menuProps.transformOrigin,
-					slotProps: {
-						paper: {
-							...menuProps.slotProps?.paper,
-							...MenuProps?.slotProps?.paper,
-							sx: [
-								menuProps.slotProps?.paper &&
-								typeof menuProps.slotProps.paper === "object" &&
-								"sx" in menuProps.slotProps.paper
-									? menuProps.slotProps.paper.sx
-									: undefined,
-								MenuProps?.slotProps?.paper &&
-								typeof MenuProps.slotProps.paper === "object" &&
-								"sx" in MenuProps.slotProps.paper
-									? MenuProps.slotProps.paper.sx
-									: undefined,
-							],
-						},
-					},
-				}}
-			/>
-		</Box>
+		<div className={fullWidth ? "w-full" : undefined}>
+			<Select {...rootProps}>
+				<SelectTrigger
+					{...triggerProps}
+					className={fullWidth ? "w-full" : triggerProps?.className}
+				>
+					<SelectValue placeholder={placeholder} />
+				</SelectTrigger>
+				<SelectContent>{children}</SelectContent>
+			</Select>
+		</div>
 	);
 }
 

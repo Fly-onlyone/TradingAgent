@@ -1,106 +1,67 @@
-import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import RefreshIcon from "@mui/icons-material/Refresh";
-import {Box, Button, Collapse, IconButton, Typography, useTheme,} from "@mui/material";
-import {useState} from "react";
+import { AlertCircle, ChevronDown, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import {
+	Collapsible,
+	CollapsibleContent,
+	CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { cn } from "@/lib/utils";
 
 interface ErrorStateProps {
-    title?: string;
-    message?: string;
-    detail?: string;
-    onRetry?: () => void;
+	title?: string;
+	message?: string;
+	detail?: string;
+	onRetry?: () => void;
 }
 
 export function ErrorState({
-                               title = "Something went wrong",
-                               message = "An unexpected error occurred. Please try again.",
-                               detail,
-                               onRetry,
-                           }: ErrorStateProps) {
-    const theme = useTheme();
-    const [showDetail, setShowDetail] = useState(false);
+	title = "Something went wrong",
+	message = "An unexpected error occurred. Please try again.",
+	detail,
+	onRetry,
+}: ErrorStateProps) {
+	const [showDetail, setShowDetail] = useState(false);
 
-    return (
-        <Box
-            sx={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                py: 6,
-                px: 3,
-                textAlign: "center",
-            }}
-        >
-            <ErrorOutlineIcon
-                sx={{
-                    fontSize: 48,
-                    color: theme.palette.error.main,
-                    mb: 2,
-                    opacity: 0.8,
-                }}
-            />
-            <Typography variant="h6" sx={{mb: 1}}>
-                {title}
-            </Typography>
-            <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{mb: 3, maxWidth: 400}}
-            >
-                {message}
-            </Typography>
-            {onRetry && (
-                <Button
-                    variant="outlined"
-                    startIcon={<RefreshIcon/>}
-                    onClick={onRetry}
-                    sx={{mb: 2}}
-                >
-                    Try again
-                </Button>
-            )}
-            {detail && (
-                <Box sx={{mt: 1}}>
-                    <IconButton
-                        size="small"
-                        onClick={() => setShowDetail(!showDetail)}
-                        aria-label={
-                            showDetail ? "Hide error details" : "Show error details"
-                        }
-                    >
-                        <ExpandMoreIcon
-                            sx={{
-                                transform: showDetail
-                                    ? "rotate(180deg)"
-                                    : "rotate(0deg)",
-                                transition: "transform 0.2s",
-                            }}
-                        />
-                    </IconButton>
-                    <Collapse in={showDetail}>
-                        <Typography
-                            variant="caption"
-                            component="pre"
-                            sx={{
-                                mt: 1,
-                                p: 2,
-                                borderRadius: 1,
-                                backgroundColor: `rgba(${theme.trading.primaryRgb}, 0.05)`,
-                                border: `1px solid ${theme.trading.border.subtle}`,
-                                maxWidth: 500,
-                                overflow: "auto",
-                                textAlign: "left",
-                                fontFamily: theme.trading.mono,
-                                whiteSpace: "pre-wrap",
-                                wordBreak: "break-word",
-                            }}
-                        >
-                            {detail}
-                        </Typography>
-                    </Collapse>
-                </Box>
-            )}
-        </Box>
-    );
+	return (
+		<div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+			<AlertCircle className="mb-4 size-12 text-[var(--error-main)] opacity-80" />
+			<h6 className="mb-2 text-lg font-semibold">{title}</h6>
+			<p className="mb-6 max-w-[400px] text-sm text-[var(--text-secondary)]">
+				{message}
+			</p>
+			{onRetry && (
+				<Button variant="outline" onClick={onRetry} className="mb-4">
+					<RefreshCw data-icon="inline-start" />
+					Try again
+				</Button>
+			)}
+			{detail && (
+				<Collapsible
+					open={showDetail}
+					onOpenChange={setShowDetail}
+					className="mt-2"
+				>
+					<CollapsibleTrigger
+						className="inline-flex items-center justify-center rounded-md p-1 hover:bg-muted"
+						aria-label={
+							showDetail ? "Hide error details" : "Show error details"
+						}
+					>
+						<ChevronDown
+							className={cn(
+								"size-5 transition-transform duration-200",
+								showDetail && "rotate-180",
+							)}
+						/>
+					</CollapsibleTrigger>
+					<CollapsibleContent>
+						<pre className="mt-2 rounded-md bg-[rgba(var(--primary-rgb),0.05)] border border-[var(--border-subtle)] p-4 max-w-[500px] overflow-auto text-left font-mono text-xs whitespace-pre-wrap break-words">
+							{detail}
+						</pre>
+					</CollapsibleContent>
+				</Collapsible>
+			)}
+		</div>
+	);
 }
