@@ -2,257 +2,198 @@
  * Login Page
  */
 
-import {zodResolver} from "@hookform/resolvers/zod";
-import EmailIcon from "@mui/icons-material/Email";
-import LockIcon from "@mui/icons-material/Lock";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
-import {
-    Alert,
-    Box,
-    Button,
-    Card,
-    CardContent,
-    CircularProgress,
-    IconButton,
-    InputAdornment,
-    TextField,
-    Typography,
-} from "@mui/material";
-import {createFileRoute, Link} from "@tanstack/react-router";
-import {useState} from "react";
-import {Controller, useForm} from "react-hook-form";
-import {PageTransition} from "@/components/common/PageTransition";
-import {AnimatedGradientBorder} from "@/components/effects/AnimatedGradientBorder";
-import {useAuth} from "@/hooks/useAuth";
-import {getErrorMessage} from "@/utils/errors";
-import {type LoginInput, loginSchema} from "@/utils/validators";
-import {requireGuest} from "../-guards";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react";
+import { useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { PageTransition } from "@/components/common/PageTransition";
+import { AnimatedGradientBorder } from "@/components/effects/AnimatedGradientBorder";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useAuth } from "@/hooks/useAuth";
+import { cn } from "@/lib/utils";
+import { getErrorMessage } from "@/utils/errors";
+import { type LoginInput, loginSchema } from "@/utils/validators";
+import { requireGuest } from "../-guards";
 
 export const Route = createFileRoute("/auth/login")({
-    beforeLoad: requireGuest,
-    component: LoginPage,
+	beforeLoad: requireGuest,
+	component: LoginPage,
 });
 
 function LoginPage() {
-    const {login, isLoading} = useAuth();
-    const [showPassword, setShowPassword] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+	const { login, isLoading } = useAuth();
+	const [showPassword, setShowPassword] = useState(false);
+	const [error, setError] = useState<string | null>(null);
 
-    const {
-        control,
-        handleSubmit,
-        formState: {errors},
-    } = useForm<LoginInput>({
-        resolver: zodResolver(loginSchema),
-        defaultValues: {
-            email: "",
-            password: "",
-        },
-    });
+	const {
+		control,
+		handleSubmit,
+		formState: { errors },
+	} = useForm<LoginInput>({
+		resolver: zodResolver(loginSchema),
+		defaultValues: {
+			email: "",
+			password: "",
+		},
+	});
 
-    const onSubmit = async (data: LoginInput) => {
-        try {
-            setError(null);
-            await login(data);
-        } catch (err) {
-            setError(getErrorMessage(err, "Login failed"));
-        }
-    };
+	const onSubmit = async (data: LoginInput) => {
+		try {
+			setError(null);
+			await login(data);
+		} catch (err) {
+			setError(getErrorMessage(err, "Login failed"));
+		}
+	};
 
-    return (
-        <PageTransition pageKey="login">
-            <Box sx={{display: "flex", minHeight: "100vh"}}>
-                {/* Left panel - hidden on mobile */}
-                <Box
-                    sx={{
-                        display: {xs: "none", md: "flex"},
-                        flexDirection: "column",
-                        justifyContent: "center",
-                        alignItems: "center",
-                        width: "60%",
-                        position: "relative",
-                        overflow: "hidden",
-                        p: 6,
-                    }}
-                >
-                    {/* Brand content */}
-                    <Box
-                        sx={{
-                            position: "relative",
-                            zIndex: 1,
-                            textAlign: "center",
-                            maxWidth: 480,
-                        }}
-                    >
-                        <img
-                            src="/coin.png"
-                            alt="TradingBot"
-                            width={64}
-                            height={64}
-                            style={{marginBottom: 24}}
-                        />
-                        <Typography variant="h3" fontWeight={700} sx={{mb: 2}}>
-                            AI-Powered Trading
-                        </Typography>
-                        <Typography
-                            variant="body1"
-                            color="text.secondary"
-                            sx={{lineHeight: 1.7}}
-                        >
-                            Let the agent analyze markets, execute strategies, and manage your
-                            portfolio automatically.
-                        </Typography>
-                    </Box>
-                    {/* Subtle background mesh effect */}
-                    <Box
-                        sx={{
-                            position: "absolute",
-                            inset: 0,
-                            background: (theme) => theme.trading.gradients.meshBg,
-                            opacity: 0.5,
-                        }}
-                    />
-                </Box>
+	return (
+		<PageTransition pageKey="login">
+			<div className="flex min-h-screen">
+				{/* Left panel - hidden on mobile */}
+				<div className="hidden md:flex flex-col justify-center items-center w-[60%] relative overflow-hidden p-12">
+					{/* Brand content */}
+					<div className="relative z-[1] text-center max-w-[480px]">
+						<img
+							src="/coin.png"
+							alt="TradingBot"
+							width={64}
+							height={64}
+							className="mb-6"
+						/>
+						<h3 className="text-3xl font-bold text-[var(--text-primary)] mb-4">
+							AI-Powered Trading
+						</h3>
+						<p className="text-base text-[var(--text-secondary)] leading-[1.7]">
+							Let the agent analyze markets, execute strategies, and manage your
+							portfolio automatically.
+						</p>
+					</div>
+					{/* Subtle background mesh effect */}
+					<div className="absolute inset-0 bg-[var(--gradient-accent)] opacity-50" />
+				</div>
 
-                {/* Right panel - login form */}
-                <Box
-                    sx={{
-                        display: "flex",
-                        flexDirection: "column",
-                        justifyContent: "center",
-                        alignItems: "center",
-                        width: {xs: "100%", md: "40%"},
-                        p: {xs: 3, sm: 4},
-                    }}
-                >
-                    <AnimatedGradientBorder>
-                        <Card sx={{maxWidth: 400, width: "100%"}}>
-                            <CardContent sx={{p: 4}}>
-                                <Box sx={{textAlign: "center", mb: 4}}>
-                                    <Typography
-                                        variant="h4"
-                                        fontWeight={700}
-                                        color="primary"
-                                        gutterBottom
-                                    >
-                                        TradingBot
-                                    </Typography>
-                                    <Typography variant="body2" color="text.secondary">
-                                        Sign in to your account
-                                    </Typography>
-                                </Box>
+				{/* Right panel - login form */}
+				<div className="flex flex-col justify-center items-center w-full md:w-[40%] p-6 sm:p-8">
+					<AnimatedGradientBorder>
+						<div className="glass-card max-w-[400px] w-full p-8">
+							<div className="text-center mb-8">
+								<h4 className="text-2xl font-bold text-[var(--primary)] mb-1">
+									TradingBot
+								</h4>
+								<p className="text-sm text-[var(--text-secondary)]">
+									Sign in to your account
+								</p>
+							</div>
 
-                                {error && (
-                                    <Alert severity="error" sx={{mb: 3}}>
-                                        {error}
-                                    </Alert>
-                                )}
+							{error && (
+								<Alert variant="destructive" className="mb-6">
+									<AlertDescription>{error}</AlertDescription>
+								</Alert>
+							)}
 
-                                <form onSubmit={handleSubmit(onSubmit)}>
-                                    <Controller
-                                        name="email"
-                                        control={control}
-                                        render={({field}) => (
-                                            <TextField
-                                                {...field}
-                                                label="Email"
-                                                type="email"
-                                                fullWidth
-                                                error={!!errors.email}
-                                                helperText={errors.email?.message}
-                                                slotProps={{
-                                                    input: {
-                                                        startAdornment: (
-                                                            <InputAdornment position="start">
-                                                                <EmailIcon color="action"/>
-                                                            </InputAdornment>
-                                                        ),
-                                                    },
-                                                }}
-                                                sx={{mb: 2}}
-                                            />
-                                        )}
-                                    />
+							<form onSubmit={handleSubmit(onSubmit)}>
+								<Controller
+									name="email"
+									control={control}
+									render={({ field, fieldState }) => (
+										<div className="mb-4 space-y-1.5">
+											<Label htmlFor="email">Email</Label>
+											<div className="relative">
+												<Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-secondary)]" />
+												<Input
+													id="email"
+													type="email"
+													className={cn(
+														"pl-10",
+														fieldState.error &&
+															"border-[var(--error)]",
+													)}
+													{...field}
+												/>
+											</div>
+											{fieldState.error && (
+												<p className="text-sm text-[var(--error)]">
+													{fieldState.error.message}
+												</p>
+											)}
+										</div>
+									)}
+								/>
 
-                                    <Controller
-                                        name="password"
-                                        control={control}
-                                        render={({field}) => (
-                                            <TextField
-                                                {...field}
-                                                label="Password"
-                                                type={showPassword ? "text" : "password"}
-                                                fullWidth
-                                                error={!!errors.password}
-                                                helperText={errors.password?.message}
-                                                slotProps={{
-                                                    input: {
-                                                        startAdornment: (
-                                                            <InputAdornment position="start">
-                                                                <LockIcon color="action"/>
-                                                            </InputAdornment>
-                                                        ),
-                                                        endAdornment: (
-                                                            <InputAdornment position="end">
-                                                                <IconButton
-                                                                    aria-label="Toggle password visibility"
-                                                                    onClick={() =>
-                                                                        setShowPassword(!showPassword)
-                                                                    }
-                                                                    edge="end"
-                                                                >
-                                                                    {showPassword ? (
-                                                                        <VisibilityOffIcon/>
-                                                                    ) : (
-                                                                        <VisibilityIcon/>
-                                                                    )}
-                                                                </IconButton>
-                                                            </InputAdornment>
-                                                        ),
-                                                    },
-                                                }}
-                                                sx={{mb: 3}}
-                                            />
-                                        )}
-                                    />
+								<Controller
+									name="password"
+									control={control}
+									render={({ field, fieldState }) => (
+										<div className="mb-6 space-y-1.5">
+											<Label htmlFor="password">Password</Label>
+											<div className="relative">
+												<Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-secondary)]" />
+												<Input
+													id="password"
+													type={
+														showPassword ? "text" : "password"
+													}
+													className={cn(
+														"pl-10 pr-10",
+														fieldState.error &&
+															"border-[var(--error)]",
+													)}
+													{...field}
+												/>
+												<button
+													type="button"
+													aria-label="Toggle password visibility"
+													onClick={() =>
+														setShowPassword(!showPassword)
+													}
+													className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+												>
+													{showPassword ? (
+														<EyeOff className="h-4 w-4" />
+													) : (
+														<Eye className="h-4 w-4" />
+													)}
+												</button>
+											</div>
+											{fieldState.error && (
+												<p className="text-sm text-[var(--error)]">
+													{fieldState.error.message}
+												</p>
+											)}
+										</div>
+									)}
+								/>
 
-                                    <Button
-                                        type="submit"
-                                        variant="contained"
-                                        fullWidth
-                                        size="large"
-                                        disabled={isLoading}
-                                        startIcon={
-                                            isLoading ? (
-                                                <CircularProgress size={18} color="inherit"/>
-                                            ) : undefined
-                                        }
-                                        sx={{mb: 2}}
-                                    >
-                                        {isLoading ? "Signing in..." : "Sign In"}
-                                    </Button>
+								<Button
+									type="submit"
+									className="w-full mb-4"
+									size="lg"
+									disabled={isLoading}
+								>
+									{isLoading && (
+										<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+									)}
+									{isLoading ? "Signing in..." : "Sign In"}
+								</Button>
 
-                                    <Typography
-                                        variant="body2"
-                                        color="text.secondary"
-                                        align="center"
-                                    >
-                                        Don't have an account?{" "}
-                                        <Box
-                                            component={Link}
-                                            to="/auth/register"
-                                            sx={{color: "primary.main"}}
-                                        >
-                                            Sign up
-                                        </Box>
-                                    </Typography>
-                                </form>
-                            </CardContent>
-                        </Card>
-                    </AnimatedGradientBorder>
-                </Box>
-            </Box>
-        </PageTransition>
-    );
+								<p className="text-sm text-[var(--text-secondary)] text-center">
+									Don't have an account?{" "}
+									<Link
+										to="/auth/register"
+										className="text-[var(--primary)] hover:underline"
+									>
+										Sign up
+									</Link>
+								</p>
+							</form>
+						</div>
+					</AnimatedGradientBorder>
+				</div>
+			</div>
+		</PageTransition>
+	);
 }

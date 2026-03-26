@@ -3,628 +3,646 @@
  * View all collections and documents (superuser only)
  */
 
-import CloseIcon from "@mui/icons-material/Close";
-import DeleteIcon from "@mui/icons-material/Delete";
-import EditIcon from "@mui/icons-material/Edit";
-import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
-import SaveIcon from "@mui/icons-material/Save";
-import SearchIcon from "@mui/icons-material/Search";
-import StorageIcon from "@mui/icons-material/Storage";
-import VisibilityIcon from "@mui/icons-material/Visibility";
 import {
-    Alert,
-    Box,
-    Button,
-    Card,
-    CardContent,
-    Chip,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogTitle,
-    Grid2 as Grid,
-    IconButton,
-    InputAdornment,
-    Paper,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TablePagination,
-    TableRow,
-    TextField,
-    Tooltip,
-    Typography,
-} from "@mui/material";
-import {keepPreviousData, useMutation, useQuery, useQueryClient,} from "@tanstack/react-query";
-import {createFileRoute} from "@tanstack/react-router";
-import {motion} from "framer-motion";
-import type {KeyboardEvent} from "react";
-import {useState} from "react";
-import {adminApi} from "@/api/endpoints/admin";
+	keepPreviousData,
+	useMutation,
+	useQuery,
+	useQueryClient,
+} from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
+import { motion } from "framer-motion";
 import {
-    adminCollectionsQueryOptions,
-    adminDbInfoQueryOptions,
-    adminDocumentsQueryOptions,
+	Database,
+	Eye,
+	Info,
+	Pencil,
+	Save,
+	Search,
+	Trash2,
+	X,
+} from "lucide-react";
+import type { KeyboardEvent } from "react";
+import { useState } from "react";
+import { adminApi } from "@/api/endpoints/admin";
+import {
+	adminCollectionsQueryOptions,
+	adminDbInfoQueryOptions,
+	adminDocumentsQueryOptions,
 } from "@/api/queryOptions/admin";
-import {ConfirmDialog} from "@/components/common/ConfirmDialog";
-import {PageTransition} from "@/components/common/PageTransition";
-import {SectionHeader} from "@/components/common/SectionHeader";
-import {ShimmerSkeleton} from "@/components/common/ShimmerSkeleton";
-import type {CollectionInfo, DatabaseInfo} from "@/types";
-import {spring} from "@/utils/animations/variants";
-import {formatBytes, formatUptime} from "@/utils/formatters";
-import {requireAdmin} from "../-guards";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { PageTransition } from "@/components/common/PageTransition";
+import { SectionHeader } from "@/components/common/SectionHeader";
+import { ShimmerSkeleton } from "@/components/common/ShimmerSkeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+import type { CollectionInfo, DatabaseInfo } from "@/types";
+import { spring } from "@/utils/animations/variants";
+import { formatBytes, formatUptime } from "@/utils/formatters";
+import { requireAdmin } from "../-guards";
 
 export const Route = createFileRoute("/admin/database")({
-    beforeLoad: requireAdmin,
-    component: DatabaseAdminPage,
+	beforeLoad: requireAdmin,
+	component: DatabaseAdminPage,
 });
 
 function DatabaseAdminPage() {
-    const queryClient = useQueryClient();
-    const [selectedCollection, setSelectedCollection] = useState<string | null>(
-        null,
-    );
-    const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(20);
-    const [search, setSearch] = useState("");
-    const [viewDocument, setViewDocument] = useState<Record<
-        string,
-        unknown
-    > | null>(null);
-    const [isEditing, setIsEditing] = useState(false);
-    const [editJson, setEditJson] = useState("");
-    const [editError, setEditError] = useState<string | null>(null);
-    const [deleteConfirm, setDeleteConfirm] = useState<{
-        collection: string;
-        id: string;
-    } | null>(null);
+	const queryClient = useQueryClient();
+	const [selectedCollection, setSelectedCollection] = useState<string | null>(
+		null,
+	);
+	const [page, setPage] = useState(1);
+	const [pageSize, setPageSize] = useState(20);
+	const [search, setSearch] = useState("");
+	const [viewDocument, setViewDocument] = useState<Record<
+		string,
+		unknown
+	> | null>(null);
+	const [isEditing, setIsEditing] = useState(false);
+	const [editJson, setEditJson] = useState("");
+	const [editError, setEditError] = useState<string | null>(null);
+	const [deleteConfirm, setDeleteConfirm] = useState<{
+		collection: string;
+		id: string;
+	} | null>(null);
 
-    // Fetch database info
-    const dbInfoQuery = useQuery(adminDbInfoQueryOptions());
+	// Fetch database info
+	const dbInfoQuery = useQuery(adminDbInfoQueryOptions());
 
-    // Fetch collections
-    const collectionsQuery = useQuery(adminCollectionsQueryOptions());
+	// Fetch collections
+	const collectionsQuery = useQuery(adminCollectionsQueryOptions());
 
-    // Fetch documents for selected collection
-    const documentsQuery = useQuery({
-        ...adminDocumentsQueryOptions(selectedCollection, {
-            page,
-            pageSize,
-            search,
-        }),
-        enabled: !!selectedCollection,
-        placeholderData: keepPreviousData,
-    });
+	// Fetch documents for selected collection
+	const documentsQuery = useQuery({
+		...adminDocumentsQueryOptions(selectedCollection, {
+			page,
+			pageSize,
+			search,
+		}),
+		enabled: !!selectedCollection,
+		placeholderData: keepPreviousData,
+	});
 
-    // Delete mutation
-    const deleteMutation = useMutation({
-        mutationFn: ({collection, id}: { collection: string; id: string }) =>
-            adminApi.deleteDocument(collection, id),
-        onSuccess: () => {
-            setDeleteConfirm(null);
-            void queryClient.invalidateQueries({queryKey: ["admin-documents"]});
-            void queryClient.invalidateQueries({queryKey: ["admin-collections"]});
-            void queryClient.invalidateQueries({queryKey: ["admin-db-info"]});
-        },
-    });
+	// Delete mutation
+	const deleteMutation = useMutation({
+		mutationFn: ({ collection, id }: { collection: string; id: string }) =>
+			adminApi.deleteDocument(collection, id),
+		onSuccess: () => {
+			setDeleteConfirm(null);
+			void queryClient.invalidateQueries({
+				queryKey: ["admin-documents"],
+			});
+			void queryClient.invalidateQueries({
+				queryKey: ["admin-collections"],
+			});
+			void queryClient.invalidateQueries({ queryKey: ["admin-db-info"] });
+		},
+	});
 
-    // Update mutation
-    const updateMutation = useMutation({
-        mutationFn: ({
-                         collection,
-                         id,
-                         document,
-                     }: {
-            collection: string;
-            id: string;
-            document: Record<string, unknown>;
-        }) => adminApi.updateDocument(collection, id, document),
-        onSuccess: (updatedDoc) => {
-            setViewDocument(updatedDoc);
-            setIsEditing(false);
-            setEditError(null);
-            void queryClient.invalidateQueries({queryKey: ["admin-documents"]});
-        },
-    });
+	// Update mutation
+	const updateMutation = useMutation({
+		mutationFn: ({
+			collection,
+			id,
+			document,
+		}: {
+			collection: string;
+			id: string;
+			document: Record<string, unknown>;
+		}) => adminApi.updateDocument(collection, id, document),
+		onSuccess: (updatedDoc) => {
+			setViewDocument(updatedDoc);
+			setIsEditing(false);
+			setEditError(null);
+			void queryClient.invalidateQueries({
+				queryKey: ["admin-documents"],
+			});
+		},
+	});
 
-    const handleCollectionClick = (collectionName: string) => {
-        setSelectedCollection(collectionName);
-        setPage(1);
-        setSearch("");
-    };
+	const handleCollectionClick = (collectionName: string) => {
+		setSelectedCollection(collectionName);
+		setPage(1);
+		setSearch("");
+	};
 
-    const handleSearch = (event: KeyboardEvent<HTMLInputElement>) => {
-        if (event.key === "Enter") {
-            setPage(1);
-        }
-    };
+	const handleSearch = (event: KeyboardEvent<HTMLInputElement>) => {
+		if (event.key === "Enter") {
+			setPage(1);
+		}
+	};
 
-    const handleViewDocument = (doc: Record<string, unknown>) => {
-        setViewDocument(doc);
-        setIsEditing(false);
-        setEditError(null);
-    };
+	const handleViewDocument = (doc: Record<string, unknown>) => {
+		setViewDocument(doc);
+		setIsEditing(false);
+		setEditError(null);
+	};
 
-    const handleStartEdit = () => {
-        setEditJson(JSON.stringify(viewDocument, null, 2));
-        setIsEditing(true);
-        setEditError(null);
-    };
+	const handleStartEdit = () => {
+		setEditJson(JSON.stringify(viewDocument, null, 2));
+		setIsEditing(true);
+		setEditError(null);
+	};
 
-    const handleCancelEdit = () => {
-        setIsEditing(false);
-        setEditError(null);
-    };
+	const handleCancelEdit = () => {
+		setIsEditing(false);
+		setEditError(null);
+	};
 
-    const handleSaveEdit = () => {
-        try {
-            const parsed = JSON.parse(editJson);
-            if (
-                typeof parsed !== "object" ||
-                parsed === null ||
-                Array.isArray(parsed)
-            ) {
-                setEditError("Document must be a JSON object");
-                return;
-            }
-            const docId = viewDocument?._id as string;
-            if (!docId || !selectedCollection) return;
-            updateMutation.mutate({
-                collection: selectedCollection,
-                id: docId,
-                document: parsed,
-            });
-        } catch {
-            setEditError("Invalid JSON syntax");
-        }
-    };
+	const handleSaveEdit = () => {
+		try {
+			const parsed = JSON.parse(editJson);
+			if (
+				typeof parsed !== "object" ||
+				parsed === null ||
+				Array.isArray(parsed)
+			) {
+				setEditError("Document must be a JSON object");
+				return;
+			}
+			const docId = viewDocument?._id as string;
+			if (!docId || !selectedCollection) return;
+			updateMutation.mutate({
+				collection: selectedCollection,
+				id: docId,
+				document: parsed,
+			});
+		} catch {
+			setEditError("Invalid JSON syntax");
+		}
+	};
 
-    const handleDeleteClick = (doc: Record<string, unknown>) => {
-        const id = doc._id as string;
-        if (!id || !selectedCollection) return;
-        setDeleteConfirm({collection: selectedCollection, id});
-    };
+	const handleDeleteClick = (doc: Record<string, unknown>) => {
+		const id = doc._id as string;
+		if (!id || !selectedCollection) return;
+		setDeleteConfirm({ collection: selectedCollection, id });
+	};
 
-    const formatValue = (value: unknown): string => {
-        if (value === null || value === undefined) return "-";
-        if (typeof value === "object") return JSON.stringify(value);
-        return String(value);
-    };
+	const formatValue = (value: unknown): string => {
+		if (value === null || value === undefined) return "-";
+		if (typeof value === "object") return JSON.stringify(value);
+		return String(value);
+	};
 
-    const truncate = (str: string, maxLength: number = 50): string => {
-        if (str.length <= maxLength) return str;
-        return `${str.slice(0, maxLength)}...`;
-    };
+	const truncate = (str: string, maxLength: number = 50): string => {
+		if (str.length <= maxLength) return str;
+		return `${str.slice(0, maxLength)}...`;
+	};
 
-    const dbInfo: DatabaseInfo | undefined = dbInfoQuery.data;
+	const dbInfo: DatabaseInfo | undefined = dbInfoQuery.data;
+	const totalDocs = documentsQuery.data?.total ?? 0;
+	const totalPages = Math.ceil(totalDocs / pageSize);
 
-    return (
-        <PageTransition pageKey="admin-database">
-            <Box>
-                <SectionHeader
-                    title="Database"
-                    subtitle="Manage MongoDB collections and documents"
-                />
+	return (
+		<PageTransition pageKey="admin-database">
+			<div>
+				<SectionHeader
+					title="Database"
+					subtitle="Manage MongoDB collections and documents"
+				/>
 
-                {collectionsQuery.error && (
-                    <Alert severity="error" sx={{mb: 3}}>
-                        Failed to load collections. You may not have admin privileges.
-                    </Alert>
-                )}
+				{collectionsQuery.error && (
+					<Alert variant="destructive" className="mb-6">
+						<AlertDescription>
+							Failed to load collections. You may not have admin
+							privileges.
+						</AlertDescription>
+					</Alert>
+				)}
 
-                {/* Database Info Header */}
-                {dbInfoQuery.isLoading ? (
-                    <ShimmerSkeleton variant="rounded" height={72} sx={{mb: 3}}/>
-                ) : dbInfo ? (
-                    <Paper sx={{p: 2, mb: 3}}>
-                        <Box
-                            sx={{display: "flex", alignItems: "center", gap: 1, mb: 1.5}}
-                        >
-                            <InfoOutlinedIcon fontSize="small" color="primary"/>
-                            <Typography variant="subtitle2" fontWeight={600}>
-                                Connection Info
-                            </Typography>
-                        </Box>
-                        <Box sx={{display: "flex", flexWrap: "wrap", gap: 1}}>
-                            <Chip
-                                label={`DB: ${dbInfo.databaseName}`}
-                                size="small"
-                                variant="outlined"
-                            />
-                            <Chip
-                                label={`Host: ${dbInfo.host}`}
-                                size="small"
-                                variant="outlined"
-                            />
-                            <Chip
-                                label={`MongoDB ${dbInfo.serverVersion}`}
-                                size="small"
-                                variant="outlined"
-                            />
-                            <Chip
-                                label={`Uptime: ${formatUptime(dbInfo.uptimeSeconds)}`}
-                                size="small"
-                                variant="outlined"
-                            />
-                            <Chip
-                                label={`${dbInfo.totalDocuments.toLocaleString()} docs`}
-                                size="small"
-                                color="primary"
-                                variant="outlined"
-                            />
-                            <Chip
-                                label={`Storage: ${formatBytes(dbInfo.totalStorageSize)}`}
-                                size="small"
-                                color="primary"
-                                variant="outlined"
-                            />
-                            <Chip
-                                label={`Indexes: ${formatBytes(dbInfo.totalIndexSize)}`}
-                                size="small"
-                                variant="outlined"
-                            />
-                        </Box>
-                    </Paper>
-                ) : null}
+				{/* Database Info Header */}
+				{dbInfoQuery.isLoading ? (
+					<ShimmerSkeleton variant="rounded" height={72} sx={{ mb: 3 }} />
+				) : dbInfo ? (
+					<div className="glass-card p-4 mb-6">
+						<div className="flex items-center gap-2 mb-3">
+							<Info className="h-4 w-4 text-[var(--primary)]" />
+							<span className="text-sm font-semibold text-[var(--text-primary)]">
+								Connection Info
+							</span>
+						</div>
+						<div className="flex flex-wrap gap-1.5">
+							<Badge variant="outline">
+								DB: {dbInfo.databaseName}
+							</Badge>
+							<Badge variant="outline">Host: {dbInfo.host}</Badge>
+							<Badge variant="outline">
+								MongoDB {dbInfo.serverVersion}
+							</Badge>
+							<Badge variant="outline">
+								Uptime: {formatUptime(dbInfo.uptimeSeconds)}
+							</Badge>
+							<Badge variant="outline" className="text-[var(--primary)]">
+								{dbInfo.totalDocuments.toLocaleString()} docs
+							</Badge>
+							<Badge variant="outline" className="text-[var(--primary)]">
+								Storage: {formatBytes(dbInfo.totalStorageSize)}
+							</Badge>
+							<Badge variant="outline">
+								Indexes: {formatBytes(dbInfo.totalIndexSize)}
+							</Badge>
+						</div>
+					</div>
+				) : null}
 
-                {/* Collection Cards */}
-                <Grid container spacing={2} sx={{mb: 4}}>
-                    {collectionsQuery.isLoading
-                        ? [...Array(8)].map((_, i) => (
-                            <Grid size={{xs: 6, sm: 4, md: 3, lg: 2}} key={i}>
-                                <ShimmerSkeleton variant="rounded" height={80}/>
-                            </Grid>
-                        ))
-                        : collectionsQuery.data?.map(
-                            (collection: CollectionInfo, index: number) => (
-                                <Grid
-                                    size={{xs: 6, sm: 4, md: 3, lg: 2}}
-                                    key={collection.name}
-                                >
-                                    <motion.div
-                                        initial={{opacity: 0, y: 30, scale: 0.95}}
-                                        animate={{opacity: 1, y: 0, scale: 1}}
-                                        transition={{...spring.snappy, delay: index * 0.04}}
-                                    >
-                                        <Card
-                                            sx={{
-                                                cursor: "pointer",
-                                                transition: "all 0.2s",
-                                                border:
-                                                    selectedCollection === collection.name ? 2 : 1,
-                                                borderColor:
-                                                    selectedCollection === collection.name
-                                                        ? "primary.main"
-                                                        : "divider",
-                                                "&:hover": {
-                                                    borderColor: "primary.main",
-                                                    transform: "translateY(-2px)",
-                                                },
-                                            }}
-                                            onClick={() => handleCollectionClick(collection.name)}
-                                        >
-                                            <CardContent
-                                                sx={{py: 1.5, px: 2, "&:last-child": {pb: 1.5}}}
-                                            >
-                                                <Box
-                                                    sx={{
-                                                        display: "flex",
-                                                        alignItems: "center",
-                                                        gap: 1,
-                                                    }}
-                                                >
-                                                    <StorageIcon fontSize="small" color="primary"/>
-                                                    <Box>
-                                                        <Typography
-                                                            variant="body2"
-                                                            fontWeight={600}
-                                                            noWrap
-                                                        >
-                                                            {collection.displayName}
-                                                        </Typography>
-                                                        <Box
-                                                            sx={{
-                                                                display: "flex",
-                                                                gap: 0.5,
-                                                                flexWrap: "wrap",
-                                                            }}
-                                                        >
-                                                            <Chip
-                                                                label={collection.documentCount.toLocaleString()}
-                                                                size="small"
-                                                                variant="outlined"
-                                                            />
-                                                            {collection.storageSize > 0 && (
-                                                                <Chip
-                                                                    label={formatBytes(collection.storageSize)}
-                                                                    size="small"
-                                                                    variant="outlined"
-                                                                    color="default"
-                                                                />
-                                                            )}
-                                                        </Box>
-                                                    </Box>
-                                                </Box>
-                                            </CardContent>
-                                        </Card>
-                                    </motion.div>
-                                </Grid>
-                            ),
-                        )}
-                </Grid>
+				{/* Collection Cards */}
+				<div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
+					{collectionsQuery.isLoading
+						? [...Array(8)].map((_, i) => (
+								<ShimmerSkeleton
+									key={i}
+									variant="rounded"
+									height={80}
+								/>
+							))
+						: collectionsQuery.data?.map(
+								(collection: CollectionInfo, index: number) => (
+									<motion.div
+										key={collection.name}
+										initial={{ opacity: 0, y: 30, scale: 0.95 }}
+										animate={{ opacity: 1, y: 0, scale: 1 }}
+										transition={{
+											...spring.snappy,
+											delay: index * 0.04,
+										}}
+									>
+										<button
+											type="button"
+											className={cn(
+												"glass-card w-full cursor-pointer transition-all duration-200 py-3 px-4 text-left hover:-translate-y-0.5",
+												selectedCollection === collection.name
+													? "ring-2 ring-[var(--primary)]"
+													: "ring-1 ring-[var(--border-subtle)] hover:ring-[var(--primary)]",
+											)}
+											onClick={() =>
+												handleCollectionClick(collection.name)
+											}
+										>
+											<div className="flex items-center gap-2">
+												<Database className="h-4 w-4 text-[var(--primary)] shrink-0" />
+												<div className="min-w-0">
+													<p className="text-sm font-semibold text-[var(--text-primary)] truncate">
+														{collection.displayName}
+													</p>
+													<div className="flex gap-1 flex-wrap mt-1">
+														<Badge
+															variant="outline"
+															className="text-xs"
+														>
+															{collection.documentCount.toLocaleString()}
+														</Badge>
+														{collection.storageSize > 0 && (
+															<Badge
+																variant="outline"
+																className="text-xs"
+															>
+																{formatBytes(
+																	collection.storageSize,
+																)}
+															</Badge>
+														)}
+													</div>
+												</div>
+											</div>
+										</button>
+									</motion.div>
+								),
+							)}
+				</div>
 
-                {/* Document Table */}
-                {selectedCollection && (
-                    <Paper>
-                        <Box sx={{p: 2, borderBottom: 1, borderColor: "divider"}}>
-                            <Box
-                                sx={{
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    alignItems: "center",
-                                }}
-                            >
-                                <Typography variant="h6">
-                                    {collectionsQuery.data?.find(
-                                        (c) => c.name === selectedCollection,
-                                    )?.displayName || selectedCollection}
-                                </Typography>
-                                <TextField
-                                    size="small"
-                                    placeholder="Search by ID or text..."
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                    onKeyDown={handleSearch}
-                                    slotProps={{
-                                        input: {
-                                            startAdornment: (
-                                                <InputAdornment position="start">
-                                                    <SearchIcon fontSize="small"/>
-                                                </InputAdornment>
-                                            ),
-                                        },
-                                    }}
-                                    sx={{width: 250}}
-                                />
-                            </Box>
-                        </Box>
+				{/* Document Table */}
+				{selectedCollection && (
+					<div className="glass-card overflow-hidden">
+						<div className="p-4 border-b border-[var(--border-subtle)]">
+							<div className="flex justify-between items-center">
+								<h6 className="text-lg font-semibold text-[var(--text-primary)]">
+									{collectionsQuery.data?.find(
+										(c) => c.name === selectedCollection,
+									)?.displayName || selectedCollection}
+								</h6>
+								<div className="relative w-[250px]">
+									<Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-secondary)]" />
+									<Input
+										placeholder="Search by ID or text..."
+										value={search}
+										onChange={(e) => setSearch(e.target.value)}
+										onKeyDown={handleSearch}
+										className="pl-10"
+									/>
+								</div>
+							</div>
+						</div>
 
-                        <TableContainer>
-                            <Table size="small">
-                                <TableHead>
-                                    <TableRow>
-                                        <TableCell>ID</TableCell>
-                                        <TableCell>Data Preview</TableCell>
-                                        <TableCell align="right">Actions</TableCell>
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {documentsQuery.isLoading
-                                        ? [...Array(5)].map((_, i) => (
-                                            <TableRow key={i}>
-                                                <TableCell>
-                                                    <ShimmerSkeleton/>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <ShimmerSkeleton/>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <ShimmerSkeleton width={40}/>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
-                                        : documentsQuery.data?.documents.map((doc) => {
-                                            const id = doc._id as string;
-                                            const preview = Object.entries(doc)
-                                                .filter(([key]) => key !== "_id")
-                                                .slice(0, 3)
-                                                .map(
-                                                    ([key, value]) =>
-                                                        `${key}: ${truncate(formatValue(value), 30)}`,
-                                                )
-                                                .join(" | ");
+						<Table>
+							<TableHeader>
+								<TableRow>
+									<TableHead>ID</TableHead>
+									<TableHead>Data Preview</TableHead>
+									<TableHead className="text-right">
+										Actions
+									</TableHead>
+								</TableRow>
+							</TableHeader>
+							<TableBody>
+								{documentsQuery.isLoading
+									? [...Array(5)].map((_, i) => (
+											<TableRow key={i}>
+												<TableCell>
+													<ShimmerSkeleton />
+												</TableCell>
+												<TableCell>
+													<ShimmerSkeleton />
+												</TableCell>
+												<TableCell>
+													<ShimmerSkeleton width={40} />
+												</TableCell>
+											</TableRow>
+										))
+									: documentsQuery.data?.documents.map((doc) => {
+											const id = doc._id as string;
+											const preview = Object.entries(doc)
+												.filter(([key]) => key !== "_id")
+												.slice(0, 3)
+												.map(
+													([key, value]) =>
+														`${key}: ${truncate(formatValue(value), 30)}`,
+												)
+												.join(" | ");
 
-                                            return (
-                                                <TableRow key={id} hover>
-                                                    <TableCell>
-                                                        <Typography
-                                                            variant="body2"
-                                                            fontFamily="monospace"
-                                                            fontSize="0.75rem"
-                                                        >
-                                                            {id}
-                                                        </Typography>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <Typography
-                                                            variant="body2"
-                                                            color="text.secondary"
-                                                            noWrap
-                                                        >
-                                                            {truncate(preview, 80)}
-                                                        </Typography>
-                                                    </TableCell>
-                                                    <TableCell align="right">
-                                                        <Tooltip title="View">
-                                                            <IconButton
-                                                                size="small"
-                                                                onClick={() => handleViewDocument(doc)}
-                                                            >
-                                                                <VisibilityIcon fontSize="small"/>
-                                                            </IconButton>
-                                                        </Tooltip>
-                                                        <Tooltip title="Delete">
-                                                            <IconButton
-                                                                size="small"
-                                                                color="error"
-                                                                onClick={() => handleDeleteClick(doc)}
-                                                            >
-                                                                <DeleteIcon fontSize="small"/>
-                                                            </IconButton>
-                                                        </Tooltip>
-                                                    </TableCell>
-                                                </TableRow>
-                                            );
-                                        })}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
+											return (
+												<TableRow
+													key={id}
+													className="hover:bg-[var(--interactive-hover)]"
+												>
+													<TableCell>
+														<span className="font-mono text-xs">
+															{id}
+														</span>
+													</TableCell>
+													<TableCell>
+														<span className="text-sm text-[var(--text-secondary)] truncate block max-w-[500px]">
+															{truncate(preview, 80)}
+														</span>
+													</TableCell>
+													<TableCell className="text-right">
+														<TooltipProvider>
+															<Tooltip>
+																<TooltipTrigger asChild>
+																	<Button
+																		variant="ghost"
+																		size="icon-sm"
+																		onClick={() =>
+																			handleViewDocument(
+																				doc,
+																			)
+																		}
+																	>
+																		<Eye className="h-4 w-4" />
+																	</Button>
+																</TooltipTrigger>
+																<TooltipContent>
+																	View
+																</TooltipContent>
+															</Tooltip>
+															<Tooltip>
+																<TooltipTrigger asChild>
+																	<Button
+																		variant="destructive"
+																		size="icon-sm"
+																		onClick={() =>
+																			handleDeleteClick(
+																				doc,
+																			)
+																		}
+																	>
+																		<Trash2 className="h-4 w-4" />
+																	</Button>
+																</TooltipTrigger>
+																<TooltipContent>
+																	Delete
+																</TooltipContent>
+															</Tooltip>
+														</TooltipProvider>
+													</TableCell>
+												</TableRow>
+											);
+										})}
+							</TableBody>
+						</Table>
 
-                        {documentsQuery.data && (
-                            <TablePagination
-                                component="div"
-                                count={documentsQuery.data.total}
-                                page={page - 1}
-                                onPageChange={(_, newPage) => setPage(newPage + 1)}
-                                rowsPerPage={pageSize}
-                                onRowsPerPageChange={(e) => {
-                                    setPageSize(parseInt(e.target.value, 10));
-                                    setPage(1);
-                                }}
-                                rowsPerPageOptions={[10, 20, 50, 100]}
-                            />
-                        )}
-                    </Paper>
-                )}
+						{/* Pagination */}
+						{documentsQuery.data && (
+							<div className="flex items-center justify-between px-4 py-3 border-t border-[var(--border-subtle)]">
+								<div className="flex items-center gap-2">
+									<span className="text-sm text-[var(--text-secondary)]">
+										Rows per page:
+									</span>
+									<select
+										value={pageSize}
+										onChange={(e) => {
+											setPageSize(
+												Number.parseInt(e.target.value, 10),
+											);
+											setPage(1);
+										}}
+										className="bg-transparent text-sm text-[var(--text-primary)] border border-[var(--border-subtle)] rounded px-2 py-1"
+									>
+										{[10, 20, 50, 100].map((opt) => (
+											<option key={opt} value={opt}>
+												{opt}
+											</option>
+										))}
+									</select>
+								</div>
+								<div className="flex items-center gap-3">
+									<span className="text-sm text-[var(--text-secondary)]">
+										{(page - 1) * pageSize + 1}–
+										{Math.min(page * pageSize, totalDocs)} of{" "}
+										{totalDocs}
+									</span>
+									<div className="flex gap-1">
+										<Button
+											variant="ghost"
+											size="sm"
+											disabled={page <= 1}
+											onClick={() => setPage(page - 1)}
+										>
+											Prev
+										</Button>
+										<Button
+											variant="ghost"
+											size="sm"
+											disabled={page >= totalPages}
+											onClick={() => setPage(page + 1)}
+										>
+											Next
+										</Button>
+									</div>
+								</div>
+							</div>
+						)}
+					</div>
+				)}
 
-                {!selectedCollection && !collectionsQuery.isLoading && (
-                    <Paper sx={{p: 4, textAlign: "center"}}>
-                        <StorageIcon
-                            sx={{fontSize: 48, color: "text.secondary", mb: 2}}
-                        />
-                        <Typography color="text.secondary">
-                            Select a collection to view documents
-                        </Typography>
-                    </Paper>
-                )}
+				{!selectedCollection && !collectionsQuery.isLoading && (
+					<div className="glass-card p-8 text-center">
+						<Database className="h-12 w-12 text-[var(--text-secondary)] mx-auto mb-4" />
+						<p className="text-[var(--text-secondary)]">
+							Select a collection to view documents
+						</p>
+					</div>
+				)}
 
-                {/* Document View/Edit Dialog */}
-                <Dialog
-                    open={!!viewDocument}
-                    onClose={() => {
-                        setViewDocument(null);
-                        setIsEditing(false);
-                        setEditError(null);
-                    }}
-                    maxWidth="md"
-                    fullWidth
-                >
-                    <DialogTitle
-                        sx={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                        }}
-                    >
-                        <Box sx={{display: "flex", alignItems: "center", gap: 1}}>
-                            Document Details
-                            {!isEditing && (
-                                <Tooltip title="Edit document">
-                                    <IconButton size="small" onClick={handleStartEdit}>
-                                        <EditIcon fontSize="small"/>
-                                    </IconButton>
-                                </Tooltip>
-                            )}
-                        </Box>
-                        <IconButton
-                            size="small"
-                            onClick={() => {
-                                setViewDocument(null);
-                                setIsEditing(false);
-                                setEditError(null);
-                            }}
-                        >
-                            <CloseIcon/>
-                        </IconButton>
-                    </DialogTitle>
-                    <DialogContent dividers>
-                        {editError && (
-                            <Alert severity="error" sx={{mb: 2}}>
-                                {editError}
-                            </Alert>
-                        )}
-                        {updateMutation.error && (
-                            <Alert severity="error" sx={{mb: 2}}>
-                                Failed to update document
-                            </Alert>
-                        )}
-                        {isEditing ? (
-                            <TextField
-                                multiline
-                                fullWidth
-                                minRows={15}
-                                maxRows={25}
-                                value={editJson}
-                                onChange={(e) => setEditJson(e.target.value)}
-                                slotProps={{
-                                    input: {
-                                        sx: {
-                                            fontFamily: "monospace",
-                                            fontSize: "0.75rem",
-                                        },
-                                    },
-                                }}
-                            />
-                        ) : (
-                            <Box
-                                component="pre"
-                                sx={{
-                                    bgcolor: "background.default",
-                                    p: 2,
-                                    borderRadius: 1,
-                                    overflow: "auto",
-                                    fontSize: "0.75rem",
-                                    fontFamily: "monospace",
-                                    maxHeight: 500,
-                                }}
-                            >
-                                {JSON.stringify(viewDocument, null, 2)}
-                            </Box>
-                        )}
-                    </DialogContent>
-                    <DialogActions>
-                        {isEditing ? (
-                            <>
-                                <Button onClick={handleCancelEdit}>Cancel</Button>
-                                <Button
-                                    variant="contained"
-                                    startIcon={<SaveIcon/>}
-                                    onClick={handleSaveEdit}
-                                    disabled={updateMutation.isPending}
-                                >
-                                    {updateMutation.isPending ? "Saving..." : "Save"}
-                                </Button>
-                            </>
-                        ) : (
-                            <Button
-                                onClick={() => {
-                                    setViewDocument(null);
-                                    setIsEditing(false);
-                                }}
-                            >
-                                Close
-                            </Button>
-                        )}
-                    </DialogActions>
-                </Dialog>
+				{/* Document View/Edit Dialog */}
+				<Dialog
+					open={!!viewDocument}
+					onOpenChange={(open) => {
+						if (!open) {
+							setViewDocument(null);
+							setIsEditing(false);
+							setEditError(null);
+						}
+					}}
+				>
+					<DialogContent
+						className="sm:max-w-2xl max-h-[85vh] flex flex-col"
+						showCloseButton={false}
+					>
+						<DialogHeader>
+							<div className="flex items-center justify-between">
+								<div className="flex items-center gap-2">
+									<DialogTitle>Document Details</DialogTitle>
+									{!isEditing && (
+										<TooltipProvider>
+											<Tooltip>
+												<TooltipTrigger asChild>
+													<Button
+														variant="ghost"
+														size="icon-sm"
+														onClick={handleStartEdit}
+													>
+														<Pencil className="h-4 w-4" />
+													</Button>
+												</TooltipTrigger>
+												<TooltipContent>
+													Edit document
+												</TooltipContent>
+											</Tooltip>
+										</TooltipProvider>
+									)}
+								</div>
+								<Button
+									variant="ghost"
+									size="icon-sm"
+									onClick={() => {
+										setViewDocument(null);
+										setIsEditing(false);
+										setEditError(null);
+									}}
+								>
+									<X className="h-4 w-4" />
+								</Button>
+							</div>
+						</DialogHeader>
 
-                {/* Delete Confirmation Dialog */}
-                <ConfirmDialog
-                    open={!!deleteConfirm}
-                    title="Confirm Delete"
-                    message={`Are you sure you want to delete this document? This action cannot be undone.${deleteConfirm ? `\n\n${deleteConfirm.collection} / ${deleteConfirm.id}` : ""}`}
-                    confirmLabel="Delete"
-                    destructive
-                    loading={deleteMutation.isPending}
-                    onConfirm={() =>
-                        deleteConfirm && deleteMutation.mutate(deleteConfirm)
-                    }
-                    onCancel={() => setDeleteConfirm(null)}
-                />
-            </Box>
-        </PageTransition>
-    );
+						<div className="flex-1 overflow-y-auto py-4 border-t border-b border-[var(--border-subtle)]">
+							{editError && (
+								<Alert variant="destructive" className="mb-4">
+									<AlertDescription>{editError}</AlertDescription>
+								</Alert>
+							)}
+							{updateMutation.error && (
+								<Alert variant="destructive" className="mb-4">
+									<AlertDescription>
+										Failed to update document
+									</AlertDescription>
+								</Alert>
+							)}
+							{isEditing ? (
+								<Textarea
+									value={editJson}
+									onChange={(e) => setEditJson(e.target.value)}
+									className="min-h-[360px] max-h-[500px] font-mono text-xs"
+								/>
+							) : (
+								<pre className="bg-[var(--bg-default)] p-4 rounded-lg overflow-auto text-xs font-mono max-h-[500px]">
+									{JSON.stringify(viewDocument, null, 2)}
+								</pre>
+							)}
+						</div>
+
+						<DialogFooter>
+							{isEditing ? (
+								<>
+									<Button
+										variant="outline"
+										onClick={handleCancelEdit}
+									>
+										Cancel
+									</Button>
+									<Button
+										onClick={handleSaveEdit}
+										disabled={updateMutation.isPending}
+									>
+										<Save className="h-4 w-4 mr-2" />
+										{updateMutation.isPending
+											? "Saving..."
+											: "Save"}
+									</Button>
+								</>
+							) : (
+								<Button
+									variant="outline"
+									onClick={() => {
+										setViewDocument(null);
+										setIsEditing(false);
+									}}
+								>
+									Close
+								</Button>
+							)}
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
+
+				{/* Delete Confirmation Dialog */}
+				<ConfirmDialog
+					open={!!deleteConfirm}
+					title="Confirm Delete"
+					message={`Are you sure you want to delete this document? This action cannot be undone.${deleteConfirm ? `\n\n${deleteConfirm.collection} / ${deleteConfirm.id}` : ""}`}
+					confirmLabel="Delete"
+					destructive
+					loading={deleteMutation.isPending}
+					onConfirm={() =>
+						deleteConfirm && deleteMutation.mutate(deleteConfirm)
+					}
+					onCancel={() => setDeleteConfirm(null)}
+				/>
+			</div>
+		</PageTransition>
+	);
 }
