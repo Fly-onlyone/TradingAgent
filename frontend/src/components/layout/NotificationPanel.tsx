@@ -1,33 +1,31 @@
 /**
- * Notification panel popover — shows active + recent notifications.
+ * Notification panel popover -- shows active + recent notifications.
  */
 
-import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
-import CloseIcon from "@mui/icons-material/Close";
-import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
-import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
-import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
-import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
-import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import {
-	Box,
-	IconButton,
-	Popover,
-	Typography,
-	useTheme,
-} from "@mui/material";
-import type { PopoverPosition } from "@mui/material/Popover";
+	AlertCircle,
+	BellOff,
+	CheckCircle,
+	Info,
+	AlertTriangle,
+	Trash,
+	X,
+} from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { useUIStore } from "@/store/uiStore";
 import type { NotificationConfig } from "@/store/uiStore";
 import { useReducedMotion } from "@/utils/animations/hooks";
 import { spring, staggerCascade } from "@/utils/animations/variants";
+import { cn } from "@/lib/utils";
 
 const typeIcon: Record<NotificationConfig["type"], React.ReactNode> = {
-	success: <CheckCircleOutlineIcon fontSize="small" color="success" />,
-	error: <ErrorOutlineIcon fontSize="small" color="error" />,
-	warning: <WarningAmberIcon fontSize="small" color="warning" />,
-	info: <InfoOutlinedIcon fontSize="small" color="info" />,
+	success: <CheckCircle className="size-4 text-[var(--success)]" />,
+	error: <AlertCircle className="size-4 text-[var(--error)]" />,
+	warning: <AlertTriangle className="size-4 text-[var(--warning)]" />,
+	info: <Info className="size-4 text-[var(--info)]" />,
 };
 
 function timeAgo(ts: number): string {
@@ -41,15 +39,16 @@ function timeAgo(ts: number): string {
 }
 
 interface NotificationPanelProps {
-	anchorPosition: PopoverPosition | null;
-	onClose: () => void;
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	children: React.ReactNode;
 }
 
 export function NotificationPanel({
-	anchorPosition,
-	onClose,
+	open,
+	onOpenChange,
+	children,
 }: NotificationPanelProps) {
-	const theme = useTheme();
 	const reducedMotion = useReducedMotion();
 	const notifications = useUIStore((s) => s.notifications);
 	const history = useUIStore((s) => s.notificationHistory);
@@ -61,178 +60,122 @@ export function NotificationPanel({
 	const hasItems = allItems.length > 0;
 
 	return (
-		<Popover
-			open={Boolean(anchorPosition)}
-			anchorReference="anchorPosition"
-			anchorPosition={anchorPosition ?? undefined}
-			onClose={onClose}
-			transformOrigin={{ vertical: "top", horizontal: "right" }}
-			slotProps={{
-				paper: {
-					sx: {
-						width: 340,
-						maxHeight: 420,
-						mt: 1,
-						background: theme.trading.glass.card.background,
-						backdropFilter: "blur(24px)",
-						WebkitBackdropFilter: "blur(24px)",
-						border: `1px solid ${theme.trading.border.subtle}`,
-						borderRadius: theme.trading.glass.card.borderRadius,
-						overflow: "hidden",
-					},
-				},
-			}}
-		>
-			{/* Header */}
-			<Box
-				sx={{
-					display: "flex",
-					alignItems: "center",
-					justifyContent: "space-between",
-					px: 2,
-					py: 1.5,
-					borderBottom: `1px solid ${theme.trading.border.subtle}`,
-				}}
+		<Popover open={open} onOpenChange={onOpenChange}>
+			<PopoverTrigger render={children as React.ReactElement} />
+			<PopoverContent
+				align="end"
+				sideOffset={8}
+				className={cn(
+					"w-[340px] max-h-[420px] p-0 overflow-hidden",
+					"bg-[rgba(var(--surface-glass),var(--glass-card-opacity))]",
+					"backdrop-blur-[24px]",
+					"border border-[var(--border-subtle)]",
+					"rounded-[calc(var(--glass-radius)*1px+4px)]",
+				)}
 			>
-				<Typography variant="subtitle2" fontWeight={700}>
-					Notifications
-				</Typography>
-				{hasItems && (
-					<IconButton
-						size="small"
-						onClick={() => {
-							clearNotifications();
-							clearHistory();
-						}}
-						sx={{ color: "text.secondary" }}
-					>
-						<DeleteSweepIcon fontSize="small" />
-					</IconButton>
-				)}
-			</Box>
+				{/* Header */}
+				<div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)]">
+					<span className="text-sm font-bold text-[var(--text-primary)]">
+						Notifications
+					</span>
+					{hasItems && (
+						<Button
+							variant="ghost"
+							size="icon-xs"
+							className="text-[var(--text-secondary)]"
+							onClick={() => {
+								clearNotifications();
+								clearHistory();
+							}}
+						>
+							<Trash className="size-4" />
+						</Button>
+					)}
+				</div>
 
-			{/* Content */}
-			<Box sx={{ overflowY: "auto", maxHeight: 360 }}>
-				{!hasItems ? (
-					<Box
-						sx={{
-							display: "flex",
-							flexDirection: "column",
-							alignItems: "center",
-							justifyContent: "center",
-							py: 6,
-							color: "text.secondary",
-						}}
-					>
-						<NotificationsNoneIcon
-							sx={{ fontSize: 40, mb: 1, opacity: 0.4 }}
-						/>
-						<Typography variant="body2" color="text.secondary">
-							No notifications
-						</Typography>
-					</Box>
-				) : (
-					<motion.div
-						variants={
-							reducedMotion ? undefined : staggerCascade.container
-						}
-						initial="hidden"
-						animate="visible"
-					>
-						<AnimatePresence>
-							{allItems.map((item) => {
-								const isActive = notifications.some(
-									(n) => n.id === item.id,
-								);
-								return (
-									<motion.div
-										key={item.id}
-										variants={
-											reducedMotion
-												? undefined
-												: staggerCascade.item
-										}
-										exit={{ opacity: 0, x: 40 }}
-										transition={spring.snappy}
-										layout
-									>
-										<Box
-											sx={{
-												display: "flex",
-												alignItems: "flex-start",
-												gap: 1.5,
-												px: 2,
-												py: 1.25,
-												opacity: isActive ? 1 : 0.6,
-												borderBottom: `1px solid ${theme.trading.border.subtle}`,
-												"&:last-child": {
-													borderBottom: "none",
-												},
-												"&:hover": {
-													background: `rgba(${theme.trading.primaryRgb}, 0.04)`,
-												},
-											}}
+				{/* Content */}
+				<div className="overflow-y-auto max-h-[360px]">
+					{!hasItems ? (
+						<div className="flex flex-col items-center justify-center py-12 text-[var(--text-secondary)]">
+							<BellOff className="size-10 mb-2 opacity-40" />
+							<p className="text-sm text-[var(--text-secondary)]">
+								No notifications
+							</p>
+						</div>
+					) : (
+						<motion.div
+							variants={
+								reducedMotion ? undefined : staggerCascade.container
+							}
+							initial="hidden"
+							animate="visible"
+						>
+							<AnimatePresence>
+								{allItems.map((item) => {
+									const isActive = notifications.some(
+										(n) => n.id === item.id,
+									);
+									return (
+										<motion.div
+											key={item.id}
+											variants={
+												reducedMotion
+													? undefined
+													: staggerCascade.item
+											}
+											exit={{ opacity: 0, x: 40 }}
+											transition={spring.snappy}
+											layout
 										>
-											<Box sx={{ pt: 0.25 }}>
-												{typeIcon[item.type]}
-											</Box>
-											<Box sx={{ flex: 1, minWidth: 0 }}>
-												<Typography
-													variant="body2"
-													fontWeight={600}
-													noWrap
-												>
-													{item.title}
-												</Typography>
-												{item.message && (
-													<Typography
-														variant="caption"
-														color="text.secondary"
-														sx={{
-															display: "-webkit-box",
-															WebkitLineClamp: 2,
-															WebkitBoxOrient:
-																"vertical",
-															overflow: "hidden",
-														}}
-													>
-														{item.message}
-													</Typography>
+											<div
+												className={cn(
+													"flex items-start gap-3 px-4 py-2.5",
+													"border-b border-[var(--border-subtle)] last:border-b-0",
+													"hover:bg-[rgba(var(--primary-rgb),0.04)]",
+													!isActive && "opacity-60",
 												)}
-												<Typography
-													variant="caption"
-													color="text.disabled"
-													sx={{ fontSize: "0.65rem" }}
-												>
-													{timeAgo(item.createdAt)}
-												</Typography>
-											</Box>
-											{isActive && (
-												<IconButton
-													size="small"
-													onClick={() =>
-														removeNotification(
-															item.id,
-														)
-													}
-													sx={{
-														color: "text.secondary",
-														p: 0.25,
-													}}
-												>
-													<CloseIcon
-														sx={{ fontSize: 16 }}
-													/>
-												</IconButton>
-											)}
-										</Box>
-									</motion.div>
-								);
-							})}
-						</AnimatePresence>
-					</motion.div>
-				)}
-			</Box>
+											>
+												<div className="pt-0.5">
+													{typeIcon[item.type]}
+												</div>
+												<div className="flex-1 min-w-0">
+													<p className="text-sm font-semibold text-[var(--text-primary)] truncate">
+														{item.title}
+													</p>
+													{item.message && (
+														<p
+															className="text-xs text-[var(--text-secondary)] line-clamp-2"
+														>
+															{item.message}
+														</p>
+													)}
+													<p className="text-[0.65rem] text-[var(--text-disabled)]">
+														{timeAgo(item.createdAt)}
+													</p>
+												</div>
+												{isActive && (
+													<Button
+														variant="ghost"
+														size="icon-xs"
+														className="text-[var(--text-secondary)] p-0.5"
+														onClick={() =>
+															removeNotification(
+																item.id,
+															)
+														}
+													>
+														<X className="size-4" />
+													</Button>
+												)}
+											</div>
+										</motion.div>
+									);
+								})}
+							</AnimatePresence>
+						</motion.div>
+					)}
+				</div>
+			</PopoverContent>
 		</Popover>
 	);
 }

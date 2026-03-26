@@ -2,190 +2,87 @@
  * Header Component
  */
 
-import LogoutIcon from "@mui/icons-material/Logout";
-import NotificationsIcon from "@mui/icons-material/Notifications";
-import SettingsIcon from "@mui/icons-material/Settings";
-import {
-	AppBar,
-	Avatar,
-	Badge,
-	Box,
-	Divider,
-	IconButton,
-	MenuItem,
-	Popover,
-	Toolbar,
-	Tooltip,
-	Typography,
-} from "@mui/material";
-import type { PopoverPosition } from "@mui/material/Popover";
+import { Bell, LogOut, Settings } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { StatusDot } from "@/components/common/StatusDot";
 import { ThemeSelector } from "@/components/common/ThemeSelector";
 import { NotificationPanel } from "@/components/layout/NotificationPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useAgentStore } from "@/store/agentStore";
 import { useUIStore } from "@/store/uiStore";
+import { cn } from "@/lib/utils";
 
 export function Header() {
 	const { user, logout } = useAuth();
 	const { notifications } = useUIStore();
-	const uiScale = useUIStore((s) => s.uiScale);
 	const backendStatus = useUIStore((s) => s.backendStatus);
 	const backendStatusMessage = useUIStore((s) => s.backendStatusMessage);
 	const agentStatus = useAgentStore((s) => s.status);
-	const accountButtonRef = useRef<HTMLButtonElement | null>(null);
-	const [accountMenuPosition, setAccountMenuPosition] =
-		useState<PopoverPosition | null>(null);
 
 	// Notification panel
-	const notifButtonRef = useRef<HTMLButtonElement | null>(null);
-	const [notifPosition, setNotifPosition] = useState<PopoverPosition | null>(
-		null,
-	);
+	const [notifOpen, setNotifOpen] = useState(false);
 
-	const openNotifPanel = useCallback(() => {
-		const button = notifButtonRef.current;
-		if (!button) return;
-		const rect = button.getBoundingClientRect();
-		const zoom = uiScale || 1;
-		setNotifPosition({
-			top: rect.bottom / zoom,
-			left: rect.right / zoom,
-		});
-	}, [uiScale]);
-
-	const updateAccountMenuPosition = useCallback(() => {
-		const button = accountButtonRef.current;
-		if (!button) return;
-		const rect = button.getBoundingClientRect();
-		const zoom = uiScale || 1;
-		setAccountMenuPosition({
-			top: rect.bottom / zoom,
-			left: rect.right / zoom,
-		});
-	}, [uiScale]);
-
-	const toggleAccountMenu = useCallback(() => {
-		if (accountMenuPosition) {
-			setAccountMenuPosition(null);
-			return;
-		}
-
-		updateAccountMenuPosition();
-	}, [accountMenuPosition, updateAccountMenuPosition]);
-
-	const handleClose = () => {
-		setAccountMenuPosition(null);
-	};
+	const unreadCount = notifications.length;
 
 	const handleLogout = () => {
-		handleClose();
 		logout();
 	};
 
-	const unreadCount = notifications.length;
-	const isAccountMenuOpen = Boolean(accountMenuPosition);
-
-	useEffect(() => {
-		if (!isAccountMenuOpen) return;
-
-		const handleLayoutChange = () => {
-			window.requestAnimationFrame(updateAccountMenuPosition);
-		};
-
-		handleLayoutChange();
-		window.addEventListener("resize", handleLayoutChange);
-		window.addEventListener("scroll", handleLayoutChange, true);
-
-		return () => {
-			window.removeEventListener("resize", handleLayoutChange);
-			window.removeEventListener("scroll", handleLayoutChange, true);
-		};
-	}, [isAccountMenuOpen, updateAccountMenuPosition]);
-
 	return (
-		<AppBar
-			position="fixed"
-			sx={{
-				zIndex: (theme) => theme.zIndex.drawer + 1,
-				background: (theme) => theme.trading.glass.header.background,
-				backdropFilter: (theme) => theme.trading.glass.header.backdropFilter,
-				borderBottom: "none",
-				"&::after": {
-					content: '""',
-					position: "absolute",
-					bottom: 0,
-					left: 0,
-					right: 0,
-					height: "1.5px",
-					background: (theme) => theme.trading.gradientAccent,
-					backgroundSize: "200% 100%",
-					animation: "gradientSlide 4s linear infinite",
-				},
-				"@keyframes gradientSlide": {
-					"0%": { backgroundPosition: "0% 0" },
-					"100%": { backgroundPosition: "200% 0" },
-				},
-			}}
+		<header
+			className={cn(
+				"glass-header fixed top-0 left-0 right-0 z-50 h-[52px] flex items-center border-b-0",
+				"after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[1.5px]",
+				"after:bg-[var(--gradient-accent)] after:bg-[length:200%_100%] after:animate-[gradientSlide_4s_linear_infinite]",
+			)}
 		>
-			<Toolbar sx={{ minHeight: "52px !important", px: { xs: 2, sm: 3 } }}>
+			<div className="flex items-center w-full h-[52px] px-4 sm:px-6">
 				{/* Brand */}
-				<Box
-					component={Link}
+				<Link
 					to="/"
-					sx={{
-						display: "flex",
-						alignItems: "center",
-						textDecoration: "none",
-						gap: 1,
-						flexGrow: 1,
-					}}
+					className="flex items-center gap-2 no-underline flex-1"
 				>
 					<img
 						src="/coin.png"
 						alt="TradingBot"
 						width={24}
 						height={24}
-						style={{ display: "block" }}
+						className="block"
 					/>
-					<Typography
-						variant="subtitle2"
-						fontWeight={700}
-						noWrap
-						sx={{
-							background: (t) =>
-								`linear-gradient(135deg, ${t.palette.primary.main} 0%, ${t.palette.primary.light} 100%)`,
-							backgroundSize: "200% 100%",
-							backgroundClip: "text",
-							WebkitBackgroundClip: "text",
-							WebkitTextFillColor: "transparent",
-							animation: "brandShine 3.5s linear infinite",
-							"@keyframes brandShine": {
-								"0%": { backgroundPosition: "0% 50%" },
-								"50%": { backgroundPosition: "100% 50%" },
-								"100%": { backgroundPosition: "0% 50%" },
-							},
-						}}
+					<span
+						className={cn(
+							"text-sm font-bold whitespace-nowrap",
+							"bg-[linear-gradient(135deg,var(--primary)_0%,var(--primary-light)_100%)]",
+							"bg-[length:200%_100%] bg-clip-text [-webkit-background-clip:text] [-webkit-text-fill-color:transparent]",
+							"animate-[brandShine_3.5s_linear_infinite]",
+						)}
 					>
 						TradingBot
-					</Typography>
-				</Box>
+					</span>
+				</Link>
 
 				{/* Actions */}
-				<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+				<div className="flex items-center gap-2">
 					{/* Backend Status */}
-					<Tooltip
-						title={
-							backendStatusMessage
-								? `Backend: ${backendStatusMessage}`
-								: `Backend: ${backendStatus}`
-						}
-					>
-						<Box
-							sx={{ display: "flex", alignItems: "center", gap: 0.75, mr: 1 }}
+					<Tooltip>
+						<TooltipTrigger
+							className="flex items-center gap-1.5 mr-2 cursor-default"
 						>
 							<StatusDot
 								status={
@@ -197,24 +94,26 @@ export function Header() {
 								}
 								size={7}
 							/>
-							<Typography
-								variant="caption"
-								color="text.secondary"
-								sx={{ display: { xs: "none", sm: "block" } }}
-							>
+							<span className="hidden sm:block text-xs text-[var(--text-secondary)]">
 								Backend
-							</Typography>
-						</Box>
+							</span>
+						</TooltipTrigger>
+						<TooltipContent>
+							{backendStatusMessage
+								? `Backend: ${backendStatusMessage}`
+								: `Backend: ${backendStatus}`}
+						</TooltipContent>
 					</Tooltip>
 
 					{/* Agent Status */}
-					<Tooltip title={`Agent: ${agentStatus}`}>
-						<Box
-							sx={{ display: "flex", alignItems: "center", gap: 0.75, mr: 1 }}
+					<Tooltip>
+						<TooltipTrigger
+							className="flex items-center gap-1.5 mr-2 cursor-default"
 						>
 							<StatusDot
 								status={
-									agentStatus === "connected" || agentStatus === "analyzing"
+									agentStatus === "connected" ||
+									agentStatus === "analyzing"
 										? "online"
 										: agentStatus === "error"
 											? "busy"
@@ -222,118 +121,115 @@ export function Header() {
 								}
 								size={7}
 							/>
-							<Typography
-								variant="caption"
-								color="text.secondary"
-								sx={{ display: { xs: "none", sm: "block" } }}
-							>
+							<span className="hidden sm:block text-xs text-[var(--text-secondary)]">
 								Agent
-							</Typography>
-						</Box>
+							</span>
+						</TooltipTrigger>
+						<TooltipContent>{`Agent: ${agentStatus}`}</TooltipContent>
 					</Tooltip>
 
 					{/* Theme Selector */}
 					<ThemeSelector />
 
 					{/* Notifications */}
-					<Tooltip title="Notifications">
-						<IconButton
-							ref={notifButtonRef}
-							aria-label="Notifications"
-							color="inherit"
-							onClick={openNotifPanel}
-							sx={
-								unreadCount > 0
-									? {
-											filter: (theme) =>
-												`drop-shadow(0 0 6px rgba(${theme.trading.semanticRgb.error}, 0.5))`,
-										}
-									: undefined
-							}
-						>
-							<Badge badgeContent={unreadCount} color="error">
-								{unreadCount > 0 ? (
-									<motion.div
-										animate={{
-											rotate: [0, 15, -15, 10, -10, 0],
-										}}
-										transition={{
-											duration: 0.5,
-											delay: 1,
-											repeat: Infinity,
-											repeatDelay: 4,
-										}}
-										style={{ display: "flex" }}
-									>
-										<NotificationsIcon />
-									</motion.div>
-								) : (
-									<NotificationsIcon />
-								)}
-							</Badge>
-						</IconButton>
-					</Tooltip>
-
 					<NotificationPanel
-						anchorPosition={notifPosition}
-						onClose={() => setNotifPosition(null)}
-					/>
+						open={notifOpen}
+						onOpenChange={setNotifOpen}
+					>
+						<Tooltip>
+							<TooltipTrigger
+								render={
+									<Button
+										variant="ghost"
+										size="icon"
+										aria-label="Notifications"
+										className={cn(
+											"text-[var(--text-primary)]",
+											unreadCount > 0 &&
+												"drop-shadow-[0_0_6px_rgba(var(--error-rgb),0.5)]",
+										)}
+										onClick={() => setNotifOpen((o) => !o)}
+									/>
+								}
+							>
+								<div className="relative">
+									{unreadCount > 0 ? (
+										<motion.div
+											animate={{
+												rotate: [0, 15, -15, 10, -10, 0],
+											}}
+											transition={{
+												duration: 0.5,
+												delay: 1,
+												repeat: Infinity,
+												repeatDelay: 4,
+											}}
+											style={{ display: "flex" }}
+										>
+											<Bell className="size-5" />
+										</motion.div>
+									) : (
+										<Bell className="size-5" />
+									)}
+									{unreadCount > 0 && (
+										<span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[16px] h-4 px-1 text-[10px] font-bold text-white bg-[var(--error)] rounded-full">
+											{unreadCount}
+										</span>
+									)}
+								</div>
+							</TooltipTrigger>
+							<TooltipContent>Notifications</TooltipContent>
+						</Tooltip>
+					</NotificationPanel>
 
 					{/* User Menu */}
-					<Tooltip title="Account">
-						<IconButton
-							ref={accountButtonRef}
-							onClick={toggleAccountMenu}
-							color="inherit"
-							sx={{ position: "relative" }}
-						>
-							<Avatar
-								sx={{
-									width: 32,
-									height: 32,
-									bgcolor: "primary.main",
-									fontSize: "0.875rem",
-								}}
+					<DropdownMenu>
+						<Tooltip>
+							<TooltipTrigger
+								render={
+									<DropdownMenuTrigger
+										className="relative cursor-pointer outline-none"
+									/>
+								}
 							>
-								{user?.email?.[0].toUpperCase() || "U"}
-							</Avatar>
-						</IconButton>
-					</Tooltip>
+								<Avatar className="bg-[var(--primary)] text-[var(--primary-contrast)]">
+									<AvatarFallback className="bg-[var(--primary)] text-[var(--primary-contrast)] text-sm">
+										{user?.email?.[0].toUpperCase() || "U"}
+									</AvatarFallback>
+								</Avatar>
+							</TooltipTrigger>
+							<TooltipContent>Account</TooltipContent>
+						</Tooltip>
 
-					<Popover
-						anchorReference="anchorPosition"
-						anchorPosition={accountMenuPosition ?? undefined}
-						open={isAccountMenuOpen}
-						onClose={handleClose}
-						transformOrigin={{
-							vertical: "top",
-							horizontal: "right",
-						}}
-						slotProps={{
-							paper: {
-								sx: { minWidth: 200, mt: 1 },
-							},
-						}}
-					>
-						<Box sx={{ px: 2, py: 1 }}>
-							<Typography variant="subtitle2">{user?.email}</Typography>
-							<Typography variant="caption" color="text.secondary">
-								{user?.username || "Trader"}
-							</Typography>
-						</Box>
-						<Divider />
-						<MenuItem component={Link} to="/settings" onClick={handleClose}>
-							<SettingsIcon sx={{ mr: 1.5, fontSize: 20 }} />
-							Settings
-						</MenuItem>
-						<MenuItem onClick={handleLogout}>
-							<LogoutIcon sx={{ mr: 1.5, fontSize: 20 }} />
-							Logout
-						</MenuItem>
-					</Popover>
-				</Box>
-			</Toolbar>
-		</AppBar>
+						<DropdownMenuContent
+							align="end"
+							sideOffset={8}
+							className="min-w-[200px]"
+						>
+							<div className="px-3 py-2">
+								<p className="text-sm font-semibold text-[var(--text-primary)]">
+									{user?.email}
+								</p>
+								<p className="text-xs text-[var(--text-secondary)]">
+									{user?.username || "Trader"}
+								</p>
+							</div>
+							<DropdownMenuSeparator />
+							<DropdownMenuItem
+								render={<Link to="/settings" />}
+							>
+								<Settings className="size-5 mr-1.5" />
+								Settings
+							</DropdownMenuItem>
+							<DropdownMenuItem onClick={handleLogout}>
+								<LogOut className="size-5 mr-1.5" />
+								Logout
+							</DropdownMenuItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
+				</div>
+			</div>
+		</header>
 	);
 }
 
