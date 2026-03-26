@@ -2,153 +2,181 @@
  * Position Card Component
  */
 
-import {Box, Button, Card, CardContent, Chip, LinearProgress, Tooltip, Typography,} from '@mui/material';
-import {motion} from 'framer-motion';
-import {formatPercent, formatPrice, formatUSD} from '@/utils/formatters';
-import type {Position} from '@/types';
+import { motion } from "framer-motion";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+import type { Position } from "@/types";
+import { formatPercent, formatPrice, formatUSD } from "@/utils/formatters";
 
 interface PositionCardProps {
-    position: Position;
-    onClose?: () => void;
-    isClosing?: boolean;
+	position: Position;
+	onClose?: () => void;
+	isClosing?: boolean;
 }
 
-export function PositionCard({position, onClose, isClosing = false}: PositionCardProps) {
-    const isLong = position.side === 'long';
-    const isProfitable = position.unrealizedPnl >= 0;
+export function PositionCard({
+	position,
+	onClose,
+	isClosing = false,
+}: PositionCardProps) {
+	const isLong = position.side === "long";
+	const isProfitable = position.unrealizedPnl >= 0;
 
-    // Calculate percentage to liquidation
-    const liquidationDistance = position.liquidationPrice
-        ? Math.abs((position.currentPrice - position.liquidationPrice) / position.currentPrice) * 100
-        : 100;
+	// Calculate percentage to liquidation
+	const liquidationDistance = position.liquidationPrice
+		? Math.abs(
+				((position.currentPrice - position.liquidationPrice) /
+					position.currentPrice) *
+					100,
+			)
+		: 100;
 
-    return (
-        <Card
-            component={motion.div}
-            initial={{opacity: 0, y: 20}}
-            animate={{opacity: 1, y: 0}}
-            exit={{opacity: 0, y: -20}}
-            sx={{
-                backdropFilter: 'blur(12px)',
-            }}
-        >
-            <CardContent>
-                {/* Header */}
-                <Box sx={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2}}>
-                    <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
-                        <Typography variant="h6" fontWeight={600}>
-                            {position.symbol.replace('-', '/')}
-                        </Typography>
-                        <Chip
-                            label={`${isLong ? 'Long' : 'Short'} ${position.leverage}x`}
-                            size="small"
-                            color={isLong ? 'success' : 'error'}
-                            variant="outlined"
-                        />
-                    </Box>
-                    <Box
-                        sx={{
-                            textAlign: 'right',
-                            p: 1,
-                            borderRadius: 1,
-                            bgcolor: (theme) => isProfitable ? `rgba(${theme.trading.colors.bullishRgb}, 0.15)` : `rgba(${theme.trading.colors.bearishRgb}, 0.15)`,
-                        }}
-                    >
-                        <Typography
-                            variant="h6"
-                            fontWeight={700}
-                            sx={{
-                                fontFamily: (theme) => theme.trading.mono,
-                                color: isProfitable ? 'success.main' : 'error.main',
-                            }}
-                        >
-                            {formatUSD(position.unrealizedPnl)}
-                        </Typography>
-                        <Typography
-                            variant="caption"
-                            sx={{color: isProfitable ? 'success.main' : 'error.main'}}
-                        >
-                            {formatPercent(position.unrealizedPnlPercent)}
-                        </Typography>
-                    </Box>
-                </Box>
+	return (
+		<motion.div
+			initial={{ opacity: 0, y: 20 }}
+			animate={{ opacity: 1, y: 0 }}
+			exit={{ opacity: 0, y: -20 }}
+		>
+			<Card className="backdrop-blur-xl">
+				<CardContent>
+					{/* Header */}
+					<div className="mb-4 flex items-center justify-between">
+						<div className="flex items-center gap-2">
+							<h3 className="text-lg font-semibold">
+								{position.symbol.replace("-", "/")}
+							</h3>
+							<Badge variant="outline" className={cn(
+								isLong
+									? "border-[var(--trading-bullish)] text-[var(--trading-bullish)]"
+									: "border-[var(--trading-bearish)] text-[var(--trading-bearish)]",
+							)}>
+								{isLong ? "Long" : "Short"} {position.leverage}x
+							</Badge>
+						</div>
+						<div
+							className={cn(
+								"rounded-md p-2 text-right",
+								isProfitable
+									? "bg-[rgba(var(--trading-bullish-rgb),0.15)]"
+									: "bg-[rgba(var(--trading-bearish-rgb),0.15)]",
+							)}
+						>
+							<p
+								className={cn(
+									"text-lg font-bold font-mono",
+									isProfitable
+										? "text-[var(--trading-bullish)]"
+										: "text-[var(--trading-bearish)]",
+								)}
+							>
+								{formatUSD(position.unrealizedPnl)}
+							</p>
+							<span
+								className={cn(
+									"text-xs",
+									isProfitable
+										? "text-[var(--trading-bullish)]"
+										: "text-[var(--trading-bearish)]",
+								)}
+							>
+								{formatPercent(position.unrealizedPnlPercent)}
+							</span>
+						</div>
+					</div>
 
-                {/* Position Details */}
-                <Box sx={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 2}}>
-                    <Box>
-                        <Typography variant="caption" color="text.secondary">
-                            Entry Price
-                        </Typography>
-                        <Typography variant="body2" fontWeight={500} sx={{fontFamily: (theme) => theme.trading.mono}}>
-                            ${formatPrice(position.entryPrice)}
-                        </Typography>
-                    </Box>
-                    <Box>
-                        <Typography variant="caption" color="text.secondary">
-                            Current Price
-                        </Typography>
-                        <Typography variant="body2" fontWeight={500} sx={{fontFamily: (theme) => theme.trading.mono}}>
-                            ${formatPrice(position.currentPrice)}
-                        </Typography>
-                    </Box>
-                    <Box>
-                        <Typography variant="caption" color="text.secondary">
-                            Quantity
-                        </Typography>
-                        <Typography variant="body2" fontWeight={500}>
-                            {position.quantity}
-                        </Typography>
-                    </Box>
-                    <Box>
-                        <Typography variant="caption" color="text.secondary">
-                            Margin
-                        </Typography>
-                        <Typography variant="body2" fontWeight={500}>
-                            {formatUSD(position.margin)}
-                        </Typography>
-                    </Box>
-                </Box>
+					{/* Position Details */}
+					<div className="mb-4 grid grid-cols-2 gap-4">
+						<div>
+							<span className="text-xs text-muted-foreground">
+								Entry Price
+							</span>
+							<p className="text-sm font-medium font-mono">
+								${formatPrice(position.entryPrice)}
+							</p>
+						</div>
+						<div>
+							<span className="text-xs text-muted-foreground">
+								Current Price
+							</span>
+							<p className="text-sm font-medium font-mono">
+								${formatPrice(position.currentPrice)}
+							</p>
+						</div>
+						<div>
+							<span className="text-xs text-muted-foreground">Quantity</span>
+							<p className="text-sm font-medium">{position.quantity}</p>
+						</div>
+						<div>
+							<span className="text-xs text-muted-foreground">Margin</span>
+							<p className="text-sm font-medium">
+								{formatUSD(position.margin)}
+							</p>
+						</div>
+					</div>
 
-                {/* Liquidation Warning */}
-                {position.liquidationPrice && liquidationDistance < 50 && (
-                    <Box sx={{mb: 2}}>
-                        <Box sx={{display: 'flex', justifyContent: 'space-between', mb: 0.5}}>
-                            <Typography variant="caption" color="text.secondary">
-                                Distance to Liquidation
-                            </Typography>
-                            <Typography
-                                variant="caption"
-                                color={liquidationDistance < 20 ? 'error.main' : 'warning.main'}
-                            >
-                                {liquidationDistance.toFixed(1)}%
-                            </Typography>
-                        </Box>
-                        <Tooltip title={`Liquidation at $${formatPrice(position.liquidationPrice)}`}>
-                            <LinearProgress
-                                variant="determinate"
-                                value={100 - liquidationDistance}
-                                color={liquidationDistance < 20 ? 'error' : 'warning'}
-                                sx={{height: 6, borderRadius: 1}}
-                            />
-                        </Tooltip>
-                    </Box>
-                )}
+					{/* Liquidation Warning */}
+					{position.liquidationPrice && liquidationDistance < 50 && (
+						<div className="mb-4">
+							<div className="mb-1 flex justify-between">
+								<span className="text-xs text-muted-foreground">
+									Distance to Liquidation
+								</span>
+								<span
+									className={cn(
+										"text-xs",
+										liquidationDistance < 20
+											? "text-[var(--trading-bearish)]"
+											: "text-yellow-500",
+									)}
+								>
+									{liquidationDistance.toFixed(1)}%
+								</span>
+							</div>
+							<Tooltip>
+								<TooltipTrigger asChild>
+									<div>
+										<Progress
+											value={100 - liquidationDistance}
+											className={cn(
+												"h-1.5",
+												liquidationDistance < 20
+													? "[&_[data-slot=progress-indicator]]:bg-[var(--trading-bearish)]"
+													: "[&_[data-slot=progress-indicator]]:bg-yellow-500",
+											)}
+										/>
+									</div>
+								</TooltipTrigger>
+								<TooltipContent>
+									Liquidation at ${formatPrice(position.liquidationPrice)}
+								</TooltipContent>
+							</Tooltip>
+						</div>
+					)}
 
-                {/* Close Button */}
-                {onClose && (
-                    <Button
-                        variant="outlined"
-                        color="error"
-                        fullWidth
-                        onClick={onClose}
-                        disabled={isClosing}
-                    >
-                        {isClosing ? 'Closing...' : 'Close Position'}
-                    </Button>
-                )}
-            </CardContent>
-        </Card>
-    );
+					{/* Close Button */}
+					{onClose && (
+						<Button
+							variant="destructive"
+							className="w-full"
+							onClick={onClose}
+							disabled={isClosing}
+						>
+							{isClosing ? "Closing..." : "Close Position"}
+						</Button>
+					)}
+				</CardContent>
+			</Card>
+		</motion.div>
+	);
 }
 
 export default PositionCard;

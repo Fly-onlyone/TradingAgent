@@ -4,22 +4,11 @@
  * Read-only view of live market data used by the trading agent for automated decisions.
  */
 
-import ShowChartIcon from "@mui/icons-material/ShowChart";
-import TimelineIcon from "@mui/icons-material/Timeline";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
-import {
-	Alert,
-	Box,
-	Card,
-	CardContent,
-	Grid2 as Grid,
-	ToggleButton,
-	ToggleButtonGroup,
-	Typography,
-} from "@mui/material";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { motion } from "framer-motion";
+import { Activity, LineChart, TrendingUp } from "lucide-react";
+
 import { ordersApi } from "@/api/endpoints/orders";
 import {
 	marketOverviewQueryOptions,
@@ -34,9 +23,15 @@ import {
 	RecentOrderActivity,
 	TickerCard,
 } from "@/components/trading";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+	ToggleGroup,
+	ToggleGroupItem,
+} from "@/components/ui/toggle-group";
+import { cn } from "@/lib/utils";
 import { useMarketStore } from "@/store/marketStore";
 import { useOrderStore } from "@/store/orderStore";
-
 import { spring } from "@/utils/animations/variants";
 import { TIMEFRAMES } from "@/utils/constants";
 import { getErrorMessage } from "@/utils/errors";
@@ -109,17 +104,17 @@ function TradingPage() {
 
 	return (
 		<PageTransition pageKey="trading">
-			<Box>
+			<div>
 				<SectionHeader
 					title="Market Monitor"
 					subtitle="Live market data — the agent uses this data for automated decisions"
 				/>
 
-				<Alert severity="info" sx={{ mb: 2 }} icon={false}>
-					<Typography variant="body2">
+				<Alert className="mb-4">
+					<AlertDescription>
 						This is a read-only view of market data. All trading is handled
 						automatically by the agent.
-					</Typography>
+					</AlertDescription>
 				</Alert>
 
 				<motion.div
@@ -127,68 +122,62 @@ function TradingPage() {
 					animate={{ opacity: 1, x: 0 }}
 					transition={{ ...spring.snappy, delay: 0.1 }}
 				>
-					<Box
-						sx={{
-							display: "flex",
-							justifyContent: "space-between",
-							alignItems: "center",
-							mb: 2,
-						}}
-					>
-						<Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-							<Typography variant="h5" fontWeight={700}>
+					<div className="mb-4 flex items-center justify-between">
+						<div className="flex items-center gap-4">
+							<h2 className="text-xl font-bold">
 								{selectedSymbol.replace("-", "/")}
-							</Typography>
+							</h2>
 							{resolvedTicker ? (
-								<Typography
-									variant="h5"
-									sx={{
-										color:
-											resolvedTicker.priceChangePercent >= 0
-												? "success.main"
-												: "error.main",
-										fontFamily: (theme) => theme.trading.mono,
-									}}
+								<span
+									className={cn(
+										"text-xl font-mono",
+										resolvedTicker.priceChangePercent >= 0
+											? "text-[var(--trading-bullish)]"
+											: "text-[var(--trading-bearish)]",
+									)}
 								>
 									${formatPrice(currentPrice)}
-								</Typography>
+								</span>
 							) : null}
-						</Box>
+						</div>
 
-						<ToggleButtonGroup
+						<ToggleGroup
+							type="single"
 							value={selectedTimeframe}
-							exclusive
-							onChange={(_, value) => value && setSelectedTimeframe(value)}
-							size="small"
-							sx={{ flexWrap: "wrap" }}
+							onValueChange={(value) => value && setSelectedTimeframe(value)}
+							size="sm"
+							className="flex-wrap"
 						>
 							{TIMEFRAMES.map((timeframe) => (
-								<ToggleButton key={timeframe.value} value={timeframe.value}>
+								<ToggleGroupItem
+									key={timeframe.value}
+									value={timeframe.value}
+								>
 									{timeframe.label}
-								</ToggleButton>
+								</ToggleGroupItem>
 							))}
-						</ToggleButtonGroup>
-					</Box>
+						</ToggleGroup>
+					</div>
 				</motion.div>
 
 				{pageError ? (
-					<Alert severity="warning" sx={{ mb: 2 }}>
-						{pageError}
+					<Alert variant="destructive" className="mb-4">
+						<AlertDescription>{pageError}</AlertDescription>
 					</Alert>
 				) : null}
 
-				<Grid container spacing={2}>
-					<Grid size={{ xs: 12 }}>
-						<Grid container spacing={2}>
-							<Grid size={{ xs: 12, sm: 6, md: 4 }}>
+				<div className="grid grid-cols-12 gap-4">
+					<div className="col-span-12">
+						<div className="grid grid-cols-12 gap-4">
+							<div className="col-span-12 sm:col-span-6 md:col-span-4">
 								<StatCard
 									title="Last Price"
 									value={resolvedTicker ? `$${formatPrice(currentPrice)}` : "-"}
-									icon={<ShowChartIcon />}
+									icon={<LineChart />}
 									loading={tickerQuery.isLoading && !resolvedTicker}
 								/>
-							</Grid>
-							<Grid size={{ xs: 12, sm: 6, md: 4 }}>
+							</div>
+							<div className="col-span-12 sm:col-span-6 md:col-span-4">
 								<StatCard
 									title="24h Change"
 									value={
@@ -196,7 +185,7 @@ function TradingPage() {
 											? formatPercent(resolvedTicker.priceChangePercent)
 											: "-"
 									}
-									icon={<TrendingUpIcon />}
+									icon={<TrendingUp />}
 									trend={
 										(resolvedTicker?.priceChangePercent ?? 0) >= 0
 											? "up"
@@ -204,8 +193,8 @@ function TradingPage() {
 									}
 									loading={tickerQuery.isLoading && !resolvedTicker}
 								/>
-							</Grid>
-							<Grid size={{ xs: 12, sm: 6, md: 4 }}>
+							</div>
+							<div className="col-span-12 sm:col-span-6 md:col-span-4">
 								<StatCard
 									title="24h Volume"
 									value={
@@ -213,30 +202,28 @@ function TradingPage() {
 											? `$${formatVolume(resolvedTicker.volume24h)}`
 											: "-"
 									}
-									icon={<TimelineIcon />}
+									icon={<Activity />}
 									loading={tickerQuery.isLoading && !resolvedTicker}
 								/>
-							</Grid>
-						</Grid>
-					</Grid>
+							</div>
+						</div>
+					</div>
 
-					<Grid size={{ xs: 12, lg: 8 }}>
+					<div className="col-span-12 lg:col-span-8">
 						<MarketOverviewPanel
 							overview={overviewQuery.data ?? null}
 							isLoading={overviewQuery.isLoading}
 						/>
-					</Grid>
+					</div>
 
-					<Grid size={{ xs: 12, lg: 4 }}>
-						<Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+					<div className="col-span-12 lg:col-span-4">
+						<div className="flex flex-col gap-4">
 							<Card>
 								<CardContent>
-									<Typography variant="h6" gutterBottom>
+									<h3 className="mb-3 text-lg font-semibold">
 										Agent Watchlist
-									</Typography>
-									<Box
-										sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}
-									>
+									</h3>
+									<div className="flex flex-col gap-3">
 										{watchlist.length > 0 ? (
 											watchlist.map((symbol) => (
 												<TickerCard
@@ -247,11 +234,11 @@ function TradingPage() {
 												/>
 											))
 										) : (
-											<Typography variant="body2" color="text.secondary">
+											<p className="text-sm text-muted-foreground">
 												No symbols in watchlist.
-											</Typography>
+											</p>
 										)}
-									</Box>
+									</div>
 								</CardContent>
 							</Card>
 
@@ -260,27 +247,28 @@ function TradingPage() {
 							) : (
 								<Card>
 									<CardContent>
-										<Typography variant="h6" gutterBottom>
+										<h3 className="mb-3 text-lg font-semibold">
 											Current Position
-										</Typography>
-										<Typography variant="body2" color="text.secondary">
-											No open position for {selectedSymbol.replace("-", "/")}.
-										</Typography>
+										</h3>
+										<p className="text-sm text-muted-foreground">
+											No open position for{" "}
+											{selectedSymbol.replace("-", "/")}.
+										</p>
 									</CardContent>
 								</Card>
 							)}
-						</Box>
-					</Grid>
+						</div>
+					</div>
 
-					<Grid size={{ xs: 12 }}>
+					<div className="col-span-12">
 						<RecentOrderActivity
 							orders={orderHistoryQuery.data?.orders ?? []}
 							isLoading={orderHistoryQuery.isLoading}
 							error={orderHistoryError}
 						/>
-					</Grid>
-				</Grid>
-			</Box>
+					</div>
+				</div>
+			</div>
 		</PageTransition>
 	);
 }
