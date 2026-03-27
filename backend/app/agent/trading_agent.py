@@ -23,6 +23,7 @@ from app.agent.mcp_tools import (
     ALLOWED_TOOL_NAMES,
     create_trading_mcp_server,
     get_pending_recommendation,
+    pop_pending_chart_data,
 )
 from app.config import get_settings
 
@@ -212,6 +213,14 @@ class TradingAgent:
 
                             if on_event:
                                 await on_event({"type": "tool_call", "data": tool_info})
+
+                            # Emit chart data if a candlestick tool just ran
+                            if block.name == "get_candlesticks" and on_event:
+                                chart_data = pop_pending_chart_data()
+                                if chart_data:
+                                    await on_event(
+                                        {"type": "chart_data", "data": chart_data}
+                                    )
 
                             logger.info(f"Tool called: {block.name}")
 

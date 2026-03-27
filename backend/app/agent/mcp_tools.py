@@ -11,6 +11,21 @@ from typing import Any
 from claude_agent_sdk import create_sdk_mcp_server, tool
 
 # ============================================================
+# Chart Data Buffer
+# ============================================================
+# Stores the last candlestick result so the trading agent can
+# emit it as a chart_data event to the frontend.
+_last_chart_data: dict[str, Any] | None = None
+
+
+def pop_pending_chart_data() -> dict[str, Any] | None:
+    """Retrieve and clear the buffered chart data from a get_candlesticks call."""
+    global _last_chart_data  # noqa: PLW0603
+    data = _last_chart_data
+    _last_chart_data = None
+    return data
+
+# ============================================================
 # Market Tools
 # ============================================================
 
@@ -93,6 +108,7 @@ async def mcp_get_orderbook(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_get_candlesticks(args: dict[str, Any]) -> dict[str, Any]:
+    global _last_chart_data  # noqa: PLW0603
     try:
         from app.agent.tools.market_tools import get_candlesticks
 
@@ -101,6 +117,22 @@ async def mcp_get_candlesticks(args: dict[str, Any]) -> dict[str, Any]:
             timeframe=args.get("timeframe", "1H"),
             limit=args.get("limit", 100),
         )
+        # Buffer chart data for the trading agent to emit to the frontend
+        if "candles" in result:
+            _last_chart_data = {
+                "symbol": result.get("symbol", args["symbol"]),
+                "timeframe": result.get("timeframe", args.get("timeframe", "1H")),
+                "candles": [
+                    {
+                        "time": c["timestamp"],
+                        "open": c["open"],
+                        "high": c["high"],
+                        "low": c["low"],
+                        "close": c["close"],
+                    }
+                    for c in result["candles"]
+                ],
+            }
         return {"content": [{"type": "text", "text": json.dumps(result)}]}
     except Exception as e:
         return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
