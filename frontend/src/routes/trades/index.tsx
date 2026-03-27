@@ -11,6 +11,7 @@ import { tradesApi } from "@/api/endpoints/trades";
 import { PageTransition } from "@/components/common/PageTransition";
 import { SectionHeader } from "@/components/common/SectionHeader";
 import {
+	OpenPositionsSection,
 	TradeExportButton,
 	TradeFilterBar,
 	TradeSummaryCards,
@@ -94,6 +95,9 @@ function TradesPage() {
 						Failed to load trade data. Please try again.
 					</Alert>
 				)}
+
+				{/* Open Positions (live from OKX) */}
+				<OpenPositionsSection />
 
 				{/* Summary Cards */}
 				<Box sx={{ mb: 3 }}>
