@@ -14,6 +14,22 @@ import type {
 import { toNumber, toTimestamp } from "@/utils/transformers";
 import apiClient from "../client";
 
+export interface SymbolInfo {
+	symbol: string;
+	base: string;
+	quote: string;
+}
+
+export interface UserPreferences {
+	defaultSymbol: string;
+	defaultTimeframe: string;
+}
+
+export interface UserPreferencesUpdate {
+	defaultSymbol?: string;
+	defaultTimeframe?: string;
+}
+
 export interface CandlesParams {
 	symbol: string;
 	timeframe: Timeframe;
@@ -98,11 +114,19 @@ export const marketApi = {
 	},
 
 	/**
-	 * Get available symbols
+	 * Get available symbols with base/quote metadata.
 	 */
-	async getSymbols(): Promise<string[]> {
-		const response = await apiClient.get<string[]>("/market/symbols");
-		return response.data;
+	async getSymbols(quoteCurrency?: string): Promise<SymbolInfo[]> {
+		const response = await apiClient.get<{
+			symbols: Array<{ symbol: string; base: string; quote: string }>;
+		}>("/market/symbols", {
+			params: quoteCurrency ? { quote_currency: quoteCurrency } : undefined,
+		});
+		return response.data.symbols.map((s) => ({
+			symbol: s.symbol,
+			base: s.base,
+			quote: s.quote,
+		}));
 	},
 
 	async getAccountBalance(): Promise<AccountBalance> {
@@ -153,6 +177,35 @@ export const marketApi = {
 				(response.data.most_traded as Record<string, unknown>[]) || []
 			).map(transformOverviewTicker),
 			error: (response.data.error as string | null) ?? null,
+		};
+	},
+
+	async getUserPreferences(): Promise<UserPreferences> {
+		const response = await apiClient.get<Record<string, unknown>>(
+			"/users/me/preferences",
+		);
+		return {
+			defaultSymbol: response.data.default_symbol as string,
+			defaultTimeframe: response.data.default_timeframe as string,
+		};
+	},
+
+	async updateUserPreferences(
+		update: UserPreferencesUpdate,
+	): Promise<UserPreferences> {
+		const payload: Record<string, unknown> = {};
+		if (update.defaultSymbol !== undefined)
+			payload.default_symbol = update.defaultSymbol;
+		if (update.defaultTimeframe !== undefined)
+			payload.default_timeframe = update.defaultTimeframe;
+
+		const response = await apiClient.put<Record<string, unknown>>(
+			"/users/me/preferences",
+			payload,
+		);
+		return {
+			defaultSymbol: response.data.default_symbol as string,
+			defaultTimeframe: response.data.default_timeframe as string,
 		};
 	},
 };

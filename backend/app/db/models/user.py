@@ -14,6 +14,8 @@ class User(Document):
     full_name: str | None = None
     is_active: bool = True
     is_superuser: bool = False
+    default_symbol: str = "BTC-USDT"
+    default_timeframe: str = "1h"
     password_changed_at: datetime | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
