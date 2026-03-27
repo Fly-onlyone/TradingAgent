@@ -2,6 +2,7 @@
  * Agent Components Exports
  */
 
+export { AgentChart } from "./AgentChart";
 export { AgentStatusBadge } from "./AgentStatusBadge";
 export { ChatInput } from "./ChatInput";
 export { ChatMessage } from "./ChatMessage";
