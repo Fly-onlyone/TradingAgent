@@ -1,5 +1,5 @@
 /**
- * Strategy Auto-Discovery configuration card for the Tasks page.
+ * Strategy Auto-Discovery configuration card for the Strategies page.
  */
 
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";

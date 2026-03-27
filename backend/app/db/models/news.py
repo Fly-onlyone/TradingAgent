@@ -38,6 +38,7 @@ class NewsSource(Document):
     crawl_enabled: bool = True
     crawl_interval_hours: int = 1
     strategy_extraction: bool = False  # Run AI strategy extraction on articles
+    auto_discovered: bool = False  # True if found via Brave Search discovery
     last_crawled: datetime | None = None
     last_error: str | None = None
 

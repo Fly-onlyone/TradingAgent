@@ -10,6 +10,7 @@ from app.db.models.user import User
 from app.knowledge.embeddings import StrategyEmbeddingGenerator
 from app.news.crawler import NewsCrawler
 from app.services.notification_service import NotificationService
+from app.services.source_discovery import SourceDiscoveryService
 from app.services.strategy_extractor import StrategyExtractor
 
 logger = logging.getLogger(__name__)
@@ -26,21 +27,35 @@ class StrategyDiscoveryService:
 
     async def run_discovery_cycle(self) -> dict:
         """Run one full discovery cycle across all strategy-extraction-enabled sources."""
+        app_settings = await AppSettings.get_instance()
+        min_confidence = app_settings.auto_discover_min_confidence
+
+        # Phase 1: Discover new sources and extract strategies via Brave Search
+        discovery_stats = {"new_sources": 0, "articles_fetched": 0, "strategies_extracted": 0}
+        try:
+            source_discovery = SourceDiscoveryService()
+            discovery_stats = await source_discovery.discover_and_extract()
+        except Exception:
+            logger.warning("Source discovery via Brave Search failed", exc_info=True)
+
+        # Phase 2: Crawl all strategy-extraction-enabled sources (including newly discovered ones)
         sources = await NewsSource.find(
             NewsSource.strategy_extraction == True,  # noqa: E712
             NewsSource.crawl_enabled == True,  # noqa: E712
         ).to_list()
 
-        stats = {"sources_crawled": 0, "articles_processed": 0, "strategies_found": 0}
+        stats = {
+            "sources_crawled": 0,
+            "articles_processed": 0,
+            "strategies_found": 0,
+            "discovery_new_sources": discovery_stats["new_sources"],
+            "discovery_articles_fetched": discovery_stats["articles_fetched"],
+            "discovery_strategies_extracted": discovery_stats["strategies_extracted"],
+        }
 
         if not sources:
-            logger.info(
-                "Strategy discovery: no sources with strategy_extraction enabled"
-            )
+            logger.info("Strategy discovery: no sources with strategy_extraction enabled")
             return stats
-
-        app_settings = await AppSettings.get_instance()
-        min_confidence = app_settings.auto_discover_min_confidence
 
         for source in sources:
             try:
@@ -49,9 +64,7 @@ class StrategyDiscoveryService:
 
                 for article in articles:
                     stats["articles_processed"] += 1
-                    strategy = await self._extract_and_save(
-                        article, source, min_confidence
-                    )
+                    strategy = await self._extract_and_save(article, source, min_confidence)
                     if strategy:
                         stats["strategies_found"] += 1
 
@@ -81,9 +94,7 @@ class StrategyDiscoveryService:
                 article.content, source_hint=article.url
             )
         except Exception:
-            logger.debug(
-                "AI extraction failed for article %s", article.url, exc_info=True
-            )
+            logger.debug("AI extraction failed for article %s", article.url, exc_info=True)
             return None
 
         # Validate: must have a meaningful name and at least entry rules
@@ -93,9 +104,7 @@ class StrategyDiscoveryService:
             return None
 
         # Deduplicate by strategy name
-        existing = await StrategyKnowledge.find_one(
-            StrategyKnowledge.name == extracted.name
-        )
+        existing = await StrategyKnowledge.find_one(StrategyKnowledge.name == extracted.name)
         if existing:
             return None
 
@@ -153,9 +162,7 @@ class StrategyDiscoveryService:
         )
         return knowledge
 
-    async def _notify_superusers(
-        self, strategy: StrategyKnowledge, article: NewsArticle
-    ) -> None:
+    async def _notify_superusers(self, strategy: StrategyKnowledge, article: NewsArticle) -> None:
         """Send notification to all superusers about a discovered strategy."""
         superusers = await User.find(User.is_superuser == True).to_list()  # noqa: E712
         for user in superusers:

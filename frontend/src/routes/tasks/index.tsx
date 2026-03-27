@@ -44,7 +44,6 @@ import { PageTransition } from "@/components/common/PageTransition";
 import { SectionHeader } from "@/components/common/SectionHeader";
 import { ZoomAwareSelect } from "@/components/common/ZoomAwareSelect";
 import { type Column, DataTable } from "@/components/data-display/DataTable";
-import { StrategyDiscoveryCard } from "@/components/tasks/StrategyDiscoveryCard";
 import { useUIStore } from "@/store/uiStore";
 import type {
 	AgentMode,
@@ -511,8 +510,6 @@ function TasksPage() {
 							{error ?? "Failed to load tasks"}
 						</Alert>
 					)}
-
-					<StrategyDiscoveryCard />
 
 					{isLoadingTasks ? (
 						<Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
