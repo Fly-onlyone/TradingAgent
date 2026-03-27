@@ -4,26 +4,36 @@
  * Read-only view of live market data used by the trading agent for automated decisions.
  */
 
+import SaveIcon from "@mui/icons-material/Save";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
 import TimelineIcon from "@mui/icons-material/Timeline";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import {
 	Alert,
+	Autocomplete,
 	Box,
+	Button,
 	Card,
 	CardContent,
+	CircularProgress,
 	Grid2 as Grid,
+	TextField,
 	ToggleButton,
 	ToggleButtonGroup,
 	Typography,
 } from "@mui/material";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { motion } from "framer-motion";
+import { useEffect, useMemo, useState } from "react";
+import type { SymbolInfo } from "@/api/endpoints/market";
+import { marketApi } from "@/api/endpoints/market";
 import { ordersApi } from "@/api/endpoints/orders";
 import {
 	marketOverviewQueryOptions,
+	marketSymbolsQueryOptions,
 	marketTickerQueryOptions,
+	userPreferencesQueryOptions,
 } from "@/api/queryOptions/market";
 import { PageTransition } from "@/components/common/PageTransition";
 import { SectionHeader } from "@/components/common/SectionHeader";
@@ -36,21 +46,23 @@ import {
 } from "@/components/trading";
 import { useMarketStore } from "@/store/marketStore";
 import { useOrderStore } from "@/store/orderStore";
+import { notify } from "@/store/uiStore";
 
 import { spring } from "@/utils/animations/variants";
-import { TIMEFRAMES } from "@/utils/constants";
+import { POPULAR_PAIRS, TIMEFRAMES } from "@/utils/constants";
 import { getErrorMessage } from "@/utils/errors";
-import {
-	formatPercent,
-	formatPrice,
-	formatVolume,
-} from "@/utils/formatters";
+import { formatPercent, formatPrice, formatVolume } from "@/utils/formatters";
 import { requireAuth } from "./-guards";
 
 export const Route = createFileRoute("/trading")({
 	beforeLoad: requireAuth,
 	component: TradingPage,
 });
+
+/** Grouped option for the symbol Autocomplete dropdown. */
+interface SymbolOption extends SymbolInfo {
+	group: string;
+}
 
 function TradingPage() {
 	const selectedSymbol = useMarketStore((state) => state.selectedSymbol);
@@ -59,6 +71,7 @@ function TradingPage() {
 		(state) => state.setSelectedTimeframe,
 	);
 	const setSelectedSymbol = useMarketStore((state) => state.setSelectedSymbol);
+	const loadPreferences = useMarketStore((state) => state.loadPreferences);
 	const watchlist = useMarketStore((state) => state.watchlist);
 	const liveTicker = useMarketStore(
 		(state) => state.tickers[state.selectedSymbol],
@@ -67,6 +80,92 @@ function TradingPage() {
 	const currentPosition = useOrderStore((state) =>
 		state.positions.find((position) => position.symbol === selectedSymbol),
 	);
+
+	const queryClient = useQueryClient();
+
+	// Local state for the preferences form
+	const [prefSymbol, setPrefSymbol] = useState(selectedSymbol);
+	const [prefTimeframe, setPrefTimeframe] = useState(selectedTimeframe);
+
+	// Load user preferences from backend on mount
+	const prefsQuery = useQuery({
+		...userPreferencesQueryOptions(),
+		refetchOnMount: "always",
+	});
+
+	useEffect(() => {
+		if (prefsQuery.data) {
+			loadPreferences(
+				prefsQuery.data.defaultSymbol,
+				prefsQuery.data.defaultTimeframe,
+			);
+			setPrefSymbol(prefsQuery.data.defaultSymbol);
+			setPrefTimeframe(prefsQuery.data.defaultTimeframe);
+		}
+	}, [prefsQuery.data, loadPreferences]);
+
+	// Fetch all OKX symbols
+	const symbolsQuery = useQuery({
+		...marketSymbolsQueryOptions(),
+	});
+
+	// Build grouped options: Popular first, then All
+	const symbolOptions = useMemo<SymbolOption[]>(() => {
+		const raw = symbolsQuery.data ?? [];
+		const popularSet = new Set(POPULAR_PAIRS);
+		const popular: SymbolOption[] = [];
+		const rest: SymbolOption[] = [];
+
+		for (const s of raw) {
+			if (popularSet.has(s.symbol)) {
+				popular.push({ ...s, group: "Popular" });
+			}
+			rest.push({ ...s, group: "All Instruments" });
+		}
+
+		// Ensure popular pairs show even if not in API response (fallback)
+		for (const pair of POPULAR_PAIRS) {
+			if (!popular.some((p) => p.symbol === pair)) {
+				const [base, quote] = pair.split("-");
+				popular.push({ symbol: pair, base, quote, group: "Popular" });
+			}
+		}
+
+		return [...popular, ...rest];
+	}, [symbolsQuery.data]);
+
+	// Find the currently selected option for Autocomplete
+	const selectedOption = useMemo<SymbolOption | null>(() => {
+		// Prefer the Popular group entry
+		return (
+			symbolOptions.find(
+				(o) => o.symbol === prefSymbol && o.group === "Popular",
+			) ??
+			symbolOptions.find((o) => o.symbol === prefSymbol) ?? {
+				symbol: prefSymbol,
+				base: prefSymbol.split("-")[0] ?? prefSymbol,
+				quote: prefSymbol.split("-")[1] ?? "USDT",
+				group: "Popular",
+			}
+		);
+	}, [symbolOptions, prefSymbol]);
+
+	// Save preferences mutation
+	const savePrefsMutation = useMutation({
+		mutationFn: () =>
+			marketApi.updateUserPreferences({
+				defaultSymbol: prefSymbol,
+				defaultTimeframe: prefTimeframe,
+			}),
+		onSuccess: (data) => {
+			queryClient.invalidateQueries({ queryKey: ["user", "preferences"] });
+			loadPreferences(data.defaultSymbol, data.defaultTimeframe);
+			notify.success("Trading preferences saved");
+		},
+		onError: (error) => {
+			notify.error("Failed to save preferences", getErrorMessage(error));
+		},
+	});
 
 	const tickerQuery = useQuery({
 		...marketTickerQueryOptions(selectedSymbol),
@@ -176,6 +275,108 @@ function TradingPage() {
 						{pageError}
 					</Alert>
 				) : null}
+
+				{/* Trading Preferences */}
+				<motion.div
+					initial={{ opacity: 0, y: 20 }}
+					animate={{ opacity: 1, y: 0 }}
+					transition={{ ...spring.snappy, delay: 0.15 }}
+				>
+					<Card sx={{ mb: 2 }}>
+						<CardContent>
+							<Typography variant="h6" gutterBottom>
+								Trading Preferences
+							</Typography>
+							<Grid container spacing={2} alignItems="center">
+								<Grid size={{ xs: 12, sm: 5 }}>
+									<Autocomplete<SymbolOption, false, false, false>
+										value={selectedOption}
+										onChange={(_, newValue) => {
+											if (newValue) {
+												setPrefSymbol(newValue.symbol);
+											}
+										}}
+										options={symbolOptions}
+										groupBy={(option) => option.group}
+										getOptionLabel={(option) => option.symbol}
+										renderOption={(props, option) => (
+											<li {...props} key={`${option.group}-${option.symbol}`}>
+												<Box>
+													<Typography variant="body2" fontWeight={600}>
+														{option.symbol}
+													</Typography>
+													<Typography variant="caption" color="text.secondary">
+														{option.base} / {option.quote}
+													</Typography>
+												</Box>
+											</li>
+										)}
+										isOptionEqualToValue={(option, value) =>
+											option.symbol === value.symbol &&
+											option.group === value.group
+										}
+										loading={symbolsQuery.isLoading}
+										renderInput={(params) => (
+											<TextField
+												{...params}
+												label="Default Symbol"
+												size="small"
+												helperText="Search OKX instruments"
+												slotProps={{
+													input: {
+														...params.InputProps,
+														endAdornment: (
+															<>
+																{symbolsQuery.isLoading ? (
+																	<CircularProgress size={18} />
+																) : null}
+																{params.InputProps.endAdornment}
+															</>
+														),
+													},
+												}}
+											/>
+										)}
+									/>
+								</Grid>
+								<Grid size={{ xs: 12, sm: 5 }}>
+									<ToggleButtonGroup
+										value={prefTimeframe}
+										exclusive
+										onChange={(_, value) => {
+											if (value) setPrefTimeframe(value);
+										}}
+										size="small"
+										sx={{ flexWrap: "wrap" }}
+									>
+										{TIMEFRAMES.map((tf) => (
+											<ToggleButton key={tf.value} value={tf.value}>
+												{tf.label}
+											</ToggleButton>
+										))}
+									</ToggleButtonGroup>
+								</Grid>
+								<Grid size={{ xs: 12, sm: 2 }}>
+									<Button
+										variant="contained"
+										startIcon={
+											savePrefsMutation.isPending ? (
+												<CircularProgress size={18} />
+											) : (
+												<SaveIcon />
+											)
+										}
+										onClick={() => savePrefsMutation.mutate()}
+										disabled={savePrefsMutation.isPending}
+										fullWidth
+									>
+										Save
+									</Button>
+								</Grid>
+							</Grid>
+						</CardContent>
+					</Card>
+				</motion.div>
 
 				<Grid container spacing={2}>
 					<Grid size={{ xs: 12 }}>

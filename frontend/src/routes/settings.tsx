@@ -1297,8 +1297,6 @@ function SettingsPage() {
 		defaultValues: {
 			email: user?.email || "",
 			username: user?.username || "",
-			defaultSymbol: "BTC-USDT",
-			defaultTimeframe: "1h",
 			notifications: {
 				email: true,
 				push: false,
@@ -1374,46 +1372,6 @@ function SettingsPage() {
 													fullWidth
 													error={!!errors.username}
 													helperText={errors.username?.message}
-												/>
-											)}
-										/>
-									</Grid>
-								</Grid>
-							</CardContent>
-						</Card>
-
-						{/* Trading Preferences */}
-						<Card sx={{ mb: 3 }}>
-							<CardContent>
-								<Typography variant="h6" gutterBottom>
-									Trading Preferences
-								</Typography>
-
-								<Grid container spacing={3}>
-									<Grid size={{ xs: 12, sm: 6 }}>
-										<Controller
-											name="defaultSymbol"
-											control={control}
-											render={({ field }) => (
-												<TextField
-													{...field}
-													label="Default Symbol"
-													fullWidth
-													helperText="Default trading pair to load"
-												/>
-											)}
-										/>
-									</Grid>
-									<Grid size={{ xs: 12, sm: 6 }}>
-										<Controller
-											name="defaultTimeframe"
-											control={control}
-											render={({ field }) => (
-												<TextField
-													{...field}
-													label="Default Timeframe"
-													fullWidth
-													helperText="Default chart timeframe"
 												/>
 											)}
 										/>

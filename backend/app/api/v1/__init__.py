@@ -19,11 +19,13 @@ from app.api.v1 import (
     strategies,
     strategy_import,
     strategy_ratings,
+    users,
 )
 
 router = APIRouter()
 
 router.include_router(auth.router, prefix="/auth", tags=["auth"])
+router.include_router(users.router, prefix="/users", tags=["users"])
 router.include_router(orders.router, prefix="/orders", tags=["orders"])
 router.include_router(
     strategy_import.router, prefix="/strategies/import", tags=["strategy-import"]

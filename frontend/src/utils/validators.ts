@@ -44,8 +44,6 @@ export const strategySchema = z.object({
 export const settingsSchema = z.object({
 	email: z.string().email("Invalid email address").optional(),
 	username: z.string().min(3).max(50).optional(),
-	defaultSymbol: z.string().optional(),
-	defaultTimeframe: z.string().optional(),
 	notifications: z
 		.object({
 			email: z.boolean(),
