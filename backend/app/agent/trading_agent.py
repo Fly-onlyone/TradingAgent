@@ -85,6 +85,7 @@ class TradingAgent:
         self._client: ClaudeSDKClient | None = None
         self._tool_calls_this_turn: list[dict] = []
         self._thinking_content_this_turn: str = ""
+        self._cancel_event = asyncio.Event()
 
     async def connect(self) -> None:
         """Initialize the SDK client and start a session.
@@ -141,6 +142,14 @@ class TradingAgent:
             self._client = None
             logger.info("Trading agent disconnected")
 
+    def cancel(self) -> None:
+        """Signal the running chat loop to stop after the current iteration."""
+        self._cancel_event.set()
+
+    def reset_cancel(self) -> None:
+        """Clear the cancel signal so the next chat() call runs normally."""
+        self._cancel_event.clear()
+
     async def _ensure_connected(self) -> None:
         """Connect lazily for background workers using the shared agent instance."""
         if not self._client:
@@ -165,6 +174,7 @@ class TradingAgent:
         """
         await self._ensure_connected()
 
+        self.reset_cancel()
         self._tool_calls_this_turn = []
         self._thinking_content_this_turn = ""
 
@@ -176,6 +186,10 @@ class TradingAgent:
             final_text_parts: list[str] = []
 
             async for message in self._client.receive_response():
+                if self._cancel_event.is_set():
+                    logger.info("Agent chat cancelled by user")
+                    break
+
                 if isinstance(message, AssistantMessage):
                     for block in message.content:
                         if isinstance(block, ThinkingBlock):

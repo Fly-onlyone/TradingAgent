@@ -107,6 +107,7 @@ function AgentPage() {
         messages,
         status,
         isThinking,
+        isCancelling,
         currentSessionId,
         sessionGroups,
         isLoadingSessions,
@@ -147,7 +148,7 @@ function AgentPage() {
     const isDecisionsTabActive = sidebarTab === "decisions";
 
     // WebSocket connection
-    const {isConnected, sendMessage, requestAnalysis, requestRecommendation} =
+    const {isConnected, sendMessage, requestAnalysis, requestRecommendation, sendCancel} =
         useAgentSocket();
 
     // Fetch sessions grouped by date
@@ -954,7 +955,9 @@ function AgentPage() {
                                 onSendMessage={handleSendMessage}
                                 onRequestAnalysis={handleRequestAnalysis}
                                 onRequestRecommendation={handleRequestRecommendation}
+                                onCancel={sendCancel}
                                 isThinking={isThinking}
+                                isCancelling={isCancelling}
                                 disabled={!isConnected}
                             />
                         </Box>
