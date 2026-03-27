@@ -3,8 +3,7 @@
  */
 
 import {useReducedMotion} from "framer-motion";
-import {useCallback, useEffect, useMemo, useRef} from "react";
-import {useUIStore} from "@/store/uiStore";
+import {useEffect, useMemo, useRef} from "react";
 import type {Particle, ParticleConfig,} from "@/utils/animations/particleEngine";
 import {createParticles, DEFAULT_CONFIG, drawParticles, updateParticles,} from "@/utils/animations/particleEngine";
 
@@ -16,22 +15,12 @@ export function ParticleGrid({config: configOverride}: ParticleGridProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const particlesRef = useRef<Particle[]>([]);
     const rafRef = useRef<number>(0);
-    const mouseRef = useRef({x: -1, y: -1});
     const prefersReduced = useReducedMotion();
-    const uiScaleRef = useRef(useUIStore.getState().uiScale);
-    useEffect(() => useUIStore.subscribe((s) => {
-        uiScaleRef.current = s.uiScale;
-    }), []);
 
     const config = useMemo(
         () => ({...DEFAULT_CONFIG, ...configOverride}),
         [configOverride],
     );
-
-    const handleMouseMove = useCallback((e: MouseEvent) => {
-        const zoom = uiScaleRef.current || 1;
-        mouseRef.current = {x: e.clientX / zoom, y: e.clientY / zoom};
-    }, []);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -55,7 +44,6 @@ export function ParticleGrid({config: configOverride}: ParticleGridProps) {
 
         resize();
         window.addEventListener("resize", resize);
-        document.addEventListener("mousemove", handleMouseMove, {passive: true});
 
         // Static rendering for reduced motion
         if (prefersReduced) {
@@ -68,7 +56,6 @@ export function ParticleGrid({config: configOverride}: ParticleGridProps) {
             );
             return () => {
                 window.removeEventListener("resize", resize);
-                document.removeEventListener("mousemove", handleMouseMove);
             };
         }
 
@@ -92,9 +79,6 @@ export function ParticleGrid({config: configOverride}: ParticleGridProps) {
                 particlesRef.current,
                 w,
                 h,
-                mouseRef.current.x,
-                mouseRef.current.y,
-                config,
                 dt,
             );
             drawParticles(ctx, particlesRef.current, w, h, config);
@@ -106,9 +90,8 @@ export function ParticleGrid({config: configOverride}: ParticleGridProps) {
         return () => {
             cancelAnimationFrame(rafRef.current);
             window.removeEventListener("resize", resize);
-            document.removeEventListener("mousemove", handleMouseMove);
         };
-    }, [prefersReduced, handleMouseMove, config]);
+    }, [prefersReduced, config]);
 
     return (
         <canvas

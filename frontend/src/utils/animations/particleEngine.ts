@@ -1,6 +1,6 @@
 /**
  * Lightweight canvas particle system (~3kb).
- * Renders connected particles with mouse interaction.
+ * Renders freely drifting connected particles.
  */
 
 export interface Particle {
@@ -15,8 +15,6 @@ export interface ParticleConfig {
 	count: number;
 	lineDistance: number;
 	lineOpacity: number;
-	mouseRadius: number;
-	mouseStrength: number;
 	speed: number;
 	color: string;
 }
@@ -25,8 +23,6 @@ export const DEFAULT_CONFIG: ParticleConfig = {
 	count: 130,
 	lineDistance: 180,
 	lineOpacity: 0.28,
-	mouseRadius: 250,
-	mouseStrength: 0.03,
 	speed: 0.3,
 	color: "249, 115, 22",
 };
@@ -54,24 +50,10 @@ export function updateParticles(
 	particles: Particle[],
 	width: number,
 	height: number,
-	mouseX: number,
-	mouseY: number,
-	config: ParticleConfig,
 	dt: number,
 ) {
 	const factor = Math.min(dt / 16, 2); // delta-time normalization, cap at 2x
 	for (const p of particles) {
-		// Mouse interaction
-		if (mouseX > 0 && mouseY > 0) {
-			const dx = mouseX - p.x;
-			const dy = mouseY - p.y;
-			const dist = Math.sqrt(dx * dx + dy * dy);
-			if (dist < config.mouseRadius && dist > 1) {
-				p.vx += (dx / dist) * config.mouseStrength * factor;
-				p.vy += (dy / dist) * config.mouseStrength * factor;
-			}
-		}
-
 		p.x += p.vx * factor;
 		p.y += p.vy * factor;
 
