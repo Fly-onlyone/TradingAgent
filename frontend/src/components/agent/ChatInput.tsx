@@ -5,6 +5,7 @@
 import LightbulbIcon from "@mui/icons-material/Lightbulb";
 import SendIcon from "@mui/icons-material/Send";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
+import StopIcon from "@mui/icons-material/Stop";
 import {
 	Box,
 	Button,
@@ -19,7 +20,9 @@ interface ChatInputProps {
 	onSendMessage: (message: string) => void;
 	onRequestAnalysis?: (symbol?: string) => void;
 	onRequestRecommendation?: () => void;
+	onCancel?: () => void;
 	isThinking?: boolean;
+	isCancelling?: boolean;
 	disabled?: boolean;
 }
 
@@ -27,7 +30,9 @@ export function ChatInput({
 	onSendMessage,
 	onRequestAnalysis,
 	onRequestRecommendation,
+	onCancel,
 	isThinking = false,
+	isCancelling = false,
 	disabled = false,
 }: ChatInputProps) {
 	const [message, setMessage] = useState("");
@@ -101,27 +106,51 @@ export function ChatInput({
 						},
 					}}
 				/>
-				<IconButton
-					color="primary"
-					onClick={handleSend}
-					disabled={!message.trim() || isThinking || disabled}
-					sx={{
-						bgcolor: "primary.main",
-						color: "white",
-						"&:hover": {
-							bgcolor: "primary.dark",
-						},
-						"&.Mui-disabled": {
-							bgcolor: "action.disabledBackground",
-						},
-					}}
-				>
-					{isThinking ? (
-						<CircularProgress size={24} color="inherit" />
-					) : (
+				{isThinking ? (
+					<Tooltip title={isCancelling ? "Cancelling..." : "Stop generation"}>
+						<span>
+							<IconButton
+								color="error"
+								onClick={onCancel}
+								disabled={isCancelling || !onCancel}
+								sx={{
+									bgcolor: "error.main",
+									color: "white",
+									"&:hover": {
+										bgcolor: "error.dark",
+									},
+									"&.Mui-disabled": {
+										bgcolor: "action.disabledBackground",
+									},
+								}}
+							>
+								{isCancelling ? (
+									<CircularProgress size={24} color="inherit" />
+								) : (
+									<StopIcon />
+								)}
+							</IconButton>
+						</span>
+					</Tooltip>
+				) : (
+					<IconButton
+						color="primary"
+						onClick={handleSend}
+						disabled={!message.trim() || disabled}
+						sx={{
+							bgcolor: "primary.main",
+							color: "white",
+							"&:hover": {
+								bgcolor: "primary.dark",
+							},
+							"&.Mui-disabled": {
+								bgcolor: "action.disabledBackground",
+							},
+						}}
+					>
 						<SendIcon />
-					)}
-				</IconButton>
+					</IconButton>
+				)}
 			</Box>
 		</Box>
 	);

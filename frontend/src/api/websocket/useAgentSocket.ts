@@ -39,11 +39,13 @@ interface AgentSocketMessage extends WebSocketMessage {
     type:
         | "message"
         | "thinking"
+        | "text_delta"
         | "tool_call"
         | "decision"
         | "error"
         | "status"
-        | "session_created";
+        | "session_created"
+        | "cancel_ack";
     data:
         | AgentMessage
         | ToolCall
@@ -61,6 +63,7 @@ export function useAgentSocket() {
         addMessage,
         updateStatus,
         setThinking,
+        setCancelling,
         addToolCall,
         setThinkingContent,
         appendStreamingText,
@@ -165,6 +168,10 @@ export function useAgentSocket() {
                     });
                     break;
                 }
+                case "cancel_ack":
+                    setThinking(false);
+                    setCancelling(false);
+                    break;
                 case "error":
                     addMessage({
                         id: crypto.randomUUID(),
@@ -180,6 +187,7 @@ export function useAgentSocket() {
             addMessage,
             updateStatus,
             setThinking,
+            setCancelling,
             addToolCall,
             setThinkingContent,
             setCurrentSessionId,
@@ -266,12 +274,18 @@ export function useAgentSocket() {
         [send, currentSessionId],
     );
 
+    const sendCancel = useCallback(() => {
+        setCancelling(true);
+        send({type: "cancel"});
+    }, [send, setCancelling]);
+
     return {
         isConnected,
         sendMessage,
         requestAnalysis,
         requestRecommendation,
         executeDecision,
+        sendCancel,
         disconnect,
         reconnect,
     };

@@ -1,5 +1,6 @@
 """Trading agent WebSocket endpoints for chat and status."""
 
+import asyncio
 import json
 import logging
 import uuid
@@ -177,6 +178,60 @@ async def agent_chat_websocket(
             },
         )
 
+        chat_task: asyncio.Task | None = None
+
+        async def _process_chat(user_message: str) -> None:
+            """Run agent.chat() and send the result back over the WebSocket."""
+            nonlocal session
+            try:
+                response = await agent.chat(user_message, on_event=send_event)
+
+                # Get tool calls and thinking content from this turn
+                tool_calls = agent.tool_calls or []
+                thinking_content = agent.thinking_content or None
+
+                # Send final response
+                await manager.send_personal(
+                    websocket,
+                    {
+                        "type": "message",
+                        "data": {
+                            "id": str(uuid.uuid4()),
+                            "role": "assistant",
+                            "content": response,
+                            "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+                            "toolCalls": tool_calls if tool_calls else None,
+                            "thinkingContent": thinking_content,
+                        },
+                    },
+                )
+
+                # Persist assistant message
+                session.add_message(
+                    role="assistant",
+                    content=response,
+                    tool_calls=tool_calls if tool_calls else None,
+                    thinking_content=thinking_content,
+                )
+                if not session.title:
+                    session.title = session.generate_title()
+                await session.save()
+
+            except asyncio.CancelledError:
+                # Task was cancelled via cancel request. The cancel_ack is sent
+                # by the cancel handler in the receive loop, so just re-raise.
+                raise
+            except Exception as e:
+                sentry_sdk.capture_exception(e)
+                logger.error("Agent error: %s", e, exc_info=True)
+                await manager.send_personal(
+                    websocket,
+                    {
+                        "type": "error",
+                        "data": {"error": f"Agent error: {e}"},
+                    },
+                )
+
         while True:
             data = await websocket.receive_text()
 
@@ -186,84 +241,6 @@ async def agent_chat_websocket(
 
             try:
                 message = json.loads(data)
-                user_message = _build_user_message(message)
-
-                if not user_message:
-                    continue
-
-                # Lazy session creation — only on first real message to
-                # avoid spamming empty sessions on reconnect attempts
-                if session is None:
-                    client_session_id = message.get("sessionId")
-                    if client_session_id:
-                        existing = await AgentSession.find_one(
-                            AgentSession.id == PydanticObjectId(client_session_id),
-                            AgentSession.user_id == user.id,
-                        )
-                        if existing:
-                            session = existing
-
-                    if session is None:
-                        session = AgentSession(user_id=user.id)
-                        await session.insert()
-                        await manager.send_personal(
-                            websocket,
-                            {
-                                "type": "session_created",
-                                "data": {"sessionId": str(session.id)},
-                            },
-                        )
-
-                # Persist user message
-                session.add_message(role="user", content=user_message)
-                await session.save()
-
-                # Process with trading agent
-                try:
-                    response = await agent.chat(user_message, on_event=send_event)
-
-                    # Get tool calls and thinking content from this turn
-                    tool_calls = agent.tool_calls or []
-                    thinking_content = agent.thinking_content or None
-
-                    # Send final response
-                    await manager.send_personal(
-                        websocket,
-                        {
-                            "type": "message",
-                            "data": {
-                                "id": str(uuid.uuid4()),
-                                "role": "assistant",
-                                "content": response,
-                                "timestamp": int(datetime.now(UTC).timestamp() * 1000),
-                                "toolCalls": tool_calls if tool_calls else None,
-                                "thinkingContent": thinking_content,
-                            },
-                        },
-                    )
-
-                    # Persist assistant message
-                    session.add_message(
-                        role="assistant",
-                        content=response,
-                        tool_calls=tool_calls if tool_calls else None,
-                        thinking_content=thinking_content,
-                    )
-                    if not session.title:
-                        session.title = session.generate_title()
-                    await session.save()
-
-                except Exception as e:
-                    sentry_sdk.capture_exception(e)
-                    logger.error("Agent error: %s", e, exc_info=True)
-                    await manager.send_personal(
-                        websocket,
-                        {
-                            "type": "error",
-                            "data": {"error": f"Agent error: {e}"},
-                        },
-                    )
-
             except json.JSONDecodeError:
                 await manager.send_personal(
                     websocket,
@@ -274,6 +251,62 @@ async def agent_chat_websocket(
                         },
                     },
                 )
+                continue
+
+            # Handle cancel requests
+            if message.get("type") == "cancel":
+                if chat_task and not chat_task.done():
+                    agent.cancel()
+                    chat_task.cancel()
+                    try:
+                        await chat_task
+                    except asyncio.CancelledError:
+                        pass
+                    chat_task = None
+                await manager.send_personal(websocket, {"type": "cancel_ack"})
+                continue
+
+            user_message = _build_user_message(message)
+            if not user_message:
+                continue
+
+            # Wait for any in-flight chat task before starting a new one
+            if chat_task and not chat_task.done():
+                try:
+                    await chat_task
+                except asyncio.CancelledError:
+                    pass
+
+            # Lazy session creation — only on first real message to
+            # avoid spamming empty sessions on reconnect attempts
+            if session is None:
+                client_session_id = message.get("sessionId")
+                if client_session_id:
+                    existing = await AgentSession.find_one(
+                        AgentSession.id == PydanticObjectId(client_session_id),
+                        AgentSession.user_id == user.id,
+                    )
+                    if existing:
+                        session = existing
+
+                if session is None:
+                    session = AgentSession(user_id=user.id)
+                    await session.insert()
+                    await manager.send_personal(
+                        websocket,
+                        {
+                            "type": "session_created",
+                            "data": {"sessionId": str(session.id)},
+                        },
+                    )
+
+            # Persist user message
+            session.add_message(role="user", content=user_message)
+            await session.save()
+
+            # Process with trading agent in a task so we can receive
+            # cancel messages while the agent is running.
+            chat_task = asyncio.create_task(_process_chat(user_message))
 
     except (WebSocketDisconnect, RuntimeError):
         # RuntimeError: "WebSocket is not connected" — raised by Starlette when
@@ -282,6 +315,12 @@ async def agent_chat_websocket(
     except Exception as e:
         logger.error("WebSocket handler error: %s", e, exc_info=True)
     finally:
+        if chat_task and not chat_task.done():
+            chat_task.cancel()
+            try:
+                await chat_task
+            except (asyncio.CancelledError, Exception):
+                pass
         if agent:
             try:
                 await agent.disconnect()

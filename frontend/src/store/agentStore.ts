@@ -38,6 +38,7 @@ interface AgentState {
     // Status
     status: AgentStatus;
     isThinking: boolean;
+    isCancelling: boolean;
     lastDecision: AgentDecision | null;
 
     // UI preferences
@@ -73,6 +74,7 @@ interface AgentState {
     // Status actions
     updateStatus: (status: string) => void;
     setThinking: (thinking: boolean) => void;
+    setCancelling: (v: boolean) => void;
     setLastDecision: (decision: AgentDecision | null) => void;
 
     // UI preference actions
@@ -109,6 +111,7 @@ export const useAgentStore = create<AgentState>()(
             // Status
             status: "disconnected",
             isThinking: false,
+            isCancelling: false,
             lastDecision: null,
 
             // UI preferences
@@ -187,6 +190,7 @@ export const useAgentStore = create<AgentState>()(
                     messages: [...state.messages, message].slice(-MAX_MESSAGES),
                     lastDecision: message.decision || state.lastDecision,
                     isThinking: false,
+                    isCancelling: false,
                     streamingText: "",
                     status: state.isThinking ? "connected" : state.status,
                 })),
@@ -258,11 +262,15 @@ export const useAgentStore = create<AgentState>()(
                 set((state) => ({
                     isThinking,
                     status: isThinking ? "thinking" : "connected",
+                    // Reset isCancelling when thinking stops
+                    ...(!isThinking ? {isCancelling: false} : {}),
                     // Reset turn state when starting a new thinking cycle
                     ...(isThinking && !state.isThinking
                         ? {currentTurnToolCalls: [], thinkingContent: ""}
                         : {}),
                 })),
+
+            setCancelling: (isCancelling) => set({isCancelling}),
 
             setLastDecision: (lastDecision) => set({lastDecision}),
 
