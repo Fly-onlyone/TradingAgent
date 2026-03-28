@@ -152,11 +152,7 @@ def _get_agent_sdk_model_aliases() -> list[str]:
     if annotation is None:
         return []
 
-    aliases = [
-        value
-        for value in _collect_literal_model_aliases(annotation)
-        if value != "inherit"
-    ]
+    aliases = [value for value in _collect_literal_model_aliases(annotation) if value != "inherit"]
 
     deduplicated: list[str] = []
     seen: set[str] = set()
@@ -355,9 +351,7 @@ async def update_agent_config(
         app_settings.agent_effort = body.effort
 
     await app_settings.save_with_timestamp()
-    logger.info(
-        "Agent config updated: auth_mode=%s", app_settings.agent_auth_mode.value
-    )
+    logger.info("Agent config updated: auth_mode=%s", app_settings.agent_auth_mode.value)
 
     effective_key = _resolve_api_key(app_settings)
     cli_logged_in = _check_cli_login()
@@ -398,9 +392,7 @@ async def test_agent_connection(
                 max_tokens=10,
                 messages=[{"role": "user", "content": "ping"}],
             )
-            friendly_name = _format_model_label(
-                family, DEFAULT_MODEL_BY_FAMILY.get(family)
-            )
+            friendly_name = _format_model_label(family, DEFAULT_MODEL_BY_FAMILY.get(family))
             return {
                 "success": True,
                 "message": f"Connected successfully (model: {friendly_name})",
@@ -542,9 +534,7 @@ async def update_embedding_config(
     if body.gaming_process_list is not None:
         app_settings.gaming_process_list = body.gaming_process_list
     if body.gaming_check_interval_minutes is not None:
-        app_settings.gaming_check_interval_minutes = max(
-            1, body.gaming_check_interval_minutes
-        )
+        app_settings.gaming_check_interval_minutes = max(1, body.gaming_check_interval_minutes)
 
     await app_settings.save_with_timestamp()
     logger.info(
@@ -659,6 +649,7 @@ class StrategyDiscoveryConfigResponse(BaseModel):
     interval_hours: int
     min_confidence: float
     max_sources: int
+    last_run_at: str | None = None
     sources: list[DiscoverySourceResponse]
 
 
@@ -695,6 +686,9 @@ async def get_strategy_discovery_config(
         "interval_hours": app_settings.auto_discover_interval_hours,
         "min_confidence": app_settings.auto_discover_min_confidence,
         "max_sources": app_settings.auto_discover_max_sources,
+        "last_run_at": app_settings.auto_discover_last_run_at.isoformat()
+        if app_settings.auto_discover_last_run_at
+        else None,
         "sources": [
             {
                 "id": str(s.id),
@@ -723,9 +717,7 @@ async def update_strategy_discovery_config(
     if body.interval_hours is not None:
         app_settings.auto_discover_interval_hours = max(1, body.interval_hours)
     if body.min_confidence is not None:
-        app_settings.auto_discover_min_confidence = max(
-            0.0, min(1.0, body.min_confidence)
-        )
+        app_settings.auto_discover_min_confidence = max(0.0, min(1.0, body.min_confidence))
     if body.max_sources is not None:
         app_settings.auto_discover_max_sources = max(1, min(100, body.max_sources))
 
@@ -733,9 +725,9 @@ async def update_strategy_discovery_config(
 
     # Reschedule the discovery job
     try:
-        from app.agent.task_scheduler import AgentTaskScheduler
+        from app.agent.task_scheduler import get_scheduler
 
-        scheduler = AgentTaskScheduler()
+        scheduler = get_scheduler()
         await scheduler.reschedule_auto_discovery()
     except Exception:
         logger.warning("Could not reschedule auto-discovery", exc_info=True)
@@ -749,6 +741,9 @@ async def update_strategy_discovery_config(
         "interval_hours": app_settings.auto_discover_interval_hours,
         "min_confidence": app_settings.auto_discover_min_confidence,
         "max_sources": app_settings.auto_discover_max_sources,
+        "last_run_at": app_settings.auto_discover_last_run_at.isoformat()
+        if app_settings.auto_discover_last_run_at
+        else None,
         "sources": [
             {
                 "id": str(s.id),
@@ -784,8 +779,18 @@ async def run_strategy_discovery_now(
             try:
                 service = StrategyDiscoveryService()
                 stats = await service.run_discovery_cycle(
-                    on_progress=on_progress, user_id=user_id,
+                    on_progress=on_progress,
+                    user_id=user_id,
                 )
+
+                # Persist last-run timestamp
+                from datetime import UTC
+                from datetime import datetime as _dt
+
+                _app = await AppSettings.get_instance()
+                _app.auto_discover_last_run_at = _dt.now(UTC)
+                await _app.save_with_timestamp()
+
                 await queue.put({"step": "complete", "stats": stats})
             except Exception as exc:
                 await queue.put({"step": "error", "message": str(exc)})
@@ -1029,9 +1034,7 @@ async def get_auth_config(
 ) -> dict:
     """Get current auth / token expiry configuration."""
     app_settings = await AppSettings.get_instance()
-    effective = (
-        app_settings.access_token_expire_minutes or settings.access_token_expire_minutes
-    )
+    effective = app_settings.access_token_expire_minutes or settings.access_token_expire_minutes
     return {"access_token_expire_minutes": effective}
 
 
@@ -1043,13 +1046,9 @@ async def update_auth_config(
     """Update token expiry configuration. 0 = no expiry."""
     app_settings = await AppSettings.get_instance()
     if body.access_token_expire_minutes is not None:
-        app_settings.access_token_expire_minutes = max(
-            0, body.access_token_expire_minutes
-        )
+        app_settings.access_token_expire_minutes = max(0, body.access_token_expire_minutes)
     await app_settings.save_with_timestamp()
-    effective = (
-        app_settings.access_token_expire_minutes or settings.access_token_expire_minutes
-    )
+    effective = app_settings.access_token_expire_minutes or settings.access_token_expire_minutes
     logger.info("Auth config updated (expire_minutes=%d)", effective)
     return {"access_token_expire_minutes": effective}
 
@@ -1094,7 +1093,5 @@ async def update_session_retention_config(
     except Exception:
         logger.warning("Could not reschedule session cleanup", exc_info=True)
 
-    logger.info(
-        "Session retention updated (days=%d)", app_settings.session_retention_days
-    )
+    logger.info("Session retention updated (days=%d)", app_settings.session_retention_days)
     return {"session_retention_days": app_settings.session_retention_days}

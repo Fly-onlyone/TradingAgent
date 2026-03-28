@@ -83,6 +83,7 @@ class AppSettings(Document):
     auto_discover_interval_hours: int = 6
     auto_discover_min_confidence: float = 0.5
     auto_discover_max_sources: int = 30
+    auto_discover_last_run_at: datetime | None = None
 
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -110,9 +111,7 @@ class AppSettings(Document):
         canonical_id: Any,
         instance: AppSettings,
     ) -> None:
-        archive_collection = cls.get_pymongo_collection().database[
-            "app_settings_conflicts"
-        ]
+        archive_collection = cls.get_pymongo_collection().database["app_settings_conflicts"]
         archived_doc = instance.model_dump(mode="python")
         archived_doc.pop("id", None)
         archived_doc["original_id"] = instance.id
@@ -174,9 +173,7 @@ class AppSettings(Document):
 
         migrated = await instance.migrate_plaintext_secrets_if_needed()
         if migrated:
-            logger.info(
-                "Migrated legacy plaintext app settings secrets to encrypted format"
-            )
+            logger.info("Migrated legacy plaintext app settings secrets to encrypted format")
 
         cls._cached_instance = instance
         return instance
@@ -240,9 +237,7 @@ class AppSettings(Document):
 
     def has_persisted_secret_values(self) -> bool:
         """Return True when any secret field has a non-empty stored value."""
-        return any(
-            bool(getattr(self, field_name)) for field_name in self.SECRET_FIELD_NAMES
-        )
+        return any(bool(getattr(self, field_name)) for field_name in self.SECRET_FIELD_NAMES)
 
     def has_encrypted_secret_values(self) -> bool:
         """Return True when at least one stored secret uses encrypted marker format."""

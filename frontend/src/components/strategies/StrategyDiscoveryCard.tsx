@@ -30,6 +30,7 @@ import { ZoomAwareSelect } from "@/components/common/ZoomAwareSelect";
 import { useAuthStore } from "@/store/authStore";
 import { useDiscoveryStore } from "@/store/discoveryStore";
 import { notify } from "@/store/uiStore";
+import { formatRelativeTime } from "@/utils/formatters";
 
 const INTERVAL_OPTIONS = [
 	{ value: 1, label: "Every hour" },
@@ -228,6 +229,11 @@ export function StrategyDiscoveryCard() {
 								>
 									{isRunning ? "Running..." : "Run Now"}
 								</Button>
+								{config?.lastRunAt && !isRunning && (
+									<Typography variant="caption" color="text.secondary">
+										Last run: {formatRelativeTime(config.lastRunAt)}
+									</Typography>
+								)}
 								{runResult && !isRunning && (
 									<Alert severity="info" sx={{ py: 0 }}>
 										{runResult}
