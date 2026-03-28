@@ -77,6 +77,7 @@ class AppSettings(Document):
 
     # Chat session retention
     session_retention_days: int = 0  # 0 = keep forever
+    session_cleanup_last_run_at: datetime | None = None
 
     # Strategy auto-discovery from news sources
     auto_discover_enabled: bool = False

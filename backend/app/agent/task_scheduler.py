@@ -34,6 +34,8 @@ from app.db.models.notification import Notification, NotificationType
 
 logger = logging.getLogger(__name__)
 
+_SESSION_CLEANUP_INTERVAL_HOURS = 6
+
 
 class AgentTaskScheduler:
     """Schedules and manages agent trading tasks."""
@@ -227,7 +229,7 @@ class AgentTaskScheduler:
 
         self.scheduler.add_job(
             self._cleanup_old_sessions,
-            IntervalTrigger(hours=6),
+            IntervalTrigger(hours=_SESSION_CLEANUP_INTERVAL_HOURS),
             id=job_id,
             name="Cleanup old chat sessions",
             replace_existing=True,
@@ -236,6 +238,28 @@ class AgentTaskScheduler:
             "Session cleanup scheduled (retention=%d days)",
             app_settings.session_retention_days,
         )
+
+        await self._maybe_run_missed_session_cleanup(app_settings)
+
+    async def _maybe_run_missed_session_cleanup(self, app_settings: Any) -> None:
+        """Fire a catch-up session cleanup run after missed intervals (sleep/shutdown)."""
+        last_run = app_settings.session_cleanup_last_run_at
+        if last_run is None:
+            logger.info("Session cleanup has never run — triggering initial cleanup")
+            asyncio.create_task(self._cleanup_old_sessions())  # noqa: RUF006
+            return
+
+        if last_run.tzinfo is None:
+            last_run = last_run.replace(tzinfo=UTC)
+
+        elapsed = datetime.now(UTC) - last_run
+        cleanup_interval = timedelta(hours=_SESSION_CLEANUP_INTERVAL_HOURS)
+        if elapsed > cleanup_interval:
+            logger.info(
+                "Session cleanup overdue by %s — triggering catch-up run",
+                elapsed - cleanup_interval,
+            )
+            asyncio.create_task(self._cleanup_old_sessions())  # noqa: RUF006
 
     async def _cleanup_old_sessions(self) -> None:
         """Delete chat sessions older than the configured retention period."""
@@ -267,6 +291,9 @@ class AgentTaskScheduler:
                     logger.info(
                         "Cleaned up %d old sessions (retention=%d days)", len(old_sessions), days
                     )
+
+                app_settings.session_cleanup_last_run_at = datetime.now(UTC)
+                await app_settings.save_with_timestamp()
             except Exception:
                 logger.exception("Session cleanup failed")
 
