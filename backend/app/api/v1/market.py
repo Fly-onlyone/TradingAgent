@@ -1,6 +1,7 @@
 """Market data endpoints using Beanie ODM."""
 
 import logging
+import time
 from datetime import UTC, datetime
 
 import sentry_sdk
@@ -324,41 +325,54 @@ async def get_market_overview(
     )
 
 
+# In-memory instruments cache (avoids hitting OKX API on every request)
+_instruments_cache: tuple[float, list[dict]] | None = None
+_INSTRUMENTS_CACHE_TTL = 300  # 5 minutes
+
+_FALLBACK_SYMBOLS = [
+    {"symbol": "BTC-USDT", "base": "BTC", "quote": "USDT"},
+    {"symbol": "ETH-USDT", "base": "ETH", "quote": "USDT"},
+    {"symbol": "SOL-USDT", "base": "SOL", "quote": "USDT"},
+    {"symbol": "XRP-USDT", "base": "XRP", "quote": "USDT"},
+    {"symbol": "DOGE-USDT", "base": "DOGE", "quote": "USDT"},
+]
+
+
+async def _get_cached_instruments() -> list[dict]:
+    """Fetch OKX SPOT instruments with a 5-min in-memory cache."""
+    global _instruments_cache  # noqa: PLW0603
+    now = time.monotonic()
+
+    if _instruments_cache and (now - _instruments_cache[0]) < _INSTRUMENTS_CACHE_TTL:
+        return list(_instruments_cache[1])
+
+    client = await OKXClient.create()
+    result = await client.get_instruments("SPOT")
+    if result.get("code") == "0" and result.get("data"):
+        symbols = [
+            {
+                "symbol": inst["instId"],
+                "base": inst["baseCcy"],
+                "quote": inst["quoteCcy"],
+            }
+            for inst in result["data"]
+        ]
+        _instruments_cache = (now, symbols)
+        return list(symbols)
+
+    return list(_FALLBACK_SYMBOLS)
+
+
 @router.get("/symbols")
 async def list_symbols(
     quote_currency: str | None = None,
     current_user: User = Depends(get_current_active_user),
 ) -> dict:
     """List available trading symbols from OKX."""
-    client = await OKXClient.create()
-
     try:
-        result = await client.get_instruments("SPOT")
-        if result.get("code") == "0" and result.get("data"):
-            symbols = [
-                {
-                    "symbol": inst["instId"],
-                    "base": inst["baseCcy"],
-                    "quote": inst["quoteCcy"],
-                }
-                for inst in result["data"]
-            ]
-
-            if quote_currency:
-                symbols = [s for s in symbols if s["quote"] == quote_currency.upper()]
-
-            return {"symbols": symbols[:100]}  # Limit to 100 symbols
+        symbols = await _get_cached_instruments()
     except Exception:
-        pass
-
-    # Fallback common pairs
-    symbols = [
-        {"symbol": "BTC-USDT", "base": "BTC", "quote": "USDT"},
-        {"symbol": "ETH-USDT", "base": "ETH", "quote": "USDT"},
-        {"symbol": "SOL-USDT", "base": "SOL", "quote": "USDT"},
-        {"symbol": "XRP-USDT", "base": "XRP", "quote": "USDT"},
-        {"symbol": "DOGE-USDT", "base": "DOGE", "quote": "USDT"},
-    ]
+        symbols = list(_FALLBACK_SYMBOLS)
 
     if quote_currency:
         symbols = [s for s in symbols if s["quote"] == quote_currency.upper()]

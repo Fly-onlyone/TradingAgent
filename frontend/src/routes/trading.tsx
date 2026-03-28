@@ -30,15 +30,18 @@ import type { SymbolInfo } from "@/api/endpoints/market";
 import { marketApi } from "@/api/endpoints/market";
 import { ordersApi } from "@/api/endpoints/orders";
 import {
+	marketAccountQueryOptions,
 	marketOverviewQueryOptions,
 	marketSymbolsQueryOptions,
 	marketTickerQueryOptions,
 	userPreferencesQueryOptions,
 } from "@/api/queryOptions/market";
+import { CoinIcon } from "@/components/common/CoinIcon";
 import { PageTransition } from "@/components/common/PageTransition";
 import { SectionHeader } from "@/components/common/SectionHeader";
 import { StatCard } from "@/components/data-display/StatCard";
 import {
+	HoldingsCard,
 	MarketOverviewPanel,
 	PositionCard,
 	RecentOrderActivity,
@@ -179,6 +182,12 @@ function TradingPage() {
 		retry: 1,
 	});
 
+	const accountQuery = useQuery({
+		...marketAccountQueryOptions(),
+		refetchInterval: 60_000,
+		retry: 1,
+	});
+
 	const orderHistoryQuery = useQuery({
 		queryKey: ["orders", "okx", "history", selectedSymbol, 20],
 		queryFn: () =>
@@ -301,13 +310,28 @@ function TradingPage() {
 										getOptionLabel={(option) => option.symbol}
 										renderOption={(props, option) => (
 											<li {...props} key={`${option.group}-${option.symbol}`}>
-												<Box>
-													<Typography variant="body2" fontWeight={600}>
-														{option.symbol}
-													</Typography>
-													<Typography variant="caption" color="text.secondary">
-														{option.base} / {option.quote}
-													</Typography>
+												<Box
+													sx={{
+														display: "flex",
+														alignItems: "center",
+														gap: 1.5,
+													}}
+												>
+													<CoinIcon symbol={option.base} size={28} />
+													<Box>
+														<Typography
+															variant="body2"
+															fontWeight={600}
+														>
+															{option.symbol}
+														</Typography>
+														<Typography
+															variant="caption"
+															color="text.secondary"
+														>
+															{option.base} / {option.quote}
+														</Typography>
+													</Box>
 												</Box>
 											</li>
 										)}
@@ -470,6 +494,13 @@ function TradingPage() {
 									</CardContent>
 								</Card>
 							)}
+
+							<HoldingsCard
+								currencies={accountQuery.data?.currencies ?? []}
+								isLoading={accountQuery.isPending}
+								error={accountQuery.data?.error ?? null}
+								onSelectSymbol={setSelectedSymbol}
+							/>
 						</Box>
 					</Grid>
 

@@ -2,6 +2,7 @@
  * Common Components Exports
  */
 
+export {CoinIcon} from "./CoinIcon";
 export {ConfirmDialog} from "./ConfirmDialog";
 export {EmptyState} from "./EmptyState";
 export {ErrorBoundary} from "./ErrorBoundary";
