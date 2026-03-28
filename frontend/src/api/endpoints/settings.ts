@@ -121,6 +121,7 @@ export interface StrategyDiscoveryConfig {
 	intervalHours: number;
 	minConfidence: number;
 	maxSources: number;
+	lastRunAt: string | null;
 	sources: StrategyDiscoverySource[];
 }
 
@@ -530,6 +531,7 @@ function transformStrategyDiscoveryConfig(
 		intervalHours: data.interval_hours as number,
 		minConfidence: data.min_confidence as number,
 		maxSources: (data.max_sources as number) ?? 30,
+		lastRunAt: (data.last_run_at as string) ?? null,
 		sources: rawSources.map((s) => ({
 			id: s.id as string,
 			name: s.name as string,
