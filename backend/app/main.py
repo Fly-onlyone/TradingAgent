@@ -4,9 +4,9 @@ import asyncio
 import logging
 import re
 import sys
-from typing import Any
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any
 
 # Defense-in-depth: set ProactorEventLoop on Windows in case this module is
 # imported before the event loop is created (e.g. running uvicorn directly).
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 def _traces_sampler(sampling_context: dict) -> float:
     """Custom sampler: downsample noisy endpoints, use configured rate otherwise."""
-    name = sampling_context.get("transaction_context", {}).get("name", "")
+    del sampling_context
     return settings.sentry_traces_sample_rate
 
 
