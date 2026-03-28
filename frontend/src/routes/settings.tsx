@@ -56,9 +56,11 @@ import {getErrorMessage} from "@/utils/errors";
 import {type ChangePasswordInput, changePasswordSchema, type SettingsInput, settingsSchema,} from "@/utils/validators";
 import {requireAuth} from "./-guards";
 
+const ProfiledSettingsPage = Sentry.withProfiler(SettingsPage);
+
 export const Route = createFileRoute("/settings")({
     beforeLoad: requireAuth,
-    component: SettingsPage,
+    component: ProfiledSettingsPage,
 });
 
 function EmbeddingConfigCard() {
@@ -1544,3 +1546,4 @@ function SettingsPage() {
         </PageTransition>
     );
 }
+

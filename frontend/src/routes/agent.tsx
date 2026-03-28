@@ -60,9 +60,11 @@ import {useAgentStore} from "@/store/agentStore";
 import type {SessionMessage} from "@/types/session";
 import {requireAuth} from "./-guards";
 
+const ProfiledAgentPage = Sentry.withProfiler(AgentPage);
+
 export const Route = createFileRoute("/agent")({
     beforeLoad: requireAuth,
-    component: AgentPage,
+    component: ProfiledAgentPage,
 });
 
 // Sidebar tab type

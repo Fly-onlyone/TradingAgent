@@ -1,10 +1,36 @@
-const pendingNavigations = new Map<string, number>();
+import * as Sentry from "@sentry/react";
+
+type PendingNavigation = {
+    finish: () => void;
+    startedAt: number;
+};
+
+const pendingNavigations = new Map<string, PendingNavigation>();
 
 export function markNavStart(routeId: string): void {
     if (typeof performance === 'undefined') {
         return;
     }
-    pendingNavigations.set(routeId, performance.now());
+
+    const existing = pendingNavigations.get(routeId);
+    if (existing) {
+        existing.finish();
+        pendingNavigations.delete(routeId);
+    }
+
+    Sentry.startSpanManual(
+        {
+            name: `route.transition ${routeId}`,
+            op: "ui.navigation",
+        },
+        (span, finish) => {
+            span.setAttribute("route.id", routeId);
+            pendingNavigations.set(routeId, {
+                finish,
+                startedAt: performance.now(),
+            });
+        },
+    );
 }
 
 export function markNavEnd(routeId: string): number | null {
@@ -12,13 +38,15 @@ export function markNavEnd(routeId: string): number | null {
         return null;
     }
 
-    const startedAt = pendingNavigations.get(routeId);
-    if (startedAt === undefined) {
+    const pendingNavigation = pendingNavigations.get(routeId);
+    if (!pendingNavigation) {
         return null;
     }
 
     pendingNavigations.delete(routeId);
-    return performance.now() - startedAt;
+    const durationMs = performance.now() - pendingNavigation.startedAt;
+    pendingNavigation.finish();
+    return durationMs;
 }
 
 export function reportNavDuration(routeId: string, durationMs: number): void {

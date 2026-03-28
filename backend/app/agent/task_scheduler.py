@@ -161,6 +161,8 @@ class AgentTaskScheduler:
         )
         logger.info("Strategy auto-discovery scheduled every %d hours", hours)
 
+        await self._maybe_run_missed_discovery(app_settings, hours)
+
     async def _run_strategy_discovery(self) -> None:
         """Execute one strategy discovery cycle."""
         from app.services.strategy_discovery import StrategyDiscoveryService
@@ -170,8 +172,35 @@ class AgentTaskScheduler:
                 service = StrategyDiscoveryService()
                 stats = await service.run_discovery_cycle()
                 logger.info("Strategy discovery stats: %s", stats)
+
+                # Persist last-run timestamp for missed-run detection on restart
+                from app.db.models.app_settings import AppSettings
+
+                app_settings = await AppSettings.get_instance()
+                app_settings.auto_discover_last_run_at = datetime.now(UTC)
+                await app_settings.save_with_timestamp()
             except Exception:
                 logger.exception("Strategy auto-discovery cycle failed")
+
+    async def _maybe_run_missed_discovery(self, app_settings: Any, interval_hours: int) -> None:
+        """Fire a catch-up discovery run if overdue (e.g. after sleep/shutdown)."""
+        last_run = app_settings.auto_discover_last_run_at
+        if last_run is None:
+            logger.info("Strategy auto-discovery has never run — triggering initial run")
+            asyncio.create_task(self._run_strategy_discovery())  # noqa: RUF006
+            return
+
+        # Handle naive datetimes from DB
+        if last_run.tzinfo is None:
+            last_run = last_run.replace(tzinfo=UTC)
+
+        elapsed = datetime.now(UTC) - last_run
+        if elapsed > timedelta(hours=interval_hours):
+            logger.info(
+                "Strategy auto-discovery overdue by %s — triggering catch-up run",
+                elapsed - timedelta(hours=interval_hours),
+            )
+            asyncio.create_task(self._run_strategy_discovery())  # noqa: RUF006
 
     async def reschedule_auto_discovery(self) -> None:
         """Public method to reschedule after settings change."""
