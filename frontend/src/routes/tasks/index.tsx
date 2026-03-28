@@ -37,13 +37,17 @@ import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { format, parse } from "date-fns";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { SymbolOption } from "@/api/endpoints/market";
 import { tasksApi } from "@/api/endpoints/tasks";
+import { CoinIcon } from "@/components/common/CoinIcon";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { PageTransition } from "@/components/common/PageTransition";
 import { SectionHeader } from "@/components/common/SectionHeader";
+import { ZoomAwareAutocomplete } from "@/components/common/ZoomAwareAutocomplete";
 import { ZoomAwareSelect } from "@/components/common/ZoomAwareSelect";
 import { type Column, DataTable } from "@/components/data-display/DataTable";
+import { useSymbolOptions } from "@/hooks/useSymbolOptions";
 import { useUIStore } from "@/store/uiStore";
 import type {
 	AgentMode,
@@ -64,20 +68,6 @@ export const Route = createFileRoute("/tasks/")({
 	component: TasksPage,
 });
 
-// Constants
-const AVAILABLE_SYMBOLS = [
-	"BTC-USDT",
-	"ETH-USDT",
-	"SOL-USDT",
-	"XRP-USDT",
-	"DOGE-USDT",
-	"ADA-USDT",
-	"AVAX-USDT",
-	"DOT-USDT",
-	"LINK-USDT",
-	"MATIC-USDT",
-];
-
 const DAYS_OF_WEEK = [
 	{ value: 0, label: "Monday" },
 	{ value: 1, label: "Tuesday" },
@@ -91,6 +81,7 @@ const DAYS_OF_WEEK = [
 function TasksPage() {
 	const queryClient = useQueryClient();
 	const backendStatus = useUIStore((s) => s.backendStatus);
+	const { symbolOptions, isLoading: symbolsLoading } = useSymbolOptions();
 	const createUiKey = useCallback(() => crypto.randomUUID(), []);
 
 	const [existingTaskId, setExistingTaskId] = useState<string | null>(null);
@@ -116,6 +107,22 @@ function TasksPage() {
 		alertCooldownMinutes: 60,
 		useSubagents: false,
 	});
+
+	const selectedSymbolOptions = useMemo<SymbolOption[]>(() => {
+		return formData.symbols.map((sym) => {
+			const found =
+				symbolOptions.find((o) => o.symbol === sym && o.group === "Popular") ??
+				symbolOptions.find((o) => o.symbol === sym);
+			if (found) return found;
+			const [base, quote] = sym.split("-");
+			return {
+				symbol: sym,
+				base: base ?? sym,
+				quote: quote ?? "USDT",
+				group: "Popular",
+			};
+		});
+	}, [formData.symbols, symbolOptions]);
 
 	const tasksQuery = useQuery({
 		queryKey: ["tasks"],
@@ -551,39 +558,90 @@ function TasksPage() {
 											rows={2}
 										/>
 
-										<FormControl fullWidth>
-											<InputLabel>Symbols</InputLabel>
-											<ZoomAwareSelect
-												multiple
-												value={formData.symbols}
-												label="Symbols"
-												onChange={(e) =>
-													setFormData({
-														...formData,
-														symbols: e.target.value as string[],
-													})
-												}
-												renderValue={(selected) => (
+										<ZoomAwareAutocomplete<SymbolOption, true, false, false>
+											multiple
+											filterSelectedOptions
+											value={selectedSymbolOptions}
+											onChange={(_, newValue) => {
+												const uniqueSymbols = [
+													...new Set(newValue.map((opt) => opt.symbol)),
+												];
+												setFormData({
+													...formData,
+													symbols: uniqueSymbols,
+												});
+											}}
+											options={symbolOptions}
+											groupBy={(option) => option.group}
+											getOptionLabel={(option) => option.symbol}
+											renderOption={(props, option) => (
+												<li {...props} key={`${option.group}-${option.symbol}`}>
 													<Box
 														sx={{
 															display: "flex",
-															flexWrap: "wrap",
-															gap: 0.5,
+															alignItems: "center",
+															gap: 1.5,
 														}}
 													>
-														{selected.map((value) => (
-															<Chip key={value} label={value} size="small" />
-														))}
+														<CoinIcon symbol={option.base} size={28} />
+														<Box>
+															<Typography variant="body2" fontWeight={600}>
+																{option.symbol}
+															</Typography>
+															<Typography
+																variant="caption"
+																color="text.secondary"
+															>
+																{option.base} / {option.quote}
+															</Typography>
+														</Box>
 													</Box>
-												)}
-											>
-												{AVAILABLE_SYMBOLS.map((symbol) => (
-													<MenuItem key={symbol} value={symbol}>
-														{symbol}
-													</MenuItem>
-												))}
-											</ZoomAwareSelect>
-										</FormControl>
+												</li>
+											)}
+											renderTags={(value, getTagProps) =>
+												value.map((option, index) => {
+													const { key, ...tagProps } = getTagProps({ index });
+													return (
+														<Chip
+															key={key}
+															label={option.symbol}
+															size="small"
+															icon={<CoinIcon symbol={option.base} size={18} />}
+															{...tagProps}
+														/>
+													);
+												})
+											}
+											isOptionEqualToValue={(option, value) =>
+												option.symbol === value.symbol &&
+												option.group === value.group
+											}
+											loading={symbolsLoading}
+											renderInput={(params) => (
+												<TextField
+													{...params}
+													label="Symbols"
+													placeholder={
+														formData.symbols.length === 0
+															? "Search instruments..."
+															: ""
+													}
+													slotProps={{
+														input: {
+															...params.InputProps,
+															endAdornment: (
+																<>
+																	{symbolsLoading ? (
+																		<CircularProgress size={18} />
+																	) : null}
+																	{params.InputProps.endAdornment}
+																</>
+															),
+														},
+													}}
+												/>
+											)}
+										/>
 
 										<Typography
 											variant="overline"
