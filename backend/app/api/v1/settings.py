@@ -5,10 +5,12 @@ import os
 import shutil
 import subprocess
 import sys
+from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any, Literal, get_args, get_origin
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.api.deps import get_current_superuser
@@ -656,6 +658,7 @@ class StrategyDiscoveryConfigResponse(BaseModel):
     enabled: bool
     interval_hours: int
     min_confidence: float
+    max_sources: int
     sources: list[DiscoverySourceResponse]
 
 
@@ -663,12 +666,16 @@ class StrategyDiscoveryConfigUpdate(BaseModel):
     enabled: bool | None = None
     interval_hours: int | None = None
     min_confidence: float | None = None
+    max_sources: int | None = None
 
 
 class DiscoveryRunResult(BaseModel):
     sources_crawled: int
     articles_processed: int
     strategies_found: int
+    discovery_new_sources: int = 0
+    discovery_articles_fetched: int = 0
+    discovery_strategies_extracted: int = 0
 
 
 @router.get("/strategy-discovery", response_model=StrategyDiscoveryConfigResponse)
@@ -687,6 +694,7 @@ async def get_strategy_discovery_config(
         "enabled": app_settings.auto_discover_enabled,
         "interval_hours": app_settings.auto_discover_interval_hours,
         "min_confidence": app_settings.auto_discover_min_confidence,
+        "max_sources": app_settings.auto_discover_max_sources,
         "sources": [
             {
                 "id": str(s.id),
@@ -718,6 +726,8 @@ async def update_strategy_discovery_config(
         app_settings.auto_discover_min_confidence = max(
             0.0, min(1.0, body.min_confidence)
         )
+    if body.max_sources is not None:
+        app_settings.auto_discover_max_sources = max(1, min(100, body.max_sources))
 
     await app_settings.save_with_timestamp()
 
@@ -738,6 +748,7 @@ async def update_strategy_discovery_config(
         "enabled": app_settings.auto_discover_enabled,
         "interval_hours": app_settings.auto_discover_interval_hours,
         "min_confidence": app_settings.auto_discover_min_confidence,
+        "max_sources": app_settings.auto_discover_max_sources,
         "sources": [
             {
                 "id": str(s.id),
@@ -751,16 +762,48 @@ async def update_strategy_discovery_config(
     }
 
 
-@router.post("/strategy-discovery/run-now", response_model=DiscoveryRunResult)
+@router.post("/strategy-discovery/run-now")
 async def run_strategy_discovery_now(
-    _: User = Depends(get_current_superuser),
-) -> dict:
-    """Run one strategy discovery cycle immediately."""
+    current_user: User = Depends(get_current_superuser),
+) -> StreamingResponse:
+    """Run one strategy discovery cycle with streaming progress via SSE."""
+    import asyncio
+    import json
+
     from app.services.strategy_discovery import StrategyDiscoveryService
 
-    service = StrategyDiscoveryService()
-    stats = await service.run_discovery_cycle()
-    return stats
+    user_id = current_user.id
+
+    async def event_stream() -> AsyncGenerator[str, None]:
+        queue: asyncio.Queue[dict | None] = asyncio.Queue()
+
+        async def on_progress(event: dict) -> None:
+            await queue.put(event)
+
+        async def run_cycle() -> None:
+            try:
+                service = StrategyDiscoveryService()
+                stats = await service.run_discovery_cycle(
+                    on_progress=on_progress, user_id=user_id,
+                )
+                await queue.put({"step": "complete", "stats": stats})
+            except Exception as exc:
+                await queue.put({"step": "error", "message": str(exc)})
+            finally:
+                await queue.put(None)
+
+        asyncio.create_task(run_cycle())  # noqa: RUF006
+        while True:
+            event = await queue.get()
+            if event is None:
+                break
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ── Exchange (OKX) Configuration ────────────────────────────────

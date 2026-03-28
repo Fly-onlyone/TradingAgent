@@ -1,10 +1,9 @@
 """AI-powered strategy extraction from unstructured content using Claude."""
 
+import json
 import logging
 
 from pydantic import BaseModel
-
-from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +69,27 @@ risk-reward ratios when mentioned.
 If the content doesn't describe a complete strategy, extract whatever is available and use \
 reasonable defaults for missing fields. Always call the save_strategy tool with your extraction."""
 
+# Variant for subscription mode (no tool_use, output JSON directly)
+SYSTEM_PROMPT_JSON = """\
+You are a trading strategy analyst. Extract structured trading strategy data from the provided content.
+
+Extract as much actionable detail as possible. For entry/exit rules, be specific about indicators, \
+thresholds, and conditions. For risk parameters, extract position sizing, stop-loss rules, and \
+risk-reward ratios when mentioned.
+
+Output ONLY a JSON object with these fields (no other text):
+{
+  "name": "strategy name",
+  "description": "1-3 sentence summary",
+  "entry_rules": {"rule_name": "rule details", ...},
+  "exit_rules": {"rule_name": "rule details", ...},
+  "risk_params": {"param_name": "value", ...},
+  "symbols": ["BTC-USDT", ...],
+  "timeframes": ["1H", "4H", ...],
+  "market_conditions": ["trending", ...],
+  "asset_classes": ["crypto", ...]
+}"""
+
 MAX_CONTENT_LENGTH = 30_000
 
 
@@ -88,20 +108,47 @@ class ExtractedStrategy(BaseModel):
 
 
 class StrategyExtractor:
-    """Extract structured strategy data from unstructured content using Claude."""
+    """Extract structured strategy data from unstructured content using Claude.
 
-    def __init__(self) -> None:
-        from anthropic import Anthropic
+    Supports two auth modes:
+    - api_key: Uses the raw Anthropic client with forced tool_use (fast, precise)
+    - subscription: Uses ClaudeSDKClient with JSON output (works with CLI credentials)
+    """
 
-        settings = get_settings()
-        self.client = Anthropic(api_key=settings.anthropic_api_key)
+    def __init__(self, api_key: str = "", use_sdk: bool = False) -> None:
+        self._api_key = api_key
+        self._use_sdk = use_sdk
+        if api_key and not use_sdk:
+            from anthropic import Anthropic
+
+            self._client = Anthropic(api_key=api_key)
+        else:
+            self._client = None
+
+    @classmethod
+    async def create(cls) -> "StrategyExtractor":
+        """Create an extractor with the correct auth mode."""
+        from app.agent.auth import resolve_anthropic_api_key
+
+        api_key = await resolve_anthropic_api_key()
+        if api_key:
+            return cls(api_key=api_key)
+        # No API key — use Agent SDK (subscription mode)
+        logger.info("StrategyExtractor using Agent SDK (subscription mode)")
+        return cls(use_sdk=True)
 
     async def extract_from_text(self, content: str, source_hint: str = "") -> ExtractedStrategy:
         """Send content to Claude and extract structured strategy fields."""
+        if self._use_sdk:
+            return await self._extract_via_sdk(content, source_hint)
+        return await self._extract_via_api(content, source_hint)
+
+    async def _extract_via_api(self, content: str, source_hint: str) -> ExtractedStrategy:
+        """Extract using the raw Anthropic client with forced tool_use."""
         truncated = content[:MAX_CONTENT_LENGTH]
         hint = f"\n\nSource: {source_hint}" if source_hint else ""
 
-        response = self.client.messages.create(
+        response = self._client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=4096,
             system=SYSTEM_PROMPT,
@@ -115,14 +162,74 @@ class StrategyExtractor:
             ],
         )
 
-        # Extract tool call input
         for block in response.content:
             if block.type == "tool_use" and block.name == "save_strategy":
                 return ExtractedStrategy(**block.input)
 
-        # Fallback: shouldn't happen with tool_choice forced
         logger.warning("Claude did not call save_strategy tool, using fallback")
         return ExtractedStrategy(
             name="Imported Strategy",
             description="Strategy extracted from provided content (extraction incomplete)",
         )
+
+    async def _extract_via_sdk(self, content: str, source_hint: str) -> ExtractedStrategy:
+        """Extract using the Agent SDK (works with subscription/CLI credentials)."""
+
+        from claude_agent_sdk import (
+            ClaudeAgentOptions,
+            ClaudeSDKClient,
+            TextBlock,
+        )
+
+        from app.agent.auth import resolve_anthropic_api_key
+        from app.db.models.app_settings import AppSettings
+
+        truncated = content[:MAX_CONTENT_LENGTH]
+        hint = f"\n\nSource: {source_hint}" if source_hint else ""
+
+        app_settings = await AppSettings.get_instance()
+        api_key = await resolve_anthropic_api_key()
+
+        options = ClaudeAgentOptions(
+            system_prompt=SYSTEM_PROMPT_JSON,
+            model=app_settings.agent_model or "claude-sonnet-4-6",
+            max_turns=1,
+            permission_mode="bypassPermissions",
+        )
+        if api_key:
+            options.env["ANTHROPIC_API_KEY"] = api_key
+
+        client = ClaudeSDKClient(options=options)
+        await client.connect()
+
+        try:
+            text_parts: list[str] = []
+            user_message = f"Extract the trading strategy from this content:{hint}\n\n{truncated}"
+
+            await client.query(user_message)
+            async for message in client.receive_response():
+                for block in getattr(message, "content", []):
+                    if isinstance(block, TextBlock):
+                        text_parts.append(block.text)
+
+            raw_text = "".join(text_parts).strip()
+
+            # Extract JSON from response (may be wrapped in ```json blocks)
+            if "```json" in raw_text:
+                raw_text = raw_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in raw_text:
+                raw_text = raw_text.split("```")[1].split("```")[0].strip()
+
+            data = json.loads(raw_text)
+            return ExtractedStrategy(**data)
+        except (json.JSONDecodeError, KeyError, TypeError) as exc:
+            logger.warning("Failed to parse SDK extraction response: %s", exc)
+            return ExtractedStrategy(
+                name="Imported Strategy",
+                description="Strategy extracted from provided content (extraction incomplete)",
+            )
+        finally:
+            try:
+                await client.disconnect()
+            except RuntimeError:
+                pass  # cancel scope task mismatch — safe to ignore

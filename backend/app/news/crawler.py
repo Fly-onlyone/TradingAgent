@@ -1,17 +1,17 @@
 """News crawler for fetching articles from various sources."""
 
 import logging
-from datetime import datetime, timezone, UTC
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import feedparser
 import httpx
-from bs4 import BeautifulSoup
 import trafilatura
+from bs4 import BeautifulSoup
 
-from app.db.models.news import NewsSource, NewsArticle
-from app.news.deduplicator import NewsDeduplicator
+from app.db.models.news import NewsArticle, NewsSource
 from app.knowledge.embeddings import get_embedding_service
+from app.news.deduplicator import NewsDeduplicator
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +24,7 @@ class NewsCrawler:
         self.embedding_service = get_embedding_service()
         self.client = httpx.AsyncClient(
             timeout=30.0,
+            follow_redirects=True,
             headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
         )
 
@@ -65,7 +66,7 @@ class NewsCrawler:
         self,
         entry: Any,
         source: NewsSource,
-    ) -> Optional[NewsArticle]:
+    ) -> NewsArticle | None:
         """Process a single RSS entry."""
         url = entry.get("link", "")
         if not url:
@@ -123,7 +124,7 @@ class NewsCrawler:
         await article.insert()
         return article
 
-    async def fetch_full_content(self, url: str) -> Optional[str]:
+    async def fetch_full_content(self, url: str) -> str | None:
         """Fetch full article content from URL using trafilatura."""
         try:
             response = await self.client.get(url)

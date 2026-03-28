@@ -2,6 +2,11 @@
 
 This file provides guidance to Coding agent when working with this project.
 
+## External References
+
+- **Notion task board**: See [`docs/NOTION.md`](docs/NOTION.md) for database schema, status values, and property
+  definitions
+
 ## Build Commands
 
 | Task                      | Command                         |
@@ -38,14 +43,18 @@ This file provides guidance to Coding agent when working with this project.
 Separate Sentry projects per layer (org: `fly-theonlyone`):
 
 - **Backend project**: `trading-agent-backend` — `sentry-sdk[fastapi]`, conditional init when `SENTRY_DSN` is set
-  - FastAPI auto-integration (transactions, error capture), `LoggingIntegration` (ERROR+ as events, INFO+ as breadcrumbs)
-  - Config: `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`, `SENTRY_TRACES_SAMPLE_RATE`, `SENTRY_PROFILES_SAMPLE_RATE`
-  - Test endpoint: `POST /api/v1/admin/sentry-test` (superuser)
+    - FastAPI auto-integration (transactions, error capture), `LoggingIntegration` (ERROR+ as events, INFO+ as
+      breadcrumbs)
+    - Config: `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`, `SENTRY_TRACES_SAMPLE_RATE`,
+      `SENTRY_PROFILES_SAMPLE_RATE`
+    - Test endpoint: `POST /api/v1/admin/sentry-test` (superuser)
 - **Frontend project**: `trading-agent-frontend` — `@sentry/react`, conditional init when `VITE_SENTRY_DSN` is set
-  - `Sentry.ErrorBoundary` wraps the React tree in `main.tsx`
-  - Browser tracing + profiling integrations
-  - Source maps uploaded via `@sentry/vite-plugin` to `trading-agent-frontend` project when `SENTRY_AUTH_TOKEN` is set at build time
-  - Config: `VITE_SENTRY_DSN`, `VITE_SENTRY_ENVIRONMENT`, `VITE_SENTRY_RELEASE`, `VITE_SENTRY_TRACES_SAMPLE_RATE`, `VITE_SENTRY_PROFILE_SESSION_SAMPLE_RATE`, `VITE_SENTRY_PROFILE_LIFECYCLE`
+    - `Sentry.ErrorBoundary` wraps the React tree in `main.tsx`
+    - Browser tracing + profiling integrations
+    - Source maps uploaded via `@sentry/vite-plugin` to `trading-agent-frontend` project when `SENTRY_AUTH_TOKEN` is set
+      at build time
+    - Config: `VITE_SENTRY_DSN`, `VITE_SENTRY_ENVIRONMENT`, `VITE_SENTRY_RELEASE`, `VITE_SENTRY_TRACES_SAMPLE_RATE`,
+      `VITE_SENTRY_PROFILE_SESSION_SAMPLE_RATE`, `VITE_SENTRY_PROFILE_LIFECYCLE`
 - **Admin page**: `/admin/sentry` — status, captured items, test events, dashboard links
 
 ## Project Overview
@@ -71,13 +80,15 @@ Separate Sentry projects per layer (org: `fly-theonlyone`):
 
 - **Backend port**: **7000**
 - **Dev entry**: `python run.py` starts both frontend + backend with watchfiles reload
-- **Auth**: JWT-based with configurable token expiry and transparent refresh. Superuser check via `get_current_superuser`
+- **Auth**: JWT-based with configurable token expiry and transparent refresh. Superuser check via
+  `get_current_superuser`
   dependency (defined in auth dependency files)
-  - Token expiry: configurable via `AppSettings.access_token_expire_minutes` (DB) > `ACCESS_TOKEN_EXPIRE_MINUTES` (env) > 0 (no expiry)
-  - `POST /auth/refresh` — re-issues token from valid current token
-  - `POST /auth/change-password` — invalidates all prior tokens via `iat` vs `password_changed_at` check
-  - Frontend interceptor auto-refreshes on 401 before logging out
-  - Encryption: Fernet (AES-128-CBC + HMAC-SHA256) for secrets at rest, keys from `SECRETS_ENCRYPTION_KEYS` env var
+    - Token expiry: configurable via `AppSettings.access_token_expire_minutes` (DB) > `ACCESS_TOKEN_EXPIRE_MINUTES` (
+      env) > 0 (no expiry)
+    - `POST /auth/refresh` — re-issues token from valid current token
+    - `POST /auth/change-password` — invalidates all prior tokens via `iat` vs `password_changed_at` check
+    - Frontend interceptor auto-refreshes on 401 before logging out
+    - Encryption: Fernet (AES-128-CBC + HMAC-SHA256) for secrets at rest, keys from `SECRETS_ENCRYPTION_KEYS` env var
 
 ## Key Patterns
 
@@ -89,7 +100,8 @@ Separate Sentry projects per layer (org: `fly-theonlyone`):
   `/admin`). Sub-prefixes (e.g. `/strategies/import`) must be registered before their parent (`/strategies`)
 - **Strategy import**: Two-step flow — extract (URL or file upload → AI extraction → preview) then confirm (save both
   `Strategy` + `StrategyKnowledge` with embedding). Endpoints at `/api/v1/strategies/import/`. AI extraction uses
-  Claude tool_use with forced `save_strategy` tool for structured output. Pattern: `backend/app/services/strategy_extractor.py`
+  Claude tool_use with forced `save_strategy` tool for structured output. Pattern:
+  `backend/app/services/strategy_extractor.py`
 - **Strategy auto-discovery**: Scheduled crawling of news sources (where `strategy_extraction=True`) → AI extraction →
   deduplicate by name → save to StrategyKnowledge (RAG only, not executable). Config in `AppSettings` singleton
   (`auto_discover_enabled/interval_hours/min_confidence`). APScheduler integration in `task_scheduler.py`.

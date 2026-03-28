@@ -1,6 +1,9 @@
 """Auto-discovery of trading strategies from news sources."""
 
 import logging
+from collections.abc import Awaitable, Callable
+
+from beanie import PydanticObjectId
 
 from app.db.models.app_settings import AppSettings
 from app.db.models.knowledge import StrategyKnowledge
@@ -21,20 +24,35 @@ class StrategyDiscoveryService:
 
     def __init__(self) -> None:
         self.crawler = NewsCrawler()
-        self.extractor = StrategyExtractor()
+        self._extractor: StrategyExtractor | None = None
         self.embedding_gen = StrategyEmbeddingGenerator()
         self.notification_service = NotificationService()
 
-    async def run_discovery_cycle(self) -> dict:
+    async def _get_extractor(self) -> StrategyExtractor:
+        if self._extractor is None:
+            self._extractor = await StrategyExtractor.create()
+        return self._extractor
+
+    async def run_discovery_cycle(
+        self,
+        on_progress: Callable[[dict], Awaitable[None]] | None = None,
+        user_id: PydanticObjectId | None = None,
+    ) -> dict:
         """Run one full discovery cycle across all strategy-extraction-enabled sources."""
         app_settings = await AppSettings.get_instance()
         min_confidence = app_settings.auto_discover_min_confidence
+
+        async def emit(event: dict) -> None:
+            if on_progress:
+                await on_progress(event)
 
         # Phase 1: Discover new sources and extract strategies via Brave Search
         discovery_stats = {"new_sources": 0, "articles_fetched": 0, "strategies_extracted": 0}
         try:
             source_discovery = SourceDiscoveryService()
-            discovery_stats = await source_discovery.discover_and_extract()
+            discovery_stats = await source_discovery.discover_and_extract(
+                on_progress=on_progress, user_id=user_id,
+            )
         except Exception:
             logger.warning("Source discovery via Brave Search failed", exc_info=True)
 
@@ -59,12 +77,14 @@ class StrategyDiscoveryService:
 
         for source in sources:
             try:
+                await emit({"step": "crawling_source", "source": source.name})
                 articles = await self.crawler.crawl_source(source)
                 stats["sources_crawled"] += 1
+                await emit({"step": "source_crawled", "source": source.name, "articles": len(articles)})
 
                 for article in articles:
                     stats["articles_processed"] += 1
-                    strategy = await self._extract_and_save(article, source, min_confidence)
+                    strategy = await self._extract_and_save(article, source, min_confidence, user_id)
                     if strategy:
                         stats["strategies_found"] += 1
 
@@ -84,13 +104,15 @@ class StrategyDiscoveryService:
         article: NewsArticle,
         source: NewsSource,
         min_confidence: float,
+        user_id: PydanticObjectId | None = None,
     ) -> StrategyKnowledge | None:
         """Extract strategy from an article, deduplicate, and save to knowledge base."""
         if not article.content or len(article.content) < 200:
             return None
 
         try:
-            extracted = await self.extractor.extract_from_text(
+            extractor = await self._get_extractor()
+            extracted = await extractor.extract_from_text(
                 article.content, source_hint=article.url
             )
         except Exception:
@@ -150,6 +172,27 @@ class StrategyDiscoveryService:
                 knowledge.id,
                 exc_info=True,
             )
+
+        # Also create an inactive Strategy for the Strategies page
+        if user_id:
+            from app.db.models.strategy import Strategy
+
+            existing_strategy = await Strategy.find_one(Strategy.name == extracted.name)
+            if not existing_strategy:
+                strategy_doc = Strategy(
+                    user_id=user_id,
+                    name=extracted.name,
+                    description=extracted.description,
+                    entry_rules=extracted.entry_rules,
+                    exit_rules=extracted.exit_rules,
+                    risk_params=extracted.risk_params,
+                    symbols=extracted.symbols,
+                    timeframes=extracted.timeframes,
+                    is_active=False,
+                    auto_discovered=True,
+                    source_url=article.url,
+                )
+                await strategy_doc.insert()
 
         # Notify all superusers
         await self._notify_superusers(knowledge, article)

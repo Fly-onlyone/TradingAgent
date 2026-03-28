@@ -212,20 +212,124 @@ function StrategiesPage() {
 								<Typography variant="body2" color="text.secondary" gutterBottom>
 									{detailsTarget.description || "No description"}
 								</Typography>
-								{detailsTarget.symbol && (
-									<Typography variant="body2" sx={{ mt: 1 }}>
-										<strong>Symbol:</strong> {detailsTarget.symbol}
+
+								<Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mt: 1 }}>
+									<Chip
+										label={detailsTarget.isActive ? "Active" : "Inactive"}
+										color={detailsTarget.isActive ? "success" : "default"}
+										size="small"
+									/>
+									{detailsTarget.autoDiscovered && (
+										<Chip
+											label="Auto-discovered"
+											size="small"
+											color="info"
+											variant="outlined"
+										/>
+									)}
+								</Box>
+
+								{detailsTarget.symbols?.length > 0 && (
+									<Box sx={{ mt: 2 }}>
+										<Typography variant="subtitle2" gutterBottom>
+											Symbols
+										</Typography>
+										<Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+											{detailsTarget.symbols.map((s) => (
+												<Chip
+													key={s}
+													label={s}
+													size="small"
+													variant="outlined"
+												/>
+											))}
+										</Box>
+									</Box>
+								)}
+
+								{detailsTarget.timeframes?.length > 0 && (
+									<Box sx={{ mt: 2 }}>
+										<Typography variant="subtitle2" gutterBottom>
+											Timeframes
+										</Typography>
+										<Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+											{detailsTarget.timeframes.map((t) => (
+												<Chip
+													key={t}
+													label={t}
+													size="small"
+													variant="outlined"
+												/>
+											))}
+										</Box>
+									</Box>
+								)}
+
+								{detailsTarget.entryRules &&
+									Object.keys(detailsTarget.entryRules).length > 0 && (
+										<Box sx={{ mt: 2 }}>
+											<Typography variant="subtitle2" gutterBottom>
+												Entry Rules
+											</Typography>
+											{Object.entries(detailsTarget.entryRules).map(
+												([key, val]) => (
+													<Typography key={key} variant="body2" sx={{ ml: 1 }}>
+														<strong>{key}:</strong> {String(val)}
+													</Typography>
+												),
+											)}
+										</Box>
+									)}
+
+								{detailsTarget.exitRules &&
+									Object.keys(detailsTarget.exitRules).length > 0 && (
+										<Box sx={{ mt: 2 }}>
+											<Typography variant="subtitle2" gutterBottom>
+												Exit Rules
+											</Typography>
+											{Object.entries(detailsTarget.exitRules).map(
+												([key, val]) => (
+													<Typography key={key} variant="body2" sx={{ ml: 1 }}>
+														<strong>{key}:</strong> {String(val)}
+													</Typography>
+												),
+											)}
+										</Box>
+									)}
+
+								{detailsTarget.riskParams &&
+									Object.keys(detailsTarget.riskParams).length > 0 && (
+										<Box sx={{ mt: 2 }}>
+											<Typography variant="subtitle2" gutterBottom>
+												Risk Parameters
+											</Typography>
+											{Object.entries(detailsTarget.riskParams).map(
+												([key, val]) => (
+													<Typography key={key} variant="body2" sx={{ ml: 1 }}>
+														<strong>{key}:</strong> {String(val)}
+													</Typography>
+												),
+											)}
+										</Box>
+									)}
+
+								{detailsTarget.sourceUrl && (
+									<Typography
+										variant="body2"
+										color="text.secondary"
+										sx={{ mt: 2 }}
+									>
+										<strong>Source:</strong>{" "}
+										<a
+											href={detailsTarget.sourceUrl}
+											target="_blank"
+											rel="noopener noreferrer"
+										>
+											{detailsTarget.sourceUrl}
+										</a>
 									</Typography>
 								)}
-								{detailsTarget.timeframe && (
-									<Typography variant="body2">
-										<strong>Timeframe:</strong> {detailsTarget.timeframe}
-									</Typography>
-								)}
-								<Typography variant="body2">
-									<strong>Status:</strong>{" "}
-									{detailsTarget.isActive ? "Active" : "Inactive"}
-								</Typography>
+
 								{detailsTarget.backtestResults && (
 									<Box sx={{ mt: 2 }}>
 										<Typography variant="subtitle2" gutterBottom>

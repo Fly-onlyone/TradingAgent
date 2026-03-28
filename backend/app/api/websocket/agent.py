@@ -119,6 +119,11 @@ async def agent_chat_websocket(
     channel = f"agent:chat:{user_id_int}"
     await manager.connect(websocket, channel, user_id=user_id_int)
 
+    # Set user context for MCP tools (strategy listing, etc.)
+    from app.agent.mcp_tools import set_active_user_id
+
+    set_active_user_id(str(user.id))
+
     agent = None
     session = None
 

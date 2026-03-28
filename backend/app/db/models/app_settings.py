@@ -82,6 +82,7 @@ class AppSettings(Document):
     auto_discover_enabled: bool = False
     auto_discover_interval_hours: int = 6
     auto_discover_min_confidence: float = 0.5
+    auto_discover_max_sources: int = 30
 
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

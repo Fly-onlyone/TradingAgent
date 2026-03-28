@@ -21,13 +21,14 @@ import {
 	Typography,
 } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef } from "react";
 import {
 	type StrategyDiscoveryConfig,
 	settingsApi,
 } from "@/api/endpoints/settings";
 import { ZoomAwareSelect } from "@/components/common/ZoomAwareSelect";
 import { useAuthStore } from "@/store/authStore";
+import { useDiscoveryStore } from "@/store/discoveryStore";
 import { notify } from "@/store/uiStore";
 
 const INTERVAL_OPTIONS = [
@@ -40,8 +41,21 @@ const INTERVAL_OPTIONS = [
 
 export function StrategyDiscoveryCard() {
 	const isSuperuser = useAuthStore((s) => s.user?.isSuperuser);
+	const token = useAuthStore((s) => s.token);
 	const queryClient = useQueryClient();
-	const [runResult, setRunResult] = useState<string | null>(null);
+
+	const isRunning = useDiscoveryStore((s) => s.isRunning);
+	const progressMessages = useDiscoveryStore((s) => s.progressMessages);
+	const runResult = useDiscoveryStore((s) => s.runResult);
+	const startRun = useDiscoveryStore((s) => s.startRun);
+	const logRef = useRef<HTMLDivElement>(null);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: trigger scroll on new messages
+	useEffect(() => {
+		if (logRef.current) {
+			logRef.current.scrollTop = logRef.current.scrollHeight;
+		}
+	}, [progressMessages]);
 
 	const configQuery = useQuery({
 		queryKey: ["strategy-discovery-config"],
@@ -58,21 +72,6 @@ export function StrategyDiscoveryCard() {
 			});
 		},
 		onError: () => notify.error("Failed to update discovery settings"),
-	});
-
-	const runNowMutation = useMutation({
-		mutationFn: () => settingsApi.runStrategyDiscoveryNow(),
-		onSuccess: (result) => {
-			setRunResult(
-				`Crawled ${result.sourcesCrawled} sources, processed ${result.articlesProcessed} articles, found ${result.strategiesFound} strategies`,
-			);
-			if (result.strategiesFound > 0) {
-				notify.success(`Discovered ${result.strategiesFound} new strategies`);
-			} else {
-				notify.info("No new strategies found");
-			}
-		},
-		onError: () => notify.error("Discovery run failed"),
 	});
 
 	if (!isSuperuser) return null;
@@ -112,8 +111,8 @@ export function StrategyDiscoveryCard() {
 				</Box>
 
 				<Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-					Automatically crawl news sources and extract trading strategies using
-					AI. Discovered strategies are saved to the knowledge base (RAG).
+					Search the web for trading strategy articles using Brave Search, then
+					extract and save strategies to the knowledge base (RAG).
 				</Typography>
 
 				{configQuery.isLoading && <CircularProgress size={24} />}
@@ -161,6 +160,25 @@ export function StrategyDiscoveryCard() {
 							/>
 						</Box>
 
+						<Box sx={{ maxWidth: 350 }}>
+							<Typography variant="body2" gutterBottom>
+								Max Auto-Discovered Sources: {config.maxSources}
+							</Typography>
+							<Slider
+								value={config.maxSources}
+								onChange={(_, val) =>
+									updateMutation.mutate({
+										maxSources: val as number,
+									})
+								}
+								min={5}
+								max={100}
+								step={5}
+								disabled={!config.enabled}
+								valueLabelDisplay="auto"
+							/>
+						</Box>
+
 						{/* Sources with strategy extraction enabled */}
 						<Box>
 							<Typography variant="body2" fontWeight={600} gutterBottom>
@@ -186,38 +204,60 @@ export function StrategyDiscoveryCard() {
 								</Box>
 							) : (
 								<Typography variant="body2" color="text.secondary">
-									No sources have strategy extraction enabled. Enable it on news
-									sources in the News page.
+									No pre-configured sources yet. Click Run Now to auto-discover
+									sources via Brave Search.
 								</Typography>
 							)}
 						</Box>
 
-						{/* Run Now button */}
-						<Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-							<Button
-								variant="outlined"
-								size="small"
-								startIcon={
-									runNowMutation.isPending ? (
-										<CircularProgress size={16} />
-									) : (
-										<PlayArrowIcon />
-									)
-								}
-								onClick={() => {
-									setRunResult(null);
-									runNowMutation.mutate();
-								}}
-								disabled={
-									runNowMutation.isPending || config.sources.length === 0
-								}
-							>
-								{runNowMutation.isPending ? "Running..." : "Run Now"}
-							</Button>
-							{runResult && (
-								<Alert severity="info" sx={{ py: 0 }}>
-									{runResult}
-								</Alert>
+						{/* Run Now button + progress */}
+						<Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+							<Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+								<Button
+									variant="outlined"
+									size="small"
+									startIcon={
+										isRunning ? (
+											<CircularProgress size={16} />
+										) : (
+											<PlayArrowIcon />
+										)
+									}
+									onClick={() => startRun(token ?? "")}
+									disabled={isRunning}
+								>
+									{isRunning ? "Running..." : "Run Now"}
+								</Button>
+								{runResult && !isRunning && (
+									<Alert severity="info" sx={{ py: 0 }}>
+										{runResult}
+									</Alert>
+								)}
+							</Box>
+
+							{isRunning && progressMessages.length > 0 && (
+								<Box
+									ref={logRef}
+									sx={{
+										maxHeight: 160,
+										overflow: "auto",
+										bgcolor: "action.hover",
+										borderRadius: 1,
+										p: 1,
+									}}
+								>
+									{progressMessages.map((msg, i) => (
+										<Typography
+											key={`${i}-${msg}`}
+											variant="caption"
+											display="block"
+											color="text.secondary"
+											sx={{ fontFamily: "monospace", lineHeight: 1.6 }}
+										>
+											{msg}
+										</Typography>
+									))}
+								</Box>
 							)}
 						</Box>
 					</Box>

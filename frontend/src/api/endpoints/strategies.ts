@@ -25,13 +25,17 @@ export interface BacktestParams {
 
 export const strategiesApi = {
 	async getStrategies(): Promise<Strategy[]> {
-		const response = await apiClient.get<Strategy[]>("/strategies");
-		return response.data;
+		const response = await apiClient.get<{
+			strategies: Record<string, unknown>[];
+		}>("/strategies");
+		return (response.data.strategies ?? []).map(transformStrategy);
 	},
 
 	async getStrategy(strategyId: string): Promise<Strategy> {
-		const response = await apiClient.get<Strategy>(`/strategies/${strategyId}`);
-		return response.data;
+		const response = await apiClient.get<Record<string, unknown>>(
+			`/strategies/${strategyId}`,
+		);
+		return transformStrategy(response.data);
 	},
 
 	async createStrategy(data: StrategyCreate): Promise<Strategy> {
@@ -122,6 +126,27 @@ export const strategiesApi = {
 		};
 	},
 };
+
+function transformStrategy(data: Record<string, unknown>): Strategy {
+	return {
+		id: data.id as string,
+		name: data.name as string,
+		description: (data.description as string) || "",
+		isActive: data.is_active as boolean,
+		symbol: data.symbol as string | undefined,
+		timeframe: data.timeframe as string | undefined,
+		symbols: (data.symbols as string[]) || [],
+		timeframes: (data.timeframes as string[]) || [],
+		entryRules: (data.entry_rules as Record<string, unknown>) || {},
+		exitRules: (data.exit_rules as Record<string, unknown>) || {},
+		riskParams: (data.risk_params as Record<string, unknown>) || {},
+		backtestResults: data.backtest_results as Strategy["backtestResults"],
+		autoDiscovered: (data.auto_discovered as boolean) ?? false,
+		sourceUrl: data.source_url as string | undefined,
+		createdAt: data.created_at as string,
+		updatedAt: data.updated_at as string | undefined,
+	};
+}
 
 function transformExtractedStrategy(
 	data: Record<string, unknown>,

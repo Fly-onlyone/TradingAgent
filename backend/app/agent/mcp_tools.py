@@ -26,6 +26,21 @@ def pop_pending_chart_data() -> dict[str, Any] | None:
     return data
 
 # ============================================================
+# Active User Context
+# ============================================================
+# Set by the WebSocket handler so MCP tools can access the current user.
+_active_user_id: ContextVar[str | None] = ContextVar("active_user_id", default=None)
+
+
+def set_active_user_id(user_id: str) -> None:
+    _active_user_id.set(user_id)
+
+
+def get_active_user_id() -> str | None:
+    return _active_user_id.get()
+
+
+# ============================================================
 # Market Tools
 # ============================================================
 
@@ -432,6 +447,114 @@ async def mcp_search_patterns(args: dict[str, Any]) -> dict[str, Any]:
             limit=args.get("limit", 5),
         )
         return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+
+
+# ============================================================
+# User Strategy Tools
+# ============================================================
+
+
+@tool(
+    "list_user_strategies",
+    "List the user's trading strategies from the Strategies page. Use this to review "
+    "strategies, check which are active/inactive, or find strategies that match current "
+    "market conditions. Call this proactively during market analysis to suggest activating "
+    "relevant inactive strategies.",
+    {
+        "type": "object",
+        "properties": {
+            "status": {
+                "type": "string",
+                "enum": ["all", "active", "inactive"],
+                "description": "Filter by strategy status",
+                "default": "all",
+            },
+        },
+    },
+)
+async def mcp_list_user_strategies(args: dict[str, Any]) -> dict[str, Any]:
+    try:
+        from beanie import PydanticObjectId
+
+        from app.db.models.strategy import Strategy
+
+        user_id = get_active_user_id()
+        if not user_id:
+            return {"content": [{"type": "text", "text": json.dumps({"error": "No active user"})}]}
+
+        query = Strategy.find(Strategy.user_id == PydanticObjectId(user_id))
+        status = args.get("status", "all")
+        if status == "active":
+            query = query.find(Strategy.is_active == True)  # noqa: E712
+        elif status == "inactive":
+            query = query.find(Strategy.is_active == False)  # noqa: E712
+
+        strategies = await query.to_list()
+        result = [
+            {
+                "id": str(s.id),
+                "name": s.name,
+                "description": s.description,
+                "is_active": s.is_active,
+                "symbols": s.symbols,
+                "timeframes": s.timeframes,
+                "entry_rules": s.entry_rules,
+                "exit_rules": s.exit_rules,
+                "risk_params": s.risk_params,
+                "auto_discovered": s.auto_discovered,
+                "source_url": s.source_url,
+            }
+            for s in strategies
+        ]
+        return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+
+
+@tool(
+    "toggle_strategy",
+    "Activate or deactivate a trading strategy. ALWAYS ask the user for confirmation "
+    "before calling this tool. Explain which strategy you want to toggle and why.",
+    {
+        "type": "object",
+        "properties": {
+            "strategy_id": {
+                "type": "string",
+                "description": "The strategy ID to toggle",
+            },
+            "activate": {
+                "type": "boolean",
+                "description": "True to activate, False to deactivate",
+            },
+        },
+        "required": ["strategy_id", "activate"],
+    },
+)
+async def mcp_toggle_strategy(args: dict[str, Any]) -> dict[str, Any]:
+    try:
+        from beanie import PydanticObjectId
+
+        from app.db.models.strategy import Strategy
+
+        user_id = get_active_user_id()
+        if not user_id:
+            return {"content": [{"type": "text", "text": json.dumps({"error": "No active user"})}]}
+
+        strategy = await Strategy.get(PydanticObjectId(args["strategy_id"]))
+        if not strategy or str(strategy.user_id) != user_id:
+            return {"content": [{"type": "text", "text": json.dumps({"error": "Strategy not found"})}]}
+
+        strategy.is_active = args["activate"]
+        strategy.update_timestamp()
+        await strategy.save()
+
+        action = "activated" if args["activate"] else "deactivated"
+        return {"content": [{"type": "text", "text": json.dumps({
+            "status": "success",
+            "message": f"Strategy '{strategy.name}' has been {action}",
+        })}]}
     except Exception as e:
         return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
 

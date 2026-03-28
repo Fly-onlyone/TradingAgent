@@ -9,10 +9,14 @@ export interface Strategy {
 	isActive: boolean;
 	symbol?: string;
 	timeframe?: string;
+	symbols: string[];
+	timeframes: string[];
 	entryRules: Record<string, unknown>;
 	exitRules: Record<string, unknown>;
 	riskParams: StrategyRiskParams;
 	backtestResults?: BacktestResults;
+	autoDiscovered?: boolean;
+	sourceUrl?: string;
 	createdAt: string;
 	updatedAt?: string;
 }

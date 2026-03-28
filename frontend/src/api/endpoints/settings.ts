@@ -120,6 +120,7 @@ export interface StrategyDiscoveryConfig {
 	enabled: boolean;
 	intervalHours: number;
 	minConfidence: number;
+	maxSources: number;
 	sources: StrategyDiscoverySource[];
 }
 
@@ -135,12 +136,16 @@ export interface StrategyDiscoveryConfigUpdate {
 	enabled?: boolean;
 	intervalHours?: number;
 	minConfidence?: number;
+	maxSources?: number;
 }
 
 export interface DiscoveryRunResult {
 	sourcesCrawled: number;
 	articlesProcessed: number;
 	strategiesFound: number;
+	discoveryNewSources: number;
+	discoveryArticlesFetched: number;
+	discoveryStrategiesExtracted: number;
 }
 
 const AGENT_THINKING_MODES = new Set(["adaptive", "enabled", "disabled"]);
@@ -449,6 +454,8 @@ export const settingsApi = {
 			payload.interval_hours = update.intervalHours;
 		if (update.minConfidence !== undefined)
 			payload.min_confidence = update.minConfidence;
+		if (update.maxSources !== undefined)
+			payload.max_sources = update.maxSources;
 
 		const response = await apiClient.put<Record<string, unknown>>(
 			"/settings/strategy-discovery",
@@ -465,6 +472,11 @@ export const settingsApi = {
 			sourcesCrawled: response.data.sources_crawled as number,
 			articlesProcessed: response.data.articles_processed as number,
 			strategiesFound: response.data.strategies_found as number,
+			discoveryNewSources: (response.data.discovery_new_sources as number) ?? 0,
+			discoveryArticlesFetched:
+				(response.data.discovery_articles_fetched as number) ?? 0,
+			discoveryStrategiesExtracted:
+				(response.data.discovery_strategies_extracted as number) ?? 0,
 		};
 	},
 
@@ -517,6 +529,7 @@ function transformStrategyDiscoveryConfig(
 		enabled: data.enabled as boolean,
 		intervalHours: data.interval_hours as number,
 		minConfidence: data.min_confidence as number,
+		maxSources: (data.max_sources as number) ?? 30,
 		sources: rawSources.map((s) => ({
 			id: s.id as string,
 			name: s.name as string,

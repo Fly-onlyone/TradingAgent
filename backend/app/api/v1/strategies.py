@@ -1,22 +1,21 @@
 """Strategy management endpoints using Beanie ODM."""
 
 from datetime import datetime
-from typing import Optional
 
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from app.db.models.user import User
-from app.db.models.strategy import Strategy
 from app.api.v1.auth import get_current_active_user
+from app.db.models.strategy import Strategy
+from app.db.models.user import User
 
 router = APIRouter()
 
 
 class StrategyCreate(BaseModel):
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     entry_rules: dict = {}
     exit_rules: dict = {}
     risk_params: dict = {}
@@ -25,31 +24,33 @@ class StrategyCreate(BaseModel):
 
 
 class StrategyUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    is_active: Optional[bool] = None
-    entry_rules: Optional[dict] = None
-    exit_rules: Optional[dict] = None
-    risk_params: Optional[dict] = None
-    symbols: Optional[list[str]] = None
-    timeframes: Optional[list[str]] = None
+    name: str | None = None
+    description: str | None = None
+    is_active: bool | None = None
+    entry_rules: dict | None = None
+    exit_rules: dict | None = None
+    risk_params: dict | None = None
+    symbols: list[str] | None = None
+    timeframes: list[str] | None = None
 
 
 class StrategyResponse(BaseModel):
     id: str
     name: str
-    description: Optional[str]
+    description: str | None
     is_active: bool
     entry_rules: dict
     exit_rules: dict
     risk_params: dict
     symbols: list
     timeframes: list
-    backtest_results: Optional[dict]
-    live_performance: Optional[dict]
+    backtest_results: dict | None
+    live_performance: dict | None
+    auto_discovered: bool = False
+    source_url: str | None = None
     created_at: datetime
     updated_at: datetime
-    last_executed_at: Optional[datetime]
+    last_executed_at: datetime | None
 
     class Config:
         from_attributes = True
@@ -77,6 +78,8 @@ def strategy_to_response(strategy: Strategy) -> StrategyResponse:
         timeframes=strategy.timeframes,
         backtest_results=strategy.backtest_results,
         live_performance=strategy.live_performance,
+        auto_discovered=strategy.auto_discovered,
+        source_url=strategy.source_url,
         created_at=strategy.created_at,
         updated_at=strategy.updated_at,
         last_executed_at=strategy.last_executed_at,
@@ -105,7 +108,7 @@ async def create_strategy(
 
 @router.get("", response_model=StrategyListResponse)
 async def list_strategies(
-    is_active: Optional[bool] = None,
+    is_active: bool | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_active_user),

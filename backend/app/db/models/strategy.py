@@ -1,7 +1,6 @@
 """Trading strategy model for MongoDB."""
 
-from datetime import datetime, timezone, UTC
-from typing import Optional
+from datetime import UTC, datetime
 
 from beanie import Document, Indexed, PydanticObjectId
 from pydantic import Field
@@ -14,7 +13,7 @@ class Strategy(Document):
 
     # Strategy info
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     is_active: bool = False
 
     # Strategy configuration
@@ -25,13 +24,17 @@ class Strategy(Document):
     timeframes: list[str] = Field(default_factory=list)  # Timeframes to analyze
 
     # Performance tracking
-    backtest_results: Optional[dict] = None
-    live_performance: Optional[dict] = None
+    backtest_results: dict | None = None
+    live_performance: dict | None = None
+
+    # Discovery metadata
+    auto_discovered: bool = False
+    source_url: str | None = None
 
     # Timestamps
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    last_executed_at: Optional[datetime] = None
+    last_executed_at: datetime | None = None
 
     class Settings:
         name = "strategies"

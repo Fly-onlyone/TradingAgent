@@ -6,6 +6,7 @@ import LightbulbIcon from "@mui/icons-material/Lightbulb";
 import SendIcon from "@mui/icons-material/Send";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
 import StopIcon from "@mui/icons-material/Stop";
+import TuneIcon from "@mui/icons-material/Tune";
 import {
 	Box,
 	Button,
@@ -20,6 +21,7 @@ interface ChatInputProps {
 	onSendMessage: (message: string) => void;
 	onRequestAnalysis?: (symbol?: string) => void;
 	onRequestRecommendation?: () => void;
+	onRequestStrategyReview?: () => void;
 	onCancel?: () => void;
 	isThinking?: boolean;
 	isCancelling?: boolean;
@@ -30,6 +32,7 @@ export function ChatInput({
 	onSendMessage,
 	onRequestAnalysis,
 	onRequestRecommendation,
+	onRequestStrategyReview,
 	onCancel,
 	isThinking = false,
 	isCancelling = false,
@@ -81,6 +84,21 @@ export function ChatInput({
 								disabled={isThinking || disabled}
 							>
 								Recommend
+							</Button>
+						</span>
+					</Tooltip>
+				)}
+				{onRequestStrategyReview && (
+					<Tooltip title="Review strategies and get activation recommendations">
+						<span>
+							<Button
+								size="small"
+								variant="outlined"
+								startIcon={<TuneIcon />}
+								onClick={onRequestStrategyReview}
+								disabled={isThinking || disabled}
+							>
+								Strategies
 							</Button>
 						</span>
 					</Tooltip>

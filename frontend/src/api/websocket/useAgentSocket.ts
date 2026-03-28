@@ -75,7 +75,7 @@ interface AgentSocketMessage extends WebSocketMessage {
 		| { content?: string }
 		| {
 				sessionId: string;
-			};
+		  };
 }
 
 export function useAgentSocket() {
@@ -91,9 +91,7 @@ export function useAgentSocket() {
 		addSession,
 		currentSessionId,
 	} = useAgentStore();
-	const recentIncomingMessageKeysRef = useRef<Map<string, number>>(
-		new Map(),
-	);
+	const recentIncomingMessageKeysRef = useRef<Map<string, number>>(new Map());
 	const pendingChartDataRef = useRef<ChartData | null>(null);
 
 	const handleMessage = useCallback(
@@ -106,8 +104,7 @@ export function useAgentSocket() {
 					// Attach accumulated thinking content from the store as fallback
 					// (backend also sends it, but store has the real-time accumulated version)
 					if (msg.role === "assistant") {
-						const storeThinking =
-							useAgentStore.getState().thinkingContent;
+						const storeThinking = useAgentStore.getState().thinkingContent;
 						if (!msg.thinkingContent && storeThinking) {
 							msg.thinkingContent = storeThinking;
 						}
@@ -122,8 +119,7 @@ export function useAgentSocket() {
 					if (msg.role === "assistant" || msg.role === "system") {
 						const messageKey = `${msg.role}:${msg.content}:${Math.floor(msg.timestamp / 1000)}`;
 						const now = Date.now();
-						const recentKeys =
-							recentIncomingMessageKeysRef.current;
+						const recentKeys = recentIncomingMessageKeysRef.current;
 
 						for (const [key, seenAt] of recentKeys.entries()) {
 							if (now - seenAt > 30_000) {
@@ -177,8 +173,7 @@ export function useAgentSocket() {
 				}
 				case "chart_data": {
 					// Buffer chart data to attach to the next assistant message
-					pendingChartDataRef.current =
-						agentMessage.data as ChartData;
+					pendingChartDataRef.current = agentMessage.data as ChartData;
 					break;
 				}
 				case "status": {
@@ -306,6 +301,15 @@ export function useAgentSocket() {
 		[send, currentSessionId],
 	);
 
+	const requestStrategyReview = useCallback(() => {
+		send({
+			type: "message",
+			content:
+				"Review my trading strategies. List all inactive strategies, evaluate each against current market conditions, and recommend which ones I should activate. Explain your reasoning for each recommendation.",
+			sessionId: currentSessionId || undefined,
+		});
+	}, [send, currentSessionId]);
+
 	const executeDecision = useCallback(
 		(decision: AgentDecision) => {
 			send({
@@ -327,6 +331,7 @@ export function useAgentSocket() {
 		sendMessage,
 		requestAnalysis,
 		requestRecommendation,
+		requestStrategyReview,
 		executeDecision,
 		sendCancel,
 		disconnect,
