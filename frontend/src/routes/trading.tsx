@@ -22,13 +22,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
-import type { SymbolInfo } from "@/api/endpoints/market";
+import type { SymbolOption } from "@/api/endpoints/market";
 import { marketApi } from "@/api/endpoints/market";
 import { ordersApi } from "@/api/endpoints/orders";
 import {
 	marketAccountQueryOptions,
 	marketOverviewQueryOptions,
-	marketSymbolsQueryOptions,
 	marketTickerQueryOptions,
 	userPreferencesQueryOptions,
 } from "@/api/queryOptions/market";
@@ -44,12 +43,12 @@ import {
 	RecentOrderActivity,
 	TickerCard,
 } from "@/components/trading";
+import { useSymbolOptions } from "@/hooks/useSymbolOptions";
 import { useMarketStore } from "@/store/marketStore";
 import { useOrderStore } from "@/store/orderStore";
 import { notify } from "@/store/uiStore";
-
 import { spring } from "@/utils/animations/variants";
-import { POPULAR_PAIRS, TIMEFRAMES } from "@/utils/constants";
+import { TIMEFRAMES } from "@/utils/constants";
 import { getErrorMessage } from "@/utils/errors";
 import { formatPercent, formatPrice, formatVolume } from "@/utils/formatters";
 import { requireAuth } from "./-guards";
@@ -58,11 +57,6 @@ export const Route = createFileRoute("/trading")({
 	beforeLoad: requireAuth,
 	component: TradingPage,
 });
-
-/** Grouped option for the symbol Autocomplete dropdown. */
-interface SymbolOption extends SymbolInfo {
-	group: string;
-}
 
 function TradingPage() {
 	const selectedSymbol = useMarketStore((state) => state.selectedSymbol);
@@ -104,35 +98,7 @@ function TradingPage() {
 		}
 	}, [prefsQuery.data, loadPreferences]);
 
-	// Fetch all OKX symbols
-	const symbolsQuery = useQuery({
-		...marketSymbolsQueryOptions(),
-	});
-
-	// Build grouped options: Popular first, then All
-	const symbolOptions = useMemo<SymbolOption[]>(() => {
-		const raw = symbolsQuery.data ?? [];
-		const popularSet = new Set(POPULAR_PAIRS);
-		const popular: SymbolOption[] = [];
-		const rest: SymbolOption[] = [];
-
-		for (const s of raw) {
-			if (popularSet.has(s.symbol)) {
-				popular.push({ ...s, group: "Popular" });
-			}
-			rest.push({ ...s, group: "All Instruments" });
-		}
-
-		// Ensure popular pairs show even if not in API response (fallback)
-		for (const pair of POPULAR_PAIRS) {
-			if (!popular.some((p) => p.symbol === pair)) {
-				const [base, quote] = pair.split("-");
-				popular.push({ symbol: pair, base, quote, group: "Popular" });
-			}
-		}
-
-		return [...popular, ...rest];
-	}, [symbolsQuery.data]);
+	const { symbolOptions, isLoading: symbolsLoading } = useSymbolOptions();
 
 	// Find the currently selected option for Autocomplete
 	const selectedOption = useMemo<SymbolOption | null>(() => {
@@ -333,7 +299,7 @@ function TradingPage() {
 											option.symbol === value.symbol &&
 											option.group === value.group
 										}
-										loading={symbolsQuery.isLoading}
+										loading={symbolsLoading}
 										renderInput={(params) => (
 											<TextField
 												{...params}
@@ -345,7 +311,7 @@ function TradingPage() {
 														...params.InputProps,
 														endAdornment: (
 															<>
-																{symbolsQuery.isLoading ? (
+																{symbolsLoading ? (
 																	<CircularProgress size={18} />
 																) : null}
 																{params.InputProps.endAdornment}

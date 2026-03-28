@@ -20,6 +20,11 @@ export interface SymbolInfo {
 	quote: string;
 }
 
+/** Grouped option for symbol Autocomplete dropdowns. */
+export interface SymbolOption extends SymbolInfo {
+	group: string;
+}
+
 export interface UserPreferences {
 	defaultSymbol: string;
 	defaultTimeframe: string;
