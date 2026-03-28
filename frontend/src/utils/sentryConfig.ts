@@ -2,10 +2,6 @@ import type { Integration } from "@sentry/core";
 import type { BrowserOptions } from "@sentry/react";
 
 export const DEFAULT_FRONTEND_SENTRY_TRACES_SAMPLE_RATE = 0.1;
-export const DEFAULT_FRONTEND_SENTRY_PROFILE_SESSION_SAMPLE_RATE = 0.1;
-export const DEFAULT_FRONTEND_SENTRY_PROFILE_LIFECYCLE = "trace";
-
-export type FrontendSentryProfileLifecycle = "manual" | "trace";
 
 export type FrontendSentryEnv = {
 	DEV?: boolean;
@@ -13,14 +9,11 @@ export type FrontendSentryEnv = {
 	VITE_SENTRY_ENVIRONMENT?: string;
 	VITE_SENTRY_RELEASE?: string;
 	VITE_SENTRY_TRACES_SAMPLE_RATE?: string;
-	VITE_SENTRY_PROFILE_SESSION_SAMPLE_RATE?: string;
-	VITE_SENTRY_PROFILE_LIFECYCLE?: string;
 	VITE_SENTRY_TRACE_PROPAGATION_TARGETS?: string;
 	VITE_SENTRY_ENABLE_LOGS?: string;
 };
 
 export type BrowserTracingIntegrationFactory = () => Integration;
-export type BrowserProfilingIntegrationFactory = () => Integration;
 export type ConsoleLoggingIntegrationFactory = () => Integration;
 
 export function isFrontendSentryConfigured(env: FrontendSentryEnv): boolean {
@@ -52,41 +45,6 @@ export function isFrontendSentryTracingEnabled(
 	);
 }
 
-export function getFrontendSentryProfileSessionSampleRate(
-	env: FrontendSentryEnv,
-): number {
-	const rawValue = env.VITE_SENTRY_PROFILE_SESSION_SAMPLE_RATE;
-	if (!rawValue) {
-		return DEFAULT_FRONTEND_SENTRY_PROFILE_SESSION_SAMPLE_RATE;
-	}
-
-	const parsed = Number(rawValue);
-	if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
-		return DEFAULT_FRONTEND_SENTRY_PROFILE_SESSION_SAMPLE_RATE;
-	}
-
-	return parsed;
-}
-
-export function getFrontendSentryProfileLifecycle(
-	env: FrontendSentryEnv,
-): FrontendSentryProfileLifecycle {
-	const rawValue = env.VITE_SENTRY_PROFILE_LIFECYCLE?.trim();
-	if (rawValue === "manual" || rawValue === "trace") {
-		return rawValue;
-	}
-	return DEFAULT_FRONTEND_SENTRY_PROFILE_LIFECYCLE;
-}
-
-export function isFrontendSentryProfilingEnabled(
-	env: FrontendSentryEnv,
-): boolean {
-	return (
-		isFrontendSentryConfigured(env) &&
-		getFrontendSentryProfileSessionSampleRate(env) > 0
-	);
-}
-
 export function getFrontendSentryEnvironment(env: FrontendSentryEnv): string {
 	const explicitEnvironment = env.VITE_SENTRY_ENVIRONMENT?.trim();
 	if (explicitEnvironment) {
@@ -104,12 +62,13 @@ export function getFrontendSentryRelease(
 
 export function getFrontendSentryTracePropagationTargets(
 	env: FrontendSentryEnv,
+	apiBaseUrl: string,
 ): Array<string | RegExp> {
-	const defaultTargets: Array<string | RegExp> = [
-		/^\/api\/v1/,
-		/^https?:\/\/localhost:7000\/api\/v1/,
-		/^https?:\/\/127\.0\.0\.1:7000\/api\/v1/,
-	];
+	const defaultTargets = new Set<string | RegExp>([/^\/api\/v1/]);
+	const normalizedApiBaseUrl = apiBaseUrl.trim();
+	if (normalizedApiBaseUrl.length > 0) {
+		defaultTargets.add(normalizedApiBaseUrl);
+	}
 
 	const extraTargets = (env.VITE_SENTRY_TRACE_PROPAGATION_TARGETS || "")
 		.split(",")
@@ -127,16 +86,15 @@ export function isFrontendSentryLogsEnabled(env: FrontendSentryEnv): boolean {
 
 export function createFrontendSentryInitOptions(
 	env: FrontendSentryEnv,
+	apiBaseUrl: string,
 	integrations: {
 		browserTracingIntegrationFactory: BrowserTracingIntegrationFactory;
-		browserProfilingIntegrationFactory: BrowserProfilingIntegrationFactory;
 		consoleLoggingIntegrationFactory?: ConsoleLoggingIntegrationFactory;
 	},
 ): BrowserOptions {
 	const enableLogs = isFrontendSentryLogsEnabled(env);
 	const integrationList: Integration[] = [
 		integrations.browserTracingIntegrationFactory(),
-		integrations.browserProfilingIntegrationFactory(),
 	];
 	if (enableLogs && integrations.consoleLoggingIntegrationFactory) {
 		integrationList.push(integrations.consoleLoggingIntegrationFactory());
@@ -147,9 +105,10 @@ export function createFrontendSentryInitOptions(
 		environment: getFrontendSentryEnvironment(env),
 		release: getFrontendSentryRelease(env),
 		tracesSampleRate: getFrontendSentryTracingSampleRate(env),
-		profileSessionSampleRate: getFrontendSentryProfileSessionSampleRate(env),
-		profileLifecycle: getFrontendSentryProfileLifecycle(env),
-		tracePropagationTargets: getFrontendSentryTracePropagationTargets(env),
+		tracePropagationTargets: getFrontendSentryTracePropagationTargets(
+			env,
+			apiBaseUrl,
+		),
 		enableLogs,
 		integrations: integrationList,
 	};

@@ -109,15 +109,18 @@ async def agent_chat_websocket(
         await websocket.close(code=4001, reason="Authentication required")
         return
 
-    user = await get_user_from_token(token)
+    with sentry_sdk.start_span(op="ws.auth", description="authenticate user"):
+        user = await get_user_from_token(token)
     if not user:
         await websocket.close(code=4001, reason="Invalid or expired token")
         return
 
     sentry_sdk.set_user({"id": str(user.id), "email": user.email})
+    sentry_sdk.set_tag("ws.channel", "agent-chat")
     user_id_int = _get_user_id_int(user)
     channel = f"agent:chat:{user_id_int}"
-    await manager.connect(websocket, channel, user_id=user_id_int)
+    with sentry_sdk.start_span(op="ws.connect", description="connect websocket"):
+        await manager.connect(websocket, channel, user_id=user_id_int)
 
     # Set user context for MCP tools (strategy listing, etc.)
     from app.agent.mcp_tools import set_active_user_id
@@ -126,6 +129,7 @@ async def agent_chat_websocket(
 
     agent = None
     session = None
+    chat_task: asyncio.Task | None = None
 
     async def send_event(event: dict) -> None:
         """Callback for intermediate agent events (thinking, tool_call)."""
@@ -133,17 +137,21 @@ async def agent_chat_websocket(
 
     try:
         # Validate auth configuration before creating agent
-        app_settings = await AppSettings.get_instance()
-        auth_error: str | None = None
+        with sentry_sdk.start_span(
+            op="ws.agent.config",
+            description="validate agent auth",
+        ):
+            app_settings = await AppSettings.get_instance()
+            auth_error: str | None = None
 
-        if app_settings.agent_auth_mode == AgentAuthMode.SUBSCRIPTION:
-            from app.api.v1.settings import _check_cli_login
+            if app_settings.agent_auth_mode == AgentAuthMode.SUBSCRIPTION:
+                from app.api.v1.settings import _check_cli_login
 
-            if not _check_cli_login():
-                auth_error = "Claude CLI not logged in. Use the gear icon to log in."
-        elif app_settings.agent_auth_mode == AgentAuthMode.API_KEY:
-            if not app_settings.get_agent_api_key() and not settings.anthropic_api_key:
-                auth_error = "No API key configured. Use the gear icon to add one."
+                if not _check_cli_login():
+                    auth_error = "Claude CLI not logged in. Use the gear icon to log in."
+            elif app_settings.agent_auth_mode == AgentAuthMode.API_KEY:
+                if not app_settings.get_agent_api_key() and not settings.anthropic_api_key:
+                    auth_error = "No API key configured. Use the gear icon to add one."
 
         if auth_error:
             await manager.send_personal(
@@ -159,7 +167,11 @@ async def agent_chat_websocket(
 
         # Create agent — notify client on failure instead of dying silently
         try:
-            agent = await create_agent_with_tools()
+            with sentry_sdk.start_span(
+                op="ws.agent.initialize",
+                description="create trading agent",
+            ):
+                agent = await create_agent_with_tools()
         except Exception as e:
             logger.warning("Failed to create agent: %s", e, exc_info=True)
             await manager.send_personal(
@@ -183,44 +195,49 @@ async def agent_chat_websocket(
             },
         )
 
-        chat_task: asyncio.Task | None = None
-
         async def _process_chat(user_message: str) -> None:
             """Run agent.chat() and send the result back over the WebSocket."""
             nonlocal session
             try:
-                response = await agent.chat(user_message, on_event=send_event)
+                with sentry_sdk.start_span(
+                    op="ws.agent.turn",
+                    description="process agent turn",
+                ) as turn_span:
+                    turn_span.set_data("has_session", session is not None)
+                    response = await agent.chat(user_message, on_event=send_event)
 
-                # Get tool calls and thinking content from this turn
-                tool_calls = agent.tool_calls or []
-                thinking_content = agent.thinking_content or None
+                    # Get tool calls and thinking content from this turn
+                    tool_calls = agent.tool_calls or []
+                    thinking_content = agent.thinking_content or None
 
-                # Send final response
-                await manager.send_personal(
-                    websocket,
-                    {
-                        "type": "message",
-                        "data": {
-                            "id": str(uuid.uuid4()),
-                            "role": "assistant",
-                            "content": response,
-                            "timestamp": int(datetime.now(UTC).timestamp() * 1000),
-                            "toolCalls": tool_calls if tool_calls else None,
-                            "thinkingContent": thinking_content,
+                    await manager.send_personal(
+                        websocket,
+                        {
+                            "type": "message",
+                            "data": {
+                                "id": str(uuid.uuid4()),
+                                "role": "assistant",
+                                "content": response,
+                                "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+                                "toolCalls": tool_calls if tool_calls else None,
+                                "thinkingContent": thinking_content,
+                            },
                         },
-                    },
-                )
+                    )
 
-                # Persist assistant message
-                session.add_message(
-                    role="assistant",
-                    content=response,
-                    tool_calls=tool_calls if tool_calls else None,
-                    thinking_content=thinking_content,
-                )
-                if not session.title:
-                    session.title = session.generate_title()
-                await session.save()
+                    with sentry_sdk.start_span(
+                        op="db.write",
+                        description="save assistant message",
+                    ):
+                        session.add_message(
+                            role="assistant",
+                            content=response,
+                            tool_calls=tool_calls if tool_calls else None,
+                            thinking_content=thinking_content,
+                        )
+                        if not session.title:
+                            session.title = session.generate_title()
+                        await session.save()
 
             except asyncio.CancelledError:
                 # Task was cancelled via cancel request. The cancel_ack is sent
@@ -285,29 +302,37 @@ async def agent_chat_websocket(
             # Lazy session creation — only on first real message to
             # avoid spamming empty sessions on reconnect attempts
             if session is None:
-                client_session_id = message.get("sessionId")
-                if client_session_id:
-                    existing = await AgentSession.find_one(
-                        AgentSession.id == PydanticObjectId(client_session_id),
-                        AgentSession.user_id == user.id,
-                    )
-                    if existing:
-                        session = existing
+                with sentry_sdk.start_span(
+                    op="db.query",
+                    description="load or create agent session",
+                ):
+                    client_session_id = message.get("sessionId")
+                    if client_session_id:
+                        existing = await AgentSession.find_one(
+                            AgentSession.id == PydanticObjectId(client_session_id),
+                            AgentSession.user_id == user.id,
+                        )
+                        if existing:
+                            session = existing
 
-                if session is None:
-                    session = AgentSession(user_id=user.id)
-                    await session.insert()
-                    await manager.send_personal(
-                        websocket,
-                        {
-                            "type": "session_created",
-                            "data": {"sessionId": str(session.id)},
-                        },
-                    )
+                    if session is None:
+                        session = AgentSession(user_id=user.id)
+                        await session.insert()
+                        await manager.send_personal(
+                            websocket,
+                            {
+                                "type": "session_created",
+                                "data": {"sessionId": str(session.id)},
+                            },
+                        )
 
             # Persist user message
-            session.add_message(role="user", content=user_message)
-            await session.save()
+            with sentry_sdk.start_span(
+                op="db.write",
+                description="save user message",
+            ):
+                session.add_message(role="user", content=user_message)
+                await session.save()
 
             # Process with trading agent in a task so we can receive
             # cancel messages while the agent is running.

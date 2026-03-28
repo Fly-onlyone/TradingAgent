@@ -11,7 +11,6 @@ export function marketAccountQueryOptions() {
 		queryFn: () => marketApi.getAccountBalance(),
 		staleTime: MARKET_STALE_TIME,
 		gcTime: MARKET_GC_TIME,
-		refetchOnMount: "always",
 	});
 }
 

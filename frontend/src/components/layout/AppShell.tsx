@@ -6,7 +6,7 @@ import {Alert, Box, Button, LinearProgress, Snackbar, Toolbar, useMediaQuery, us
 import {useRouterState} from "@tanstack/react-router";
 import {AnimatePresence, motion} from "framer-motion";
 import type {ReactNode} from "react";
-import {useEffect, useRef} from "react";
+import {useEffect, useRef, useState} from "react";
 import {MeshBlobs} from "@/components/effects/MeshBlobs";
 import {ParticleGrid} from "@/components/effects/ParticleGrid";
 import {useUIStore} from "@/store/uiStore";
@@ -29,6 +29,7 @@ export function AppShell({children}: AppShellProps) {
         select: (state) => state.location.pathname,
     });
     const contentRef = useRef<HTMLDivElement>(null);
+    const [showParticleGrid, setShowParticleGrid] = useState(false);
     const isAuthPage = currentPath.startsWith("/auth/");
     const isAgentPage = currentPath.startsWith("/agent");
 
@@ -44,6 +45,21 @@ export function AppShell({children}: AppShellProps) {
         contentRef.current?.scrollTo(0, 0);
     }, [currentPath]);
 
+    useEffect(() => {
+        if (isMobile || !effectsEnabled) {
+            setShowParticleGrid(false);
+            return;
+        }
+
+        const frameId = window.requestAnimationFrame(() => {
+            setShowParticleGrid(true);
+        });
+
+        return () => {
+            window.cancelAnimationFrame(frameId);
+        };
+    }, [effectsEnabled, isMobile, currentPath]);
+
     const showLayout = !isAuthPage;
 
     const showEffects = showLayout && effectsEnabled;
@@ -54,7 +70,9 @@ export function AppShell({children}: AppShellProps) {
             {showEffects && (
                 <>
                     <MeshBlobs/>
-                    <ParticleGrid config={{color: theme.trading.primaryRgb}}/>
+                    {showParticleGrid && (
+                        <ParticleGrid config={{color: theme.trading.primaryRgb}}/>
+                    )}
                 </>
             )}
 

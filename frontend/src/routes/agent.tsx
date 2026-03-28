@@ -67,7 +67,7 @@ import { requireAuth } from "./-guards";
 
 export const Route = createFileRoute("/agent")({
 	beforeLoad: requireAuth,
-	component: AgentPage,
+	component: ProfiledAgentPage,
 });
 
 // Sidebar tab type
@@ -982,3 +982,5 @@ function AgentPage() {
 		</PageTransition>
 	);
 }
+
+const ProfiledAgentPage = Sentry.withProfiler(AgentPage);

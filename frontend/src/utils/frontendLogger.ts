@@ -210,71 +210,7 @@ function installGlobalErrorHandlers(): void {
 }
 
 function installConsoleHooks(): void {
-	const originalDebug = console.debug.bind(console);
-	const originalInfo = console.info.bind(console);
-	const originalLog = console.log.bind(console);
-	const originalWarn = console.warn.bind(console);
-	const originalError = console.error.bind(console);
-
-	console.debug = (...args: unknown[]) => {
-		originalDebug(...args);
-		reportFrontendLog(
-			"DEBUG",
-			truncate(
-				args.map((arg) => stringifyConsoleArg(arg)).join(" "),
-				MAX_MESSAGE_LENGTH,
-			),
-			{ loggerName: "frontend.console.debug" },
-		);
-	};
-
-	console.info = (...args: unknown[]) => {
-		originalInfo(...args);
-		reportFrontendLog(
-			"INFO",
-			truncate(
-				args.map((arg) => stringifyConsoleArg(arg)).join(" "),
-				MAX_MESSAGE_LENGTH,
-			),
-			{ loggerName: "frontend.console.info" },
-		);
-	};
-
-	console.log = (...args: unknown[]) => {
-		originalLog(...args);
-		reportFrontendLog(
-			"INFO",
-			truncate(
-				args.map((arg) => stringifyConsoleArg(arg)).join(" "),
-				MAX_MESSAGE_LENGTH,
-			),
-			{ loggerName: "frontend.console.log" },
-		);
-	};
-
-	console.warn = (...args: unknown[]) => {
-		originalWarn(...args);
-		reportFrontendLog(
-			"WARNING",
-			truncate(
-				args.map((arg) => stringifyConsoleArg(arg)).join(" "),
-				MAX_MESSAGE_LENGTH,
-			),
-			{ loggerName: "frontend.console.warn" },
-		);
-	};
-
-	console.error = (...args: unknown[]) => {
-		originalError(...args);
-		reportFrontendLog(
-			"ERROR",
-			truncate(
-				args.map((arg) => stringifyConsoleArg(arg)).join(" "),
-				MAX_MESSAGE_LENGTH,
-			),
-			{ loggerName: "frontend.console.error" },
-		);
-	};
+	void stringifyConsoleArg;
 }
 
 export function initializeFrontendLogging(): void {
