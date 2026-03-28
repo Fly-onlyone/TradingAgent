@@ -733,9 +733,9 @@ async def update_strategy_discovery_config(
 
     # Reschedule the discovery job
     try:
-        from app.agent.task_scheduler import AgentTaskScheduler
+        from app.agent.task_scheduler import get_scheduler
 
-        scheduler = AgentTaskScheduler()
+        scheduler = get_scheduler()
         await scheduler.reschedule_auto_discovery()
     except Exception:
         logger.warning("Could not reschedule auto-discovery", exc_info=True)
@@ -1087,9 +1087,9 @@ async def update_session_retention_config(
 
     # Reschedule the cleanup job
     try:
-        from app.agent.task_scheduler import AgentTaskScheduler
+        from app.agent.task_scheduler import get_scheduler
 
-        scheduler = AgentTaskScheduler()
+        scheduler = get_scheduler()
         await scheduler.reschedule_session_cleanup()
     except Exception:
         logger.warning("Could not reschedule session cleanup", exc_info=True)
