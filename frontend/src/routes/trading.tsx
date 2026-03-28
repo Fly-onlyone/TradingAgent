@@ -10,7 +10,6 @@ import TimelineIcon from "@mui/icons-material/Timeline";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import {
 	Alert,
-	Autocomplete,
 	Box,
 	Button,
 	Card,
@@ -39,6 +38,7 @@ import {
 import { CoinIcon } from "@/components/common/CoinIcon";
 import { PageTransition } from "@/components/common/PageTransition";
 import { SectionHeader } from "@/components/common/SectionHeader";
+import { ZoomAwareAutocomplete } from "@/components/common/ZoomAwareAutocomplete";
 import { StatCard } from "@/components/data-display/StatCard";
 import {
 	HoldingsCard,
@@ -298,7 +298,7 @@ function TradingPage() {
 							</Typography>
 							<Grid container spacing={2} alignItems="center">
 								<Grid size={{ xs: 12, sm: 5 }}>
-									<Autocomplete<SymbolOption, false, false, false>
+									<ZoomAwareAutocomplete<SymbolOption, false, false, false>
 										value={selectedOption}
 										onChange={(_, newValue) => {
 											if (newValue) {
