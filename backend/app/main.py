@@ -4,6 +4,7 @@ import asyncio
 import logging
 import re
 import sys
+from typing import Any
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -17,6 +18,7 @@ import sentry_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sentry_sdk.integrations.logging import LoggingIntegration
+from sentry_sdk.types import Event
 
 from app.agent.task_scheduler import get_scheduler
 from app.api.v1 import router as api_v1_router
@@ -34,8 +36,6 @@ logger = logging.getLogger(__name__)
 def _traces_sampler(sampling_context: dict) -> float:
     """Custom sampler: downsample noisy endpoints, use configured rate otherwise."""
     name = sampling_context.get("transaction_context", {}).get("name", "")
-    if name == "/api/v1/logs/frontend":
-        return 0.01  # 1% — high-volume, low-value log ingestion
     return settings.sentry_traces_sample_rate
 
 
@@ -50,7 +50,7 @@ _PII_PATTERNS = [
 ]
 
 
-def _before_send(event: dict, hint: dict) -> dict:
+def _before_send(event: Event, hint: dict[str, Any]) -> Event | None:
     """Scrub potential PII/secrets from error event messages."""
     if message := event.get("message"):
         for pattern, replacement in _PII_PATTERNS:
@@ -66,19 +66,24 @@ def _before_send(event: dict, hint: dict) -> dict:
     return event
 
 
-def _before_send_transaction(event: dict, hint: dict) -> dict | None:
+def _before_send_transaction(
+    event: Event,
+    hint: dict[str, Any],
+) -> Event | None:
     """Drop noise: SPA-serving routes, malformed outbound calls, debug artifacts."""
     name = event.get("transaction", "")
     if not name:
         return event
+    if name in {"/api/v1/logs/frontend", "/health"}:
+        return None
     # Drop outbound HTTP client calls leaking as transactions (http://*/...)
     if name.startswith("http://"):
         return None
     # Drop debug/test artifacts
     if name.startswith("manual-profile-"):
         return None
-    # Keep API, WebSocket, and health check transactions
-    if name.startswith(("/api/", "/ws/", "/health")):
+    # Keep API and WebSocket transactions
+    if name.startswith(("/api/", "/ws/")):
         return event
     # Drop everything else (SPA catch-all routes: /, /agent, /settings, etc.)
     return None

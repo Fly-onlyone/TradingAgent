@@ -21,9 +21,11 @@ import {
 	TableRow,
 	Typography,
 } from "@mui/material";
+import * as Sentry from "@sentry/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
+import { startTransition, useEffect, useState } from "react";
 import { tradesApi } from "@/api/endpoints/trades";
 import { agentDecisionsQueryOptions } from "@/api/queryOptions/agent";
 import { marketAccountQueryOptions } from "@/api/queryOptions/market";
@@ -50,7 +52,7 @@ import { requireAuth } from "./-guards";
 
 export const Route = createFileRoute("/")({
 	beforeLoad: requireAuth,
-	component: Dashboard,
+	component: ProfiledDashboard,
 });
 
 function StatsSection({
@@ -414,6 +416,19 @@ function RecentTradesSection({
 function Dashboard() {
 	const navigate = useNavigate();
 	const positions = useOrderStore((state) => state.positions);
+	const [secondaryQueriesEnabled, setSecondaryQueriesEnabled] = useState(false);
+
+	useEffect(() => {
+		const frameId = window.requestAnimationFrame(() => {
+			startTransition(() => {
+				setSecondaryQueriesEnabled(true);
+			});
+		});
+
+		return () => {
+			window.cancelAnimationFrame(frameId);
+		};
+	}, []);
 
 	const accountQuery = useQuery({
 		...marketAccountQueryOptions(),
@@ -430,11 +445,13 @@ function Dashboard() {
 		queryKey: ["trades", "recent"],
 		queryFn: () => tradesApi.getTrades({ pageSize: 5 }),
 		staleTime: 30_000,
+		enabled: secondaryQueriesEnabled,
 	});
 
 	const decisionsQuery = useQuery({
 		...agentDecisionsQueryOptions({}, 1, 5),
 		refetchInterval: 60_000,
+		enabled: secondaryQueriesEnabled,
 	});
 
 	const accountError = accountQuery.isError || accountQuery.data?.error;
@@ -442,6 +459,7 @@ function Dashboard() {
 	const decisionsCount = decisionsQuery.data?.decisions?.length ?? 0;
 	const tradesCount = recentTradesQuery.data?.trades?.length ?? 0;
 	const isFirstTimeUser =
+		secondaryQueriesEnabled &&
 		!accountQuery.isPending &&
 		!recentTradesQuery.isPending &&
 		!decisionsQuery.isPending &&
@@ -543,3 +561,5 @@ function Dashboard() {
 		</PageTransition>
 	);
 }
+
+const ProfiledDashboard = Sentry.withProfiler(Dashboard);

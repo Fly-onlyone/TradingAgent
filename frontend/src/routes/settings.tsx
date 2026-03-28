@@ -63,7 +63,7 @@ import { requireAuth } from "./-guards";
 
 export const Route = createFileRoute("/settings")({
 	beforeLoad: requireAuth,
-	component: SettingsPage,
+	component: ProfiledSettingsPage,
 });
 
 function EmbeddingConfigCard() {
@@ -1549,3 +1549,5 @@ function SettingsPage() {
 		</PageTransition>
 	);
 }
+
+const ProfiledSettingsPage = Sentry.withProfiler(SettingsPage);

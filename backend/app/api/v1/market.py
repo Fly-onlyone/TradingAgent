@@ -3,6 +3,7 @@
 import logging
 import time
 from datetime import UTC, datetime
+from typing import TypeVar
 
 import sentry_sdk
 from fastapi import APIRouter, Depends, Query
@@ -18,6 +19,14 @@ from app.utils.converters import to_optional_float as _to_optional_float
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+_ACCOUNT_CACHE_TTL = 5
+_OVERVIEW_CACHE_TTL = 15
+_TICKER_CACHE_TTL = 5
+_account_cache: dict[str, tuple[float, "AccountBalanceResponse"]] = {}
+_overview_cache: tuple[float, "MarketOverviewResponse"] | None = None
+_ticker_cache: dict[str, tuple[float, "TickerResponse"]] = {}
+ResponseModelT = TypeVar("ResponseModelT")
 
 
 class OHLCVResponse(BaseModel):
@@ -94,6 +103,21 @@ def ohlcv_to_response(data: MarketData) -> OHLCVResponse:
     )
 
 
+def _get_cached_response(
+    cache_entry: tuple[float, ResponseModelT] | None,
+    ttl_seconds: int,
+) -> ResponseModelT | None:
+    """Return a copied cached response when its TTL has not expired."""
+    if not cache_entry:
+        return None
+
+    cached_at, cached_value = cache_entry
+    if time.monotonic() - cached_at >= ttl_seconds:
+        return None
+
+    return cached_value.model_copy(deep=True)
+
+
 @router.get("/ohlcv/{symbol}", response_model=list[OHLCVResponse])
 async def get_ohlcv(
     symbol: str,
@@ -126,6 +150,11 @@ async def get_ticker(
 ) -> TickerResponse:
     """Get current ticker data for a symbol from OKX."""
     symbol_normalized = symbol.upper()
+    if cached_response := _get_cached_response(
+        _ticker_cache.get(symbol_normalized),
+        _TICKER_CACHE_TTL,
+    ):
+        return cached_response
 
     try:
         client = await OKXClient.create()
@@ -136,7 +165,7 @@ async def get_ticker(
         result = {"code": "error", "data": []}
 
     if result.get("code") != "0" or not result.get("data"):
-        return TickerResponse(
+        response = TickerResponse(
             symbol=symbol_normalized,
             last_price=0.0,
             bid_price=0.0,
@@ -148,6 +177,8 @@ async def get_ticker(
             change_pct_24h=0.0,
             timestamp=datetime.now(UTC),
         )
+        _ticker_cache[symbol_normalized] = (time.monotonic(), response)
+        return response
 
     data = result["data"][0]
     last_price = _to_float(data.get("last"))
@@ -155,7 +186,7 @@ async def get_ticker(
     change_24h = last_price - open_24h if open_24h else 0
     change_pct = (change_24h / open_24h * 100) if open_24h else 0
 
-    return TickerResponse(
+    response = TickerResponse(
         symbol=symbol_normalized,
         last_price=last_price,
         bid_price=_to_float(data.get("bidPx")),
@@ -167,6 +198,8 @@ async def get_ticker(
         change_pct_24h=change_pct,
         timestamp=datetime.now(UTC),
     )
+    _ticker_cache[symbol_normalized] = (time.monotonic(), response)
+    return response
 
 
 @router.get("/tickers", response_model=list[TickerResponse])
@@ -215,6 +248,13 @@ async def get_account_balance(
     current_user: User = Depends(get_current_active_user),
 ) -> AccountBalanceResponse:
     """Get account balance from OKX."""
+    user_cache_key = str(current_user.id)
+    if cached_response := _get_cached_response(
+        _account_cache.get(user_cache_key),
+        _ACCOUNT_CACHE_TTL,
+    ):
+        return cached_response
+
     client = await OKXClient.create()
     try:
         result = await client.get_account_balance()
@@ -235,7 +275,7 @@ async def get_account_balance(
                     )
             total_equity = _to_float(data.get("totalEq"))
             available_balance = _to_optional_float(data.get("adjEq"))
-            return AccountBalanceResponse(
+            response = AccountBalanceResponse(
                 total_equity=total_equity,
                 available_balance=(
                     available_balance if available_balance is not None else total_equity
@@ -244,6 +284,8 @@ async def get_account_balance(
                 margin_ratio=_to_optional_float(data.get("mgnRatio")),
                 currencies=currencies,
             )
+            _account_cache[user_cache_key] = (time.monotonic(), response)
+            return response
         code = str(result.get("code", "unknown"))
         message = str(result.get("msg", "Unknown error from OKX"))
         logger.warning(
@@ -251,7 +293,7 @@ async def get_account_balance(
             code,
             message,
         )
-        return AccountBalanceResponse(
+        response = AccountBalanceResponse(
             total_equity=0.0,
             available_balance=0.0,
             unrealized_pnl=0.0,
@@ -259,10 +301,12 @@ async def get_account_balance(
             currencies=[],
             error=f"OKX API error ({code}): {message}",
         )
+        _account_cache[user_cache_key] = (time.monotonic(), response)
+        return response
     except Exception as exc:
         sentry_sdk.capture_exception(exc)
         logger.warning("Failed to fetch account balance from OKX: %s", exc)
-        return AccountBalanceResponse(
+        response = AccountBalanceResponse(
             total_equity=0.0,
             available_balance=0.0,
             unrealized_pnl=0.0,
@@ -270,6 +314,8 @@ async def get_account_balance(
             currencies=[],
             error=f"Unable to fetch account balance from OKX: {exc}",
         )
+        _account_cache[user_cache_key] = (time.monotonic(), response)
+        return response
 
 
 @router.get("/overview", response_model=MarketOverviewResponse)
@@ -277,6 +323,11 @@ async def get_market_overview(
     current_user: User = Depends(get_current_active_user),
 ) -> MarketOverviewResponse:
     """Get overall market overview with top movers from OKX."""
+    global _overview_cache  # noqa: PLW0603
+
+    if cached_response := _get_cached_response(_overview_cache, _OVERVIEW_CACHE_TTL):
+        return cached_response
+
     client = await OKXClient.create()
     try:
         result = await client.get_tickers("SPOT")
@@ -306,23 +357,27 @@ async def get_market_overview(
             top_losers = sorted(tickers, key=lambda t: t.change_pct_24h)[:5]
             most_traded = sorted(tickers, key=lambda t: t.volume_24h, reverse=True)[:5]
 
-            return MarketOverviewResponse(
+            response = MarketOverviewResponse(
                 total_volume_24h=total_volume,
                 top_gainers=top_gainers,
                 top_losers=top_losers,
                 most_traded=most_traded,
             )
+            _overview_cache = (time.monotonic(), response)
+            return response
     except Exception as exc:
         sentry_sdk.capture_exception(exc)
         logger.warning("Failed to fetch market overview from OKX: %s", exc)
 
-    return MarketOverviewResponse(
+    response = MarketOverviewResponse(
         total_volume_24h=0.0,
         top_gainers=[],
         top_losers=[],
         most_traded=[],
         error="Unable to fetch market data from OKX.",
     )
+    _overview_cache = (time.monotonic(), response)
+    return response
 
 
 # In-memory instruments cache (avoids hitting OKX API on every request)

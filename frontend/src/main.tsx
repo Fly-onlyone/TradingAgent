@@ -16,10 +16,11 @@ import {createFrontendSentryInitOptions} from "./utils/sentryConfig";
 import {getApiBaseUrl} from "./utils/tauriEnv";
 
 Sentry.init(
-    createFrontendSentryInitOptions(import.meta.env, {
-        browserTracingIntegrationFactory: () => Sentry.browserTracingIntegration(),
-        browserProfilingIntegrationFactory: () =>
-            Sentry.browserProfilingIntegration(),
+    createFrontendSentryInitOptions(import.meta.env, getApiBaseUrl(), {
+        browserTracingIntegrationFactory: () =>
+            Sentry.browserTracingIntegration({
+                enableInp: true,
+            }),
         consoleLoggingIntegrationFactory: () => Sentry.consoleLoggingIntegration(),
     }),
 );
