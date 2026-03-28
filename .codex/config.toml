@@ -8,3 +8,9 @@ args = [
 
 [mcp_servers.rustover.env]
 IJ_MCP_SERVER_PORT = '64342'
+
+[mcp_servers.rustover.tools.get_file_problems]
+approval_mode = "approve"
+
+[mcp_servers.rustover.tools.reformat_file]
+approval_mode = "approve"
