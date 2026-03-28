@@ -5,9 +5,6 @@
  */
 
 import SaveIcon from "@mui/icons-material/Save";
-import ShowChartIcon from "@mui/icons-material/ShowChart";
-import TimelineIcon from "@mui/icons-material/Timeline";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import {
 	Alert,
 	Box,
@@ -319,10 +316,7 @@ function TradingPage() {
 												>
 													<CoinIcon symbol={option.base} size={28} />
 													<Box>
-														<Typography
-															variant="body2"
-															fontWeight={600}
-														>
+														<Typography variant="body2" fontWeight={600}>
 															{option.symbol}
 														</Typography>
 														<Typography
@@ -409,7 +403,6 @@ function TradingPage() {
 								<StatCard
 									title="Last Price"
 									value={resolvedTicker ? `$${formatPrice(currentPrice)}` : "-"}
-									icon={<ShowChartIcon />}
 									loading={tickerQuery.isLoading && !resolvedTicker}
 								/>
 							</Grid>
@@ -421,7 +414,6 @@ function TradingPage() {
 											? formatPercent(resolvedTicker.priceChangePercent)
 											: "-"
 									}
-									icon={<TrendingUpIcon />}
 									trend={
 										(resolvedTicker?.priceChangePercent ?? 0) >= 0
 											? "up"
@@ -438,7 +430,6 @@ function TradingPage() {
 											? `$${formatVolume(resolvedTicker.volume24h)}`
 											: "-"
 									}
-									icon={<TimelineIcon />}
 									loading={tickerQuery.isLoading && !resolvedTicker}
 								/>
 							</Grid>

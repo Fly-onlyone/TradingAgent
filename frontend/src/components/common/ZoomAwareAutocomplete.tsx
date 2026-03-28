@@ -7,10 +7,12 @@ import {
 	Autocomplete,
 	type AutocompleteProps,
 	Box,
+	Popper,
+	type PopperProps,
 	type SxProps,
 	type Theme,
 } from "@mui/material";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import { useUIStore } from "@/store/uiStore";
 
 type ZoomAwareAutocompleteProps<
@@ -21,8 +23,45 @@ type ZoomAwareAutocompleteProps<
 > = AutocompleteProps<Value, Multiple, DisableClearable, FreeSolo>;
 
 interface DropdownMetrics {
-	width: number | null;
 	maxHeight: number | null;
+}
+
+function resolveAnchorEl(anchorEl: PopperProps["anchorEl"]) {
+	return typeof anchorEl === "function" ? anchorEl() : anchorEl;
+}
+
+const ZoomAwareAutocompletePopper = forwardRef<HTMLDivElement, PopperProps>(
+	function ZoomAwareAutocompletePopper(props, ref) {
+		const { anchorEl, style, ...rest } = props;
+		const uiScale = useUIStore((state) => state.uiScale);
+		const resolvedAnchor = resolveAnchorEl(anchorEl);
+		const measuredWidth =
+			resolvedAnchor && "clientWidth" in resolvedAnchor
+				? resolvedAnchor.clientWidth * uiScale
+				: style?.width;
+
+		return (
+			<Popper
+				{...rest}
+				anchorEl={anchorEl}
+				ref={ref}
+				style={{
+					...style,
+					width: measuredWidth ?? style?.width,
+				}}
+			/>
+		);
+	},
+);
+
+function mergeStyle(
+	base: React.CSSProperties | undefined,
+	extra: React.CSSProperties,
+) {
+	return {
+		...(base ?? {}),
+		...extra,
+	};
 }
 
 function mergeSx(base: SxProps<Theme> | undefined, extra: SxProps<Theme>) {
@@ -42,6 +81,10 @@ function mergeSlotProp(slotProp: unknown, extra: Record<string, unknown>) {
 			return {
 				...resolved,
 				...extra,
+				style: mergeStyle(
+					resolved?.style as React.CSSProperties | undefined,
+					(extra.style ?? {}) as React.CSSProperties,
+				),
 				sx: mergeSx(
 					resolved?.sx as SxProps<Theme> | undefined,
 					(extra.sx ?? {}) as SxProps<Theme>,
@@ -58,6 +101,10 @@ function mergeSlotProp(slotProp: unknown, extra: Record<string, unknown>) {
 	return {
 		...resolved,
 		...extra,
+		style: mergeStyle(
+			resolved.style as React.CSSProperties | undefined,
+			(extra.style ?? {}) as React.CSSProperties,
+		),
 		sx: mergeSx(
 			resolved.sx as SxProps<Theme> | undefined,
 			(extra.sx ?? {}) as SxProps<Theme>,
@@ -78,10 +125,8 @@ export function ZoomAwareAutocomplete<
 	...props
 }: ZoomAwareAutocompleteProps<Value, Multiple, DisableClearable, FreeSolo>) {
 	const containerRef = useRef<HTMLDivElement | null>(null);
-	const uiScale = useUIStore((state) => state.uiScale);
 	const [internalOpen, setInternalOpen] = useState(false);
 	const [dropdownMetrics, setDropdownMetrics] = useState<DropdownMetrics>({
-		width: null,
 		maxHeight: null,
 	});
 	const open = openProp ?? internalOpen;
@@ -93,17 +138,14 @@ export function ZoomAwareAutocomplete<
 		}
 
 		const rect = container.getBoundingClientRect();
-		const zoom = uiScale || 1;
 		const viewportPadding = 24;
 		const availableHeight =
-			Math.max(rect.top, window.innerHeight - rect.bottom) / zoom -
-			viewportPadding;
+			Math.max(rect.top, window.innerHeight - rect.bottom) - viewportPadding;
 
 		setDropdownMetrics({
-			width: rect.width / zoom,
 			maxHeight: Math.max(180, Math.min(420, availableHeight)),
 		});
-	}, [uiScale]);
+	}, []);
 
 	const handleOpen = useCallback<NonNullable<typeof onOpen>>(
 		(event) => {
@@ -158,24 +200,35 @@ export function ZoomAwareAutocomplete<
 				open={open}
 				onOpen={handleOpen}
 				onClose={handleClose}
+				slots={{
+					...props.slots,
+					popper: ZoomAwareAutocompletePopper,
+				}}
 				slotProps={{
 					...slotProps,
-					popper: mergeSlotProp(slotProps?.popper, {
-						sx:
-							dropdownMetrics.width !== null
-								? {
-										width: dropdownMetrics.width,
-									}
-								: {},
-					}),
 					paper: mergeSlotProp(slotProps?.paper, {
+						style: {
+							width: "100%",
+							maxHeight:
+								dropdownMetrics.maxHeight !== null
+									? `${dropdownMetrics.maxHeight}px`
+									: undefined,
+							overflow: "hidden",
+						},
 						sx: {
 							width: "100%",
-							maxWidth: dropdownMetrics.width ?? undefined,
+							maxHeight: dropdownMetrics.maxHeight ?? undefined,
 							overflow: "hidden",
 						},
 					}),
 					listbox: mergeSlotProp(slotProps?.listbox, {
+						style: {
+							maxHeight:
+								dropdownMetrics.maxHeight !== null
+									? `${dropdownMetrics.maxHeight}px`
+									: undefined,
+							overflowY: "auto",
+						},
 						sx: {
 							maxHeight: dropdownMetrics.maxHeight ?? undefined,
 							overflowY: "auto",
