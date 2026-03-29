@@ -508,6 +508,23 @@ function TasksPage() {
 						</Box>
 					)}
 
+					{existingTaskId && task && (
+						<Box sx={{ display: "flex", gap: 2, mb: 2 }}>
+							<Typography variant="body2" color="text.secondary">
+								Next run:{" "}
+								{task.nextRunAt
+									? formatDateTime(task.nextRunAt)
+									: "Not scheduled"}
+							</Typography>
+							<Typography variant="body2" color="text.secondary">
+								Last run:{" "}
+								{task.lastRunAt
+									? formatDateTime(task.lastRunAt)
+									: "Never"}
+							</Typography>
+						</Box>
+					)}
+
 					{(error || (tasksQuery.isError && !isWaitingForBackend)) && (
 						<Alert
 							severity="error"

@@ -376,7 +376,7 @@ function FileUploadTab({
 						Drop a file here or click to browse
 					</Typography>
 					<Typography variant="caption" color="text.secondary">
-						Supports PDF, TXT, MD files
+						Supports TXT, JSON, YAML, PDF files
 					</Typography>
 					{selectedFile && (
 						<Typography
