@@ -59,7 +59,13 @@ const processQueue = (error: unknown, token: string | null = null) => {
 };
 
 /** URLs that should never trigger a refresh attempt (prevents infinite loops). */
-const NO_REFRESH_URLS = ["/auth/token", "/auth/refresh", "/auth/register"];
+const NO_REFRESH_URLS = [
+	"/auth/token",
+	"/auth/refresh",
+	"/auth/register",
+	"/auth/forgot-password",
+	"/auth/reset-password",
+];
 
 function shouldSkipRefresh(url: string | undefined): boolean {
 	if (!url) return true;

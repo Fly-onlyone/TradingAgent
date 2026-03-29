@@ -96,6 +96,27 @@ export const authApi = {
     },
 
     /**
+     * Request a password-reset email
+     */
+    async forgotPassword(email: string): Promise<{ message: string }> {
+        const response = await apiClient.post<{ message: string }>("/auth/forgot-password", {
+            email: email.trim().toLowerCase(),
+        });
+        return response.data;
+    },
+
+    /**
+     * Reset password using a token from the reset email
+     */
+    async resetPassword(token: string, password: string): Promise<{ message: string }> {
+        const response = await apiClient.post<{ message: string }>("/auth/reset-password", {
+            token,
+            password,
+        });
+        return response.data;
+    },
+
+    /**
      * Logout (clear local token)
      */
     logout(): void {

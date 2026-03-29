@@ -3,11 +3,12 @@
  * Displays trade history with profit/loss analysis
  */
 
-import { Alert, Box, Card, CardContent, Typography } from "@mui/material";
+import { Alert, Box } from "@mui/material";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { tradesApi } from "@/api/endpoints/trades";
+import { PnLChart } from "@/components/charts";
 import { PageTransition } from "@/components/common/PageTransition";
 import { SectionHeader } from "@/components/common/SectionHeader";
 import {
@@ -107,29 +108,11 @@ function TradesPage() {
 					/>
 				</Box>
 
-				{/* P&L Chart Placeholder */}
-				<Card sx={{ mb: 3 }}>
-					<CardContent>
-						<Typography variant="h6" sx={{ mb: 2 }}>
-							P&L Performance
-						</Typography>
-						<Box
-							sx={{
-								height: 200,
-								display: "flex",
-								alignItems: "center",
-								justifyContent: "center",
-								border: (theme) =>
-									`1px dashed ${theme.trading.border.subtle}`,
-								borderRadius: 1,
-							}}
-						>
-							<Typography variant="body2" color="text.secondary">
-								P&L chart — coming soon
-							</Typography>
-						</Box>
-					</CardContent>
-				</Card>
+				{/* P&L Performance Chart */}
+				<PnLChart
+					trades={tradesQuery.data?.trades ?? []}
+					loading={tradesQuery.isLoading}
+				/>
 
 				{/* Filter Bar */}
 				<TradeFilterBar

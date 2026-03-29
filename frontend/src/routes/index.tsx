@@ -29,6 +29,7 @@ import {startTransition, useEffect, useState} from "react";
 import {tradesApi} from "@/api/endpoints/trades";
 import {agentDecisionsQueryOptions} from "@/api/queryOptions/agent";
 import {marketAccountQueryOptions} from "@/api/queryOptions/market";
+import {EquityChart} from "@/components/charts";
 import {EmptyState} from "@/components/common/EmptyState";
 import {MetricRow} from "@/components/common/MetricRow";
 import {PageTransition} from "@/components/common/PageTransition";
@@ -121,31 +122,6 @@ function StatsSection({
     );
 }
 
-function EquityChartPlaceholder() {
-    return (
-        <Card sx={{height: 280}}>
-            <CardContent>
-                <Typography variant="h6" sx={{mb: 2}}>
-                    Portfolio Equity
-                </Typography>
-                <Box
-                    sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        height: 200,
-                        borderRadius: 1,
-                        border: (theme) => `1px dashed ${theme.trading.border.subtle}`,
-                    }}
-                >
-                    <Typography variant="body2" color="text.secondary">
-                        Equity chart — coming soon
-                    </Typography>
-                </Box>
-            </CardContent>
-        </Card>
-    );
-}
 
 function AgentStatusCard() {
     const agentStatus = useAgentStore((s) => s.status);
@@ -444,6 +420,13 @@ function Dashboard() {
         enabled: secondaryQueriesEnabled,
     });
 
+    const chartTradesQuery = useQuery({
+        queryKey: ["trades", "chart"],
+        queryFn: () => tradesApi.getTrades({pageSize: 50}),
+        staleTime: 60_000,
+        enabled: secondaryQueriesEnabled,
+    });
+
     const decisionsQuery = useQuery({
         ...agentDecisionsQueryOptions({}, 1, 5),
         refetchInterval: 60_000,
@@ -531,7 +514,10 @@ function Dashboard() {
                 <ScrollReveal direction="up" delay={0.1}>
                     <Grid container spacing={3} sx={{mb: 3}}>
                         <Grid size={{xs: 12, md: 8}}>
-                            <EquityChartPlaceholder/>
+                            <EquityChart
+                                trades={chartTradesQuery.data?.trades ?? []}
+                                loading={chartTradesQuery.isLoading}
+                            />
                         </Grid>
                         <Grid size={{xs: 12, md: 4}}>
                             <AgentStatusCard/>

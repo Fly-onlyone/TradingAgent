@@ -1,5 +1,7 @@
 """Authentication endpoints using Beanie ODM."""
 
+import hashlib
+import secrets
 from datetime import UTC, datetime, timedelta
 
 import bcrypt
@@ -14,6 +16,7 @@ from app.config import get_settings
 from app.core.rate_limit import limiter
 from app.db.models.app_settings import AppSettings
 from app.db.models.user import User
+from app.services.email_service import EmailService
 
 # Fixed dev user ID so all debug-mode layers (REST, WebSocket) share
 # the same identity and can find each other's data.
@@ -46,6 +49,15 @@ class UserCreate(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str
 
 
 class UserResponse(BaseModel):
@@ -254,3 +266,46 @@ async def read_users_me(
         "is_superuser": current_user.is_superuser,
         "created_at": current_user.created_at,
     }
+
+
+@router.post("/forgot-password")
+@limiter.limit("3/minute")
+async def forgot_password(request: Request, body: ForgotPasswordRequest) -> dict:
+    """Send a password-reset email. Always returns 200 to avoid leaking user existence."""
+    normalized_email = str(body.email).strip().lower()
+    user = await User.find_one(User.email == normalized_email)
+
+    if user and user.is_active:
+        token = secrets.token_urlsafe(32)
+        user.reset_token_hash = hashlib.sha256(token.encode()).hexdigest()
+        user.reset_token_expires = datetime.now(UTC) + timedelta(hours=1)
+        user.update_timestamp()
+        await user.save()
+
+        email_service = EmailService()
+        await email_service.send_password_reset(normalized_email, token)
+
+    return {"message": "If an account exists with this email, you will receive a reset link."}
+
+
+@router.post("/reset-password")
+@limiter.limit("5/minute")
+async def reset_password(request: Request, body: ResetPasswordRequest) -> dict:
+    """Reset password using a valid token."""
+    token_hash = hashlib.sha256(body.token.encode()).hexdigest()
+    user = await User.find_one(
+        User.reset_token_hash == token_hash,
+        User.reset_token_expires >= datetime.now(UTC),
+    )
+
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    user.hashed_password = get_password_hash(body.password)
+    user.password_changed_at = datetime.now(UTC)
+    user.reset_token_hash = None
+    user.reset_token_expires = None
+    user.update_timestamp()
+    await user.save()
+
+    return {"message": "Password has been reset successfully."}

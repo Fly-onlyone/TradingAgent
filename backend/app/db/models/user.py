@@ -17,6 +17,8 @@ class User(Document):
     default_symbol: str = "BTC-USDT"
     default_timeframe: str = "1h"
     password_changed_at: datetime | None = None
+    reset_token_hash: str | None = None
+    reset_token_expires: datetime | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

@@ -217,6 +217,20 @@ function LoginPage() {
                                         )}
                                     />
 
+                                    <Box sx={{textAlign: "right", mb: 2}}>
+                                        <Box
+                                            component={Link}
+                                            to="/auth/forgot-password"
+                                            sx={{
+                                                color: "text.secondary",
+                                                fontSize: "0.8125rem",
+                                                "&:hover": {color: "primary.main"},
+                                            }}
+                                        >
+                                            Forgot password?
+                                        </Box>
+                                    </Box>
+
                                     <Button
                                         type="submit"
                                         variant="contained"

@@ -12,13 +12,14 @@ import {
     Grid2 as Grid,
     InputAdornment,
     Link as MuiLink,
+    TablePagination,
     TextField,
     Typography,
 } from "@mui/material";
-import {useQuery} from "@tanstack/react-query";
+import {keepPreviousData, useQuery} from "@tanstack/react-query";
 import {createFileRoute} from "@tanstack/react-router";
 import {motion} from "framer-motion";
-import {useMemo, useState} from "react";
+import {useCallback, useMemo, useState} from "react";
 import {newsApi} from "@/api/endpoints/news";
 import {EmptyState} from "@/components/common/EmptyState";
 import {PageTransition} from "@/components/common/PageTransition";
@@ -40,20 +41,47 @@ export const Route = createFileRoute("/news")({
 function NewsPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [sourceFilter, setSourceFilter] = useState<string | null>(null);
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(20);
     const debouncedQuery = useDebounce(searchQuery, 300);
+
+    /** Reset to page 1 when filters change */
+    const handleSearchChange = useCallback((value: string) => {
+        setSearchQuery(value);
+        setPage(1);
+    }, []);
+
+    const handleSourceFilterChange = useCallback((source: string | null) => {
+        setSourceFilter(source);
+        setPage(1);
+    }, []);
 
     const {data: marketSentiment, isLoading: loadingSentiment} = useQuery({
         queryKey: ["marketSentiment"],
         queryFn: () => newsApi.getMarketSentiment(),
     });
 
-    const {data: articles, isLoading: loadingArticles} = useQuery({
-        queryKey: ["news", debouncedQuery],
+    const {data: articlesResponse, isLoading: loadingArticles} = useQuery({
+        queryKey: ["news", debouncedQuery, page, pageSize],
         queryFn: () =>
             debouncedQuery
-                ? newsApi.searchNews(debouncedQuery, 20)
-                : newsApi.getArticles({pageSize: 20}).then((r) => r.items ?? []),
+                ? newsApi.searchNews(debouncedQuery, pageSize)
+                : newsApi.getArticles({page, pageSize}),
+        placeholderData: keepPreviousData,
     });
+
+    // Normalize response: searchNews returns an array, getArticles returns PaginatedResponse
+    const articles = useMemo(() => {
+        if (!articlesResponse) return [];
+        if (Array.isArray(articlesResponse)) return articlesResponse;
+        return articlesResponse.items ?? [];
+    }, [articlesResponse]);
+
+    const totalArticles = useMemo(() => {
+        if (!articlesResponse) return 0;
+        if (Array.isArray(articlesResponse)) return articlesResponse.length;
+        return articlesResponse.total ?? 0;
+    }, [articlesResponse]);
 
     const sentimentScore = marketSentiment?.overallMarketSentiment ?? null;
 
@@ -160,7 +188,7 @@ function NewsPage() {
                     fullWidth
                     placeholder="Search news..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => handleSearchChange(e.target.value)}
                     slotProps={{
                         input: {
                             startAdornment: (
@@ -176,13 +204,13 @@ function NewsPage() {
                 {/* Source filter chips */}
                 <Box sx={{display: "flex", gap: 1, mb: 3, flexWrap: "wrap"}}>
                     <Chip label="All" variant={!sourceFilter ? "filled" : "outlined"}
-                          onClick={() => setSourceFilter(null)} size="small"/>
+                          onClick={() => handleSourceFilterChange(null)} size="small"/>
                     {uniqueSources.map((source) => (
                         <Chip
                             key={source}
                             label={source}
                             variant={sourceFilter === source ? "filled" : "outlined"}
-                            onClick={() => setSourceFilter(source === sourceFilter ? null : source)}
+                            onClick={() => handleSourceFilterChange(source === sourceFilter ? null : source)}
                             size="small"
                         />
                     ))}
@@ -223,6 +251,23 @@ function NewsPage() {
                         </Grid>
                     )}
                 </Grid>
+
+                {/* Pagination */}
+                {!loadingArticles && !debouncedQuery && totalArticles > 0 && (
+                    <TablePagination
+                        component="div"
+                        count={totalArticles}
+                        page={page - 1}
+                        onPageChange={(_, newPage) => setPage(newPage + 1)}
+                        rowsPerPage={pageSize}
+                        onRowsPerPageChange={(e) => {
+                            setPageSize(parseInt(e.target.value, 10));
+                            setPage(1);
+                        }}
+                        rowsPerPageOptions={[10, 20, 50]}
+                        sx={{mt: 2}}
+                    />
+                )}
             </Box>
         </PageTransition>
     );

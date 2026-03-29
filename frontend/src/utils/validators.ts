@@ -72,6 +72,22 @@ export const knowledgeQuerySchema = z.object({
 		.optional(),
 });
 
+// Forgot password schema
+export const forgotPasswordSchema = z.object({
+	email: z.string().email("Invalid email address"),
+});
+
+// Reset password schema
+export const resetPasswordSchema = z
+	.object({
+		password: z.string().min(8, "Password must be at least 8 characters"),
+		confirmPassword: z.string(),
+	})
+	.refine((data) => data.password === data.confirmPassword, {
+		message: "Passwords don't match",
+		path: ["confirmPassword"],
+	});
+
 // Change password schema
 export const changePasswordSchema = z
 	.object({
@@ -108,6 +124,8 @@ export const agentSettingsSchema = z
 	);
 
 // Type exports
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 export type AgentSettingsInput = z.infer<typeof agentSettingsSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
