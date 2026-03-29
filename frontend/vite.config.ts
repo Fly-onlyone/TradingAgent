@@ -155,11 +155,11 @@ export default defineConfig({
 	server: {
 		proxy: {
 			"/api": {
-				target: "http://localhost:7000",
+				target: `http://localhost:${process.env.VITE_BACKEND_PORT || "7001"}`,
 				changeOrigin: true,
 			},
 			"/ws": {
-				target: "http://localhost:7000",
+				target: `http://localhost:${process.env.VITE_BACKEND_PORT || "7001"}`,
 				ws: true,
 				changeOrigin: true,
 			},

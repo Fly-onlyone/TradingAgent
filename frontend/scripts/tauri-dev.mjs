@@ -8,7 +8,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const frontendRoot = resolve(__dirname, "..");
 const projectRoot = resolve(frontendRoot, "..");
-const backendHealthUrl = "http://127.0.0.1:7000/health";
+const backendPort = process.env.BACKEND_PORT || "7000";
+const backendHealthUrl = `http://127.0.0.1:${backendPort}/health`;
 const backendStartupTimeoutMs = 90_000;
 const backendPollIntervalMs = 500;
 
@@ -116,10 +117,11 @@ async function waitForBackendReady() {
 
 function spawnBackend() {
     const {command, args} = getBackendCommand();
-    console.log(`[tauri-dev] starting backend: ${command} ${args.join(" ")}`);
+    console.log(`[tauri-dev] starting backend: ${command} ${args.join(" ")} (port ${backendPort})`);
     backendProcess = spawn(command, args, {
         cwd: projectRoot,
         stdio: "inherit",
+        env: {...process.env, TAURI_APP: "1", BACKEND_PORT: backendPort},
     });
 
     backendProcess.on("exit", (code, signal) => {

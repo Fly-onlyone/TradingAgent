@@ -1,11 +1,24 @@
 """Application configuration using Pydantic settings."""
 
+import os
 import secrets
 import warnings
 from functools import lru_cache
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _default_db_name() -> str:
+    """Derive the default MongoDB database name from the runtime context.
+
+    Priority: MONGODB_DB_NAME env var > TAURI_APP detection > dev default.
+    """
+    if os.environ.get("MONGODB_DB_NAME"):
+        return os.environ["MONGODB_DB_NAME"]
+    if os.environ.get("TAURI_APP"):
+        return "trading_agent"
+    return "trading_agent_dev"
 
 
 class Settings(BaseSettings):
@@ -30,7 +43,7 @@ class Settings(BaseSettings):
 
     # MongoDB
     mongodb_url: str = "mongodb://localhost:27017"
-    mongodb_db_name: str = "trading_agent"
+    mongodb_db_name: str = _default_db_name()
 
     # OKX API
     okx_api_key: str = ""
@@ -90,11 +103,7 @@ class Settings(BaseSettings):
                 stacklevel=2,
             )
 
-        if (
-            not self.debug
-            and "localhost" in self.mongodb_url
-            and "@" not in self.mongodb_url
-        ):
+        if not self.debug and "localhost" in self.mongodb_url and "@" not in self.mongodb_url:
             warnings.warn(
                 "MongoDB connection has no authentication credentials. "
                 "Configure a URI with username:password@ for production.",

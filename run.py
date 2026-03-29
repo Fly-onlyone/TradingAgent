@@ -25,8 +25,12 @@ if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
-BACKEND_HOST = "127.0.0.1"
-BACKEND_PORT = 7000
+BACKEND_HOST = os.environ.get("BACKEND_HOST", "127.0.0.1")
+
+# --serve is used by Tauri exe (production) → default 7000
+# Dev mode (no --serve) → default 7001 so both can run simultaneously
+_DEFAULT_PORT = 7000 if "--serve" in sys.argv else 7001
+BACKEND_PORT = int(os.environ.get("BACKEND_PORT", str(_DEFAULT_PORT)))
 
 
 def _is_port_free(host: str, port: int) -> bool:
@@ -72,6 +76,12 @@ def _terminate_process(proc: subprocess.Popen | None) -> None:
 def _run_server() -> int:
     """Start uvicorn directly — no reload, no multiprocessing subprocess."""
     import uvicorn
+
+    _mode = "production" if os.environ.get("TAURI_APP") else "dev"
+    _db = os.environ.get(
+        "MONGODB_DB_NAME", "trading_agent" if _mode == "production" else "trading_agent_dev"
+    )
+    print(f"[serve] Backend on port {BACKEND_PORT} ({_mode} mode), DB: {_db}")
 
     if not _wait_for_port_free(BACKEND_HOST, BACKEND_PORT, timeout_seconds=2.5):
         print(
