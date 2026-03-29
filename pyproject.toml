@@ -39,12 +39,17 @@ dependencies = [
     "bcrypt>=4.0.0",
     # Error monitoring
     "sentry-sdk[fastapi]>=2.0.0",
+    # Rate limiting
+    "slowapi>=0.1.9",
     # Dev file watcher (used by run.py)
     "watchfiles>=0.20.0",
     "pandas-stubs~=3.0.0",
     # Strategy import (PDF + YAML parsing)
     "pymupdf>=1.24.0",
     "pyyaml>=6.0.0",
+    "pyotp>=2.9.0",
+    "qrcode[pil]>=8.2",
+    "apprise>=1.9.0",
 ]
 
 [dependency-groups]

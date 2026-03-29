@@ -1177,6 +1177,21 @@ Provide:
         }
         return action_map.get(action_str.lower())
 
+    async def pause_all_tasks(self) -> int:
+        """Pause all active tasks and unschedule their jobs. Returns count paused."""
+        tasks = await AgentTask.find(AgentTask.status == TaskStatus.ACTIVE).to_list()
+        paused = 0
+        for task in tasks:
+            try:
+                task.pause()
+                await task.save()
+                self._remove_task_jobs(str(task.id))
+                paused += 1
+            except Exception:
+                logger.exception("Failed to pause task %s during emergency stop", task.id)
+        logger.info("Emergency stop: paused %d of %d active tasks", paused, len(tasks))
+        return paused
+
     async def unschedule_task(self, task_id: str) -> None:
         """Remove all jobs for a task from the scheduler."""
         self._remove_task_jobs(task_id)

@@ -36,6 +36,9 @@ import {createFileRoute} from "@tanstack/react-router";
 import {useEffect, useState} from "react";
 import {Controller, useForm} from "react-hook-form";
 import {authApi} from "@/api/endpoints/auth";
+import type {TwoFactorSetupResponse} from "@/api/endpoints/auth";
+import type {NotificationSettingsUpdate} from "@/api/endpoints/notifications";
+import {notificationsApi} from "@/api/endpoints/notifications";
 import type {
     AuthConfigUpdate,
     BraveSearchConfigUpdate,
@@ -424,6 +427,182 @@ function ChangePasswordCard() {
             </CardContent>
         </Card>
     );
+}
+
+function TwoFactorCard() {
+	const { user } = useAuthStore();
+	const queryClient = useQueryClient();
+	const [setupData, setSetupData] = useState<TwoFactorSetupResponse | null>(null);
+	const [verifyCode, setVerifyCode] = useState("");
+	const [disableCode, setDisableCode] = useState("");
+
+	const totpEnabled = user?.totpEnabled ?? false;
+
+	const setupMutation = useMutation({
+		mutationFn: () => authApi.setup2FA(),
+		onSuccess: (data) => {
+			setSetupData(data);
+		},
+		onError: (error) => {
+			notify.error("Failed to start 2FA setup", getErrorMessage(error));
+		},
+	});
+
+	const verifyMutation = useMutation({
+		mutationFn: (code: string) => authApi.verify2FA(code),
+		onSuccess: () => {
+			notify.success("Two-factor authentication enabled");
+			setSetupData(null);
+			setVerifyCode("");
+			// Refresh user data so totpEnabled updates
+			queryClient.invalidateQueries({ queryKey: ["auth-me"] });
+			void authApi.getMe().then((u) => useAuthStore.getState().setUser(u));
+		},
+		onError: (error) => {
+			notify.error("Invalid verification code", getErrorMessage(error));
+			setVerifyCode("");
+		},
+	});
+
+	const disableMutation = useMutation({
+		mutationFn: (code: string) => authApi.disable2FA(code),
+		onSuccess: () => {
+			notify.success("Two-factor authentication disabled");
+			setDisableCode("");
+			void authApi.getMe().then((u) => useAuthStore.getState().setUser(u));
+		},
+		onError: (error) => {
+			notify.error("Failed to disable 2FA", getErrorMessage(error));
+			setDisableCode("");
+		},
+	});
+
+	return (
+		<Card sx={{ mb: 3 }}>
+			<CardContent>
+				<Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 2 }}>
+					<Typography variant="h6">Two-Factor Authentication</Typography>
+					<Chip
+						label={totpEnabled ? "Enabled" : "Not Enabled"}
+						color={totpEnabled ? "success" : "default"}
+						size="small"
+						variant="outlined"
+					/>
+				</Box>
+
+				{totpEnabled ? (
+					<Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+						<Typography variant="body2" color="text.secondary">
+							Enter your current authenticator code to disable 2FA.
+						</Typography>
+						<Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+							<TextField
+								size="small"
+								label="6-digit code"
+								value={disableCode}
+								onChange={(e) => {
+									const val = e.target.value.replace(/\D/g, "").slice(0, 6);
+									setDisableCode(val);
+								}}
+								slotProps={{
+									htmlInput: { inputMode: "numeric", maxLength: 6 },
+								}}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" && disableCode.length === 6) {
+										disableMutation.mutate(disableCode);
+									}
+								}}
+								sx={{ width: 160 }}
+							/>
+							<Button
+								variant="outlined"
+								color="error"
+								disabled={disableCode.length !== 6 || disableMutation.isPending}
+								onClick={() => disableMutation.mutate(disableCode)}
+							>
+								{disableMutation.isPending ? "Disabling..." : "Disable 2FA"}
+							</Button>
+						</Box>
+					</Box>
+				) : setupData ? (
+					<Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+						<Typography variant="body2" color="text.secondary">
+							Scan this QR code with your authenticator app, then enter the
+							6-digit code to verify.
+						</Typography>
+						<Box sx={{ display: "flex", justifyContent: "center" }}>
+							<img
+								src={setupData.qrCode}
+								alt="2FA QR Code"
+								width={200}
+								height={200}
+							/>
+						</Box>
+						<Typography
+							variant="caption"
+							color="text.secondary"
+							sx={{ textAlign: "center", wordBreak: "break-all" }}
+						>
+							Manual entry key: {setupData.secret}
+						</Typography>
+						<Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+							<TextField
+								size="small"
+								label="6-digit code"
+								value={verifyCode}
+								onChange={(e) => {
+									const val = e.target.value.replace(/\D/g, "").slice(0, 6);
+									setVerifyCode(val);
+								}}
+								slotProps={{
+									htmlInput: { inputMode: "numeric", maxLength: 6 },
+								}}
+								autoFocus
+								onKeyDown={(e) => {
+									if (e.key === "Enter" && verifyCode.length === 6) {
+										verifyMutation.mutate(verifyCode);
+									}
+								}}
+								sx={{ width: 160 }}
+							/>
+							<Button
+								variant="contained"
+								disabled={verifyCode.length !== 6 || verifyMutation.isPending}
+								onClick={() => verifyMutation.mutate(verifyCode)}
+							>
+								{verifyMutation.isPending ? "Verifying..." : "Verify & Enable"}
+							</Button>
+						</Box>
+						<Button
+							variant="text"
+							size="small"
+							sx={{ alignSelf: "flex-start" }}
+							onClick={() => {
+								setSetupData(null);
+								setVerifyCode("");
+							}}
+						>
+							Cancel
+						</Button>
+					</Box>
+				) : (
+					<Box>
+						<Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+							Add an extra layer of security to your account by requiring a
+							code from your authenticator app when signing in.
+						</Typography>
+						<Button
+							variant="outlined"
+							disabled={setupMutation.isPending}
+							onClick={() => setupMutation.mutate()}
+						>
+							{setupMutation.isPending ? "Setting up..." : "Enable 2FA"}
+						</Button>
+					</Box>
+				)}
+			</CardContent>
+		</Card>
+	);
 }
 
 function AuthConfigCard() {
@@ -1278,6 +1457,172 @@ function BraveSearchConfigCard() {
     );
 }
 
+function NotificationPreferencesCard() {
+    const queryClient = useQueryClient();
+
+    const settingsQuery = useQuery({
+        queryKey: ["notification-settings"],
+        queryFn: () => notificationsApi.getSettings(),
+        staleTime: 60_000,
+    });
+
+    const updateMutation = useMutation({
+        mutationFn: (update: NotificationSettingsUpdate) =>
+            notificationsApi.updateSettings(update),
+        onSuccess: () => {
+            queryClient.invalidateQueries({queryKey: ["notification-settings"]});
+            notify.success("Notification preferences saved");
+        },
+        onError: (error) => {
+            notify.error("Failed to update notification preferences", getErrorMessage(error));
+        },
+    });
+
+    const settings = settingsQuery.data;
+
+    const handleToggle = (field: keyof NotificationSettingsUpdate, value: boolean) => {
+        updateMutation.mutate({[field]: value});
+    };
+
+    return (
+        <Card sx={{mb: 3}}>
+            <CardContent>
+                <Typography variant="h6" gutterBottom>
+                    Notifications
+                </Typography>
+
+                {settingsQuery.isLoading ? (
+                    <Box sx={{display: "flex", justifyContent: "center", py: 3}}>
+                        <CircularProgress size={24}/>
+                    </Box>
+                ) : settingsQuery.error ? (
+                    <Alert severity="error">Failed to load notification settings</Alert>
+                ) : settings ? (
+                    <Box sx={{display: "flex", flexDirection: "column", gap: 1}}>
+                        {/* Alert type toggles */}
+                        <FormControlLabel
+                            control={
+                                <Switch
+                                    checked={settings.tradeConfirmations}
+                                    onChange={(_, checked) => handleToggle("tradeConfirmations", checked)}
+                                    disabled={updateMutation.isPending}
+                                />
+                            }
+                            label="Trade confirmations"
+                        />
+                        <FormControlLabel
+                            control={
+                                <Switch
+                                    checked={settings.tradeExecutions}
+                                    onChange={(_, checked) => handleToggle("tradeExecutions", checked)}
+                                    disabled={updateMutation.isPending}
+                                />
+                            }
+                            label="Trade executions"
+                        />
+                        <FormControlLabel
+                            control={
+                                <Switch
+                                    checked={settings.riskAlerts}
+                                    onChange={(_, checked) => handleToggle("riskAlerts", checked)}
+                                    disabled={updateMutation.isPending}
+                                />
+                            }
+                            label="Risk alerts"
+                        />
+                        <FormControlLabel
+                            control={
+                                <Switch
+                                    checked={settings.taskCompletions}
+                                    onChange={(_, checked) => handleToggle("taskCompletions", checked)}
+                                    disabled={updateMutation.isPending}
+                                />
+                            }
+                            label="Task completions"
+                        />
+                        <FormControlLabel
+                            control={
+                                <Switch
+                                    checked={settings.priceAlerts}
+                                    onChange={(_, checked) => handleToggle("priceAlerts", checked)}
+                                    disabled={updateMutation.isPending}
+                                />
+                            }
+                            label="Price alerts"
+                        />
+                        <FormControlLabel
+                            control={
+                                <Switch
+                                    checked={settings.analysisReady}
+                                    onChange={(_, checked) => handleToggle("analysisReady", checked)}
+                                    disabled={updateMutation.isPending}
+                                />
+                            }
+                            label="Analysis ready"
+                        />
+
+                        <Divider sx={{my: 1}}/>
+
+                        {/* Web Push */}
+                        <FormControlLabel
+                            control={
+                                <Switch
+                                    checked={settings.webPushEnabled}
+                                    disabled
+                                />
+                            }
+                            label="Web push notifications"
+                        />
+                        <Typography variant="caption" color="text.secondary" sx={{mt: -0.5, ml: 4}}>
+                            {settings.hasSubscription ? "Browser subscribed" : "Not subscribed — managed via browser permissions"}
+                        </Typography>
+
+                        <Divider sx={{my: 1}}/>
+
+                        {/* Quiet Hours */}
+                        <FormControlLabel
+                            control={
+                                <Switch
+                                    checked={settings.quietHoursEnabled}
+                                    onChange={(_, checked) => handleToggle("quietHoursEnabled", checked)}
+                                    disabled={updateMutation.isPending}
+                                />
+                            }
+                            label="Quiet hours"
+                        />
+                        {settings.quietHoursEnabled && (
+                            <Box sx={{display: "flex", gap: 2, ml: 4, alignItems: "center"}}>
+                                <TextField
+                                    size="small"
+                                    label="Start"
+                                    type="time"
+                                    value={settings.quietHoursStart ?? "22:00"}
+                                    onChange={(e) =>
+                                        updateMutation.mutate({quietHoursStart: e.target.value})
+                                    }
+                                    slotProps={{htmlInput: {step: 300}}}
+                                    sx={{width: 140}}
+                                />
+                                <TextField
+                                    size="small"
+                                    label="End"
+                                    type="time"
+                                    value={settings.quietHoursEnd ?? "08:00"}
+                                    onChange={(e) =>
+                                        updateMutation.mutate({quietHoursEnd: e.target.value})
+                                    }
+                                    slotProps={{htmlInput: {step: 300}}}
+                                    sx={{width: 140}}
+                                />
+                            </Box>
+                        )}
+                    </Box>
+                ) : null}
+            </CardContent>
+        </Card>
+    );
+}
+
 function SettingsPage() {
     const {user} = useAuth();
     const isSuperuser = user?.isSuperuser ?? false;
@@ -1294,13 +1639,6 @@ function SettingsPage() {
         defaultValues: {
             email: user?.email || "",
             username: user?.username || "",
-            notifications: {
-                email: true,
-                push: false,
-                orderFilled: true,
-                priceAlerts: true,
-                newsAlerts: false,
-            },
         },
     });
 
@@ -1377,77 +1715,14 @@ function SettingsPage() {
                             </CardContent>
                         </Card>
 
-                        {/* Notification Settings */}
-                        <Card sx={{mb: 3}}>
-                            <CardContent>
-                                <Typography variant="h6" gutterBottom>
-                                    Notifications
-                                </Typography>
-
-                                <Box
-                                    sx={{
-                                        display: "flex",
-                                        flexDirection: "column",
-                                        gap: 1,
-                                    }}
-                                >
-                                    <Controller
-                                        name="notifications.email"
-                                        control={control}
-                                        render={({field}) => (
-                                            <FormControlLabel
-                                                control={<Switch {...field} checked={field.value}/>}
-                                                label="Email notifications"
-                                            />
-                                        )}
-                                    />
-                                    <Controller
-                                        name="notifications.push"
-                                        control={control}
-                                        render={({field}) => (
-                                            <FormControlLabel
-                                                control={<Switch {...field} checked={field.value}/>}
-                                                label="Push notifications"
-                                            />
-                                        )}
-                                    />
-                                    <Divider sx={{my: 1}}/>
-                                    <Controller
-                                        name="notifications.orderFilled"
-                                        control={control}
-                                        render={({field}) => (
-                                            <FormControlLabel
-                                                control={<Switch {...field} checked={field.value}/>}
-                                                label="Order filled alerts"
-                                            />
-                                        )}
-                                    />
-                                    <Controller
-                                        name="notifications.priceAlerts"
-                                        control={control}
-                                        render={({field}) => (
-                                            <FormControlLabel
-                                                control={<Switch {...field} checked={field.value}/>}
-                                                label="Price alerts"
-                                            />
-                                        )}
-                                    />
-                                    <Controller
-                                        name="notifications.newsAlerts"
-                                        control={control}
-                                        render={({field}) => (
-                                            <FormControlLabel
-                                                control={<Switch {...field} checked={field.value}/>}
-                                                label="News alerts"
-                                            />
-                                        )}
-                                    />
-                                </Box>
-                            </CardContent>
-                        </Card>
+                        {/* Notification Settings - API-backed */}
+                        <NotificationPreferencesCard/>
 
                         {/* Change Password */}
                         <ChangePasswordCard/>
+
+                        {/* Two-Factor Authentication */}
+                        <TwoFactorCard/>
 
                         {/* Save Button */}
                         <Box sx={{display: "flex", justifyContent: "flex-end"}}>

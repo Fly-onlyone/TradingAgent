@@ -16,7 +16,13 @@ class User(Document):
     is_superuser: bool = False
     default_symbol: str = "BTC-USDT"
     default_timeframe: str = "1h"
+    totp_secret: str | None = None
+    totp_enabled: bool = False
     password_changed_at: datetime | None = None
+    email_verified: bool = False
+    verification_token_hash: str | None = None
+    reset_token_hash: str | None = None
+    reset_token_expires: datetime | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

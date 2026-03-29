@@ -5,6 +5,7 @@
 import LogoutIcon from "@mui/icons-material/Logout";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import SettingsIcon from "@mui/icons-material/Settings";
+import StopCircleIcon from "@mui/icons-material/StopCircle";
 import {
 	AppBar,
 	Avatar,
@@ -19,15 +20,18 @@ import {
 	Typography,
 } from "@mui/material";
 import type { PopoverPosition } from "@mui/material/Popover";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { tasksApi } from "@/api/endpoints/tasks";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { StatusDot } from "@/components/common/StatusDot";
 import { ThemeSelector } from "@/components/common/ThemeSelector";
 import { NotificationPanel } from "@/components/layout/NotificationPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useAgentStore } from "@/store/agentStore";
-import { useUIStore } from "@/store/uiStore";
+import { notify, useUIStore } from "@/store/uiStore";
 
 export function Header() {
 	const { user, logout } = useAuth();
@@ -85,6 +89,24 @@ export function Header() {
 		handleClose();
 		logout();
 	};
+
+	// Emergency stop
+	const [emergencyStopOpen, setEmergencyStopOpen] = useState(false);
+	const queryClient = useQueryClient();
+	const emergencyStopMutation = useMutation({
+		mutationFn: () => tasksApi.emergencyStop(),
+		onSuccess: (data) => {
+			setEmergencyStopOpen(false);
+			notify.success(
+				"Emergency Stop",
+				`Paused ${data.pausedCount} active task${data.pausedCount === 1 ? "" : "s"}.`,
+			);
+			void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+		},
+		onError: () => {
+			notify.error("Emergency Stop Failed", "Could not pause tasks.");
+		},
+	});
 
 	const unreadCount = notifications.length;
 	const isAccountMenuOpen = Boolean(accountMenuPosition);
@@ -234,6 +256,36 @@ export function Header() {
 
 					{/* Theme Selector */}
 					<ThemeSelector />
+
+					{/* Emergency Stop */}
+					{user && (
+						<Tooltip title="Emergency Stop — pause all tasks">
+							<IconButton
+								aria-label="Emergency stop"
+								color="error"
+								onClick={() => setEmergencyStopOpen(true)}
+								sx={{
+									"&:hover": {
+										bgcolor: "error.dark",
+										color: "error.contrastText",
+									},
+								}}
+							>
+								<StopCircleIcon />
+							</IconButton>
+						</Tooltip>
+					)}
+
+					<ConfirmDialog
+						open={emergencyStopOpen}
+						title="Emergency Stop"
+						message="Stop all trading? This will pause all active tasks."
+						confirmLabel="Stop All"
+						destructive
+						loading={emergencyStopMutation.isPending}
+						onConfirm={() => emergencyStopMutation.mutate()}
+						onCancel={() => setEmergencyStopOpen(false)}
+					/>
 
 					{/* Notifications */}
 					<Tooltip title="Notifications">

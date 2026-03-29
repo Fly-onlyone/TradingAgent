@@ -261,6 +261,16 @@ export const tasksApi = {
     },
 
     /**
+     * Emergency stop: pause all active tasks
+     */
+    async emergencyStop(): Promise<{ pausedCount: number }> {
+        const response = await apiClient.post<Record<string, unknown>>(
+            "/agent/tasks/emergency-stop",
+        );
+        return { pausedCount: response.data.paused_count as number };
+    },
+
+    /**
      * Get task execution history
      */
     async getTaskHistory(

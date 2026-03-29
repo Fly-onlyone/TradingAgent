@@ -57,6 +57,43 @@ import {spring} from "@/utils/animations/variants";
 import {formatBytes, formatUptime} from "@/utils/formatters";
 import {requireAdmin} from "../-guards";
 
+const SENSITIVE_KEYS = new Set([
+	"password",
+	"hashed_password",
+	"secret",
+	"api_key",
+	"secret_key",
+	"passphrase",
+	"encryption_key",
+	"token",
+	"access_token",
+	"refresh_token",
+	"totp_secret",
+]);
+
+/** Recursively replace sensitive field values with a mask. Caps at depth 5. */
+function maskSensitiveFields(
+	obj: unknown,
+	depth = 0,
+): unknown {
+	if (depth > 5) return obj;
+	if (Array.isArray(obj)) {
+		return obj.map((item) => maskSensitiveFields(item, depth + 1));
+	}
+	if (obj !== null && typeof obj === "object") {
+		const masked: Record<string, unknown> = {};
+		for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+			if (SENSITIVE_KEYS.has(key.toLowerCase())) {
+				masked[key] = "●●●●●●●●";
+			} else {
+				masked[key] = maskSensitiveFields(value, depth + 1);
+			}
+		}
+		return masked;
+	}
+	return obj;
+}
+
 export const Route = createFileRoute("/admin/database")({
     beforeLoad: requireAdmin,
     component: DatabaseAdminPage,
@@ -418,7 +455,8 @@ function DatabaseAdminPage() {
                                         ))
                                         : documentsQuery.data?.documents.map((doc) => {
                                             const id = doc._id as string;
-                                            const preview = Object.entries(doc)
+                                            const maskedDoc = maskSensitiveFields(doc) as Record<string, unknown>;
+                                            const preview = Object.entries(maskedDoc)
                                                 .filter(([key]) => key !== "_id")
                                                 .slice(0, 3)
                                                 .map(
@@ -581,7 +619,7 @@ function DatabaseAdminPage() {
                                     maxHeight: 500,
                                 }}
                             >
-                                {JSON.stringify(viewDocument, null, 2)}
+                                {JSON.stringify(maskSensitiveFields(viewDocument), null, 2)}
                             </Box>
                         )}
                     </DialogContent>

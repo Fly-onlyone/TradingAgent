@@ -3,7 +3,9 @@
  */
 
 import AddIcon from "@mui/icons-material/Add";
+import CloseIcon from "@mui/icons-material/Close";
 import DeleteIcon from "@mui/icons-material/Delete";
+import EditIcon from "@mui/icons-material/Edit";
 import InfoIcon from "@mui/icons-material/Info";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
@@ -15,6 +17,7 @@ import {
 	CardContent,
 	Chip,
 	Dialog,
+	DialogActions,
 	DialogContent,
 	DialogTitle,
 	Grid2 as Grid,
@@ -22,12 +25,13 @@ import {
 	Menu,
 	MenuItem,
 	Switch,
+	TextField,
 	Typography,
 } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { strategiesApi } from "@/api/endpoints/strategies";
 import { PerformanceGauge } from "@/components/charts/PerformanceGauge";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
@@ -38,7 +42,7 @@ import { ShimmerSkeleton } from "@/components/common/ShimmerSkeleton";
 import { StrategyDiscoveryCard } from "@/components/strategies/StrategyDiscoveryCard";
 import { useZoomAwareMenu } from "@/hooks/useZoomAwareMenu";
 import { notify } from "@/store/uiStore";
-import type { Strategy } from "@/types";
+import type { Strategy, StrategyUpdate } from "@/types";
 import { staggerCascade } from "@/utils/animations/variants";
 import { formatPercent } from "@/utils/formatters";
 import { requireAuth } from "../-guards";
@@ -199,27 +203,243 @@ function StrategiesPage() {
 					onCancel={() => setDeleteTarget(null)}
 				/>
 
-				<Dialog
-					open={!!detailsTarget}
+				<StrategyDetailDialog
+					strategy={detailsTarget}
 					onClose={() => setDetailsTarget(null)}
-					maxWidth="sm"
-					fullWidth
-				>
-					{detailsTarget && (
-						<>
-							<DialogTitle>{detailsTarget.name}</DialogTitle>
-							<DialogContent>
+				/>
+			</Box>
+		</PageTransition>
+	);
+}
+
+/** Formats a rules/params object as a JSON string for editing. */
+function rulesAsText(rules: Record<string, unknown>): string {
+	return JSON.stringify(rules, null, 2);
+}
+
+/** Safely parses JSON text back to a Record. Returns null on invalid JSON. */
+function parseRulesText(text: string): Record<string, unknown> | null {
+	try {
+		const parsed = JSON.parse(text);
+		if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed))
+			return parsed as Record<string, unknown>;
+		return null;
+	} catch {
+		return null;
+	}
+}
+
+function StrategyDetailDialog({
+	strategy,
+	onClose,
+}: {
+	strategy: Strategy | null;
+	onClose: () => void;
+}) {
+	const queryClient = useQueryClient();
+	const [editing, setEditing] = useState(false);
+
+	// Edit form state
+	const [editName, setEditName] = useState("");
+	const [editDescription, setEditDescription] = useState("");
+	const [editEntryRules, setEditEntryRules] = useState("");
+	const [editExitRules, setEditExitRules] = useState("");
+	const [editRiskParams, setEditRiskParams] = useState("");
+
+	// JSON validation
+	const [entryError, setEntryError] = useState(false);
+	const [exitError, setExitError] = useState(false);
+	const [riskError, setRiskError] = useState(false);
+
+	const populateForm = useCallback((s: Strategy) => {
+		setEditName(s.name);
+		setEditDescription(s.description || "");
+		setEditEntryRules(rulesAsText(s.entryRules));
+		setEditExitRules(rulesAsText(s.exitRules));
+		setEditRiskParams(rulesAsText(s.riskParams));
+		setEntryError(false);
+		setExitError(false);
+		setRiskError(false);
+	}, []);
+
+	// Reset edit state when dialog opens with a new strategy
+	useEffect(() => {
+		if (strategy) {
+			populateForm(strategy);
+			setEditing(false);
+		}
+	}, [strategy, populateForm]);
+
+	const updateMutation = useMutation({
+		mutationFn: (data: StrategyUpdate) =>
+			strategiesApi.updateStrategy(strategy!.id, data),
+		onSuccess: async () => {
+			notify.success("Strategy updated");
+			await queryClient.invalidateQueries({ queryKey: ["strategies"] });
+			setEditing(false);
+		},
+		onError: () => {
+			notify.error("Failed to update strategy");
+		},
+	});
+
+	const handleStartEdit = () => {
+		if (strategy) populateForm(strategy);
+		setEditing(true);
+	};
+
+	const handleCancelEdit = () => {
+		if (strategy) populateForm(strategy);
+		setEditing(false);
+	};
+
+	const handleSave = () => {
+		const entry = parseRulesText(editEntryRules);
+		const exit = parseRulesText(editExitRules);
+		const risk = parseRulesText(editRiskParams);
+
+		let hasError = false;
+		if (!entry) {
+			setEntryError(true);
+			hasError = true;
+		} else {
+			setEntryError(false);
+		}
+		if (!exit) {
+			setExitError(true);
+			hasError = true;
+		} else {
+			setExitError(false);
+		}
+		if (!risk) {
+			setRiskError(true);
+			hasError = true;
+		} else {
+			setRiskError(false);
+		}
+		if (hasError) return;
+
+		updateMutation.mutate({
+			name: editName,
+			description: editDescription,
+			entryRules: entry!,
+			exitRules: exit!,
+			riskParams: risk! as Strategy["riskParams"],
+		});
+	};
+
+	const handleClose = () => {
+		setEditing(false);
+		onClose();
+	};
+
+	return (
+		<Dialog open={!!strategy} onClose={handleClose} maxWidth="sm" fullWidth>
+			{strategy && (
+				<>
+					<DialogTitle
+						sx={{
+							display: "flex",
+							alignItems: "center",
+							justifyContent: "space-between",
+							pr: 1,
+						}}
+					>
+						{editing ? (
+							<TextField
+								value={editName}
+								onChange={(e) => setEditName(e.target.value)}
+								variant="standard"
+								fullWidth
+								sx={{ mr: 2, "& .MuiInputBase-input": { fontSize: "1.25rem", fontWeight: 600 } }}
+							/>
+						) : (
+							<Typography variant="h6" component="span">
+								{strategy.name}
+							</Typography>
+						)}
+						<Box sx={{ display: "flex", gap: 0.5, flexShrink: 0 }}>
+							{!editing && (
+								<IconButton size="small" onClick={handleStartEdit} title="Edit">
+									<EditIcon fontSize="small" />
+								</IconButton>
+							)}
+							<IconButton size="small" onClick={handleClose} title="Close">
+								<CloseIcon fontSize="small" />
+							</IconButton>
+						</Box>
+					</DialogTitle>
+					<DialogContent>
+						{editing ? (
+							<Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
+								<TextField
+									label="Description"
+									value={editDescription}
+									onChange={(e) => setEditDescription(e.target.value)}
+									multiline
+									minRows={2}
+									fullWidth
+									size="small"
+								/>
+								<TextField
+									label="Entry Rules (JSON)"
+									value={editEntryRules}
+									onChange={(e) => {
+										setEditEntryRules(e.target.value);
+										setEntryError(false);
+									}}
+									multiline
+									minRows={3}
+									fullWidth
+									size="small"
+									error={entryError}
+									helperText={entryError ? "Invalid JSON" : undefined}
+									slotProps={{ htmlInput: { style: { fontFamily: "monospace", fontSize: 13 } } }}
+								/>
+								<TextField
+									label="Exit Rules (JSON)"
+									value={editExitRules}
+									onChange={(e) => {
+										setEditExitRules(e.target.value);
+										setExitError(false);
+									}}
+									multiline
+									minRows={3}
+									fullWidth
+									size="small"
+									error={exitError}
+									helperText={exitError ? "Invalid JSON" : undefined}
+									slotProps={{ htmlInput: { style: { fontFamily: "monospace", fontSize: 13 } } }}
+								/>
+								<TextField
+									label="Risk Parameters (JSON)"
+									value={editRiskParams}
+									onChange={(e) => {
+										setEditRiskParams(e.target.value);
+										setRiskError(false);
+									}}
+									multiline
+									minRows={3}
+									fullWidth
+									size="small"
+									error={riskError}
+									helperText={riskError ? "Invalid JSON" : undefined}
+									slotProps={{ htmlInput: { style: { fontFamily: "monospace", fontSize: 13 } } }}
+								/>
+							</Box>
+						) : (
+							<>
 								<Typography variant="body2" color="text.secondary" gutterBottom>
-									{detailsTarget.description || "No description"}
+									{strategy.description || "No description"}
 								</Typography>
 
 								<Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mt: 1 }}>
 									<Chip
-										label={detailsTarget.isActive ? "Active" : "Inactive"}
-										color={detailsTarget.isActive ? "success" : "default"}
+										label={strategy.isActive ? "Active" : "Inactive"}
+										color={strategy.isActive ? "success" : "default"}
 										size="small"
 									/>
-									{detailsTarget.autoDiscovered && (
+									{strategy.autoDiscovered && (
 										<Chip
 											label="Auto-discovered"
 											size="small"
@@ -229,13 +449,13 @@ function StrategiesPage() {
 									)}
 								</Box>
 
-								{detailsTarget.symbols?.length > 0 && (
+								{strategy.symbols?.length > 0 && (
 									<Box sx={{ mt: 2 }}>
 										<Typography variant="subtitle2" gutterBottom>
 											Symbols
 										</Typography>
 										<Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
-											{detailsTarget.symbols.map((s) => (
+											{strategy.symbols.map((s) => (
 												<Chip
 													key={s}
 													label={s}
@@ -247,13 +467,13 @@ function StrategiesPage() {
 									</Box>
 								)}
 
-								{detailsTarget.timeframes?.length > 0 && (
+								{strategy.timeframes?.length > 0 && (
 									<Box sx={{ mt: 2 }}>
 										<Typography variant="subtitle2" gutterBottom>
 											Timeframes
 										</Typography>
 										<Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
-											{detailsTarget.timeframes.map((t) => (
+											{strategy.timeframes.map((t) => (
 												<Chip
 													key={t}
 													label={t}
@@ -265,13 +485,13 @@ function StrategiesPage() {
 									</Box>
 								)}
 
-								{detailsTarget.entryRules &&
-									Object.keys(detailsTarget.entryRules).length > 0 && (
+								{strategy.entryRules &&
+									Object.keys(strategy.entryRules).length > 0 && (
 										<Box sx={{ mt: 2 }}>
 											<Typography variant="subtitle2" gutterBottom>
 												Entry Rules
 											</Typography>
-											{Object.entries(detailsTarget.entryRules).map(
+											{Object.entries(strategy.entryRules).map(
 												([key, val]) => (
 													<Typography key={key} variant="body2" sx={{ ml: 1 }}>
 														<strong>{key}:</strong> {String(val)}
@@ -281,13 +501,13 @@ function StrategiesPage() {
 										</Box>
 									)}
 
-								{detailsTarget.exitRules &&
-									Object.keys(detailsTarget.exitRules).length > 0 && (
+								{strategy.exitRules &&
+									Object.keys(strategy.exitRules).length > 0 && (
 										<Box sx={{ mt: 2 }}>
 											<Typography variant="subtitle2" gutterBottom>
 												Exit Rules
 											</Typography>
-											{Object.entries(detailsTarget.exitRules).map(
+											{Object.entries(strategy.exitRules).map(
 												([key, val]) => (
 													<Typography key={key} variant="body2" sx={{ ml: 1 }}>
 														<strong>{key}:</strong> {String(val)}
@@ -297,13 +517,13 @@ function StrategiesPage() {
 										</Box>
 									)}
 
-								{detailsTarget.riskParams &&
-									Object.keys(detailsTarget.riskParams).length > 0 && (
+								{strategy.riskParams &&
+									Object.keys(strategy.riskParams).length > 0 && (
 										<Box sx={{ mt: 2 }}>
 											<Typography variant="subtitle2" gutterBottom>
 												Risk Parameters
 											</Typography>
-											{Object.entries(detailsTarget.riskParams).map(
+											{Object.entries(strategy.riskParams).map(
 												([key, val]) => (
 													<Typography key={key} variant="body2" sx={{ ml: 1 }}>
 														<strong>{key}:</strong> {String(val)}
@@ -313,7 +533,7 @@ function StrategiesPage() {
 										</Box>
 									)}
 
-								{detailsTarget.sourceUrl && (
+								{strategy.sourceUrl && (
 									<Typography
 										variant="body2"
 										color="text.secondary"
@@ -321,47 +541,61 @@ function StrategiesPage() {
 									>
 										<strong>Source:</strong>{" "}
 										<a
-											href={detailsTarget.sourceUrl}
+											href={strategy.sourceUrl}
 											target="_blank"
 											rel="noopener noreferrer"
 										>
-											{detailsTarget.sourceUrl}
+											{strategy.sourceUrl}
 										</a>
 									</Typography>
 								)}
 
-								{detailsTarget.backtestResults && (
+								{strategy.backtestResults && (
 									<Box sx={{ mt: 2 }}>
 										<Typography variant="subtitle2" gutterBottom>
 											Backtest Results
 										</Typography>
 										<Typography variant="body2">
 											Win Rate:{" "}
-											{formatPercent(detailsTarget.backtestResults.winRate)}
+											{formatPercent(strategy.backtestResults.winRate)}
 										</Typography>
 										<Typography variant="body2">
-											Total Trades: {detailsTarget.backtestResults.totalTrades}
+											Total Trades: {strategy.backtestResults.totalTrades}
 										</Typography>
 										<Typography variant="body2">
 											P&L:{" "}
 											{formatPercent(
-												detailsTarget.backtestResults.totalPnlPercent,
+												strategy.backtestResults.totalPnlPercent,
 											)}
 										</Typography>
 										<Typography variant="body2">
 											Max Drawdown:{" "}
 											{formatPercent(
-												-detailsTarget.backtestResults.maxDrawdown,
+												-strategy.backtestResults.maxDrawdown,
 											)}
 										</Typography>
 									</Box>
 								)}
-							</DialogContent>
-						</>
+							</>
+						)}
+					</DialogContent>
+					{editing && (
+						<DialogActions sx={{ px: 3, pb: 2 }}>
+							<Button onClick={handleCancelEdit} disabled={updateMutation.isPending}>
+								Cancel
+							</Button>
+							<Button
+								variant="contained"
+								onClick={handleSave}
+								disabled={updateMutation.isPending || !editName.trim()}
+							>
+								{updateMutation.isPending ? "Saving..." : "Save"}
+							</Button>
+						</DialogActions>
 					)}
-				</Dialog>
-			</Box>
-		</PageTransition>
+				</>
+			)}
+		</Dialog>
 	);
 }
 

@@ -1,18 +1,27 @@
 """Authentication endpoints using Beanie ODM."""
 
+import base64
+import hashlib
+import io
+import secrets
 from datetime import UTC, datetime, timedelta
 
 import bcrypt
+import pyotp
+import qrcode
 import sentry_sdk
 from beanie import PydanticObjectId
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
 
 from app.config import get_settings
+from app.core.rate_limit import limiter
 from app.db.models.app_settings import AppSettings
 from app.db.models.user import User
+from app.security.secrets_crypto import decrypt_secret_value, encrypt_secret_value
+from app.services.email_service import NotifyService
 
 # Fixed dev user ID so all debug-mode layers (REST, WebSocket) share
 # the same identity and can find each other's data.
@@ -47,12 +56,50 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
+
+class TwoFactorCodeRequest(BaseModel):
+    code: str
+
+
+class TwoFactorSetupResponse(BaseModel):
+    secret: str
+    qr_code: str
+    uri: str
+
+
+class TwoFactorStatusResponse(BaseModel):
+    totp_enabled: bool
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+    totp_code: str | None = None
+
+
 class UserResponse(BaseModel):
     id: str
     email: str
     full_name: str | None
     is_active: bool
     is_superuser: bool
+    totp_enabled: bool = False
     created_at: datetime
 
     class Config:
@@ -167,7 +214,8 @@ async def get_dev_user() -> User:
 
 
 @router.post("/register", response_model=UserResponse)
-async def register(user_data: UserCreate) -> dict:
+@limiter.limit("3/minute")
+async def register(request: Request, user_data: UserCreate) -> dict:
     """Register a new user."""
     normalized_email = str(user_data.email).strip().lower()
     existing_user = await User.find_one(User.email == normalized_email)
@@ -182,6 +230,15 @@ async def register(user_data: UserCreate) -> dict:
     )
     await user.insert()
 
+    # Send verification email (advisory — user can still log in)
+    token = secrets.token_urlsafe(32)
+    user.verification_token_hash = hashlib.sha256(token.encode()).hexdigest()
+    user.update_timestamp()
+    await user.save()
+
+    notify_service = NotifyService()
+    await notify_service.send_email_verification(normalized_email, token)
+
     return {
         "id": str(user.id),
         "email": user.email,
@@ -192,11 +249,18 @@ async def register(user_data: UserCreate) -> dict:
     }
 
 
-@router.post("/token", response_model=Token)
+@router.post("/token")
+@limiter.limit("5/minute")
 async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
 ) -> dict:
-    """Authenticate user and return JWT token."""
+    """Authenticate user and return JWT token.
+
+    When 2FA is enabled and no totp_code is provided, returns
+    ``{"requires_2fa": true}`` so the client can prompt for the code.
+    The totp_code is passed via the OAuth2 form's ``client_secret`` field.
+    """
     normalized_email = form_data.username.strip().lower()
     user = await User.find_one(User.email == normalized_email)
 
@@ -207,11 +271,27 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # 2FA check
+    if user.totp_enabled:
+        totp_code = form_data.client_secret  # piggyback on OAuth2 form field
+        if not totp_code:
+            return {"requires_2fa": True}
+
+        secret = decrypt_secret_value(user.totp_secret) if user.totp_secret else ""
+        if not secret or not pyotp.TOTP(secret).verify(totp_code, valid_window=1):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid 2FA code",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
     return await _build_token_response(user.email)
 
 
 @router.post("/refresh", response_model=Token)
+@limiter.limit("10/minute")
 async def refresh_token(
+    request: Request,
     current_user: User = Depends(get_current_active_user),
 ) -> dict:
     """Issue a new token from a valid current token."""
@@ -246,5 +326,165 @@ async def read_users_me(
         "full_name": current_user.full_name,
         "is_active": current_user.is_active,
         "is_superuser": current_user.is_superuser,
+        "totp_enabled": current_user.totp_enabled,
         "created_at": current_user.created_at,
     }
+
+
+@router.post("/forgot-password")
+@limiter.limit("3/minute")
+async def forgot_password(request: Request, body: ForgotPasswordRequest) -> dict:
+    """Send a password-reset email. Always returns 200 to avoid leaking user existence."""
+    normalized_email = str(body.email).strip().lower()
+    user = await User.find_one(User.email == normalized_email)
+
+    if user and user.is_active:
+        token = secrets.token_urlsafe(32)
+        user.reset_token_hash = hashlib.sha256(token.encode()).hexdigest()
+        user.reset_token_expires = datetime.now(UTC) + timedelta(hours=1)
+        user.update_timestamp()
+        await user.save()
+
+        notify_service = NotifyService()
+        await notify_service.send_password_reset(normalized_email, token)
+
+    return {"message": "If an account exists with this email, you will receive a reset link."}
+
+
+@router.post("/reset-password")
+@limiter.limit("5/minute")
+async def reset_password(request: Request, body: ResetPasswordRequest) -> dict:
+    """Reset password using a valid token."""
+    token_hash = hashlib.sha256(body.token.encode()).hexdigest()
+    user = await User.find_one(
+        User.reset_token_hash == token_hash,
+        User.reset_token_expires >= datetime.now(UTC),
+    )
+
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    user.hashed_password = get_password_hash(body.password)
+    user.password_changed_at = datetime.now(UTC)
+    user.reset_token_hash = None
+    user.reset_token_expires = None
+    user.update_timestamp()
+    await user.save()
+
+    return {"message": "Password has been reset successfully."}
+
+
+@router.post("/verify-email")
+@limiter.limit("5/minute")
+async def verify_email(request: Request, body: VerifyEmailRequest) -> dict:
+    """Verify a user's email address using the token from the verification email."""
+    token_hash = hashlib.sha256(body.token.encode()).hexdigest()
+    user = await User.find_one(User.verification_token_hash == token_hash)
+
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid verification token")
+
+    user.email_verified = True
+    user.verification_token_hash = None
+    user.update_timestamp()
+    await user.save()
+
+    return {"message": "Email verified successfully."}
+
+
+@router.post("/resend-verification")
+@limiter.limit("2/minute")
+async def resend_verification(request: Request, body: ResendVerificationRequest) -> dict:
+    """Resend email verification. Always returns 200 to avoid leaking user existence."""
+    normalized_email = str(body.email).strip().lower()
+    user = await User.find_one(User.email == normalized_email)
+
+    if user and user.is_active and not user.email_verified:
+        token = secrets.token_urlsafe(32)
+        user.verification_token_hash = hashlib.sha256(token.encode()).hexdigest()
+        user.update_timestamp()
+        await user.save()
+
+        notify_service = NotifyService()
+        await notify_service.send_email_verification(normalized_email, token)
+
+    return {
+        "message": "If an account exists with this email, you will receive a verification link."
+    }
+
+
+# ── Two-Factor Authentication ──────────────────────────────────
+
+
+@router.post("/2fa/setup", response_model=TwoFactorSetupResponse)
+async def setup_2fa(
+    current_user: User = Depends(get_current_active_user),
+) -> dict:
+    """Generate a TOTP secret, provisioning URI, and QR code for 2FA setup.
+
+    The secret is stored (encrypted) on the user but NOT yet enabled —
+    the client must call ``/2fa/verify`` with a valid code to activate.
+    """
+    secret = pyotp.random_base32()
+    totp = pyotp.TOTP(secret)
+    provisioning_uri = totp.provisioning_uri(name=current_user.email, issuer_name="Trading Agent")
+
+    # Generate QR code as base64 PNG
+    img = qrcode.make(provisioning_uri)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    qr_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+
+    # Store encrypted secret (not yet enabled)
+    current_user.totp_secret = encrypt_secret_value(secret)
+    current_user.update_timestamp()
+    await current_user.save()
+
+    return {
+        "secret": secret,
+        "qr_code": f"data:image/png;base64,{qr_b64}",
+        "uri": provisioning_uri,
+    }
+
+
+@router.post("/2fa/verify", response_model=TwoFactorStatusResponse)
+async def verify_2fa(
+    body: TwoFactorCodeRequest,
+    current_user: User = Depends(get_current_active_user),
+) -> dict:
+    """Verify a TOTP code and enable 2FA on the account."""
+    if not current_user.totp_secret:
+        raise HTTPException(
+            status_code=400, detail="2FA setup not initiated. Call /2fa/setup first."
+        )
+
+    secret = decrypt_secret_value(current_user.totp_secret)
+    if not pyotp.TOTP(secret).verify(body.code, valid_window=1):
+        raise HTTPException(status_code=400, detail="Invalid verification code")
+
+    current_user.totp_enabled = True
+    current_user.update_timestamp()
+    await current_user.save()
+
+    return {"totp_enabled": True}
+
+
+@router.post("/2fa/disable", response_model=TwoFactorStatusResponse)
+async def disable_2fa(
+    body: TwoFactorCodeRequest,
+    current_user: User = Depends(get_current_active_user),
+) -> dict:
+    """Disable 2FA after verifying the current TOTP code."""
+    if not current_user.totp_enabled or not current_user.totp_secret:
+        raise HTTPException(status_code=400, detail="2FA is not enabled")
+
+    secret = decrypt_secret_value(current_user.totp_secret)
+    if not pyotp.TOTP(secret).verify(body.code, valid_window=1):
+        raise HTTPException(status_code=400, detail="Invalid verification code")
+
+    current_user.totp_enabled = False
+    current_user.totp_secret = None
+    current_user.update_timestamp()
+    await current_user.save()
+
+    return {"totp_enabled": False}

@@ -8,6 +8,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import {
 	Box,
+	Button,
 	Card,
 	CardContent,
 	Chip,
@@ -22,7 +23,7 @@ import {
 	TextField,
 	Typography,
 } from "@mui/material";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
@@ -54,6 +55,10 @@ function KnowledgePage() {
 		"strategy" | "lesson" | "pattern" | null
 	>(null);
 
+	const [strategiesLimit, setStrategiesLimit] = useState(20);
+	const [lessonsLimit, setLessonsLimit] = useState(20);
+	const [patternsLimit, setPatternsLimit] = useState(20);
+
 	const { data: searchResults, isLoading: searching } = useQuery({
 		queryKey: ["knowledge-search", debouncedQuery],
 		queryFn: () =>
@@ -61,22 +66,25 @@ function KnowledgePage() {
 		enabled: debouncedQuery.length > 0,
 	});
 
-	const { data: strategies, isLoading: loadingStrategies } = useQuery({
-		queryKey: ["knowledge-strategies"],
-		queryFn: () => knowledgeApi.getStrategies(20),
+	const { data: strategies, isLoading: loadingStrategies, isFetching: fetchingStrategies } = useQuery({
+		queryKey: ["knowledge-strategies", strategiesLimit],
+		queryFn: () => knowledgeApi.getStrategies(strategiesLimit),
 		enabled: tabValue === 0 && !debouncedQuery,
+		placeholderData: keepPreviousData,
 	});
 
-	const { data: lessons, isLoading: loadingLessons } = useQuery({
-		queryKey: ["knowledge-lessons"],
-		queryFn: () => knowledgeApi.getLessons({ limit: 20 }),
+	const { data: lessons, isLoading: loadingLessons, isFetching: fetchingLessons } = useQuery({
+		queryKey: ["knowledge-lessons", lessonsLimit],
+		queryFn: () => knowledgeApi.getLessons({ limit: lessonsLimit }),
 		enabled: tabValue === 1 && !debouncedQuery,
+		placeholderData: keepPreviousData,
 	});
 
-	const { data: patterns, isLoading: loadingPatterns } = useQuery({
-		queryKey: ["knowledge-patterns"],
-		queryFn: () => knowledgeApi.getPatterns({ limit: 20 }),
+	const { data: patterns, isLoading: loadingPatterns, isFetching: fetchingPatterns } = useQuery({
+		queryKey: ["knowledge-patterns", patternsLimit],
+		queryFn: () => knowledgeApi.getPatterns({ limit: patternsLimit }),
 		enabled: tabValue === 2 && !debouncedQuery,
+		placeholderData: keepPreviousData,
 	});
 
 	const isLoading =
@@ -266,6 +274,44 @@ function KnowledgePage() {
 											</Grid>
 										))}
 								</Grid>
+
+									{/* Load More buttons (only in non-search mode) */}
+									{!debouncedQuery && tabValue === 0 && displayStrategies && displayStrategies.length >= strategiesLimit && (
+										<Box sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
+											<Button
+												variant="outlined"
+												onClick={() => setStrategiesLimit((prev) => prev + 20)}
+												disabled={fetchingStrategies}
+												startIcon={fetchingStrategies ? <CircularProgress size={16} /> : undefined}
+											>
+												{fetchingStrategies ? "Loading..." : "Load More"}
+											</Button>
+										</Box>
+									)}
+									{!debouncedQuery && tabValue === 1 && displayLessons && displayLessons.length >= lessonsLimit && (
+										<Box sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
+											<Button
+												variant="outlined"
+												onClick={() => setLessonsLimit((prev) => prev + 20)}
+												disabled={fetchingLessons}
+												startIcon={fetchingLessons ? <CircularProgress size={16} /> : undefined}
+											>
+												{fetchingLessons ? "Loading..." : "Load More"}
+											</Button>
+										</Box>
+									)}
+									{!debouncedQuery && tabValue === 2 && displayPatterns && displayPatterns.length >= patternsLimit && (
+										<Box sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
+											<Button
+												variant="outlined"
+												onClick={() => setPatternsLimit((prev) => prev + 20)}
+												disabled={fetchingPatterns}
+												startIcon={fetchingPatterns ? <CircularProgress size={16} /> : undefined}
+											>
+												{fetchingPatterns ? "Loading..." : "Load More"}
+											</Button>
+										</Box>
+									)}
 							</motion.div>
 						</motion.div>
 					</AnimatePresence>

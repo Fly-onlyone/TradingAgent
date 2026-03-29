@@ -20,8 +20,10 @@ import { Route as TasksIndexRouteImport } from './routes/tasks/index'
 import { Route as StrategiesIndexRouteImport } from './routes/strategies/index'
 import { Route as KnowledgeIndexRouteImport } from './routes/knowledge/index'
 import { Route as StrategiesCreateRouteImport } from './routes/strategies/create'
+import { Route as AuthResetPasswordRouteImport } from './routes/auth/reset-password'
 import { Route as AuthRegisterRouteImport } from './routes/auth/register'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
+import { Route as AuthForgotPasswordRouteImport } from './routes/auth/forgot-password'
 import { Route as AdminLogsRouteImport } from './routes/admin/logs'
 import { Route as AdminDatabaseRouteImport } from './routes/admin/database'
 
@@ -80,6 +82,11 @@ const StrategiesCreateRoute = StrategiesCreateRouteImport.update({
   path: '/strategies/create',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthResetPasswordRoute = AuthResetPasswordRouteImport.update({
+  id: '/auth/reset-password',
+  path: '/auth/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRegisterRoute = AuthRegisterRouteImport.update({
   id: '/auth/register',
   path: '/auth/register',
@@ -88,6 +95,11 @@ const AuthRegisterRoute = AuthRegisterRouteImport.update({
 const AuthLoginRoute = AuthLoginRouteImport.update({
   id: '/auth/login',
   path: '/auth/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
+  id: '/auth/forgot-password',
+  path: '/auth/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminLogsRoute = AdminLogsRouteImport.update({
@@ -110,8 +122,10 @@ export interface FileRoutesByFullPath {
   '/trading': typeof TradingRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/logs': typeof AdminLogsRoute
+  '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
+  '/auth/reset-password': typeof AuthResetPasswordRoute
   '/strategies/create': typeof StrategiesCreateRoute
   '/knowledge/': typeof KnowledgeIndexRoute
   '/strategies/': typeof StrategiesIndexRoute
@@ -127,8 +141,10 @@ export interface FileRoutesByTo {
   '/trading': typeof TradingRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/logs': typeof AdminLogsRoute
+  '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
+  '/auth/reset-password': typeof AuthResetPasswordRoute
   '/strategies/create': typeof StrategiesCreateRoute
   '/knowledge': typeof KnowledgeIndexRoute
   '/strategies': typeof StrategiesIndexRoute
@@ -145,8 +161,10 @@ export interface FileRoutesById {
   '/trading': typeof TradingRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/logs': typeof AdminLogsRoute
+  '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
+  '/auth/reset-password': typeof AuthResetPasswordRoute
   '/strategies/create': typeof StrategiesCreateRoute
   '/knowledge/': typeof KnowledgeIndexRoute
   '/strategies/': typeof StrategiesIndexRoute
@@ -164,8 +182,10 @@ export interface FileRouteTypes {
     | '/trading'
     | '/admin/database'
     | '/admin/logs'
+    | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/register'
+    | '/auth/reset-password'
     | '/strategies/create'
     | '/knowledge/'
     | '/strategies/'
@@ -181,8 +201,10 @@ export interface FileRouteTypes {
     | '/trading'
     | '/admin/database'
     | '/admin/logs'
+    | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/register'
+    | '/auth/reset-password'
     | '/strategies/create'
     | '/knowledge'
     | '/strategies'
@@ -198,8 +220,10 @@ export interface FileRouteTypes {
     | '/trading'
     | '/admin/database'
     | '/admin/logs'
+    | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/register'
+    | '/auth/reset-password'
     | '/strategies/create'
     | '/knowledge/'
     | '/strategies/'
@@ -216,8 +240,10 @@ export interface RootRouteChildren {
   TradingRoute: typeof TradingRoute
   AdminDatabaseRoute: typeof AdminDatabaseRoute
   AdminLogsRoute: typeof AdminLogsRoute
+  AuthForgotPasswordRoute: typeof AuthForgotPasswordRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthRegisterRoute: typeof AuthRegisterRoute
+  AuthResetPasswordRoute: typeof AuthResetPasswordRoute
   StrategiesCreateRoute: typeof StrategiesCreateRoute
   KnowledgeIndexRoute: typeof KnowledgeIndexRoute
   StrategiesIndexRoute: typeof StrategiesIndexRoute
@@ -304,6 +330,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StrategiesCreateRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/reset-password': {
+      id: '/auth/reset-password'
+      path: '/auth/reset-password'
+      fullPath: '/auth/reset-password'
+      preLoaderRoute: typeof AuthResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/register': {
       id: '/auth/register'
       path: '/auth/register'
@@ -316,6 +349,13 @@ declare module '@tanstack/react-router' {
       path: '/auth/login'
       fullPath: '/auth/login'
       preLoaderRoute: typeof AuthLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/forgot-password': {
+      id: '/auth/forgot-password'
+      path: '/auth/forgot-password'
+      fullPath: '/auth/forgot-password'
+      preLoaderRoute: typeof AuthForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/logs': {
@@ -344,8 +384,10 @@ const rootRouteChildren: RootRouteChildren = {
   TradingRoute: TradingRoute,
   AdminDatabaseRoute: AdminDatabaseRoute,
   AdminLogsRoute: AdminLogsRoute,
+  AuthForgotPasswordRoute: AuthForgotPasswordRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthRegisterRoute: AuthRegisterRoute,
+  AuthResetPasswordRoute: AuthResetPasswordRoute,
   StrategiesCreateRoute: StrategiesCreateRoute,
   KnowledgeIndexRoute: KnowledgeIndexRoute,
   StrategiesIndexRoute: StrategiesIndexRoute,
