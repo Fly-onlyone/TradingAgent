@@ -3,7 +3,7 @@
  */
 
 import * as Sentry from "@sentry/react";
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import { getAccessToken } from "@/api/client";
 import { useAgentStore } from "@/store/agentStore";
 import type { WebSocketMessage } from "@/types";
@@ -53,6 +53,12 @@ export interface AgentDecision {
 	riskAssessment?: string;
 }
 
+interface UsageData {
+	inputTokens: number;
+	outputTokens: number;
+	totalTokens: number;
+}
+
 interface AgentSocketMessage extends WebSocketMessage {
 	type:
 		| "message"
@@ -64,12 +70,14 @@ interface AgentSocketMessage extends WebSocketMessage {
 		| "error"
 		| "status"
 		| "session_created"
-		| "cancel_ack";
+		| "cancel_ack"
+		| "usage";
 	data:
 		| AgentMessage
 		| ToolCall
 		| AgentDecision
 		| ChartData
+		| UsageData
 		| { status: string }
 		| { error: string }
 		| { content?: string }
@@ -93,6 +101,7 @@ export function useAgentSocket() {
 	} = useAgentStore();
 	const recentIncomingMessageKeysRef = useRef<Map<string, number>>(new Map());
 	const pendingChartDataRef = useRef<ChartData | null>(null);
+	const [sessionTokens, setSessionTokens] = useState(0);
 
 	const handleMessage = useCallback(
 		(message: WebSocketMessage) => {
@@ -201,6 +210,11 @@ export function useAgentSocket() {
 						symbolsDiscussed: [],
 						startedAt: new Date().toISOString(),
 					});
+					break;
+				}
+				case "usage": {
+					const usage = agentMessage.data as UsageData;
+					setSessionTokens(usage.totalTokens);
 					break;
 				}
 				case "cancel_ack":
@@ -336,6 +350,7 @@ export function useAgentSocket() {
 		sendCancel,
 		disconnect,
 		reconnect,
+		sessionTokens,
 	};
 }
 

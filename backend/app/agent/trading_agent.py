@@ -179,6 +179,8 @@ class TradingAgent:
         self.reset_cancel()
         self._tool_calls_this_turn = []
         self._thinking_content_this_turn = ""
+        self._input_tokens = 0
+        self._output_tokens = 0
 
         with sentry_sdk.start_span(
             op="ai.agent.chat", description="claude.chat"
@@ -230,7 +232,9 @@ class TradingAgent:
 
                 elif isinstance(message, StreamEvent):
                     event = message.event
-                    if event.get("type") == "content_block_delta":
+                    event_type = event.get("type")
+
+                    if event_type == "content_block_delta":
                         delta = event.get("delta", {})
                         if delta.get("type") == "text_delta":
                             text_chunk = delta.get("text", "")
@@ -252,6 +256,14 @@ class TradingAgent:
                                             "data": {"content": thinking_chunk},
                                         }
                                     )
+
+                    # Capture token usage from API events
+                    elif event_type == "message_start":
+                        usage = event.get("message", {}).get("usage", {})
+                        self._input_tokens += usage.get("input_tokens", 0)
+                    elif event_type == "message_delta":
+                        usage = event.get("usage", {})
+                        self._output_tokens += usage.get("output_tokens", 0)
 
                 elif isinstance(message, ResultMessage):
                     if message.is_error:
@@ -280,6 +292,16 @@ class TradingAgent:
     def thinking_content(self) -> str:
         """Get accumulated thinking content from the most recent turn."""
         return self._thinking_content_this_turn.strip()
+
+    @property
+    def input_tokens(self) -> int:
+        """Input tokens used in the most recent turn."""
+        return self._input_tokens
+
+    @property
+    def output_tokens(self) -> int:
+        """Output tokens used in the most recent turn."""
+        return self._output_tokens
 
     def _extract_confidence(self, response: str) -> float:
         """Extract confidence percentage from free-form model text."""

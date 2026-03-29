@@ -206,9 +206,10 @@ async def agent_chat_websocket(
                     turn_span.set_data("has_session", session is not None)
                     response = await agent.chat(user_message, on_event=send_event)
 
-                    # Get tool calls and thinking content from this turn
+                    # Get tool calls, thinking content, and token usage
                     tool_calls = agent.tool_calls or []
                     thinking_content = agent.thinking_content or None
+                    turn_tokens = agent.input_tokens + agent.output_tokens
 
                     await manager.send_personal(
                         websocket,
@@ -225,6 +226,19 @@ async def agent_chat_websocket(
                         },
                     )
 
+                    # Send token usage update
+                    await manager.send_personal(
+                        websocket,
+                        {
+                            "type": "usage",
+                            "data": {
+                                "inputTokens": agent.input_tokens,
+                                "outputTokens": agent.output_tokens,
+                                "totalTokens": session.total_tokens + turn_tokens,
+                            },
+                        },
+                    )
+
                     with sentry_sdk.start_span(
                         op="db.write",
                         description="save assistant message",
@@ -234,6 +248,7 @@ async def agent_chat_websocket(
                             content=response,
                             tool_calls=tool_calls if tool_calls else None,
                             thinking_content=thinking_content,
+                            tokens=turn_tokens,
                         )
                         if not session.title:
                             session.title = session.generate_title()
