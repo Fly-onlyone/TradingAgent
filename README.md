@@ -169,7 +169,7 @@ The primary interface is a real-time chat with Claude AI over WebSocket (`/agent
 **How it works:**
 
 1. Frontend opens a WebSocket connection to the backend
-2. Backend creates a `TradingAgent` instance with 20 MCP tools attached
+2. Backend creates a `TradingAgent` instance with 22 MCP tools attached
 3. User sends a message (e.g., "Analyze BTC-USDT") — the agent streams back thinking blocks, tool calls, and a final response
 4. At the end of analysis, the agent calls `submit_recommendation` to produce a structured decision (action, confidence, entry/SL/TP, key factors)
 5. Sessions are persisted in MongoDB — messages, tool calls, and thinking content are all saved and resumable
@@ -195,6 +195,7 @@ Historical Context → search knowledge base for past strategies, lessons, patte
 | Fundamental        | `get_onchain_metrics`, `get_macro_indicators`                  |
 | News & Sentiment   | `get_latest_news`, `get_news_sentiment`                        |
 | Knowledge (RAG)    | `search_strategies`, `search_lessons`, `search_patterns`       |
+| Strategy Mgmt      | `list_user_strategies`, `toggle_strategy`                      |
 | Trading            | `get_account_balance`, `get_open_orders`, `place_order`, `cancel_order` |
 | Web Search         | `search_web`, `search_news`                                    |
 | Output             | `submit_recommendation`, `modify_task`                         |
@@ -321,7 +322,7 @@ Before deploying to production:
 - [ ] Configure `SENTRY_DSN` and `VITE_SENTRY_DSN` for error tracking
 - [ ] Generate `SECRETS_ENCRYPTION_KEYS` for API key encryption at rest
 - [ ] Set up automated database backups
-- [ ] Configure SMTP for password reset and email verification emails
+- [ ] Configure `NOTIFICATION_URLS` and `EMAIL_URL` (Apprise) for notifications and transactional emails
 - [ ] Review risk levels and max position sizes in task configuration
 
 ## Deployment
@@ -361,7 +362,7 @@ Copy `.env.example` files and fill in production values. Never commit `.env` fil
 | OKX API errors (401/403) | Verify API key, secret, passphrase in Settings. Check IP whitelist on OKX |
 | Agent not responding | Check Anthropic API key in Settings. Verify `ANTHROPIC_API_KEY` env var |
 | WebSocket disconnects | Check browser console for errors. Verify backend is reachable on port 7000 |
-| Embedding model slow to load | First run downloads ~500MB model. Subsequent runs use cache |
+| Embedding model slow to load | First run downloads the model (~100-300MB depending on model). Subsequent runs use cache |
 | Frontend blank page | Run `bun install` then `bun run dev`. Check for TypeScript errors with `bun run check` |
 | Rate limit errors (429) | Auth endpoints are rate-limited. Wait and retry, or check for brute-force attempts |
 
