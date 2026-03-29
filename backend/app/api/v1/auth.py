@@ -21,7 +21,7 @@ from app.core.rate_limit import limiter
 from app.db.models.app_settings import AppSettings
 from app.db.models.user import User
 from app.security.secrets_crypto import decrypt_secret_value, encrypt_secret_value
-from app.services.email_service import EmailService
+from app.services.email_service import NotifyService
 
 # Fixed dev user ID so all debug-mode layers (REST, WebSocket) share
 # the same identity and can find each other's data.
@@ -236,8 +236,8 @@ async def register(request: Request, user_data: UserCreate) -> dict:
     user.update_timestamp()
     await user.save()
 
-    email_service = EmailService()
-    await email_service.send_email_verification(normalized_email, token)
+    notify_service = NotifyService()
+    await notify_service.send_email_verification(normalized_email, token)
 
     return {
         "id": str(user.id),
@@ -345,8 +345,8 @@ async def forgot_password(request: Request, body: ForgotPasswordRequest) -> dict
         user.update_timestamp()
         await user.save()
 
-        email_service = EmailService()
-        await email_service.send_password_reset(normalized_email, token)
+        notify_service = NotifyService()
+        await notify_service.send_password_reset(normalized_email, token)
 
     return {"message": "If an account exists with this email, you will receive a reset link."}
 
@@ -405,8 +405,8 @@ async def resend_verification(request: Request, body: ResendVerificationRequest)
         user.update_timestamp()
         await user.save()
 
-        email_service = EmailService()
-        await email_service.send_email_verification(normalized_email, token)
+        notify_service = NotifyService()
+        await notify_service.send_email_verification(normalized_email, token)
 
     return {
         "message": "If an account exists with this email, you will receive a verification link."

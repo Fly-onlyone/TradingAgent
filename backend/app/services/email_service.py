@@ -1,68 +1,114 @@
-"""Email service for transactional emails (password reset, verification)."""
+"""Notification service using Apprise for multi-channel delivery.
 
+Supports 80+ notification services (Telegram, Discord, Slack, email, webhooks, etc.)
+via URL-based configuration. See https://github.com/caronc/apprise/wiki for all services.
+"""
+
+import asyncio
 import logging
 import os
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+
+import apprise
 
 logger = logging.getLogger(__name__)
 
 
-class EmailService:
-    def __init__(self):
-        self.smtp_host = os.getenv("SMTP_HOST", "")
-        self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        self.smtp_user = os.getenv("SMTP_USER", "")
-        self.smtp_password = os.getenv("SMTP_PASSWORD", "")
-        self.from_email = os.getenv("SMTP_FROM", "noreply@tradingagent.local")
-        self.enabled = bool(self.smtp_host and self.smtp_user)
+class NotifyService:
+    """Multi-channel notification service backed by Apprise.
 
-    async def send_email(self, to: str, subject: str, html_body: str) -> bool:
-        """Send an HTML email. Logs instead of sending when SMTP is not configured."""
-        if not self.enabled:
+    Reads comma-separated Apprise URLs from env vars:
+    - ``NOTIFICATION_URLS``: broadcast channels (Telegram, Discord, Slack, etc.)
+    - ``EMAIL_URL``: transactional email channel (``mailto://`` scheme)
+
+    When no URLs are configured, notifications are logged to console (dev mode).
+    """
+
+    def __init__(self):
+        raw_urls = os.getenv("NOTIFICATION_URLS", "")
+        self.notification_urls: list[str] = [u.strip() for u in raw_urls.split(",") if u.strip()]
+        self.email_url: str = os.getenv("EMAIL_URL", "").strip()
+        self.frontend_url: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+    async def broadcast(self, title: str, body: str, notify_type: str = "info") -> bool:
+        """Send a notification to ALL configured channels."""
+        if not self.notification_urls:
             logger.info(
-                "Email not configured — logging instead:\n  To: %s\n  Subject: %s\n  Body: %s",
-                to,
-                subject,
-                html_body,
+                "No NOTIFICATION_URLS configured — logging instead:\n  Title: %s\n  Body: %s",
+                title,
+                body,
             )
             return True
-        try:
-            msg = MIMEMultipart("alternative")
-            msg["Subject"] = subject
-            msg["From"] = self.from_email
-            msg["To"] = to
-            msg.attach(MIMEText(html_body, "html"))
-            with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.smtp_user, self.smtp_password)
-                server.send_message(msg)
-            return True
-        except Exception:
-            logger.exception("Failed to send email to %s", to)
-            return False
+        return await self._send(self.notification_urls, title, body, notify_type)
+
+    async def notify(self, title: str, body: str, notify_type: str = "info") -> bool:
+        """Alias for broadcast — send to all configured notification channels."""
+        return await self.broadcast(title, body, notify_type)
 
     async def send_password_reset(self, to: str, token: str, base_url: str = "") -> bool:
-        """Send a password-reset email with a 1-hour expiry notice."""
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-        reset_link = f"{frontend_url}/auth/reset-password?token={token}"
-        html = (
-            "<h2>Password Reset</h2>"
-            "<p>Click the link below to reset your password. "
-            "This link expires in 1 hour.</p>"
-            f"<p><a href='{reset_link}'>Reset Password</a></p>"
-            "<p>If you didn't request this, ignore this email.</p>"
+        """Send a password-reset notification to a specific email address."""
+        reset_link = f"{self.frontend_url}/auth/reset-password?token={token}"
+        title = "Password Reset Request"
+        body = (
+            "Password Reset\n\n"
+            "Click the link below to reset your password. "
+            "This link expires in 1 hour.\n\n"
+            f"{reset_link}\n\n"
+            "If you didn't request this, ignore this message."
         )
-        return await self.send_email(to, "Password Reset Request", html)
+        return await self._send_email(to, title, body)
 
     async def send_email_verification(self, to: str, token: str) -> bool:
-        """Send an email-verification link."""
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-        verify_link = f"{frontend_url}/auth/verify-email?token={token}"
-        html = (
-            "<h2>Verify Your Email</h2>"
-            "<p>Click the link below to verify your email address.</p>"
-            f"<p><a href='{verify_link}'>Verify Email</a></p>"
+        """Send an email-verification notification to a specific email address."""
+        verify_link = f"{self.frontend_url}/auth/verify-email?token={token}"
+        title = "Verify Your Email"
+        body = (
+            "Verify Your Email\n\n"
+            "Click the link below to verify your email address.\n\n"
+            f"{verify_link}"
         )
-        return await self.send_email(to, "Verify Your Email", html)
+        return await self._send_email(to, title, body)
+
+    async def _send_email(self, to: str, title: str, body: str) -> bool:
+        """Send a transactional email to a specific recipient.
+
+        Constructs a targeted ``mailto://`` URL from EMAIL_URL with the recipient
+        address appended. Falls back to console logging when EMAIL_URL is not set.
+        """
+        if not self.email_url:
+            logger.info(
+                "No EMAIL_URL configured — logging instead:\n  To: %s\n  Title: %s\n  Body: %s",
+                to,
+                title,
+                body,
+            )
+            return True
+
+        # Build a recipient-specific mailto URL by appending ?to=<address>
+        separator = "&" if "?" in self.email_url else "?"
+        targeted_url = f"{self.email_url}{separator}to={to}"
+        return await self._send([targeted_url], title, body, "info")
+
+    async def _send(
+        self, urls: list[str], title: str, body: str, notify_type: str = "info"
+    ) -> bool:
+        """Create an Apprise instance, add URLs, and send synchronously via executor."""
+        ap = apprise.Apprise()
+        for url in urls:
+            ap.add(url)
+
+        nt = getattr(apprise.NotifyType, notify_type.upper(), apprise.NotifyType.INFO)
+
+        loop = asyncio.get_event_loop()
+        try:
+            result = await loop.run_in_executor(
+                None,
+                lambda: ap.notify(title=title, body=body, notify_type=nt),
+            )
+            return bool(result)
+        except Exception:
+            logger.exception("Failed to send notification: %s", title)
+            return False
+
+
+# Backward-compatible alias
+EmailService = NotifyService
