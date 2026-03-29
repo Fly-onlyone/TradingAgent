@@ -26,6 +26,9 @@ monitoring.
   - [Lifecycle](#lifecycle)
   - [Subagents](#subagents)
   - [Risk & Safeguards](#risk--safeguards)
+- [Production Checklist](#production-checklist)
+- [Deployment](#deployment)
+- [Troubleshooting](#troubleshooting)
 - [API Overview](#api-overview)
 
 ## Features
@@ -305,6 +308,62 @@ Their results are aggregated into an enriched prompt for the main agent, improvi
 | Aggressive   | 7.5%             | 55%            | Growth-oriented      |
 
 Additional safeguards: max position size cap, daily trade limit per task, mandatory stop-loss recommendation, idempotent order execution (no duplicate trades on retry), auto-pause after consecutive failures.
+
+## Production Checklist
+
+Before deploying to production:
+
+- [ ] Generate a strong `SECRET_KEY`: `python -c "import secrets; print(secrets.token_urlsafe(48))"`
+- [ ] Set `DEBUG=false` (debug mode bypasses all authentication)
+- [ ] Set `OKX_SANDBOX=false` for live trading
+- [ ] Configure `CORS_ORIGINS` to your production domain only
+- [ ] Set up MongoDB authentication and TLS
+- [ ] Configure `SENTRY_DSN` and `VITE_SENTRY_DSN` for error tracking
+- [ ] Generate `SECRETS_ENCRYPTION_KEYS` for API key encryption at rest
+- [ ] Set up automated database backups
+- [ ] Configure SMTP for password reset and email verification emails
+- [ ] Review risk levels and max position sizes in task configuration
+
+## Deployment
+
+### Reverse Proxy (nginx)
+
+Place the backend behind nginx with SSL termination. The backend listens on port 7000, the frontend on port 3000 (or serve the built frontend as static files).
+
+### Process Manager
+
+Use `systemd` (Linux) or a container runtime to keep the backend running:
+
+```bash
+# Build frontend
+cd frontend && bun run build
+
+# Run backend (serves API + static frontend build)
+uv run uvicorn app.main:app --host 0.0.0.0 --port 7000
+```
+
+### Environment
+
+Copy `.env.example` files and fill in production values. Never commit `.env` files.
+
+### MongoDB
+
+- Use MongoDB Atlas or a replica set for production
+- Enable authentication and TLS
+- Create a dedicated database user with minimal permissions
+- Set up automated backups
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| MongoDB connection refused | Check `MONGODB_URL`, ensure MongoDB is running, verify network/firewall |
+| OKX API errors (401/403) | Verify API key, secret, passphrase in Settings. Check IP whitelist on OKX |
+| Agent not responding | Check Anthropic API key in Settings. Verify `ANTHROPIC_API_KEY` env var |
+| WebSocket disconnects | Check browser console for errors. Verify backend is reachable on port 7000 |
+| Embedding model slow to load | First run downloads ~500MB model. Subsequent runs use cache |
+| Frontend blank page | Run `bun install` then `bun run dev`. Check for TypeScript errors with `bun run check` |
+| Rate limit errors (429) | Auth endpoints are rate-limited. Wait and retry, or check for brute-force attempts |
 
 ## API Overview
 

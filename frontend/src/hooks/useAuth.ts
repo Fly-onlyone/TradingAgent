@@ -15,14 +15,20 @@ export function useAuth() {
     const {user, isAuthenticated, isLoading, login, logout, setLoading} = useAuthStore();
 
     const handleLogin = useCallback(
-        async (credentials: UserLogin) => {
+        async (credentials: UserLogin, totpCode?: string): Promise<{ requires2FA?: boolean }> => {
             try {
                 setLoading(true);
-                const tokens = await authApi.login(credentials);
+                const result = await authApi.login(credentials, totpCode);
+
+                if (result.requires_2fa) {
+                    return { requires2FA: true };
+                }
+
                 const userData = await authApi.getMe();
-                login(userData, tokens.access_token);
+                login(userData, result.access_token);
                 notify.success('Welcome back!', `Logged in as ${userData.email}`);
                 void navigate({to: '/'});
+                return {};
             } catch (error) {
                 notify.error('Login failed', getErrorMessage(error, 'Login failed'));
                 throw error;

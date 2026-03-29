@@ -47,11 +47,21 @@ export const strategiesApi = {
 		strategyId: string,
 		data: StrategyUpdate,
 	): Promise<Strategy> {
-		const response = await apiClient.patch<Strategy>(
+		const payload: Record<string, unknown> = {};
+		if (data.name !== undefined) payload.name = data.name;
+		if (data.description !== undefined) payload.description = data.description;
+		if (data.isActive !== undefined) payload.is_active = data.isActive;
+		if (data.symbol !== undefined) payload.symbol = data.symbol;
+		if (data.timeframe !== undefined) payload.timeframe = data.timeframe;
+		if (data.entryRules !== undefined) payload.entry_rules = data.entryRules;
+		if (data.exitRules !== undefined) payload.exit_rules = data.exitRules;
+		if (data.riskParams !== undefined) payload.risk_params = data.riskParams;
+
+		const response = await apiClient.patch<Record<string, unknown>>(
 			`/strategies/${strategyId}`,
-			data,
+			payload,
 		);
-		return response.data;
+		return transformStrategy(response.data);
 	},
 
 	async deleteStrategy(strategyId: string): Promise<void> {
@@ -59,11 +69,11 @@ export const strategiesApi = {
 	},
 
 	async toggleStrategy(strategyId: string, active: boolean): Promise<Strategy> {
-		const response = await apiClient.patch<Strategy>(
+		const response = await apiClient.patch<Record<string, unknown>>(
 			`/strategies/${strategyId}`,
-			{ isActive: active },
+			{ is_active: active },
 		);
-		return response.data;
+		return transformStrategy(response.data);
 	},
 
 	async runBacktest(params: BacktestParams): Promise<BacktestResults> {

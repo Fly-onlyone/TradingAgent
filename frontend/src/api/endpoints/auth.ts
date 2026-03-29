@@ -5,6 +5,16 @@
 import type {AuthTokens, User, UserCreate, UserLogin, UserUpdate,} from "@/types";
 import apiClient, {handleAuthResponse} from "../client";
 
+export interface TwoFactorSetupResponse {
+	secret: string;
+	qrCode: string;
+	uri: string;
+}
+
+export interface TwoFactorStatusResponse {
+	totpEnabled: boolean;
+}
+
 function transformUser(data: Record<string, unknown>): User {
     return {
         id: String(data.id ?? ""),
@@ -14,6 +24,7 @@ function transformUser(data: Record<string, unknown>): User {
             (data.username as string | undefined),
         isActive: Boolean(data.is_active),
         isSuperuser: Boolean(data.is_superuser),
+        totpEnabled: Boolean(data.totp_enabled),
         createdAt: String(data.created_at ?? ""),
         updatedAt: data.updated_at ? String(data.updated_at) : undefined,
     };
@@ -23,19 +34,31 @@ export const authApi = {
     /**
      * Login with email and password
      */
-    async login(credentials: UserLogin): Promise<AuthTokens> {
-        const normalizedEmail = credentials.email.trim().toLowerCase();
-        const formData = new URLSearchParams();
-        formData.append("username", normalizedEmail);
-        formData.append("password", credentials.password);
+    async login(
+		credentials: UserLogin,
+		totpCode?: string,
+	): Promise<AuthTokens & { requires_2fa?: boolean }> {
+		const normalizedEmail = credentials.email.trim().toLowerCase();
+		const formData = new URLSearchParams();
+		formData.append("username", normalizedEmail);
+		formData.append("password", credentials.password);
+		if (totpCode) {
+			formData.append("client_secret", totpCode);
+		}
 
-        const response = await apiClient.post<AuthTokens>("/auth/token", formData, {
-            headers: {"Content-Type": "application/x-www-form-urlencoded"},
-        });
+		const response = await apiClient.post<
+			AuthTokens & { requires_2fa?: boolean }
+		>("/auth/token", formData, {
+			headers: { "Content-Type": "application/x-www-form-urlencoded" },
+		});
 
-        handleAuthResponse(response.data);
-        return response.data;
-    },
+		if (response.data.requires_2fa) {
+			return response.data;
+		}
+
+		handleAuthResponse(response.data);
+		return response.data;
+	},
 
     /**
      * Register new user
@@ -115,6 +138,62 @@ export const authApi = {
         });
         return response.data;
     },
+
+    /**
+     * Verify email using a token from the verification email
+     */
+    async verifyEmail(token: string): Promise<{ message: string }> {
+        const response = await apiClient.post<{ message: string }>("/auth/verify-email", {
+            token,
+        });
+        return response.data;
+    },
+
+    /**
+     * Resend email verification link
+     */
+    async resendVerification(email: string): Promise<{ message: string }> {
+        const response = await apiClient.post<{ message: string }>("/auth/resend-verification", {
+            email: email.trim().toLowerCase(),
+        });
+        return response.data;
+    },
+
+    /**
+	 * Start 2FA setup — returns secret, QR code image, and provisioning URI
+	 */
+	async setup2FA(): Promise<TwoFactorSetupResponse> {
+		const response = await apiClient.post<Record<string, unknown>>(
+			"/auth/2fa/setup",
+		);
+		return {
+			secret: String(response.data.secret ?? ""),
+			qrCode: String(response.data.qr_code ?? ""),
+			uri: String(response.data.uri ?? ""),
+		};
+	},
+
+	/**
+	 * Verify TOTP code to activate 2FA
+	 */
+	async verify2FA(code: string): Promise<TwoFactorStatusResponse> {
+		const response = await apiClient.post<Record<string, unknown>>(
+			"/auth/2fa/verify",
+			{ code },
+		);
+		return { totpEnabled: Boolean(response.data.totp_enabled) };
+	},
+
+	/**
+	 * Disable 2FA (requires current TOTP code)
+	 */
+	async disable2FA(code: string): Promise<TwoFactorStatusResponse> {
+		const response = await apiClient.post<Record<string, unknown>>(
+			"/auth/2fa/disable",
+			{ code },
+		);
+		return { totpEnabled: Boolean(response.data.totp_enabled) };
+	},
 
     /**
      * Logout (clear local token)

@@ -47,6 +47,8 @@ dependencies = [
     # Strategy import (PDF + YAML parsing)
     "pymupdf>=1.24.0",
     "pyyaml>=6.0.0",
+    "pyotp>=2.9.0",
+    "qrcode[pil]>=8.2",
 ]
 
 [dependency-groups]

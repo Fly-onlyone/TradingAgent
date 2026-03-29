@@ -8,6 +8,7 @@ export interface User {
   username?: string;
   isActive: boolean;
   isSuperuser: boolean;
+  totpEnabled: boolean;
   createdAt: string;
   updatedAt?: string;
 }

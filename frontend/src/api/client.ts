@@ -65,6 +65,8 @@ const NO_REFRESH_URLS = [
 	"/auth/register",
 	"/auth/forgot-password",
 	"/auth/reset-password",
+	"/auth/verify-email",
+	"/auth/resend-verification",
 ];
 
 function shouldSkipRefresh(url: string | undefined): boolean {
