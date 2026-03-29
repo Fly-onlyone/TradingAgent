@@ -1,34 +1,35 @@
 export interface BuildOptions {
-	release: boolean;
-	wixInstaller: boolean;
-	stripSymbols: boolean;
+    release: boolean;
+    wixInstaller: boolean;
+    stripSymbols: boolean;
+    autoRunInstaller: boolean;
 }
 
 export interface BuildOutputEvent {
-	line: string;
-	stream: "stdout" | "stderr";
+    line: string;
+    stream: "stdout" | "stderr";
 }
 
 export interface BuildProgressEvent {
-	step: number;
-	totalSteps: number;
-	label: string;
-	percent: number;
-	elapsedSecs: number;
+    step: number;
+    totalSteps: number;
+    label: string;
+    percent: number;
+    elapsedSecs: number;
 }
 
 export interface BuildCompleteEvent {
-	success: boolean;
-	message: string;
-	elapsedSecs: number;
+    success: boolean;
+    message: string;
+    elapsedSecs: number;
 }
 
 export type BuildStatus = "idle" | "building" | "success" | "error" | "cancelled";
 
 export interface LogEntry {
-	id: number;
-	line: string;
-	stream: "stdout" | "stderr";
-	timestamp: number;
-	type: "info" | "success" | "error" | "warning";
+    id: number;
+    line: string;
+    stream: "stdout" | "stderr";
+    timestamp: number;
+    type: "info" | "success" | "error" | "warning";
 }

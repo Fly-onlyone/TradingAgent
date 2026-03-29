@@ -154,6 +154,63 @@ fn sync_versions(version: String) -> Result<(), String> {
 }
 
 // ---------------------------------------------------------------------------
+// Commands: Run Installer
+// ---------------------------------------------------------------------------
+
+/// Finds and launches the most recently built installer (.msi or .exe in bundle/).
+#[tauri::command]
+fn run_installer() -> Result<String, String> {
+    let frontend = frontend_dir()?;
+    let bundle_dir = frontend
+        .join("src-tauri")
+        .join("target")
+        .join("release")
+        .join("bundle");
+
+    if !bundle_dir.exists() {
+        return Err("Bundle directory not found. Has a build completed?".to_string());
+    }
+
+    // Search msi/ and nsis/ subdirs for installer files
+    let mut candidates: Vec<(PathBuf, std::time::SystemTime)> = Vec::new();
+    for subdir in &["msi", "nsis"] {
+        let dir = bundle_dir.join(subdir);
+        if !dir.exists() {
+            continue;
+        }
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+                if ext == "msi" || ext == "exe" {
+                    if let Ok(meta) = path.metadata() {
+                        if let Ok(modified) = meta.modified() {
+                            candidates.push((path, modified));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if candidates.is_empty() {
+        return Err("No installer found in bundle/msi or bundle/nsis".to_string());
+    }
+
+    // Pick the most recently modified installer
+    candidates.sort_by(|a, b| b.1.cmp(&a.1));
+    let installer_path = &candidates[0].0;
+
+    // Launch the installer via Windows shell (open/run)
+    std::process::Command::new("cmd")
+        .args(["/C", "start", "", &installer_path.display().to_string()])
+        .spawn()
+        .map_err(|e| format!("Failed to launch installer: {e}"))?;
+
+    Ok(installer_path.display().to_string())
+}
+
+// ---------------------------------------------------------------------------
 // Commands: Build
 // ---------------------------------------------------------------------------
 
@@ -407,6 +464,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             read_version,
             sync_versions,
+            run_installer,
             start_build,
             cancel_build,
         ])
