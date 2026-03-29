@@ -6,6 +6,7 @@ from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from app.api.deps import get_current_superuser
 from app.api.v1.auth import get_current_active_user
 from app.db.models.agent_decision import AgentDecision
 from app.db.models.agent_task import (
@@ -337,6 +338,18 @@ async def list_tasks(
     }
 
 
+@router.post("/emergency-stop")
+async def emergency_stop(
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Pause all active trading tasks (emergency stop)."""
+    from app.agent.task_scheduler import get_scheduler
+
+    scheduler = get_scheduler()
+    paused_count = await scheduler.pause_all_tasks()
+    return {"paused_count": paused_count}
+
+
 @router.get("/{task_id}", response_model=TaskResponse)
 async def get_task(
     task_id: str,
@@ -390,9 +403,7 @@ async def update_task(
     schedules_data = update_data.get("schedules", task.schedules)
     for schedule in schedules_data:
         freq = (
-            schedule.frequency
-            if isinstance(schedule, TaskSchedule)
-            else schedule.get("frequency")
+            schedule.frequency if isinstance(schedule, TaskSchedule) else schedule.get("frequency")
         )
         cron = (
             schedule.cron_expression

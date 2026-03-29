@@ -5,12 +5,13 @@ from datetime import UTC, datetime, timedelta
 import bcrypt
 import sentry_sdk
 from beanie import PydanticObjectId
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
 
 from app.config import get_settings
+from app.core.rate_limit import limiter
 from app.db.models.app_settings import AppSettings
 from app.db.models.user import User
 
@@ -167,7 +168,8 @@ async def get_dev_user() -> User:
 
 
 @router.post("/register", response_model=UserResponse)
-async def register(user_data: UserCreate) -> dict:
+@limiter.limit("3/minute")
+async def register(request: Request, user_data: UserCreate) -> dict:
     """Register a new user."""
     normalized_email = str(user_data.email).strip().lower()
     existing_user = await User.find_one(User.email == normalized_email)
@@ -193,7 +195,9 @@ async def register(user_data: UserCreate) -> dict:
 
 
 @router.post("/token", response_model=Token)
+@limiter.limit("5/minute")
 async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
 ) -> dict:
     """Authenticate user and return JWT token."""
@@ -211,7 +215,9 @@ async def login(
 
 
 @router.post("/refresh", response_model=Token)
+@limiter.limit("10/minute")
 async def refresh_token(
+    request: Request,
     current_user: User = Depends(get_current_active_user),
 ) -> dict:
     """Issue a new token from a valid current token."""

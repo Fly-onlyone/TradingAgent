@@ -19,11 +19,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sentry_sdk.integrations.logging import LoggingIntegration
 from sentry_sdk.types import Event
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from app.agent.task_scheduler import get_scheduler
 from app.api.v1 import router as api_v1_router
 from app.api.websocket import router as ws_router
 from app.config import get_settings
+from app.core.rate_limit import limiter
 from app.db.session import close_db, init_db
 from app.knowledge.embeddings import preload_model as preload_embedding_model
 from app.logging_config import setup_logging
@@ -41,9 +45,7 @@ def _traces_sampler(sampling_context: dict) -> float:
 
 _PII_PATTERNS = [
     (
-        re.compile(
-            r"(?i)(api[_-]?key|secret[_-]?key|passphrase|password|token)\s*[:=]\s*\S+"
-        ),
+        re.compile(r"(?i)(api[_-]?key|secret[_-]?key|passphrase|password|token)\s*[:=]\s*\S+"),
         r"\1=***",
     ),
     (re.compile(r"(?i)(Bearer\s+)\S+"), r"\1***"),
@@ -143,6 +145,11 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# Rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 # Configure CORS
 if settings.cors_origins:

@@ -39,6 +39,8 @@ dependencies = [
     "bcrypt>=4.0.0",
     # Error monitoring
     "sentry-sdk[fastapi]>=2.0.0",
+    # Rate limiting
+    "slowapi>=0.1.9",
     # Dev file watcher (used by run.py)
     "watchfiles>=0.20.0",
     "pandas-stubs~=3.0.0",
