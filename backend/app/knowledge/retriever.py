@@ -3,6 +3,7 @@
 import sentry_sdk
 
 from app.db.models.knowledge import StrategyKnowledge, TradeLesson, TradingPattern
+from app.db.models.news import NewsArticle
 from app.knowledge.embeddings import EmbeddingService, get_embedding_service
 
 
@@ -135,19 +136,55 @@ class KnowledgeRetriever:
 
         return [p[0] for p in scored[:limit]]
 
+    async def search_news(
+        self,
+        query: str,
+        assets: list[str] | None = None,
+        limit: int = 5,
+        min_similarity: float = 0.6,
+        query_embedding: list[float] | None = None,
+    ) -> list[NewsArticle]:
+        """Semantic search over news articles using stored embeddings.
+
+        Falls back to regex if embedding search yields no results.
+        """
+        if query_embedding is None:
+            query_embedding = await self.embedding_service.generate_query_embedding(query)
+        if query_embedding is None:
+            return []
+
+        filter_query: dict = {"embedding": {"$exists": True, "$ne": None}}
+        if assets:
+            normalized = [a.upper().replace("-USDT", "") for a in assets]
+            filter_query["mentioned_assets"] = {"$in": normalized}
+
+        articles = await NewsArticle.find(filter_query).to_list()
+
+        scored = []
+        for article in articles:
+            if article.embedding:
+                similarity = self.embedding_service.cosine_similarity(
+                    query_embedding, article.embedding
+                )
+                if similarity >= min_similarity:
+                    scored.append((article, similarity))
+
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return [a[0] for a in scored[:limit]]
+
     async def search_all(
         self,
         query: str,
         limit_per_type: int = 3,
         min_similarity: float = 0.6,
     ) -> dict[str, list]:
-        """Search across all knowledge types.
+        """Search across all knowledge types including news.
 
-        Generates the query embedding once and reuses it for all three searches.
+        Generates the query embedding once and reuses it for all four searches.
         """
         query_embedding = await self.embedding_service.generate_query_embedding(query)
         if query_embedding is None:
-            return {"strategies": [], "lessons": [], "patterns": []}
+            return {"strategies": [], "lessons": [], "patterns": [], "news": []}
 
         strategies = await self.search_strategies(
             query, limit_per_type, min_similarity, query_embedding=query_embedding
@@ -164,11 +201,18 @@ class KnowledgeRetriever:
             min_similarity=min_similarity,
             query_embedding=query_embedding,
         )
+        news = await self.search_news(
+            query,
+            limit=limit_per_type,
+            min_similarity=min_similarity,
+            query_embedding=query_embedding,
+        )
 
         return {
             "strategies": strategies,
             "lessons": lessons,
             "patterns": patterns,
+            "news": news,
         }
 
     async def get_relevant_context(
@@ -208,6 +252,22 @@ class KnowledgeRetriever:
                         f"- **{pattern.pattern_name}** ({pattern.pattern_type}, "
                         f"success: {pattern.success_rate}%): {desc}"
                     )
+
+            if results.get("news"):
+                context_parts.append("\n## Relevant News")
+                for article in results["news"]:
+                    title = article.title[:120] if article.title else "Untitled"
+                    sentiment = (
+                        f", sentiment: {article.sentiment_score:+.2f}"
+                        if article.sentiment_score is not None
+                        else ""
+                    )
+                    assets = (
+                        f" [{', '.join(article.mentioned_assets)}]"
+                        if article.mentioned_assets
+                        else ""
+                    )
+                    context_parts.append(f"- **{title}**{assets}{sentiment}")
 
             if not context_parts:
                 return "No relevant knowledge found."

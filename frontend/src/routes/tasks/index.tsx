@@ -916,6 +916,25 @@ function TasksPage() {
 													}
 													fullWidth
 												/>
+
+												<TextField
+													label="Max Daily Trades"
+													type="number"
+													value={formData.maxDailyTrades || ""}
+													onChange={(e) =>
+														setFormData({
+															...formData,
+															maxDailyTrades: e.target.value
+																? Number(e.target.value)
+																: undefined,
+														})
+													}
+													fullWidth
+													helperText="Limit how many trades the agent can execute per day"
+													slotProps={{
+														htmlInput: { min: 1, step: 1 },
+													}}
+												/>
 											</>
 										)}
 

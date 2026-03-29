@@ -52,6 +52,15 @@ class StrategyKnowledge(Document):
     asset_classes: list[str] | None = None  # Suitable assets
     timeframes: list[str] | None = None  # Suitable timeframes
 
+    # Provenance — traces back to the source that produced this knowledge entry
+    source_article_id: PydanticObjectId | None = None  # FK → NewsArticle (auto-discovery)
+    source_url: str | None = None  # Original URL (article or user-provided import)
+    source_sentiment: float | None = Field(
+        default=None,
+        ge=-1.0,
+        le=1.0,
+    )  # Sentiment of the source article at extraction time
+
     # Embedding for semantic search (768-dim nomic-embed-text-v1.5 vector stored inline)
     embedding: list[float] | None = None
 

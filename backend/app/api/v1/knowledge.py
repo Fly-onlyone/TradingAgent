@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from app.api.v1.auth import get_current_active_user
 from app.db.models.knowledge import StrategyKnowledge, TradeLesson, TradingPattern
+from app.db.models.news import NewsArticle
 from app.db.models.user import User
 from app.knowledge.embeddings import StrategyEmbeddingGenerator
 from app.knowledge.retriever import get_retriever
@@ -96,10 +97,24 @@ class TradingPatternResponse(BaseModel):
         from_attributes = True
 
 
+# News Article Schema (for unified search results)
+class NewsArticleSearchResponse(BaseModel):
+    id: str
+    title: str
+    summary: str | None
+    url: str
+    sentiment_score: float | None
+    mentioned_assets: list[str] | None
+    published_at: datetime | None
+
+    class Config:
+        from_attributes = True
+
+
 # Search Schema
 class KnowledgeSearchRequest(BaseModel):
     query: str
-    search_type: str = "all"  # all, strategies, lessons, patterns
+    search_type: str = "all"  # all, strategies, lessons, patterns, news
     limit: int = 10
 
 
@@ -107,6 +122,19 @@ class KnowledgeSearchResponse(BaseModel):
     strategies: list[StrategyKnowledgeResponse] = []
     lessons: list[TradeLessonResponse] = []
     patterns: list[TradingPatternResponse] = []
+    news: list[NewsArticleSearchResponse] = []
+
+
+def article_to_search_response(article: NewsArticle) -> NewsArticleSearchResponse:
+    return NewsArticleSearchResponse(
+        id=str(article.id),
+        title=article.title,
+        summary=article.summary,
+        url=article.url,
+        sentiment_score=article.sentiment_score,
+        mentioned_assets=article.mentioned_assets,
+        published_at=article.published_at,
+    )
 
 
 def strategy_to_response(strategy: StrategyKnowledge) -> StrategyKnowledgeResponse:
@@ -341,4 +369,5 @@ async def search_knowledge(
         "strategies": [strategy_to_response(s) for s in results["strategies"]],
         "lessons": [lesson_to_response(lesson) for lesson in results["lessons"]],
         "patterns": [pattern_to_response(p) for p in results["patterns"]],
+        "news": [article_to_search_response(a) for a in results.get("news", [])],
     }

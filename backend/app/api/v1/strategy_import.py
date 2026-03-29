@@ -117,20 +117,7 @@ async def confirm_import(
     current_user: User = Depends(get_current_active_user),
 ) -> StrategyImportResult:
     """Save confirmed strategy data as both Strategy and StrategyKnowledge."""
-    # 1. Create user-owned Strategy
-    strategy = Strategy(
-        user_id=current_user.id,
-        name=data.name,
-        description=data.description,
-        entry_rules=data.entry_rules,
-        exit_rules=data.exit_rules,
-        risk_params=data.risk_params,
-        symbols=data.symbols,
-        timeframes=data.timeframes,
-    )
-    await strategy.insert()
-
-    # 2. Create StrategyKnowledge for RAG
+    # 1. Create StrategyKnowledge for RAG (first, so we have the ID for linking)
     knowledge = StrategyKnowledge(
         name=data.name,
         description=data.description,
@@ -140,8 +127,24 @@ async def confirm_import(
         market_conditions=data.market_conditions,
         asset_classes=data.asset_classes,
         timeframes=data.timeframes,
+        source_url=data.source_url,
     )
     await knowledge.insert()
+
+    # 2. Create user-owned Strategy linked to its StrategyKnowledge
+    strategy = Strategy(
+        user_id=current_user.id,
+        name=data.name,
+        description=data.description,
+        entry_rules=data.entry_rules,
+        exit_rules=data.exit_rules,
+        risk_params=data.risk_params,
+        symbols=data.symbols,
+        timeframes=data.timeframes,
+        knowledge_id=knowledge.id,
+        source_url=data.source_url,
+    )
+    await strategy.insert()
 
     # 3. Generate embedding for semantic search
     try:
@@ -150,7 +153,9 @@ async def confirm_import(
         if knowledge.embedding is not None:
             await knowledge.save()
     except Exception:
-        logger.warning("Failed to generate embedding for imported strategy %s", knowledge.id, exc_info=True)
+        logger.warning(
+            "Failed to generate embedding for imported strategy %s", knowledge.id, exc_info=True
+        )
 
     return StrategyImportResult(
         strategy_id=str(strategy.id),

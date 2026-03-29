@@ -51,7 +51,8 @@ class StrategyDiscoveryService:
         try:
             source_discovery = SourceDiscoveryService()
             discovery_stats = await source_discovery.discover_and_extract(
-                on_progress=on_progress, user_id=user_id,
+                on_progress=on_progress,
+                user_id=user_id,
             )
         except Exception:
             logger.warning("Source discovery via Brave Search failed", exc_info=True)
@@ -80,11 +81,15 @@ class StrategyDiscoveryService:
                 await emit({"step": "crawling_source", "source": source.name})
                 articles = await self.crawler.crawl_source(source)
                 stats["sources_crawled"] += 1
-                await emit({"step": "source_crawled", "source": source.name, "articles": len(articles)})
+                await emit(
+                    {"step": "source_crawled", "source": source.name, "articles": len(articles)}
+                )
 
                 for article in articles:
                     stats["articles_processed"] += 1
-                    strategy = await self._extract_and_save(article, source, min_confidence, user_id)
+                    strategy = await self._extract_and_save(
+                        article, source, min_confidence, user_id
+                    )
                     if strategy:
                         stats["strategies_found"] += 1
 
@@ -112,9 +117,7 @@ class StrategyDiscoveryService:
 
         try:
             extractor = await self._get_extractor()
-            extracted = await extractor.extract_from_text(
-                article.content, source_hint=article.url
-            )
+            extracted = await extractor.extract_from_text(article.content, source_hint=article.url)
         except Exception:
             logger.debug("AI extraction failed for article %s", article.url, exc_info=True)
             return None
@@ -130,7 +133,7 @@ class StrategyDiscoveryService:
         if existing:
             return None
 
-        # Create StrategyKnowledge entry
+        # Create StrategyKnowledge entry with provenance from the source article
         knowledge = StrategyKnowledge(
             name=extracted.name,
             description=extracted.description,
@@ -140,6 +143,9 @@ class StrategyDiscoveryService:
             market_conditions=extracted.market_conditions,
             asset_classes=extracted.asset_classes,
             timeframes=extracted.timeframes,
+            source_article_id=article.id,
+            source_url=article.url,
+            source_sentiment=article.sentiment_score,
         )
         await knowledge.insert()
 
@@ -173,7 +179,7 @@ class StrategyDiscoveryService:
                 exc_info=True,
             )
 
-        # Also create an inactive Strategy for the Strategies page
+        # Also create an inactive Strategy linked to the StrategyKnowledge
         if user_id:
             from app.db.models.strategy import Strategy
 
@@ -191,6 +197,7 @@ class StrategyDiscoveryService:
                     is_active=False,
                     auto_discovered=True,
                     source_url=article.url,
+                    knowledge_id=knowledge.id,
                 )
                 await strategy_doc.insert()
 

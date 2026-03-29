@@ -26,6 +26,7 @@ import {useQuery} from "@tanstack/react-query";
 import {createFileRoute, Link, useNavigate} from "@tanstack/react-router";
 import {motion} from "framer-motion";
 import {startTransition, useEffect, useState} from "react";
+import {tasksApi} from "@/api/endpoints/tasks";
 import {tradesApi} from "@/api/endpoints/trades";
 import {agentDecisionsQueryOptions} from "@/api/queryOptions/agent";
 import {marketAccountQueryOptions} from "@/api/queryOptions/market";
@@ -155,6 +156,18 @@ function AgentStatusCard() {
         agentStatus === "thinking" ||
         agentStatus === "analyzing";
 
+    const taskQuery = useQuery({
+        queryKey: ["tasks", "dashboard-mode"],
+        queryFn: () => tasksApi.getTasks(),
+        staleTime: 60_000,
+    });
+    const activeTask = taskQuery.data?.tasks?.[0];
+    const modeLabel = activeTask?.agentMode === "ask"
+        ? "Ask (confirm before trading)"
+        : activeTask?.agentMode === "auto"
+            ? "Auto (immediate execution)"
+            : "No task configured";
+
     return (
         <Card sx={{height: 280}}>
             <CardContent>
@@ -181,7 +194,7 @@ function AgentStatusCard() {
                         label="Active Task"
                         value={isThinking ? "Running" : "None"}
                     />
-                    <MetricRow label="Mode" value="Automated"/>
+                    <MetricRow label="Mode" value={modeLabel}/>
                 </Box>
             </CardContent>
         </Card>
@@ -452,7 +465,7 @@ function Dashboard() {
 
     const accountError = accountQuery.isError || accountQuery.data?.error;
 
-    const decisionsCount = decisionsQuery.data?.decisions?.length ?? 0;
+    const decisionsCount = decisionsQuery.data?.total ?? 0;
     const tradesCount = recentTradesQuery.data?.trades?.length ?? 0;
     const isFirstTimeUser =
         secondaryQueriesEnabled &&

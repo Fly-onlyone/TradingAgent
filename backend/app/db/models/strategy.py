@@ -27,6 +27,9 @@ class Strategy(Document):
     backtest_results: dict | None = None
     live_performance: dict | None = None
 
+    # Links
+    knowledge_id: PydanticObjectId | None = None  # FK → StrategyKnowledge (RAG counterpart)
+
     # Discovery metadata
     auto_discovered: bool = False
     source_url: str | None = None
