@@ -1,0 +1,47 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Build GUI",
+  "version": "0.1.0",
+  "identifier": "com.trading-agent.build-gui",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:3100",
+    "beforeDevCommand": "bun run dev",
+    "beforeBuildCommand": "bun run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Trading Agent Build Tool",
+        "width": 720,
+        "height": 680,
+        "minWidth": 600,
+        "minHeight": 500,
+        "center": true,
+        "decorations": true,
+        "resizable": true,
+        "fullscreen": false,
+        "label": "main"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  },
+  "plugins": {
+    "shell": {
+      "open": false
+    }
+  }
+}
