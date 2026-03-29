@@ -4,11 +4,9 @@
  * Read-only view of live market data used by the trading agent for automated decisions.
  */
 
-import SaveIcon from "@mui/icons-material/Save";
 import {
 	Alert,
 	Box,
-	Button,
 	Card,
 	CardContent,
 	CircularProgress,
@@ -18,10 +16,10 @@ import {
 	ToggleButtonGroup,
 	Typography,
 } from "@mui/material";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { SymbolOption } from "@/api/endpoints/market";
 import { marketApi } from "@/api/endpoints/market";
 import { ordersApi } from "@/api/endpoints/orders";
@@ -33,6 +31,7 @@ import {
 } from "@/api/queryOptions/market";
 import { CoinIcon } from "@/components/common/CoinIcon";
 import { PageTransition } from "@/components/common/PageTransition";
+import { SaveIndicator } from "@/components/common/SaveIndicator";
 import { SectionHeader } from "@/components/common/SectionHeader";
 import { ZoomAwareAutocomplete } from "@/components/common/ZoomAwareAutocomplete";
 import { StatCard } from "@/components/data-display/StatCard";
@@ -43,10 +42,10 @@ import {
 	RecentOrderActivity,
 	TickerCard,
 } from "@/components/trading";
+import { useDebouncedSave } from "@/hooks/useDebouncedSave";
 import { useSymbolOptions } from "@/hooks/useSymbolOptions";
 import { useMarketStore } from "@/store/marketStore";
 import { useOrderStore } from "@/store/orderStore";
-import { notify } from "@/store/uiStore";
 import { spring } from "@/utils/animations/variants";
 import { TIMEFRAMES } from "@/utils/constants";
 import { getErrorMessage } from "@/utils/errors";
@@ -95,6 +94,10 @@ function TradingPage() {
 			);
 			setPrefSymbol(prefsQuery.data.defaultSymbol);
 			setPrefTimeframe(prefsQuery.data.defaultTimeframe);
+			// Mark init complete after a tick so auto-save doesn't fire on load
+			requestAnimationFrame(() => {
+				prefsInitRef.current = true;
+			});
 		}
 	}, [prefsQuery.data, loadPreferences]);
 
@@ -116,22 +119,27 @@ function TradingPage() {
 		);
 	}, [symbolOptions, prefSymbol]);
 
-	// Save preferences mutation
-	const savePrefsMutation = useMutation({
-		mutationFn: () =>
-			marketApi.updateUserPreferences({
-				defaultSymbol: prefSymbol,
-				defaultTimeframe: prefTimeframe,
-			}),
-		onSuccess: (data) => {
-			queryClient.invalidateQueries({ queryKey: ["user", "preferences"] });
-			loadPreferences(data.defaultSymbol, data.defaultTimeframe);
-			notify.success("Trading preferences saved");
-		},
-		onError: (error) => {
-			notify.error("Failed to save preferences", getErrorMessage(error));
-		},
-	});
+	const prefsInitRef = useRef(false);
+
+	// Auto-save preferences via debounce
+	const { triggerSave: triggerPrefsSave, saveStatus: prefsStatus } =
+		useDebouncedSave<{ defaultSymbol: string; defaultTimeframe: string }>({
+			mutationFn: async (prefs) => {
+				const data = await marketApi.updateUserPreferences(prefs);
+				queryClient.invalidateQueries({ queryKey: ["user", "preferences"] });
+				loadPreferences(data.defaultSymbol, data.defaultTimeframe);
+				return data;
+			},
+		});
+
+	// Auto-save when prefSymbol or prefTimeframe changes (after initial load)
+	useEffect(() => {
+		if (!prefsInitRef.current) return;
+		triggerPrefsSave({
+			defaultSymbol: prefSymbol,
+			defaultTimeframe: prefTimeframe,
+		});
+	}, [prefSymbol, prefTimeframe, triggerPrefsSave]);
 
 	const tickerQuery = useQuery({
 		...marketTickerQueryOptions(selectedSymbol),
@@ -340,22 +348,15 @@ function TradingPage() {
 										))}
 									</ToggleButtonGroup>
 								</Grid>
-								<Grid size={{ xs: 12, sm: 2 }}>
-									<Button
-										variant="contained"
-										startIcon={
-											savePrefsMutation.isPending ? (
-												<CircularProgress size={18} />
-											) : (
-												<SaveIcon />
-											)
-										}
-										onClick={() => savePrefsMutation.mutate()}
-										disabled={savePrefsMutation.isPending}
-										fullWidth
-									>
-										Save
-									</Button>
+								<Grid
+									size={{ xs: 12, sm: 2 }}
+									sx={{
+										display: "flex",
+										alignItems: "center",
+										justifyContent: "center",
+									}}
+								>
+									<SaveIndicator status={prefsStatus} />
 								</Grid>
 							</Grid>
 						</CardContent>

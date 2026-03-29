@@ -12,4 +12,5 @@ export {MetricRow} from "./MetricRow";
 export {PageTransition} from "./PageTransition";
 export {SectionHeader} from "./SectionHeader";
 export {ShimmerSkeleton} from "./ShimmerSkeleton";
+export {SaveIndicator} from "./SaveIndicator";
 export {StatusDot} from "./StatusDot";
