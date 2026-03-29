@@ -1,15 +1,17 @@
 /**
- * Tasks Page - Single task with multiple toggleable schedules
+ * Task Configuration Page — single-task auto-save design.
+ * Auto-creates a default task on first visit, debounces all changes.
  */
 
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import AutoModeIcon from "@mui/icons-material/AutoMode";
-import DeleteIcon from "@mui/icons-material/Delete";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import HistoryIcon from "@mui/icons-material/History";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import PauseIcon from "@mui/icons-material/Pause";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
+import ScheduleIcon from "@mui/icons-material/Schedule";
 import {
 	Accordion,
 	AccordionDetails,
@@ -37,16 +39,18 @@ import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { format, parse } from "date-fns";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SymbolOption } from "@/api/endpoints/market";
 import { tasksApi } from "@/api/endpoints/tasks";
 import { CoinIcon } from "@/components/common/CoinIcon";
-import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { PageTransition } from "@/components/common/PageTransition";
+import { SaveIndicator } from "@/components/common/SaveIndicator";
 import { SectionHeader } from "@/components/common/SectionHeader";
 import { ZoomAwareAutocomplete } from "@/components/common/ZoomAwareAutocomplete";
 import { ZoomAwareSelect } from "@/components/common/ZoomAwareSelect";
 import { type Column, DataTable } from "@/components/data-display/DataTable";
+import { useDebouncedSave } from "@/hooks/useDebouncedSave";
 import { useSymbolOptions } from "@/hooks/useSymbolOptions";
 import { useUIStore } from "@/store/uiStore";
 import type {
@@ -58,14 +62,16 @@ import type {
 	TaskExecution,
 	TaskFrequency,
 	TaskSchedule,
+	TaskUpdate,
 } from "@/types/task";
 import { MONITORING_CONDITION_CONFIG } from "@/types/task";
+import { staggerCascade } from "@/utils/animations/variants";
 import { formatDateTime } from "@/utils/formatters";
 import { requireAuth } from "../-guards";
 
 export const Route = createFileRoute("/tasks/")({
 	beforeLoad: requireAuth,
-	component: TasksPage,
+	component: TaskConfigPage,
 });
 
 const DAYS_OF_WEEK = [
@@ -78,51 +84,42 @@ const DAYS_OF_WEEK = [
 	{ value: 6, label: "Sunday" },
 ];
 
-function TasksPage() {
+const DEFAULT_FORM: TaskCreate = {
+	name: "Trading Task",
+	description: "",
+	tradingEnabled: false,
+	monitoringEnabled: false,
+	schedules: [{ frequency: "daily", scheduledTime: "09:00", enabled: true }],
+	symbols: [],
+	riskLevel: "moderate",
+	agentMode: "ask",
+	monitoringConditions: [],
+	alertCooldownMinutes: 60,
+	useSubagents: false,
+};
+
+function TaskConfigPage() {
 	const queryClient = useQueryClient();
 	const backendStatus = useUIStore((s) => s.backendStatus);
 	const { symbolOptions, isLoading: symbolsLoading } = useSymbolOptions();
 	const createUiKey = useCallback(() => crypto.randomUUID(), []);
 
-	const [existingTaskId, setExistingTaskId] = useState<string | null>(null);
+	const [taskId, setTaskId] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
-	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 	const [scheduleKeys, setScheduleKeys] = useState<string[]>(() => [
 		createUiKey(),
 	]);
 	const [monitoringConditionKeys, setMonitoringConditionKeys] = useState<
 		string[]
 	>([]);
+	const [formData, setFormData] = useState<TaskCreate>({ ...DEFAULT_FORM });
 
-	const [formData, setFormData] = useState<TaskCreate>({
-		name: "",
-		description: "",
-		tradingEnabled: false,
-		monitoringEnabled: false,
-		schedules: [{ frequency: "daily", scheduledTime: "09:00", enabled: true }],
-		symbols: [],
-		riskLevel: "moderate",
-		agentMode: "ask",
-		monitoringConditions: [],
-		alertCooldownMinutes: 60,
-		useSubagents: false,
-	});
+	/** Tracks whether the form was populated from the backend at least once. */
+	const initRef = useRef(false);
+	/** Guards against double auto-create. */
+	const autoCreatingRef = useRef(false);
 
-	const selectedSymbolOptions = useMemo<SymbolOption[]>(() => {
-		return formData.symbols.map((sym) => {
-			const found =
-				symbolOptions.find((o) => o.symbol === sym && o.group === "Popular") ??
-				symbolOptions.find((o) => o.symbol === sym);
-			if (found) return found;
-			const [base, quote] = sym.split("-");
-			return {
-				symbol: sym,
-				base: base ?? sym,
-				quote: quote ?? "USDT",
-				group: "Popular",
-			};
-		});
-	}, [formData.symbols, symbolOptions]);
+	// ── Queries ──────────────────────────────────────────────────────────
 
 	const tasksQuery = useQuery({
 		queryKey: ["tasks"],
@@ -132,13 +129,80 @@ function TasksPage() {
 
 	const task = tasksQuery.data?.tasks?.[0] ?? null;
 
-	// Populate form from existing task
+	const historyQuery = useQuery({
+		queryKey: ["tasks", "history", taskId],
+		queryFn: () => tasksApi.getTaskHistory(taskId as string),
+		enabled: !!taskId,
+	});
+
+	// ── Mutations ────────────────────────────────────────────────────────
+
+	const createTaskMutation = useMutation({
+		mutationFn: (payload: TaskCreate) => tasksApi.createTask(payload),
+		onSuccess: (created) => {
+			setTaskId(created.id);
+			setError(null);
+			autoCreatingRef.current = false;
+			void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+		},
+		onError: () => {
+			setError("Failed to create task");
+			autoCreatingRef.current = false;
+		},
+	});
+
+	const pauseTaskMutation = useMutation({
+		mutationFn: (id: string) => tasksApi.pauseTask(id),
+		onSuccess: () => {
+			setError(null);
+			void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+		},
+		onError: () => setError("Failed to pause task"),
+	});
+
+	const resumeTaskMutation = useMutation({
+		mutationFn: (id: string) => tasksApi.resumeTask(id),
+		onSuccess: () => {
+			setError(null);
+			void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+		},
+		onError: () => setError("Failed to resume task"),
+	});
+
+	const runTaskMutation = useMutation({
+		mutationFn: (id: string) => tasksApi.runTaskNow(id),
+		onSuccess: () => {
+			setError(null);
+			void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+			if (taskId) {
+				void queryClient.invalidateQueries({
+					queryKey: ["tasks", "history", taskId],
+				});
+			}
+		},
+		onError: () => setError("Failed to run task"),
+	});
+
+	// ── Debounced auto-save ──────────────────────────────────────────────
+
+	const { triggerSave, saveStatus } = useDebouncedSave<TaskUpdate>({
+		mutationFn: async (update) => {
+			if (!taskId) return;
+			await tasksApi.updateTask(taskId, update);
+			void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+		},
+		delay: 1500,
+	});
+
+	// ── Populate form from backend task ─────────────────────────────────
+
 	useEffect(() => {
 		if (!task) {
-			setExistingTaskId(null);
+			initRef.current = false;
+			setTaskId(null);
 			return;
 		}
-		setExistingTaskId(task.id);
+		setTaskId(task.id);
 		setScheduleKeys(
 			(task.schedules.length > 0 ? task.schedules : [{}]).map(() =>
 				createUiKey(),
@@ -169,109 +233,75 @@ function TasksPage() {
 			useSubagents: task.useSubagents ?? false,
 			customInstructions: task.customInstructions,
 		});
+		// Mark initialised after a tick so the auto-save effect skips this batch.
+		const t = setTimeout(() => {
+			initRef.current = true;
+		}, 0);
+		return () => clearTimeout(t);
 	}, [createUiKey, task]);
 
-	const historyQuery = useQuery({
-		queryKey: ["tasks", "history", existingTaskId],
-		queryFn: () => tasksApi.getTaskHistory(existingTaskId as string),
-		enabled: !!existingTaskId,
-	});
+	// ── Auto-create when no task exists ──────────────────────────────────
 
-	const createTaskMutation = useMutation({
-		mutationFn: (payload: TaskCreate) => tasksApi.createTask(payload),
-		onSuccess: (created) => {
-			setExistingTaskId(created.id);
-			setError(null);
-			void queryClient.invalidateQueries({ queryKey: ["tasks"] });
-		},
-		onError: () => {
-			setError("Failed to create task");
-		},
-	});
+	useEffect(() => {
+		if (tasksQuery.isLoading || tasksQuery.isError) return;
+		if (task) return; // task already exists
+		if (autoCreatingRef.current || createTaskMutation.isPending) return;
+		autoCreatingRef.current = true;
+		createTaskMutation.mutate({ ...DEFAULT_FORM });
+	}, [
+		tasksQuery.isLoading,
+		tasksQuery.isError,
+		task,
+		createTaskMutation.isPending,
+		createTaskMutation.mutate,
+	]);
 
-	const updateTaskMutation = useMutation({
-		mutationFn: ({
-			taskId,
-			payload,
-		}: {
-			taskId: string;
-			payload: TaskCreate;
-		}) => tasksApi.updateTask(taskId, payload),
-		onSuccess: () => {
-			setError(null);
-			void queryClient.invalidateQueries({ queryKey: ["tasks"] });
-		},
-		onError: () => {
-			setError("Failed to update task");
-		},
-	});
+	// ── Trigger debounced save on form changes ──────────────────────────
 
-	const deleteTaskMutation = useMutation({
-		mutationFn: (taskId: string) => tasksApi.deleteTask(taskId),
-		onSuccess: () => {
-			setExistingTaskId(null);
-			setFormData({
-				name: "",
-				description: "",
-				tradingEnabled: false,
-				monitoringEnabled: false,
-				schedules: [
-					{ frequency: "daily", scheduledTime: "09:00", enabled: true },
-				],
-				symbols: [],
-				riskLevel: "moderate",
-				agentMode: "ask",
-				monitoringConditions: [],
-				alertCooldownMinutes: 60,
-				useSubagents: false,
-			});
-			setScheduleKeys([createUiKey()]);
-			setMonitoringConditionKeys([]);
-			setError(null);
-			void queryClient.invalidateQueries({ queryKey: ["tasks"] });
-		},
-		onError: () => {
-			setError("Failed to delete task");
-		},
-	});
+	useEffect(() => {
+		if (!initRef.current || !taskId) return;
+		triggerSave({
+			description: formData.description,
+			symbols: formData.symbols,
+			customInstructions: formData.customInstructions,
+			schedules: formData.schedules,
+			tradingEnabled: formData.tradingEnabled,
+			agentMode: formData.agentMode,
+			riskLevel: formData.riskLevel,
+			useSubagents: formData.useSubagents,
+			maxPositionSize: formData.maxPositionSize,
+			maxDailyTrades: formData.maxDailyTrades,
+			monitoringEnabled: formData.monitoringEnabled,
+			monitoringConditions: formData.monitoringConditions,
+			alertCooldownMinutes: formData.alertCooldownMinutes,
+		});
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [formData, taskId]);
 
-	const pauseTaskMutation = useMutation({
-		mutationFn: (taskId: string) => tasksApi.pauseTask(taskId),
-		onSuccess: () => {
-			setError(null);
-			void queryClient.invalidateQueries({ queryKey: ["tasks"] });
-		},
-		onError: () => {
-			setError("Failed to pause task");
-		},
-	});
+	// ── Retry on reconnect ──────────────────────────────────────────────
 
-	const resumeTaskMutation = useMutation({
-		mutationFn: (taskId: string) => tasksApi.resumeTask(taskId),
-		onSuccess: () => {
-			setError(null);
-			void queryClient.invalidateQueries({ queryKey: ["tasks"] });
-		},
-		onError: () => {
-			setError("Failed to resume task");
-		},
-	});
+	useEffect(() => {
+		if (backendStatus !== "online" || !tasksQuery.isError) return;
+		void tasksQuery.refetch();
+	}, [backendStatus, tasksQuery.isError, tasksQuery.refetch]);
 
-	const runTaskMutation = useMutation({
-		mutationFn: (taskId: string) => tasksApi.runTaskNow(taskId),
-		onSuccess: () => {
-			setError(null);
-			void queryClient.invalidateQueries({ queryKey: ["tasks"] });
-			if (existingTaskId) {
-				void queryClient.invalidateQueries({
-					queryKey: ["tasks", "history", existingTaskId],
-				});
-			}
-		},
-		onError: () => {
-			setError("Failed to run task");
-		},
-	});
+	// ── Derived ──────────────────────────────────────────────────────────
+
+	const selectedSymbolOptions = useMemo<SymbolOption[]>(() => {
+		return formData.symbols.map((sym) => {
+			const found =
+				symbolOptions.find((o) => o.symbol === sym && o.group === "Popular") ??
+				symbolOptions.find((o) => o.symbol === sym);
+			if (found) return found;
+			const [base, quote] = sym.split("-");
+			return {
+				symbol: sym,
+				base: base ?? sym,
+				quote: quote ?? "USDT",
+				group: "Popular",
+			};
+		});
+	}, [formData.symbols, symbolOptions]);
 
 	const taskHistory = historyQuery.data?.executions ?? [];
 	const historyLoading = historyQuery.isLoading;
@@ -279,66 +309,30 @@ function TasksPage() {
 		backendStatus === "connecting" && tasksQuery.isError && !tasksQuery.data;
 	const isLoadingTasks = tasksQuery.isLoading || isWaitingForBackend;
 
-	useEffect(() => {
-		if (backendStatus !== "online" || !tasksQuery.isError) {
-			return;
-		}
-
-		void tasksQuery.refetch();
-	}, [backendStatus, tasksQuery.isError, tasksQuery.refetch]);
-
-	const handleSave = async () => {
-		try {
-			if (existingTaskId) {
-				await updateTaskMutation.mutateAsync({
-					taskId: existingTaskId,
-					payload: formData,
-				});
-			} else {
-				await createTaskMutation.mutateAsync(formData);
-			}
-		} catch {
-			// handled in mutation callbacks
-		}
-	};
-
-	const handleDelete = () => {
-		if (!existingTaskId) return;
-		setShowDeleteConfirm(true);
-	};
-
-	const handleConfirmDelete = async () => {
-		if (!existingTaskId) return;
-		try {
-			await deleteTaskMutation.mutateAsync(existingTaskId);
-		} catch {
-			// handled in mutation callbacks
-		}
-		setShowDeleteConfirm(false);
-	};
+	// ── Handlers ─────────────────────────────────────────────────────────
 
 	const handlePause = async () => {
-		if (!existingTaskId) return;
+		if (!taskId) return;
 		try {
-			await pauseTaskMutation.mutateAsync(existingTaskId);
+			await pauseTaskMutation.mutateAsync(taskId);
 		} catch {
 			// handled in mutation callbacks
 		}
 	};
 
 	const handleResume = async () => {
-		if (!existingTaskId) return;
+		if (!taskId) return;
 		try {
-			await resumeTaskMutation.mutateAsync(existingTaskId);
+			await resumeTaskMutation.mutateAsync(taskId);
 		} catch {
 			// handled in mutation callbacks
 		}
 	};
 
 	const handleRunNow = async () => {
-		if (!existingTaskId) return;
+		if (!taskId) return;
 		try {
-			await runTaskMutation.mutateAsync(existingTaskId);
+			await runTaskMutation.mutateAsync(taskId);
 		} catch {
 			// handled in mutation callbacks
 		}
@@ -431,97 +425,152 @@ function TasksPage() {
 		},
 	];
 
-	const isSaving = createTaskMutation.isPending || updateTaskMutation.isPending;
+	// ── Render ────────────────────────────────────────────────────────────
+
 	return (
 		<LocalizationProvider dateAdapter={AdapterDateFns}>
 			<PageTransition pageKey="tasks">
 				<Box>
-					{/* Header with title + task-level actions */}
+					{/* ── Header ───────────────────────────────────────── */}
 					<SectionHeader
-						title="Automated Tasks"
-						subtitle="Configure and manage scheduled agent trading tasks"
-						action={task ? getStatusChip(task.status) : undefined}
+						title="Task Configuration"
+						subtitle="Configure your automated trading task"
+						action={
+							<Box
+								sx={{
+									display: "flex",
+									alignItems: "center",
+									gap: 1.5,
+								}}
+							>
+								<SaveIndicator status={saveStatus} />
+								{task && getStatusChip(task.status)}
+							</Box>
+						}
 					/>
-					{existingTaskId && (
-						<Box sx={{ display: "flex", gap: 1, mb: 2 }}>
-							{task?.status === "active" && (
+
+					{taskId && task && (
+						<Box
+							sx={{
+								display: "flex",
+								alignItems: "center",
+								gap: 1.5,
+								mb: 2,
+								flexWrap: "wrap",
+							}}
+						>
+							{task.status === "active" && (
 								<>
-									<Tooltip title="Run Now">
-										<span>
-											<Button
-												variant="outlined"
-												size="small"
-												startIcon={<PlayArrowIcon />}
-												onClick={handleRunNow}
-												disabled={runTaskMutation.isPending}
-											>
-												Run Now
-											</Button>
-										</span>
-									</Tooltip>
-									<Tooltip title="Pause">
-										<span>
-											<Button
-												variant="outlined"
-												size="small"
-												color="warning"
-												startIcon={<PauseIcon />}
-												onClick={handlePause}
-												disabled={pauseTaskMutation.isPending}
-											>
-												Pause
-											</Button>
-										</span>
-									</Tooltip>
-								</>
-							)}
-							{task?.status === "paused" && (
-								<Tooltip title="Resume">
-									<span>
-										<Button
-											variant="outlined"
-											size="small"
-											color="success"
-											startIcon={<PlayArrowIcon />}
-											onClick={handleResume}
-											disabled={resumeTaskMutation.isPending}
-										>
-											Resume
-										</Button>
-									</span>
-								</Tooltip>
-							)}
-							<Tooltip title="Delete">
-								<span>
 									<Button
 										variant="outlined"
 										size="small"
-										color="error"
-										startIcon={<DeleteIcon />}
-										onClick={handleDelete}
-										disabled={deleteTaskMutation.isPending}
+										startIcon={<PlayArrowIcon />}
+										onClick={handleRunNow}
+										disabled={runTaskMutation.isPending}
 									>
-										Delete
+										Run Now
 									</Button>
-								</span>
-							</Tooltip>
-						</Box>
-					)}
+									<Button
+										variant="outlined"
+										size="small"
+										color="warning"
+										startIcon={<PauseIcon />}
+										onClick={handlePause}
+										disabled={pauseTaskMutation.isPending}
+									>
+										Pause
+									</Button>
+								</>
+							)}
+							{task.status === "paused" && (
+								<Button
+									variant="outlined"
+									size="small"
+									color="success"
+									startIcon={<PlayArrowIcon />}
+									onClick={handleResume}
+									disabled={resumeTaskMutation.isPending}
+								>
+									Resume
+								</Button>
+							)}
 
-					{existingTaskId && task && (
-						<Box sx={{ display: "flex", gap: 2, mb: 2 }}>
-							<Typography variant="body2" color="text.secondary">
-								Next run:{" "}
-								{task.nextRunAt
-									? formatDateTime(task.nextRunAt)
-									: "Not scheduled"}
-							</Typography>
-							<Typography variant="body2" color="text.secondary">
-								Last run:{" "}
-								{task.lastRunAt
-									? formatDateTime(task.lastRunAt)
-									: "Never"}
-							</Typography>
+							<Box sx={{ display: "flex", gap: 1.5, ml: "auto" }}>
+								<Box
+									sx={{
+										display: "flex",
+										alignItems: "center",
+										gap: 1.5,
+										px: 2,
+										py: 1,
+										borderRadius: 3,
+										background: "rgba(16, 185, 129, 0.08)",
+										border: "1.5px solid rgba(16, 185, 129, 0.5)",
+									}}
+								>
+									<ScheduleIcon
+										sx={{
+											color: "#10B981",
+											fontSize: 20,
+										}}
+									/>
+									<Box>
+										<Typography
+											variant="caption"
+											sx={{
+												display: "block",
+												lineHeight: 1.2,
+												letterSpacing: 0.5,
+												color: "#34D399",
+											}}
+										>
+											Next Run
+										</Typography>
+										<Typography variant="body2" fontWeight={500}>
+											{task.nextRunAt
+												? formatDateTime(task.nextRunAt)
+												: "Not scheduled"}
+										</Typography>
+									</Box>
+								</Box>
+								<Box
+									sx={{
+										display: "flex",
+										alignItems: "center",
+										gap: 1.5,
+										px: 2,
+										py: 1,
+										borderRadius: 3,
+										background: "rgba(167, 139, 250, 0.1)",
+										border: "1.5px solid rgba(167, 139, 250, 0.55)",
+									}}
+								>
+									<HistoryIcon
+										sx={{
+											color: "#A78BFA",
+											fontSize: 20,
+										}}
+									/>
+									<Box>
+										<Typography
+											variant="caption"
+											sx={{
+												display: "block",
+												lineHeight: 1.2,
+												letterSpacing: 0.5,
+												color: "#A78BFA",
+											}}
+										>
+											Last Run
+										</Typography>
+										<Typography variant="body2" fontWeight={500}>
+											{task.lastRunAt
+												? formatDateTime(task.lastRunAt)
+												: "Never"}
+										</Typography>
+									</Box>
+								</Box>
+							</Box>
 						</Box>
 					)}
 
@@ -540,346 +589,342 @@ function TasksPage() {
 							<CircularProgress />
 						</Box>
 					) : (
-						<>
-							{/* Inline task form */}
-							<Card sx={{ mb: 3 }}>
-								<CardContent>
-									<Box
-										sx={{
-											display: "flex",
-											flexDirection: "column",
-											gap: 2,
-										}}
-									>
-										<TextField
-											label="Task Name"
-											value={formData.name}
-											onChange={(e) =>
-												setFormData({ ...formData, name: e.target.value })
-											}
-											fullWidth
-											required
-										/>
-
-										<TextField
-											label="Description"
-											value={formData.description || ""}
-											onChange={(e) =>
-												setFormData({
-													...formData,
-													description: e.target.value,
-												})
-											}
-											fullWidth
-											multiline
-											rows={2}
-										/>
-
-										<ZoomAwareAutocomplete<SymbolOption, true, false, false>
-											multiple
-											filterSelectedOptions
-											value={selectedSymbolOptions}
-											onChange={(_, newValue) => {
-												const uniqueSymbols = [
-													...new Set(newValue.map((opt) => opt.symbol)),
-												];
-												setFormData({
-													...formData,
-													symbols: uniqueSymbols,
-												});
+						<motion.div
+							variants={staggerCascade.container}
+							initial="hidden"
+							animate="visible"
+							style={{ display: "flex", flexDirection: "column", gap: 24 }}
+						>
+							{/* ── Card 1: General ─────────────────────── */}
+							<motion.div variants={staggerCascade.item}>
+								<Card>
+									<CardContent>
+										<Typography variant="h6" sx={{ mb: 2 }}>
+											General
+										</Typography>
+										<Box
+											sx={{
+												display: "flex",
+												flexDirection: "column",
+												gap: 2,
 											}}
-											options={symbolOptions}
-											groupBy={(option) => option.group}
-											getOptionLabel={(option) => option.symbol}
-											renderOption={(props, option) => (
-												<li {...props} key={`${option.group}-${option.symbol}`}>
+										>
+											<TextField
+												label="Description"
+												value={formData.description || ""}
+												onChange={(e) =>
+													setFormData({
+														...formData,
+														description: e.target.value,
+													})
+												}
+												fullWidth
+												multiline
+												rows={2}
+												placeholder="What should this task do?"
+											/>
+
+											<ZoomAwareAutocomplete<SymbolOption, true, false, false>
+												multiple
+												filterSelectedOptions
+												value={selectedSymbolOptions}
+												onChange={(_, newValue) => {
+													const uniqueSymbols = [
+														...new Set(newValue.map((opt) => opt.symbol)),
+													];
+													setFormData({
+														...formData,
+														symbols: uniqueSymbols,
+													});
+												}}
+												options={symbolOptions}
+												groupBy={(option) => option.group}
+												getOptionLabel={(option) => option.symbol}
+												renderOption={(props, option) => (
+													<li
+														{...props}
+														key={`${option.group}-${option.symbol}`}
+													>
+														<Box
+															sx={{
+																display: "flex",
+																alignItems: "center",
+																gap: 1.5,
+															}}
+														>
+															<CoinIcon symbol={option.base} size={28} />
+															<Box>
+																<Typography variant="body2" fontWeight={600}>
+																	{option.symbol}
+																</Typography>
+																<Typography
+																	variant="caption"
+																	color="text.secondary"
+																>
+																	{option.base} / {option.quote}
+																</Typography>
+															</Box>
+														</Box>
+													</li>
+												)}
+												renderTags={(value, getTagProps) =>
+													value.map((option, index) => {
+														const { key, ...tagProps } = getTagProps({ index });
+														return (
+															<Chip
+																key={key}
+																label={option.symbol}
+																size="small"
+																icon={
+																	<CoinIcon symbol={option.base} size={18} />
+																}
+																{...tagProps}
+															/>
+														);
+													})
+												}
+												isOptionEqualToValue={(option, value) =>
+													option.symbol === value.symbol &&
+													option.group === value.group
+												}
+												loading={symbolsLoading}
+												renderInput={(params) => (
+													<TextField
+														{...params}
+														label="Symbols"
+														placeholder={
+															formData.symbols.length === 0
+																? "Search instruments..."
+																: ""
+														}
+														slotProps={{
+															input: {
+																...params.InputProps,
+																endAdornment: (
+																	<>
+																		{symbolsLoading ? (
+																			<CircularProgress size={18} />
+																		) : null}
+																		{params.InputProps.endAdornment}
+																	</>
+																),
+															},
+														}}
+													/>
+												)}
+											/>
+
+											<TextField
+												label="Custom Instructions"
+												value={formData.customInstructions || ""}
+												onChange={(e) =>
+													setFormData({
+														...formData,
+														customInstructions: e.target.value,
+													})
+												}
+												fullWidth
+												multiline
+												rows={3}
+												placeholder="Additional instructions for the agent..."
+											/>
+										</Box>
+									</CardContent>
+								</Card>
+							</motion.div>
+
+							{/* ── Card 2: Schedule ────────────────────── */}
+							<motion.div variants={staggerCascade.item}>
+								<Card>
+									<CardContent>
+										<Typography variant="h6" sx={{ mb: 2 }}>
+											Schedule
+										</Typography>
+										<Box
+											sx={{
+												display: "flex",
+												flexDirection: "column",
+												gap: 1.5,
+											}}
+										>
+											{formData.schedules.map((schedule, idx) => (
+												<Box
+													key={scheduleKeys[idx] as string}
+													sx={{
+														display: "flex",
+														flexDirection: "column",
+														gap: 1,
+														p: 1.5,
+														border: 1,
+														borderColor: "divider",
+														borderRadius: 1,
+														opacity: schedule.enabled === false ? 0.5 : 1,
+													}}
+												>
 													<Box
 														sx={{
 															display: "flex",
+															gap: 1,
 															alignItems: "center",
-															gap: 1.5,
 														}}
 													>
-														<CoinIcon symbol={option.base} size={28} />
-														<Box>
-															<Typography variant="body2" fontWeight={600}>
-																{option.symbol}
-															</Typography>
-															<Typography
-																variant="caption"
-																color="text.secondary"
-															>
-																{option.base} / {option.quote}
-															</Typography>
-														</Box>
-													</Box>
-												</li>
-											)}
-											renderTags={(value, getTagProps) =>
-												value.map((option, index) => {
-													const { key, ...tagProps } = getTagProps({ index });
-													return (
-														<Chip
-															key={key}
-															label={option.symbol}
-															size="small"
-															icon={<CoinIcon symbol={option.base} size={18} />}
-															{...tagProps}
-														/>
-													);
-												})
-											}
-											isOptionEqualToValue={(option, value) =>
-												option.symbol === value.symbol &&
-												option.group === value.group
-											}
-											loading={symbolsLoading}
-											renderInput={(params) => (
-												<TextField
-													{...params}
-													label="Symbols"
-													placeholder={
-														formData.symbols.length === 0
-															? "Search instruments..."
-															: ""
-													}
-													slotProps={{
-														input: {
-															...params.InputProps,
-															endAdornment: (
-																<>
-																	{symbolsLoading ? (
-																		<CircularProgress size={18} />
-																	) : null}
-																	{params.InputProps.endAdornment}
-																</>
-															),
-														},
-													}}
-												/>
-											)}
-										/>
-
-										<Typography
-											variant="overline"
-											color="text.secondary"
-											sx={{ mt: 1, display: "block" }}
-										>
-											Schedule Configuration
-										</Typography>
-
-										{formData.schedules.map((schedule, idx) => (
-											<Box
-												key={scheduleKeys[idx] as string}
-												sx={{
-													display: "flex",
-													flexDirection: "column",
-													gap: 1,
-													p: 1.5,
-													border: 1,
-													borderColor: "divider",
-													borderRadius: 1,
-													opacity: schedule.enabled === false ? 0.5 : 1,
-												}}
-											>
-												<Box
-													sx={{
-														display: "flex",
-														gap: 1,
-														alignItems: "center",
-													}}
-												>
-													<Switch
-														checked={schedule.enabled !== false}
-														onChange={(e) =>
-															updateSchedule(idx, {
-																enabled: e.target.checked,
-															})
-														}
-														size="small"
-													/>
-
-													<FormControl sx={{ minWidth: 130 }}>
-														<InputLabel>Frequency</InputLabel>
-														<ZoomAwareSelect
-															value={schedule.frequency}
-															label="Frequency"
-															size="small"
+														<Switch
+															checked={schedule.enabled !== false}
 															onChange={(e) =>
 																updateSchedule(idx, {
-																	frequency: e.target.value as TaskFrequency,
+																	enabled: e.target.checked,
 																})
 															}
-														>
-															<MenuItem value="once">Once</MenuItem>
-															<MenuItem value="hourly">Hourly</MenuItem>
-															<MenuItem value="daily">Daily</MenuItem>
-															<MenuItem value="weekly">Weekly</MenuItem>
-															<MenuItem value="custom">Custom</MenuItem>
-														</ZoomAwareSelect>
-													</FormControl>
-
-													{(schedule.frequency === "daily" ||
-														schedule.frequency === "weekly") && (
-														<TimePicker
-															label="Time"
-															value={parse(
-																schedule.scheduledTime || "09:00",
-																"HH:mm",
-																new Date(),
-															)}
-															onChange={(val) => {
-																if (val) {
-																	updateSchedule(idx, {
-																		scheduledTime: format(val, "HH:mm"),
-																	});
-																}
-															}}
-															slotProps={{
-																textField: { size: "small" },
-															}}
-															slots={{
-																openPickerButton: (props) => (
-																	<Tooltip title="Pick time">
-																		<IconButton {...props} />
-																	</Tooltip>
-																),
-															}}
-															sx={{ width: 170 }}
+															size="small"
 														/>
-													)}
 
-													{schedule.frequency === "weekly" && (
-														<FormControl size="small" sx={{ minWidth: 120 }}>
-															<InputLabel>Day</InputLabel>
+														<FormControl sx={{ minWidth: 130 }}>
+															<InputLabel>Frequency</InputLabel>
 															<ZoomAwareSelect
-																value={schedule.dayOfWeek ?? 0}
-																label="Day"
+																value={schedule.frequency}
+																label="Frequency"
+																size="small"
 																onChange={(e) =>
 																	updateSchedule(idx, {
-																		dayOfWeek: e.target.value as number,
+																		frequency: e.target.value as TaskFrequency,
 																	})
 																}
 															>
-																{DAYS_OF_WEEK.map((day) => (
-																	<MenuItem key={day.value} value={day.value}>
-																		{day.label}
-																	</MenuItem>
-																))}
+																<MenuItem value="once">Once</MenuItem>
+																<MenuItem value="hourly">Hourly</MenuItem>
+																<MenuItem value="daily">Daily</MenuItem>
+																<MenuItem value="weekly">Weekly</MenuItem>
+																<MenuItem value="custom">Custom</MenuItem>
 															</ZoomAwareSelect>
 														</FormControl>
-													)}
 
-													{schedule.frequency === "custom" && (
-														<TextField
-															label="Cron"
-															size="small"
-															value={schedule.cronExpression || ""}
-															onChange={(e) =>
-																updateSchedule(idx, {
-																	cronExpression: e.target.value,
-																})
-															}
-															placeholder="0 9 * * *"
-															sx={{ flex: 1 }}
-														/>
-													)}
+														{(schedule.frequency === "daily" ||
+															schedule.frequency === "weekly") && (
+															<TimePicker
+																label="Time"
+																value={parse(
+																	schedule.scheduledTime || "09:00",
+																	"HH:mm",
+																	new Date(),
+																)}
+																onChange={(val) => {
+																	if (val) {
+																		updateSchedule(idx, {
+																			scheduledTime: format(val, "HH:mm"),
+																		});
+																	}
+																}}
+																slotProps={{
+																	textField: { size: "small" },
+																}}
+																slots={{
+																	openPickerButton: (props) => (
+																		<Tooltip title="Pick time">
+																			<IconButton {...props} />
+																		</Tooltip>
+																	),
+																}}
+																sx={{ width: 170 }}
+															/>
+														)}
 
-													{formData.schedules.length > 1 && (
-														<Tooltip title="Remove schedule">
-															<IconButton
+														{schedule.frequency === "weekly" && (
+															<FormControl size="small" sx={{ minWidth: 120 }}>
+																<InputLabel>Day</InputLabel>
+																<ZoomAwareSelect
+																	value={schedule.dayOfWeek ?? 0}
+																	label="Day"
+																	onChange={(e) =>
+																		updateSchedule(idx, {
+																			dayOfWeek: e.target.value as number,
+																		})
+																	}
+																>
+																	{DAYS_OF_WEEK.map((day) => (
+																		<MenuItem key={day.value} value={day.value}>
+																			{day.label}
+																		</MenuItem>
+																	))}
+																</ZoomAwareSelect>
+															</FormControl>
+														)}
+
+														{schedule.frequency === "custom" && (
+															<TextField
+																label="Cron"
 																size="small"
-																color="error"
-																onClick={() => removeSchedule(idx)}
-															>
-																<RemoveCircleOutlineIcon />
-															</IconButton>
-														</Tooltip>
-													)}
+																value={schedule.cronExpression || ""}
+																onChange={(e) =>
+																	updateSchedule(idx, {
+																		cronExpression: e.target.value,
+																	})
+																}
+																placeholder="0 9 * * *"
+																sx={{ flex: 1 }}
+															/>
+														)}
+
+														{formData.schedules.length > 1 && (
+															<Tooltip title="Remove schedule">
+																<IconButton
+																	size="small"
+																	color="error"
+																	onClick={() => removeSchedule(idx)}
+																>
+																	<RemoveCircleOutlineIcon />
+																</IconButton>
+															</Tooltip>
+														)}
+													</Box>
 												</Box>
-											</Box>
-										))}
+											))}
 
-										<Button
-											size="small"
-											startIcon={<AddCircleOutlineIcon />}
-											onClick={addSchedule}
-										>
-											Add Schedule
-										</Button>
+											<Button
+												size="small"
+												startIcon={<AddCircleOutlineIcon />}
+												onClick={addSchedule}
+												sx={{ alignSelf: "flex-start" }}
+											>
+												Add Schedule
+											</Button>
+										</Box>
+									</CardContent>
+								</Card>
+							</motion.div>
 
-										{/* Risk Level */}
-										<Typography
-											variant="overline"
-											color="text.secondary"
-											sx={{ mt: 1, display: "block" }}
+							{/* ── Card 3: Trading ─────────────────────── */}
+							<motion.div variants={staggerCascade.item}>
+								<Card>
+									<CardContent>
+										<Box
+											sx={{
+												display: "flex",
+												alignItems: "center",
+												justifyContent: "space-between",
+												mb: 1,
+											}}
 										>
-											Risk & Analysis
-										</Typography>
-										<Box sx={{ px: 4 }}>
-											<Typography gutterBottom>Risk Level</Typography>
-											<Slider
-												value={riskValues.indexOf(formData.riskLevel)}
-												onChange={(_, value) =>
+											<Typography variant="h6">Trading</Typography>
+											<Switch
+												checked={formData.tradingEnabled}
+												onChange={(e) =>
 													setFormData({
 														...formData,
-														riskLevel: riskValues[value as number],
+														tradingEnabled: e.target.checked,
 													})
 												}
-												step={1}
-												marks={riskMarks}
-												min={0}
-												max={2}
-												sx={{
-													"& .MuiSlider-markLabel": {
-														fontSize: "0.75rem",
-													},
-												}}
 											/>
 										</Box>
 
-										{/* Deep Analysis toggle */}
-										<Tooltip title="Run specialized subagents (Technical, Fundamental, News) before main analysis. More thorough but uses more API credits.">
-											<FormControlLabel
-												control={
-													<Switch
-														checked={formData.useSubagents ?? false}
-														onChange={(e) =>
-															setFormData({
-																...formData,
-																useSubagents: e.target.checked,
-															})
-														}
-													/>
-												}
-												label="Deep Analysis (Subagents)"
-											/>
-										</Tooltip>
-
-										<Typography
-											variant="overline"
-											color="text.secondary"
-											sx={{ mt: 1, display: "block" }}
-										>
-											Trading Configuration
-										</Typography>
-										<FormControlLabel
-											control={
-												<Switch
-													checked={formData.tradingEnabled}
-													onChange={(e) =>
-														setFormData({
-															...formData,
-															tradingEnabled: e.target.checked,
-														})
-													}
-												/>
-											}
-											label="Enable Trading"
-										/>
-
 										{formData.tradingEnabled && (
-											<>
+											<Box
+												sx={{
+													display: "flex",
+													flexDirection: "column",
+													gap: 2,
+													mt: 1,
+												}}
+											>
 												<FormControl fullWidth>
 													<InputLabel>Agent Mode</InputLabel>
 													<ZoomAwareSelect
@@ -919,6 +964,45 @@ function TasksPage() {
 													</ZoomAwareSelect>
 												</FormControl>
 
+												<Box sx={{ px: 4 }}>
+													<Typography gutterBottom>Risk Level</Typography>
+													<Slider
+														value={riskValues.indexOf(formData.riskLevel)}
+														onChange={(_, value) =>
+															setFormData({
+																...formData,
+																riskLevel: riskValues[value as number],
+															})
+														}
+														step={1}
+														marks={riskMarks}
+														min={0}
+														max={2}
+														sx={{
+															"& .MuiSlider-markLabel": {
+																fontSize: "0.75rem",
+															},
+														}}
+													/>
+												</Box>
+
+												<Tooltip title="Run specialized subagents (Technical, Fundamental, News) before main analysis. More thorough but uses more API credits.">
+													<FormControlLabel
+														control={
+															<Switch
+																checked={formData.useSubagents ?? false}
+																onChange={(e) =>
+																	setFormData({
+																		...formData,
+																		useSubagents: e.target.checked,
+																	})
+																}
+															/>
+														}
+														label="Deep Analysis (Subagents)"
+													/>
+												</Tooltip>
+
 												<TextField
 													label="Max Position Size (USDT)"
 													type="number"
@@ -952,33 +1036,45 @@ function TasksPage() {
 														htmlInput: { min: 1, step: 1 },
 													}}
 												/>
-											</>
+											</Box>
 										)}
+									</CardContent>
+								</Card>
+							</motion.div>
 
-										<Typography
-											variant="overline"
-											color="text.secondary"
-											sx={{ mt: 1, display: "block" }}
+							{/* ── Card 4: Monitoring ──────────────────── */}
+							<motion.div variants={staggerCascade.item}>
+								<Card>
+									<CardContent>
+										<Box
+											sx={{
+												display: "flex",
+												alignItems: "center",
+												justifyContent: "space-between",
+												mb: 1,
+											}}
 										>
-											Monitoring
-										</Typography>
-										<FormControlLabel
-											control={
-												<Switch
-													checked={formData.monitoringEnabled}
-													onChange={(e) =>
-														setFormData({
-															...formData,
-															monitoringEnabled: e.target.checked,
-														})
-													}
-												/>
-											}
-											label="Enable Monitoring"
-										/>
+											<Typography variant="h6">Monitoring</Typography>
+											<Switch
+												checked={formData.monitoringEnabled}
+												onChange={(e) =>
+													setFormData({
+														...formData,
+														monitoringEnabled: e.target.checked,
+													})
+												}
+											/>
+										</Box>
 
 										{formData.monitoringEnabled && (
-											<>
+											<Box
+												sx={{
+													display: "flex",
+													flexDirection: "column",
+													gap: 1.5,
+													mt: 1,
+												}}
+											>
 												{(formData.monitoringConditions ?? []).map(
 													(condition, index) => (
 														<Box
@@ -1134,11 +1230,12 @@ function TasksPage() {
 															],
 														});
 													}}
+													sx={{ alignSelf: "flex-start" }}
 												>
 													Add Condition
 												</Button>
 
-												<Box sx={{ px: 1 }}>
+												<Box sx={{ px: 1, mt: 1 }}>
 													<Typography gutterBottom variant="body2">
 														Alert Cooldown:{" "}
 														{formData.alertCooldownMinutes ?? 60} minutes
@@ -1173,83 +1270,38 @@ function TasksPage() {
 														}}
 													/>
 												</Box>
-											</>
+											</Box>
 										)}
+									</CardContent>
+								</Card>
+							</motion.div>
 
-										<Typography
-											variant="overline"
-											color="text.secondary"
-											sx={{ mt: 1, display: "block" }}
-										>
-											Additional Settings
-										</Typography>
-										<TextField
-											label="Custom Instructions"
-											value={formData.customInstructions || ""}
-											onChange={(e) =>
-												setFormData({
-													...formData,
-													customInstructions: e.target.value,
-												})
-											}
-											fullWidth
-											multiline
-											rows={3}
-											placeholder="Additional instructions for the agent..."
-										/>
-
-										{/* Save button */}
-										<Box
-											sx={{
-												display: "flex",
-												justifyContent: "flex-end",
-											}}
-										>
-											<Button
-												variant="contained"
-												onClick={handleSave}
-												disabled={isSaving}
-											>
-												{isSaving ? "Saving..." : "Save"}
-											</Button>
-										</Box>
-									</Box>
-								</CardContent>
-							</Card>
-
-							{/* History accordion */}
-							{existingTaskId && (
-								<Accordion defaultExpanded={false}>
-									<AccordionSummary expandIcon={<ExpandMoreIcon />}>
-										<Typography variant="h6">
-											Recent Executions - {task?.name}
-										</Typography>
-									</AccordionSummary>
-									<AccordionDetails>
-										<DataTable
-											columns={historyColumns}
-											rows={taskHistory}
-											rowKey="id"
-											loading={historyLoading}
-											emptyMessage="No executions yet"
-											maxHeight={400}
-										/>
-									</AccordionDetails>
-								</Accordion>
+							{/* ── Card 5: History ─────────────────────── */}
+							{taskId && (
+								<motion.div variants={staggerCascade.item}>
+									<Card>
+										<Accordion defaultExpanded={false} disableGutters>
+											<AccordionSummary expandIcon={<ExpandMoreIcon />}>
+												<Typography variant="h6">Execution History</Typography>
+											</AccordionSummary>
+											<AccordionDetails>
+												<DataTable
+													columns={historyColumns}
+													rows={taskHistory}
+													rowKey="id"
+													loading={historyLoading}
+													emptyMessage="No executions yet"
+													maxHeight={400}
+													pagination
+												/>
+											</AccordionDetails>
+										</Accordion>
+									</Card>
+								</motion.div>
 							)}
-						</>
+						</motion.div>
 					)}
 				</Box>
-				<ConfirmDialog
-					open={showDeleteConfirm}
-					title="Delete Task"
-					message="Are you sure you want to delete this task? This action cannot be undone."
-					confirmLabel="Delete"
-					destructive
-					loading={deleteTaskMutation.isPending}
-					onConfirm={handleConfirmDelete}
-					onCancel={() => setShowDeleteConfirm(false)}
-				/>
 			</PageTransition>
 		</LocalizationProvider>
 	);

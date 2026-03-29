@@ -5,6 +5,7 @@ from datetime import datetime
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from starlette.requests import Request
 
 from app.api.deps import get_current_superuser
 from app.api.v1.auth import get_current_active_user
@@ -247,11 +248,11 @@ async def create_task(
                 detail="cron_expression is required for custom frequency",
             )
 
-    # Validate symbols
-    if not task_data.symbols:
+    # Validate symbols when trading or monitoring is enabled
+    if (task_data.trading_enabled or task_data.monitoring_enabled) and not task_data.symbols:
         raise HTTPException(
             status_code=400,
-            detail="At least one symbol is required",
+            detail="At least one symbol is required when trading or monitoring is enabled",
         )
 
     # Validate monitoring requires conditions
@@ -348,6 +349,22 @@ async def emergency_stop(
     scheduler = get_scheduler()
     paused_count = await scheduler.pause_all_tasks()
     return {"paused_count": paused_count}
+
+
+@router.post("/run-now-local", response_model=dict)
+async def run_task_now_local(request: Request) -> dict:
+    """Run the active task. Localhost-only, no auth (for tray menu)."""
+    client_host = request.client.host if request.client else None
+    if client_host not in ("127.0.0.1", "::1"):
+        raise HTTPException(status_code=403, detail="Localhost only")
+    task = await AgentTask.find_one(AgentTask.status == TaskStatus.ACTIVE)
+    if not task:
+        raise HTTPException(status_code=404, detail="No active task")
+    from app.agent.task_scheduler import get_scheduler
+
+    scheduler = get_scheduler()
+    await scheduler.run_task_now(str(task.id))
+    return {"message": f"Task '{task.name}' started"}
 
 
 @router.get("/{task_id}", response_model=TaskResponse)

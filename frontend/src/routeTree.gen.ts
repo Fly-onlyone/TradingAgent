@@ -20,6 +20,7 @@ import { Route as TasksIndexRouteImport } from './routes/tasks/index'
 import { Route as StrategiesIndexRouteImport } from './routes/strategies/index'
 import { Route as KnowledgeIndexRouteImport } from './routes/knowledge/index'
 import { Route as StrategiesCreateRouteImport } from './routes/strategies/create'
+import { Route as AuthVerifyEmailRouteImport } from './routes/auth/verify-email'
 import { Route as AuthResetPasswordRouteImport } from './routes/auth/reset-password'
 import { Route as AuthRegisterRouteImport } from './routes/auth/register'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
@@ -82,6 +83,11 @@ const StrategiesCreateRoute = StrategiesCreateRouteImport.update({
   path: '/strategies/create',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthVerifyEmailRoute = AuthVerifyEmailRouteImport.update({
+  id: '/auth/verify-email',
+  path: '/auth/verify-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthResetPasswordRoute = AuthResetPasswordRouteImport.update({
   id: '/auth/reset-password',
   path: '/auth/reset-password',
@@ -126,6 +132,7 @@ export interface FileRoutesByFullPath {
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
+  '/auth/verify-email': typeof AuthVerifyEmailRoute
   '/strategies/create': typeof StrategiesCreateRoute
   '/knowledge/': typeof KnowledgeIndexRoute
   '/strategies/': typeof StrategiesIndexRoute
@@ -145,6 +152,7 @@ export interface FileRoutesByTo {
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
+  '/auth/verify-email': typeof AuthVerifyEmailRoute
   '/strategies/create': typeof StrategiesCreateRoute
   '/knowledge': typeof KnowledgeIndexRoute
   '/strategies': typeof StrategiesIndexRoute
@@ -165,6 +173,7 @@ export interface FileRoutesById {
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
+  '/auth/verify-email': typeof AuthVerifyEmailRoute
   '/strategies/create': typeof StrategiesCreateRoute
   '/knowledge/': typeof KnowledgeIndexRoute
   '/strategies/': typeof StrategiesIndexRoute
@@ -186,6 +195,7 @@ export interface FileRouteTypes {
     | '/auth/login'
     | '/auth/register'
     | '/auth/reset-password'
+    | '/auth/verify-email'
     | '/strategies/create'
     | '/knowledge/'
     | '/strategies/'
@@ -205,6 +215,7 @@ export interface FileRouteTypes {
     | '/auth/login'
     | '/auth/register'
     | '/auth/reset-password'
+    | '/auth/verify-email'
     | '/strategies/create'
     | '/knowledge'
     | '/strategies'
@@ -224,6 +235,7 @@ export interface FileRouteTypes {
     | '/auth/login'
     | '/auth/register'
     | '/auth/reset-password'
+    | '/auth/verify-email'
     | '/strategies/create'
     | '/knowledge/'
     | '/strategies/'
@@ -244,6 +256,7 @@ export interface RootRouteChildren {
   AuthLoginRoute: typeof AuthLoginRoute
   AuthRegisterRoute: typeof AuthRegisterRoute
   AuthResetPasswordRoute: typeof AuthResetPasswordRoute
+  AuthVerifyEmailRoute: typeof AuthVerifyEmailRoute
   StrategiesCreateRoute: typeof StrategiesCreateRoute
   KnowledgeIndexRoute: typeof KnowledgeIndexRoute
   StrategiesIndexRoute: typeof StrategiesIndexRoute
@@ -330,6 +343,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StrategiesCreateRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/verify-email': {
+      id: '/auth/verify-email'
+      path: '/auth/verify-email'
+      fullPath: '/auth/verify-email'
+      preLoaderRoute: typeof AuthVerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/reset-password': {
       id: '/auth/reset-password'
       path: '/auth/reset-password'
@@ -388,6 +408,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthLoginRoute: AuthLoginRoute,
   AuthRegisterRoute: AuthRegisterRoute,
   AuthResetPasswordRoute: AuthResetPasswordRoute,
+  AuthVerifyEmailRoute: AuthVerifyEmailRoute,
   StrategiesCreateRoute: StrategiesCreateRoute,
   KnowledgeIndexRoute: KnowledgeIndexRoute,
   StrategiesIndexRoute: StrategiesIndexRoute,
