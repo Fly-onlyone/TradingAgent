@@ -44,12 +44,16 @@ async def get_user_from_token(token: str) -> User | None:
         )
 
     try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        payload = jwt.decode(
+            token, settings.secret_key, algorithms=[settings.algorithm]
+        )
         email = payload.get("sub")
         if email:
             user = await User.find_one(User.email == email)
             if user and is_token_revoked_by_password_change(user, payload):
-                logger.warning("WebSocket token invalidated by password change for %s", email)
+                logger.warning(
+                    "WebSocket token invalidated by password change for %s", email
+                )
                 return None
             return user
     except JWTError as e:
@@ -135,6 +139,58 @@ async def agent_chat_websocket(
         """Callback for intermediate agent events (thinking, tool_call)."""
         await manager.send_personal(websocket, event)
 
+    async def _send_and_persist_assistant_message(
+        content: str,
+        tool_calls: list[dict],
+        thinking_content: str | None,
+        turn_tokens: int,
+    ) -> None:
+        """Send and save the assistant message for the current turn."""
+        if not content.strip():
+            return
+
+        await manager.send_personal(
+            websocket,
+            {
+                "type": "message",
+                "data": {
+                    "id": str(uuid.uuid4()),
+                    "role": "assistant",
+                    "content": content,
+                    "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+                    "toolCalls": tool_calls if tool_calls else None,
+                    "thinkingContent": thinking_content,
+                },
+            },
+        )
+
+        await manager.send_personal(
+            websocket,
+            {
+                "type": "usage",
+                "data": {
+                    "inputTokens": agent.input_tokens,
+                    "outputTokens": agent.output_tokens,
+                    "totalTokens": session.total_tokens + turn_tokens,
+                },
+            },
+        )
+
+        with sentry_sdk.start_span(
+            op="db.write",
+            description="save assistant message",
+        ):
+            session.add_message(
+                role="assistant",
+                content=content,
+                tool_calls=tool_calls if tool_calls else None,
+                thinking_content=thinking_content,
+                tokens=turn_tokens,
+            )
+            if not session.title:
+                session.title = session.generate_title()
+            await session.save()
+
     try:
         # Validate auth configuration before creating agent
         with sentry_sdk.start_span(
@@ -148,9 +204,14 @@ async def agent_chat_websocket(
                 from app.api.v1.settings import _check_cli_login
 
                 if not _check_cli_login():
-                    auth_error = "Claude CLI not logged in. Use the gear icon to log in."
+                    auth_error = (
+                        "Claude CLI not logged in. Use the gear icon to log in."
+                    )
             elif app_settings.agent_auth_mode == AgentAuthMode.API_KEY:
-                if not app_settings.get_agent_api_key() and not settings.anthropic_api_key:
+                if (
+                    not app_settings.get_agent_api_key()
+                    and not settings.anthropic_api_key
+                ):
                     auth_error = "No API key configured. Use the gear icon to add one."
 
         if auth_error:
@@ -211,52 +272,24 @@ async def agent_chat_websocket(
                     thinking_content = agent.thinking_content or None
                     turn_tokens = agent.input_tokens + agent.output_tokens
 
-                    await manager.send_personal(
-                        websocket,
-                        {
-                            "type": "message",
-                            "data": {
-                                "id": str(uuid.uuid4()),
-                                "role": "assistant",
-                                "content": response,
-                                "timestamp": int(datetime.now(UTC).timestamp() * 1000),
-                                "toolCalls": tool_calls if tool_calls else None,
-                                "thinkingContent": thinking_content,
-                            },
-                        },
+                    await _send_and_persist_assistant_message(
+                        content=response,
+                        tool_calls=tool_calls,
+                        thinking_content=thinking_content,
+                        turn_tokens=turn_tokens,
                     )
-
-                    # Send token usage update
-                    await manager.send_personal(
-                        websocket,
-                        {
-                            "type": "usage",
-                            "data": {
-                                "inputTokens": agent.input_tokens,
-                                "outputTokens": agent.output_tokens,
-                                "totalTokens": session.total_tokens + turn_tokens,
-                            },
-                        },
-                    )
-
-                    with sentry_sdk.start_span(
-                        op="db.write",
-                        description="save assistant message",
-                    ):
-                        session.add_message(
-                            role="assistant",
-                            content=response,
-                            tool_calls=tool_calls if tool_calls else None,
-                            thinking_content=thinking_content,
-                            tokens=turn_tokens,
-                        )
-                        if not session.title:
-                            session.title = session.generate_title()
-                        await session.save()
 
             except asyncio.CancelledError:
-                # Task was cancelled via cancel request. The cancel_ack is sent
-                # by the cancel handler in the receive loop, so just re-raise.
+                partial_response = agent.partial_response or ""
+                if partial_response:
+                    await _send_and_persist_assistant_message(
+                        content=partial_response,
+                        tool_calls=agent.tool_calls or [],
+                        thinking_content=agent.thinking_content or None,
+                        turn_tokens=agent.input_tokens + agent.output_tokens,
+                    )
+
+                # The cancel_ack is sent by the cancel handler in the receive loop.
                 raise
             except Exception as e:
                 sentry_sdk.capture_exception(e)

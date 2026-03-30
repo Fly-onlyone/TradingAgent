@@ -126,7 +126,7 @@ function StatsSection({
 
 function AgentStatusCard() {
     const agentStatus = useAgentStore((s) => s.status);
-    const isThinking = useAgentStore((s) => s.isThinking);
+    const isThinking = useAgentStore((s) => Boolean(s.activeRunSessionId));
     const agentConnected =
         agentStatus === "connected" ||
         agentStatus === "thinking" ||

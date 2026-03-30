@@ -87,6 +87,7 @@ class TradingAgent:
         self._client: ClaudeSDKClient | None = None
         self._tool_calls_this_turn: list[dict] = []
         self._thinking_content_this_turn: str = ""
+        self._partial_response_this_turn: str = ""
         self._cancel_event = asyncio.Event()
 
     async def connect(self) -> None:
@@ -179,6 +180,7 @@ class TradingAgent:
         self.reset_cancel()
         self._tool_calls_this_turn = []
         self._thinking_content_this_turn = ""
+        self._partial_response_this_turn = ""
         self._input_tokens = 0
         self._output_tokens = 0
 
@@ -238,6 +240,8 @@ class TradingAgent:
                         delta = event.get("delta", {})
                         if delta.get("type") == "text_delta":
                             text_chunk = delta.get("text", "")
+                            if text_chunk:
+                                self._partial_response_this_turn += text_chunk
                             if text_chunk and on_event:
                                 await on_event(
                                     {
@@ -281,7 +285,12 @@ class TradingAgent:
                 [tc["name"] for tc in self._tool_calls_this_turn],
             )
 
-        return "".join(final_text_parts)
+        final_response = "".join(final_text_parts).strip()
+        if final_response:
+            self._partial_response_this_turn = final_response
+            return final_response
+
+        return self._partial_response_this_turn.strip()
 
     @property
     def tool_calls(self) -> list[dict]:
@@ -292,6 +301,11 @@ class TradingAgent:
     def thinking_content(self) -> str:
         """Get accumulated thinking content from the most recent turn."""
         return self._thinking_content_this_turn.strip()
+
+    @property
+    def partial_response(self) -> str:
+        """Get the streamed assistant text accumulated for the most recent turn."""
+        return self._partial_response_this_turn.strip()
 
     @property
     def input_tokens(self) -> int:

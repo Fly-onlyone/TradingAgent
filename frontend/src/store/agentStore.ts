@@ -1,33 +1,29 @@
 /**
- * Agent Chat Store with Session Management
+ * Agent chat store with per-session runtime state.
  */
 
 import {create} from "zustand";
 import {persist} from "zustand/middleware";
 import type {AgentDecision, AgentMessage, ToolCall,} from "@/api/websocket/useAgentSocket";
-import type {
-    AgentDecisionSummary,
-    AgentSession,
-    AgentStatus,
-    DecisionFilters,
-    DecisionStatus,
-    SessionsByDateGroup,
-} from "@/types/session";
+import type {AgentDecisionSummary, AgentStatus, DecisionFilters, DecisionStatus,} from "@/types/session";
 
-interface AgentState {
-    // Session management
-    currentSessionId: string | null;
-    sessionGroups: SessionsByDateGroup[];
-    isLoadingSessions: boolean;
-
-    // Chat
+interface SessionRuntimeState {
     messages: AgentMessage[];
     toolCalls: ToolCall[];
     currentTurnToolCalls: ToolCall[];
     thinkingContent: string;
     streamingText: string;
+    isThinking: boolean;
+    isCancelling: boolean;
+    lastDecision: AgentDecision | null;
+    hasLocalUpdates: boolean;
+}
 
-    // Decisions
+interface AgentState {
+    selectedSessionId: string | null;
+    activeRunSessionId: string | null;
+    sessionStates: Record<string, SessionRuntimeState>;
+
     decisions: AgentDecisionSummary[];
     decisionSymbols: string[];
     decisionFilters: DecisionFilters;
@@ -35,33 +31,28 @@ interface AgentState {
     hasMoreDecisions: boolean;
     pendingDecisionsCount: number;
 
-    // Status
     status: AgentStatus;
-    isThinking: boolean;
-    isCancelling: boolean;
-    lastDecision: AgentDecision | null;
 
-    // UI preferences
     showThinkingContent: boolean;
 
-    // Session actions
-    setCurrentSessionId: (sessionId: string | null) => void;
-    setSessionGroups: (groups: SessionsByDateGroup[]) => void;
-    setIsLoadingSessions: (loading: boolean) => void;
-    addSession: (session: AgentSession) => void;
+    setSelectedSessionId: (sessionId: string | null) => void;
+    setActiveRunSessionId: (sessionId: string | null) => void;
+    createDraftSession: () => string;
+    replaceSessionId: (oldSessionId: string, newSessionId: string) => void;
     removeSession: (sessionId: string) => void;
-    updateSessionTitle: (sessionId: string, title: string) => void;
+    hydrateSessionMessages: (sessionId: string, messages: AgentMessage[]) => void;
+    addMessage: (sessionId: string, message: AgentMessage) => void;
+    addToolCall: (sessionId: string, toolCall: ToolCall) => void;
+    updateToolCallResult: (
+        sessionId: string,
+        toolCallId: string,
+        result: unknown,
+    ) => void;
+    appendThinkingContent: (sessionId: string, delta: string) => void;
+    appendStreamingText: (sessionId: string, delta: string) => void;
+    setThinking: (sessionId: string, thinking: boolean) => void;
+    setCancelling: (sessionId: string, value: boolean) => void;
 
-    // Chat actions
-    addMessage: (message: AgentMessage) => void;
-    setMessages: (messages: AgentMessage[]) => void;
-    clearMessages: () => void;
-    addToolCall: (toolCall: ToolCall) => void;
-    updateToolCallResult: (toolCallId: string, result: unknown) => void;
-    setThinkingContent: (content: string) => void;
-    appendStreamingText: (delta: string) => void;
-
-    // Decision actions
     setDecisions: (decisions: AgentDecisionSummary[]) => void;
     appendDecisions: (decisions: AgentDecisionSummary[]) => void;
     setDecisionSymbols: (symbols: string[]) => void;
@@ -71,13 +62,7 @@ interface AgentState {
     setPendingDecisionsCount: (count: number) => void;
     updateDecisionStatus: (decisionId: string, status: DecisionStatus) => void;
 
-    // Status actions
     updateStatus: (status: string) => void;
-    setThinking: (thinking: boolean) => void;
-    setCancelling: (v: boolean) => void;
-    setLastDecision: (decision: AgentDecision | null) => void;
-
-    // UI preference actions
     toggleThinkingContent: () => void;
 }
 
@@ -85,22 +70,43 @@ const MAX_MESSAGES = 100;
 const MAX_TOOL_CALLS = 200;
 const MAX_DECISIONS = 100;
 
+function createEmptySessionState(): SessionRuntimeState {
+    return {
+        messages: [],
+        toolCalls: [],
+        currentTurnToolCalls: [],
+        thinkingContent: "",
+        streamingText: "",
+        isThinking: false,
+        isCancelling: false,
+        lastDecision: null,
+        hasLocalUpdates: false,
+    };
+}
+
+function mergeSessionState(
+    existing: SessionRuntimeState | undefined,
+    next: SessionRuntimeState,
+): SessionRuntimeState {
+    if (!existing) {
+        return next;
+    }
+
+    return {
+        ...next,
+        toolCalls: [...existing.toolCalls, ...next.toolCalls].slice(-MAX_TOOL_CALLS),
+        lastDecision: next.lastDecision ?? existing.lastDecision,
+        hasLocalUpdates: existing.hasLocalUpdates || next.hasLocalUpdates,
+    };
+}
+
 export const useAgentStore = create<AgentState>()(
     persist(
         (set) => ({
-            // Session management
-            currentSessionId: null,
-            sessionGroups: [],
-            isLoadingSessions: false,
+            selectedSessionId: null,
+            activeRunSessionId: null,
+            sessionStates: {},
 
-            // Chat
-            messages: [],
-            toolCalls: [],
-            currentTurnToolCalls: [],
-            thinkingContent: "",
-            streamingText: "",
-
-            // Decisions
             decisions: [],
             decisionSymbols: [],
             decisionFilters: {},
@@ -108,143 +114,294 @@ export const useAgentStore = create<AgentState>()(
             hasMoreDecisions: false,
             pendingDecisionsCount: 0,
 
-            // Status
             status: "disconnected",
-            isThinking: false,
-            isCancelling: false,
-            lastDecision: null,
 
-            // UI preferences
             showThinkingContent: true,
 
-            // Session actions
-            setCurrentSessionId: (sessionId) => set({currentSessionId: sessionId}),
+            setSelectedSessionId: (selectedSessionId) => set({selectedSessionId}),
 
-            setSessionGroups: (groups) => set({sessionGroups: groups}),
+            setActiveRunSessionId: (activeRunSessionId) => set({activeRunSessionId}),
 
-            setIsLoadingSessions: (loading) => set({isLoadingSessions: loading}),
+            createDraftSession: () => {
+                const sessionId = `draft-${crypto.randomUUID()}`;
+                set((state) => ({
+                    selectedSessionId: sessionId,
+                    activeRunSessionId: sessionId,
+                    sessionStates: {
+                        ...state.sessionStates,
+                        [sessionId]: createEmptySessionState(),
+                    },
+                }));
+                return sessionId;
+            },
 
-            addSession: (session) =>
+            replaceSessionId: (oldSessionId, newSessionId) =>
                 set((state) => {
-                    // Find or create today's group
-                    const today = new Date().toISOString().split("T")[0];
-                    const updatedGroups = [...state.sessionGroups];
-
-                    const todayGroupIndex = updatedGroups.findIndex(
-                        (g) => g.date === today,
-                    );
-                    if (todayGroupIndex >= 0) {
-                        // Add to existing today group at the beginning
-                        updatedGroups[todayGroupIndex] = {
-                            ...updatedGroups[todayGroupIndex],
-                            sessions: [session, ...updatedGroups[todayGroupIndex].sessions],
-                        };
-                    } else {
-                        // Create new today group at the beginning
-                        updatedGroups.unshift({
-                            date: today,
-                            label: "Today",
-                            sessions: [session],
-                        });
+                    if (oldSessionId === newSessionId) {
+                        return {};
                     }
 
+                    const existingState = state.sessionStates[oldSessionId];
+                    const nextState = mergeSessionState(
+                        state.sessionStates[newSessionId],
+                        existingState ?? createEmptySessionState(),
+                    );
+                    const sessionStates = {...state.sessionStates};
+                    delete sessionStates[oldSessionId];
+                    sessionStates[newSessionId] = nextState;
+
                     return {
-                        sessionGroups: updatedGroups,
-                        currentSessionId: session.id,
+                        sessionStates,
+                        selectedSessionId:
+                            state.selectedSessionId === oldSessionId
+                                ? newSessionId
+                                : state.selectedSessionId,
+                        activeRunSessionId:
+                            state.activeRunSessionId === oldSessionId
+                                ? newSessionId
+                                : state.activeRunSessionId,
                     };
                 }),
 
             removeSession: (sessionId) =>
                 set((state) => {
-                    const updatedGroups = state.sessionGroups
-                        .map((group) => ({
-                            ...group,
-                            sessions: group.sessions.filter((s) => s.id !== sessionId),
-                        }))
-                        .filter((group) => group.sessions.length > 0);
+                    const sessionStates = {...state.sessionStates};
+                    delete sessionStates[sessionId];
 
                     return {
-                        sessionGroups: updatedGroups,
-                        currentSessionId:
-                            state.currentSessionId === sessionId
+                        sessionStates,
+                        selectedSessionId:
+                            state.selectedSessionId === sessionId
                                 ? null
-                                : state.currentSessionId,
-                        messages:
-                            state.currentSessionId === sessionId ? [] : state.messages,
+                                : state.selectedSessionId,
+                        activeRunSessionId:
+                            state.activeRunSessionId === sessionId
+                                ? null
+                                : state.activeRunSessionId,
+                        status:
+                            state.activeRunSessionId === sessionId
+                                ? "connected"
+                                : state.status,
                     };
                 }),
 
-            updateSessionTitle: (sessionId, title) =>
-                set((state) => ({
-                    sessionGroups: state.sessionGroups.map((group) => ({
-                        ...group,
-                        sessions: group.sessions.map((s) =>
-                            s.id === sessionId ? {...s, title} : s,
-                        ),
-                    })),
-                })),
+            hydrateSessionMessages: (sessionId, messages) =>
+                set((state) => {
+                    const existingState = state.sessionStates[sessionId];
+                    if (
+                        existingState?.hasLocalUpdates ||
+                        existingState?.isThinking ||
+                        existingState?.streamingText
+                    ) {
+                        return {};
+                    }
 
-            // Chat actions
-            addMessage: (message) =>
-                set((state) => ({
-                    messages: [...state.messages, message].slice(-MAX_MESSAGES),
-                    lastDecision: message.decision || state.lastDecision,
-                    isThinking: false,
-                    isCancelling: false,
-                    streamingText: "",
-                    status: state.isThinking ? "connected" : state.status,
-                })),
-
-            setMessages: (messages) => set({messages}),
-
-            clearMessages: () =>
-                set({
-                    messages: [],
-                    toolCalls: [],
-                    lastDecision: null,
+                    return {
+                        sessionStates: {
+                            ...state.sessionStates,
+                            [sessionId]: {
+                                ...(existingState ?? createEmptySessionState()),
+                                messages,
+                                hasLocalUpdates: false,
+                            },
+                        },
+                    };
                 }),
 
-            addToolCall: (toolCall) =>
-                set((state) => ({
-                    toolCalls: [...state.toolCalls, toolCall].slice(-MAX_TOOL_CALLS),
-                    currentTurnToolCalls: [...state.currentTurnToolCalls, toolCall],
-                })),
+            addMessage: (sessionId, message) =>
+                set((state) => {
+                    const sessionState =
+                        state.sessionStates[sessionId] ?? createEmptySessionState();
 
-            updateToolCallResult: (toolCallId, result) =>
-                set((state) => ({
-                    toolCalls: state.toolCalls.map((tc) =>
-                        tc.id === toolCallId ? {...tc, result} : tc,
-                    ),
-                })),
+                    return {
+                        sessionStates: {
+                            ...state.sessionStates,
+                            [sessionId]: {
+                                ...sessionState,
+                                messages: [...sessionState.messages, message].slice(
+                                    -MAX_MESSAGES,
+                                ),
+                                lastDecision: message.decision ?? sessionState.lastDecision,
+                                isThinking: false,
+                                isCancelling: false,
+                                streamingText: "",
+                                hasLocalUpdates: true,
+                            },
+                        },
+                        status:
+                            state.activeRunSessionId === sessionId &&
+                            state.status === "thinking"
+                                ? "connected"
+                                : state.status,
+                    };
+                }),
 
-            setThinkingContent: (thinkingContent) => set({thinkingContent}),
+            addToolCall: (sessionId, toolCall) =>
+                set((state) => {
+                    const sessionState =
+                        state.sessionStates[sessionId] ?? createEmptySessionState();
 
-            appendStreamingText: (delta) =>
-                set((state) => ({streamingText: state.streamingText + delta})),
+                    return {
+                        sessionStates: {
+                            ...state.sessionStates,
+                            [sessionId]: {
+                                ...sessionState,
+                                toolCalls: [...sessionState.toolCalls, toolCall].slice(
+                                    -MAX_TOOL_CALLS,
+                                ),
+                                currentTurnToolCalls: [
+                                    ...sessionState.currentTurnToolCalls,
+                                    toolCall,
+                                ],
+                                hasLocalUpdates: true,
+                            },
+                        },
+                    };
+                }),
 
-            // Decision actions
+            updateToolCallResult: (sessionId, toolCallId, result) =>
+                set((state) => {
+                    const sessionState = state.sessionStates[sessionId];
+                    if (!sessionState) {
+                        return {};
+                    }
+
+                    return {
+                        sessionStates: {
+                            ...state.sessionStates,
+                            [sessionId]: {
+                                ...sessionState,
+                                toolCalls: sessionState.toolCalls.map((toolCall) =>
+                                    toolCall.id === toolCallId
+                                        ? {
+                                            ...toolCall,
+                                            result,
+                                        }
+                                        : toolCall,
+                                ),
+                            },
+                        },
+                    };
+                }),
+
+            appendThinkingContent: (sessionId, delta) =>
+                set((state) => {
+                    const sessionState =
+                        state.sessionStates[sessionId] ?? createEmptySessionState();
+
+                    return {
+                        sessionStates: {
+                            ...state.sessionStates,
+                            [sessionId]: {
+                                ...sessionState,
+                                thinkingContent: `${sessionState.thinkingContent}${delta}`,
+                                hasLocalUpdates: true,
+                            },
+                        },
+                    };
+                }),
+
+            appendStreamingText: (sessionId, delta) =>
+                set((state) => {
+                    const sessionState =
+                        state.sessionStates[sessionId] ?? createEmptySessionState();
+
+                    return {
+                        sessionStates: {
+                            ...state.sessionStates,
+                            [sessionId]: {
+                                ...sessionState,
+                                streamingText: `${sessionState.streamingText}${delta}`,
+                                hasLocalUpdates: true,
+                            },
+                        },
+                    };
+                }),
+
+            setThinking: (sessionId, isThinking) =>
+                set((state) => {
+                    const sessionState =
+                        state.sessionStates[sessionId] ?? createEmptySessionState();
+                    const shouldResetTurn = isThinking && !sessionState.isThinking;
+
+                    return {
+                        sessionStates: {
+                            ...state.sessionStates,
+                            [sessionId]: {
+                                ...sessionState,
+                                isThinking,
+                                isCancelling: !isThinking ? false : sessionState.isCancelling,
+                                currentTurnToolCalls: shouldResetTurn
+                                    ? []
+                                    : sessionState.currentTurnToolCalls,
+                                thinkingContent: shouldResetTurn
+                                    ? ""
+                                    : sessionState.thinkingContent,
+                                streamingText: shouldResetTurn
+                                    ? ""
+                                    : sessionState.streamingText,
+                                hasLocalUpdates: sessionState.hasLocalUpdates || isThinking,
+                            },
+                        },
+                        activeRunSessionId: isThinking
+                            ? sessionId
+                            : state.activeRunSessionId === sessionId
+                                ? null
+                                : state.activeRunSessionId,
+                        status: isThinking
+                            ? "thinking"
+                            : state.status === "thinking"
+                                ? "connected"
+                                : state.status,
+                    };
+                }),
+
+            setCancelling: (sessionId, isCancelling) =>
+                set((state) => {
+                    const sessionState =
+                        state.sessionStates[sessionId] ?? createEmptySessionState();
+
+                    return {
+                        sessionStates: {
+                            ...state.sessionStates,
+                            [sessionId]: {
+                                ...sessionState,
+                                isCancelling,
+                            },
+                        },
+                    };
+                }),
+
             setDecisions: (decisions) => set({decisions}),
 
             appendDecisions: (newDecisions) =>
                 set((state) => ({
-                    decisions: [...state.decisions, ...newDecisions].slice(-MAX_DECISIONS),
+                    decisions: [...state.decisions, ...newDecisions].slice(
+                        -MAX_DECISIONS,
+                    ),
                 })),
 
-            setDecisionSymbols: (symbols) => set({decisionSymbols: symbols}),
+            setDecisionSymbols: (decisionSymbols) => set({decisionSymbols}),
 
-            setDecisionFilters: (filters) => set({decisionFilters: filters}),
+            setDecisionFilters: (decisionFilters) => set({decisionFilters}),
 
-            setIsLoadingDecisions: (loading) => set({isLoadingDecisions: loading}),
+            setIsLoadingDecisions: (isLoadingDecisions) =>
+                set({isLoadingDecisions}),
 
-            setHasMoreDecisions: (hasMore) => set({hasMoreDecisions: hasMore}),
+            setHasMoreDecisions: (hasMoreDecisions) => set({hasMoreDecisions}),
 
-            setPendingDecisionsCount: (count) =>
-                set({pendingDecisionsCount: count}),
+            setPendingDecisionsCount: (pendingDecisionsCount) =>
+                set({pendingDecisionsCount}),
 
             updateDecisionStatus: (decisionId, status) =>
                 set((state) => ({
-                    decisions: state.decisions.map((d) =>
-                        d.id === decisionId ? {...d, status} : d,
+                    decisions: state.decisions.map((decision) =>
+                        decision.id === decisionId
+                            ? {
+                                ...decision,
+                                status,
+                            }
+                            : decision,
                     ),
                     pendingDecisionsCount:
                         status !== "pending"
@@ -252,35 +409,18 @@ export const useAgentStore = create<AgentState>()(
                             : state.pendingDecisionsCount,
                 })),
 
-            // Status actions
             updateStatus: (status) =>
                 set({
                     status: status as AgentStatus,
                 }),
 
-            setThinking: (isThinking) =>
-                set((state) => ({
-                    isThinking,
-                    status: isThinking ? "thinking" : "connected",
-                    // Reset isCancelling when thinking stops
-                    ...(!isThinking ? {isCancelling: false} : {}),
-                    // Reset turn state when starting a new thinking cycle
-                    ...(isThinking && !state.isThinking
-                        ? {currentTurnToolCalls: [], thinkingContent: ""}
-                        : {}),
-                })),
-
-            setCancelling: (isCancelling) => set({isCancelling}),
-
-            setLastDecision: (lastDecision) => set({lastDecision}),
-
-            // UI preference actions
             toggleThinkingContent: () =>
-                set((state) => ({showThinkingContent: !state.showThinkingContent})),
+                set((state) => ({
+                    showThinkingContent: !state.showThinkingContent,
+                })),
         }),
         {
             name: "agent-store",
-            // Only persist session-related data and UI preferences
             partialize: (state) => ({
                 showThinkingContent: state.showThinkingContent,
             }),
