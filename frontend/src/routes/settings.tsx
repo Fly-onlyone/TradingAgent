@@ -4,6 +4,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import AddIcon from "@mui/icons-material/Add";
+import AppsIcon from "@mui/icons-material/Apps";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ErrorIcon from "@mui/icons-material/Error";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
@@ -53,6 +54,7 @@ import {
 } from "@/api/endpoints/settings";
 import { AgentConfigPanel } from "@/components/agent/AgentConfigPanel";
 import { AppriseConfigCard } from "@/components/settings/AppriseConfigCard";
+import { ProcessSelectorDialog } from "@/components/settings/ProcessSelectorDialog";
 import { PageTransition } from "@/components/common/PageTransition";
 import { SaveIndicator } from "@/components/common/SaveIndicator";
 import { SectionHeader } from "@/components/common/SectionHeader";
@@ -84,6 +86,7 @@ function EmbeddingConfigCard() {
 	const isSuperuser = user?.isSuperuser ?? false;
 	const queryClient = useQueryClient();
 	const [newProcess, setNewProcess] = useState("");
+	const [processDialogOpen, setProcessDialogOpen] = useState(false);
 
 	const configQuery = useQuery({
 		queryKey: ["embedding-config"],
@@ -218,7 +221,30 @@ function EmbeddingConfigCard() {
 										>
 											Add
 										</Button>
+										<Button
+											size="small"
+											variant="outlined"
+											startIcon={<AppsIcon />}
+											onClick={() => setProcessDialogOpen(true)}
+											disabled={updateMutation.isPending}
+										>
+											Browse
+										</Button>
 									</Box>
+									<ProcessSelectorDialog
+										open={processDialogOpen}
+										onClose={() => setProcessDialogOpen(false)}
+										currentProcesses={config.gamingProcessList}
+										onSelect={(selected) => {
+											const merged = new Set([
+												...config.gamingProcessList,
+												...selected,
+											]);
+											updateMutation.mutate({
+												gamingProcessList: Array.from(merged),
+											});
+										}}
+									/>
 								</Box>
 
 								<Box>
