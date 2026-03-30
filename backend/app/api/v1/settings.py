@@ -1131,3 +1131,39 @@ async def update_autostart_config(
     await app_settings.save_with_timestamp()
     logger.info("Autostart updated (enabled=%s)", app_settings.app_autostart_enabled)
     return {"enabled": app_settings.app_autostart_enabled}
+
+
+# ── Native Notification Configuration ──────────────────────────
+
+
+class NativeNotificationConfigResponse(BaseModel):
+    enabled: bool
+
+
+class NativeNotificationConfigUpdate(BaseModel):
+    enabled: bool
+
+
+@router.get("/notifications/native", response_model=NativeNotificationConfigResponse)
+async def get_native_notification_config(
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Get current native notification configuration."""
+    app_settings = await AppSettings.get_instance()
+    return {"enabled": app_settings.native_notifications_enabled}
+
+
+@router.put("/notifications/native", response_model=NativeNotificationConfigResponse)
+async def update_native_notification_config(
+    body: NativeNotificationConfigUpdate,
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Update native notification configuration."""
+    app_settings = await AppSettings.get_instance()
+    app_settings.native_notifications_enabled = body.enabled
+    await app_settings.save_with_timestamp()
+    logger.info(
+        "Native notifications updated (enabled=%s)",
+        app_settings.native_notifications_enabled,
+    )
+    return {"enabled": app_settings.native_notifications_enabled}

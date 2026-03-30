@@ -5,11 +5,28 @@
 
 import { isTauri } from "./tauriEnv";
 
+let notificationsEnabled = true;
+
+/** Fetch the native notification setting from the API and cache it locally. */
+export async function refreshNativeNotificationSetting(): Promise<void> {
+	try {
+		const { nativeNotificationApi } = await import(
+			"@/api/endpoints/settings"
+		);
+		const config = await nativeNotificationApi.getNativeNotificationConfig();
+		notificationsEnabled = config.enabled;
+	} catch {
+		// Default to enabled if we can't reach the API
+		notificationsEnabled = true;
+	}
+}
+
 export async function sendNativeNotification(
 	title: string,
 	body: string,
 ): Promise<void> {
 	if (!isTauri()) return;
+	if (!notificationsEnabled) return;
 
 	try {
 		const { isPermissionGranted, requestPermission, sendNotification } =

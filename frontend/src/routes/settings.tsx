@@ -46,7 +46,11 @@ import type {
 	ExchangeConfigUpdate,
 	SessionRetentionConfigUpdate,
 } from "@/api/endpoints/settings";
-import { autostartApi, settingsApi } from "@/api/endpoints/settings";
+import {
+	autostartApi,
+	nativeNotificationApi,
+	settingsApi,
+} from "@/api/endpoints/settings";
 import { AgentConfigPanel } from "@/components/agent/AgentConfigPanel";
 import { PageTransition } from "@/components/common/PageTransition";
 import { SaveIndicator } from "@/components/common/SaveIndicator";
@@ -58,6 +62,7 @@ import { useZoomAwareMenu } from "@/hooks/useZoomAwareMenu";
 import { useAuthStore } from "@/store/authStore";
 import { notify, useUIStore } from "@/store/uiStore";
 import { getErrorMessage } from "@/utils/errors";
+import { refreshNativeNotificationSetting } from "@/utils/nativeNotifications";
 import {
 	type ChangePasswordInput,
 	changePasswordSchema,
@@ -1703,7 +1708,37 @@ function DesktopCard() {
 		},
 	});
 
+	const notifQuery = useQuery({
+		queryKey: ["native-notification-config"],
+		queryFn: () => nativeNotificationApi.getNativeNotificationConfig(),
+		enabled: isSuperuser || import.meta.env.DEV,
+		staleTime: 60_000,
+	});
+
+	const notifMutation = useMutation({
+		mutationFn: (enabled: boolean) =>
+			nativeNotificationApi.updateNativeNotificationConfig(enabled),
+		onSuccess: (data) => {
+			queryClient.invalidateQueries({
+				queryKey: ["native-notification-config"],
+			});
+			refreshNativeNotificationSetting();
+			notify.success(
+				`Desktop notifications ${data.enabled ? "enabled" : "disabled"}`,
+			);
+		},
+		onError: (error) => {
+			notify.error(
+				"Failed to update notification setting",
+				getErrorMessage(error),
+			);
+		},
+	});
+
 	if (!isSuperuser && !import.meta.env.DEV) return null;
+
+	const isLoading = configQuery.isLoading || notifQuery.isLoading;
+	const hasError = configQuery.error || notifQuery.error;
 
 	return (
 		<Card sx={{ mb: 3 }}>
@@ -1712,31 +1747,56 @@ function DesktopCard() {
 					Desktop
 				</Typography>
 
-				{configQuery.isLoading ? (
+				{isLoading ? (
 					<Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
 						<CircularProgress size={24} />
 					</Box>
-				) : configQuery.error ? (
-					<Alert severity="error">Failed to load autostart configuration</Alert>
-				) : configQuery.data ? (
-					<Box
-						sx={{
-							display: "flex",
-							alignItems: "center",
-							justifyContent: "space-between",
-						}}
-					>
-						<Box>
-							<Typography variant="body2">Start on login</Typography>
-							<Typography variant="caption" color="text.secondary">
-								Automatically launch when you sign in to Windows
-							</Typography>
+				) : hasError ? (
+					<Alert severity="error">
+						Failed to load desktop configuration
+					</Alert>
+				) : configQuery.data && notifQuery.data ? (
+					<Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+						<Box
+							sx={{
+								display: "flex",
+								alignItems: "center",
+								justifyContent: "space-between",
+							}}
+						>
+							<Box>
+								<Typography variant="body2">Start on login</Typography>
+								<Typography variant="caption" color="text.secondary">
+									Automatically launch when you sign in to Windows
+								</Typography>
+							</Box>
+							<Switch
+								checked={configQuery.data.enabled}
+								onChange={(_, checked) => updateMutation.mutate(checked)}
+								disabled={updateMutation.isPending}
+							/>
 						</Box>
-						<Switch
-							checked={configQuery.data.enabled}
-							onChange={(_, checked) => updateMutation.mutate(checked)}
-							disabled={updateMutation.isPending}
-						/>
+						<Box
+							sx={{
+								display: "flex",
+								alignItems: "center",
+								justifyContent: "space-between",
+							}}
+						>
+							<Box>
+								<Typography variant="body2">
+									Desktop Notifications
+								</Typography>
+								<Typography variant="caption" color="text.secondary">
+									Show native toast notifications for agent events
+								</Typography>
+							</Box>
+							<Switch
+								checked={notifQuery.data.enabled}
+								onChange={(_, checked) => notifMutation.mutate(checked)}
+								disabled={notifMutation.isPending}
+							/>
+						</Box>
 					</Box>
 				) : null}
 			</CardContent>
