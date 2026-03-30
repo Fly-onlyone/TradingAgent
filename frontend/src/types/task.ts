@@ -7,6 +7,7 @@ export type TaskStatus = "active" | "paused" | "completed" | "failed";
 export type RiskLevel = "conservative" | "moderate" | "aggressive";
 export type AgentMode = "auto" | "ask";
 export type TaskModificationMode = "disabled" | "auto" | "ask";
+export type HoldingTerm = "short" | "medium" | "long";
 
 export type MonitoringConditionType =
 	| "price_above"
@@ -50,6 +51,7 @@ export interface AgentTask {
 	// Trading parameters
 	symbols: string[];
 	riskLevel: RiskLevel;
+	holdingTerm?: HoldingTerm;
 	agentMode: AgentMode;
 	taskModificationMode: TaskModificationMode;
 	maxPositionSize?: number;
@@ -84,6 +86,7 @@ export interface TaskCreate {
 	timezone?: string;
 	symbols: string[];
 	riskLevel: RiskLevel;
+	holdingTerm?: HoldingTerm;
 	agentMode: AgentMode;
 	taskModificationMode?: TaskModificationMode;
 	maxPositionSize?: number;
@@ -103,6 +106,7 @@ export interface TaskUpdate {
 	timezone?: string;
 	symbols?: string[];
 	riskLevel?: RiskLevel;
+	holdingTerm?: HoldingTerm;
 	agentMode?: AgentMode;
 	taskModificationMode?: TaskModificationMode;
 	maxPositionSize?: number;
@@ -159,6 +163,16 @@ export const RISK_LEVEL_CONFIG: Record<
 		description: "5-10% risk per trade",
 		color: "#f44336",
 	},
+};
+
+// Holding term configurations
+export const HOLDING_TERM_CONFIG: Record<
+	HoldingTerm,
+	{ label: string; description: string }
+> = {
+	short: { label: "Short-term", description: "< 7 days" },
+	medium: { label: "Medium-term", description: "7-30 days" },
+	long: { label: "Long-term", description: "> 30 days" },
 };
 
 // Agent mode configurations
