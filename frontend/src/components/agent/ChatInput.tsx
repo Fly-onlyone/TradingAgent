@@ -41,17 +41,21 @@ function capitalize(s: string): string {
 
 /** Map model value to short display label */
 function modelDisplayLabel(model: string): string {
+	if (model.includes("1m")) {
+		return model.includes("opus") ? "Opus 1M" : "Sonnet 1M";
+	}
 	if (model.includes("opus")) return "Opus";
 	if (model.includes("sonnet")) return "Sonnet";
-	if (model.includes("haiku")) return "Haiku";
 	return capitalize(model);
 }
 
 /** Dot color per model family */
 function modelDotColor(model: string): string {
+	if (model.includes("1m")) {
+		return model.includes("opus") ? "#e879f9" : "#fbbf24";
+	}
 	if (model.includes("opus")) return "#c084fc";
 	if (model.includes("sonnet")) return "#f59e0b";
-	if (model.includes("haiku")) return "#22d3ee";
 	return "#a78bfa";
 }
 
@@ -72,9 +76,9 @@ function effortDotColor(effort: string): string {
 
 /** Context window size per model family (approximate) */
 function contextWindowSize(model: string): number {
+	if (model.includes("1m")) return 1_000_000;
 	if (model.includes("opus")) return 200_000;
 	if (model.includes("sonnet")) return 200_000;
-	if (model.includes("haiku")) return 200_000;
 	return 200_000;
 }
 
