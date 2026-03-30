@@ -8,7 +8,7 @@ from enum import Enum
 from typing import Any, ClassVar
 
 from beanie import Document
-from pydantic import Field
+from pydantic import Field, model_validator
 from pymongo import ASCENDING, IndexModel
 from pymongo.errors import DuplicateKeyError
 
@@ -87,6 +87,14 @@ class AppSettings(Document):
     auto_discover_last_run_at: datetime | None = None
 
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_model(cls, data: Any) -> Any:
+        """Silently migrate removed 'haiku' model to 'sonnet'."""
+        if isinstance(data, dict) and data.get("agent_model") == "haiku":
+            data["agent_model"] = "sonnet"
+        return data
 
     class Settings:
         name = "app_settings"

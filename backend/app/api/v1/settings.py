@@ -167,33 +167,36 @@ def _get_agent_sdk_model_aliases() -> list[str]:
 DEFAULT_MODEL_BY_FAMILY = {
     "sonnet": "claude-sonnet-4-6",
     "opus": "claude-opus-4-6",
-    "haiku": "claude-haiku-4-5-20251001",
+    "sonnet-1m": "claude-sonnet-4-6",
+    "opus-1m": "claude-opus-4-6",
 }
 
 MODEL_ALIAS_TO_NAME = {
     "sonnet": "Claude Sonnet",
     "opus": "Claude Opus",
-    "haiku": "Claude Haiku",
+    "sonnet-1m": "Claude Sonnet 4 (1M)",
+    "opus-1m": "Claude Opus 4 (1M)",
 }
 
 MODEL_ALIAS_TO_FAMILY = {
     "sonnet": "sonnet",
     "opus": "opus",
-    "haiku": "haiku",
+    "sonnet-1m": "sonnet-1m",
+    "opus-1m": "opus-1m",
     "claude-sonnet-4-5": "sonnet",
     "claude-sonnet-4-6": "sonnet",
     "claude-opus-4-5": "opus",
     "claude-opus-4-6": "opus",
-    "claude-haiku-4-5": "haiku",
 }
 
 FAMILY_TO_API_MODEL = {
     "sonnet": "claude-sonnet-4-6",
     "opus": "claude-opus-4-6",
-    "haiku": "claude-haiku-4-5",
+    "sonnet-1m": "claude-sonnet-4-6",
+    "opus-1m": "claude-opus-4-6",
 }
 
-MODEL_FAMILY_ORDER = ("sonnet", "opus", "haiku")
+MODEL_FAMILY_ORDER = ("sonnet", "opus", "sonnet-1m", "opus-1m")
 
 
 def _get_supported_model_families() -> tuple[str, ...]:
@@ -229,7 +232,7 @@ def _extract_model_version(model_id: str) -> str | None:
 
 
 def _normalize_to_family(model: str) -> str:
-    """Normalize any model string to its family alias (sonnet/opus/haiku)."""
+    """Normalize any model string to its family alias (sonnet/opus/sonnet-1m/opus-1m)."""
     family = MODEL_ALIAS_TO_FAMILY.get(model.strip().lower())
     if family:
         return family
