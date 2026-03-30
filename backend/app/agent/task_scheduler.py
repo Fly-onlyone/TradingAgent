@@ -1098,9 +1098,7 @@ class AgentTaskScheduler:
             f"Max Risk={risk_config['max_risk_percent']}%, "
             f"Max Position={task.max_position_size or 'default'}"
         )
-        sections.append(
-            f"Holding Term: {task.holding_term.value} — {holding_instruction}"
-        )
+        sections.append(f"Holding Term: {task.holding_term.value} — {holding_instruction}")
         sections.append(
             "\nBased on all specialist analyses above, provide your final recommendation."
         )
@@ -1184,8 +1182,7 @@ Provide:
                 "Target holding periods under 7 days."
             ),
             HoldingTerm.MEDIUM: (
-                "Focus on swing trading and trend following. "
-                "Target holding periods of 7-30 days."
+                "Focus on swing trading and trend following. Target holding periods of 7-30 days."
             ),
             HoldingTerm.LONG: (
                 "Focus on fundamental analysis and accumulation. "

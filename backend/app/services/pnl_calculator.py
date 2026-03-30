@@ -77,9 +77,7 @@ def order_to_trade_pnl(order: Order) -> TradePnL:
         entry_time=order.filled_at or order.created_at,
         exit_time=order.closed_at,
         status=order.trade_status.value,
-        related_order_id=(
-            str(order.related_order_id) if order.related_order_id else None
-        ),
+        related_order_id=(str(order.related_order_id) if order.related_order_id else None),
     )
 
 
@@ -117,10 +115,7 @@ async def get_trades(
 
     # Get paginated results
     orders = (
-        await query.sort(-Order.created_at)
-        .skip((page - 1) * page_size)
-        .limit(page_size)
-        .to_list()
+        await query.sort(-Order.created_at).skip((page - 1) * page_size).limit(page_size).to_list()
     )
 
     trades = [order_to_trade_pnl(order) for order in orders]
@@ -249,9 +244,7 @@ async def get_trades_by_symbol(
         total_volume = sum(
             (o.entry_price or 0.0) * (o.filled_quantity or 0.0) for o in symbol_orders
         )
-        total_pnl_percent = (
-            (total_pnl / total_volume * 100) if total_volume > 0 else 0.0
-        )
+        total_pnl_percent = (total_pnl / total_volume * 100) if total_volume > 0 else 0.0
 
         winning = sum(1 for o in symbol_orders if (o.realized_pnl or 0.0) > 0)
         losing = sum(1 for o in symbol_orders if (o.realized_pnl or 0.0) < 0)
@@ -330,12 +323,8 @@ async def export_trades(
             for trade in trades:
                 row = trade.model_dump()
                 # Convert datetime to string
-                row["entry_time"] = (
-                    row["entry_time"].isoformat() if row["entry_time"] else ""
-                )
-                row["exit_time"] = (
-                    row["exit_time"].isoformat() if row["exit_time"] else ""
-                )
+                row["entry_time"] = row["entry_time"].isoformat() if row["entry_time"] else ""
+                row["exit_time"] = row["exit_time"].isoformat() if row["exit_time"] else ""
                 writer.writerow(row)
         return output.getvalue()
     else:
