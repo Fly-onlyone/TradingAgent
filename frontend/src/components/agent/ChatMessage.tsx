@@ -30,7 +30,7 @@ const markdownComponents = {
     td: MdTd,
     p: ({children, ...props}: React.ComponentPropsWithoutRef<"p">) => (
         <Typography
-            variant="body2"
+            variant="body1"
             component="p"
             sx={{mb: 1, "&:last-child": {mb: 0}}}
             {...props}
@@ -89,7 +89,7 @@ const markdownComponents = {
         </Box>
     ),
     li: ({children, ...props}: React.ComponentPropsWithoutRef<"li">) => (
-        <Typography variant="body2" component="li" {...props}>
+        <Typography variant="body1" component="li" {...props}>
             {children}
         </Typography>
     ),
@@ -114,7 +114,7 @@ const markdownComponents = {
                     sx={(theme) => ({
                         display: "block",
                         fontFamily: theme.trading.mono,
-                        fontSize: "0.78rem",
+                        fontSize: "0.85rem",
                         lineHeight: 1.6,
                         p: 1.5,
                         my: 1,
@@ -135,7 +135,7 @@ const markdownComponents = {
                 component="code"
                 sx={(theme) => ({
                     fontFamily: theme.trading.mono,
-                    fontSize: "0.82em",
+                    fontSize: "0.9em",
                     bgcolor: "action.hover",
                     px: 0.5,
                     py: 0.25,
@@ -331,7 +331,7 @@ export function ChatMessage({
                                                     sx={{
                                                         whiteSpace: "pre-wrap",
                                                         color: "text.secondary",
-                                                        fontSize: "0.8rem",
+                                                        fontSize: "0.85rem",
                                                         lineHeight: 1.6,
                                                     }}
                                                 >
@@ -430,7 +430,7 @@ export function ChatMessage({
                                             label={tool.name}
                                             size="small"
                                             variant="outlined"
-                                            sx={{fontSize: "0.7rem"}}
+                                            sx={{fontSize: "0.75rem"}}
                                         />
                                     ))}
                                 </Box>

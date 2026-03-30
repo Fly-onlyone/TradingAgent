@@ -56,7 +56,7 @@ export function MdTh({children}: ComponentPropsWithoutRef<"th">) {
             component="th"
             sx={{
                 fontWeight: 700,
-                fontSize: "0.75rem",
+                fontSize: "0.85rem",
                 whiteSpace: "nowrap",
                 py: 1,
                 px: 1.5,
@@ -72,7 +72,7 @@ export function MdTd({children}: ComponentPropsWithoutRef<"td">) {
         <TableCell
             sx={(theme) => ({
                 fontFamily: theme.trading.mono,
-                fontSize: "0.75rem",
+                fontSize: "0.85rem",
                 py: 0.75,
                 px: 1.5,
             })}
