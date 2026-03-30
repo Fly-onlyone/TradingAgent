@@ -23,6 +23,7 @@ from app.db.models.agent_decision import (
 from app.db.models.agent_task import (
     AgentMode,
     AgentTask,
+    HoldingTerm,
     MonitoringConditionType,
     RiskLevel,
     TaskFrequency,
@@ -1091,10 +1092,14 @@ class AgentTaskScheduler:
         else:
             sections.append(f"== NEWS SENTIMENT == Error: {news_data['error']}\n")
 
+        holding_instruction = self._get_holding_term_instruction(task.holding_term)
         sections.append(
             f"Risk Parameters: Level={task.risk_level.value}, "
             f"Max Risk={risk_config['max_risk_percent']}%, "
             f"Max Position={task.max_position_size or 'default'}"
+        )
+        sections.append(
+            f"Holding Term: {task.holding_term.value} — {holding_instruction}"
         )
         sections.append(
             "\nBased on all specialist analyses above, provide your final recommendation."
@@ -1107,7 +1112,11 @@ class AgentTaskScheduler:
 
     def _build_analysis_prompt(self, symbol: str, task: AgentTask) -> str:
         """Build analysis prompt for agent."""
-        prompt = f"Analyze {symbol} and provide a market analysis."
+        holding_instruction = self._get_holding_term_instruction(task.holding_term)
+        prompt = (
+            f"Analyze {symbol} and provide a market analysis.\n"
+            f"Holding Term: {task.holding_term.value} — {holding_instruction}"
+        )
 
         if task.custom_instructions:
             prompt += f"\n\nAdditional context: {task.custom_instructions}"
@@ -1119,12 +1128,15 @@ class AgentTaskScheduler:
         """Build trading prompt with risk parameters."""
         risk_config = self._get_risk_config(task.risk_level)
 
+        holding_instruction = self._get_holding_term_instruction(task.holding_term)
+
         prompt = f"""Analyze {symbol} for a potential trade opportunity.
 
 Risk Parameters:
 - Risk Level: {task.risk_level.value}
 - Max Risk per Trade: {risk_config["max_risk_percent"]}%
 - Max Position Size: {task.max_position_size or "Use default sizing"}
+- Holding Term: {task.holding_term.value} — {holding_instruction}
 
 Provide:
 1. Market analysis
@@ -1150,6 +1162,7 @@ Provide:
             "when market conditions warrant changes. "
             f"Current config: symbols={task.symbols}, "
             f"risk_level={task.risk_level.value}, "
+            f"holding_term={task.holding_term.value}, "
             f"max_position_size={task.max_position_size}, "
             f"max_daily_trades={task.max_daily_trades}."
         )
@@ -1162,6 +1175,24 @@ Provide:
             RiskLevel.AGGRESSIVE: {"max_risk_percent": 7.5, "min_confidence": 55},
         }
         return configs.get(risk_level, configs[RiskLevel.MODERATE])
+
+    def _get_holding_term_instruction(self, holding_term: HoldingTerm) -> str:
+        """Return strategy guidance based on the configured holding term."""
+        instructions = {
+            HoldingTerm.SHORT: (
+                "Focus on momentum plays, breakout patterns, and quick scalps. "
+                "Target holding periods under 7 days."
+            ),
+            HoldingTerm.MEDIUM: (
+                "Focus on swing trading and trend following. "
+                "Target holding periods of 7-30 days."
+            ),
+            HoldingTerm.LONG: (
+                "Focus on fundamental analysis and accumulation. "
+                "Target holding periods over 30 days."
+            ),
+        }
+        return instructions.get(holding_term, instructions[HoldingTerm.MEDIUM])
 
     def _parse_action(self, action_str: str | None) -> DecisionAction | None:
         """Parse action string to DecisionAction enum."""

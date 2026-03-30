@@ -36,6 +36,14 @@ class RiskLevel(str, Enum):
     AGGRESSIVE = "aggressive"  # 5-10% risk per trade
 
 
+class HoldingTerm(str, Enum):
+    """Target holding period for positions."""
+
+    SHORT = "short"  # < 7 days
+    MEDIUM = "medium"  # 7-30 days
+    LONG = "long"  # > 30 days
+
+
 class AgentMode(str, Enum):
     """Agent execution mode."""
 
@@ -55,6 +63,7 @@ AGENT_MODIFIABLE_FIELDS: frozenset[str] = frozenset(
     {
         "symbols",
         "risk_level",
+        "holding_term",
         "max_position_size",
         "max_daily_trades",
         "monitoring_conditions",
@@ -101,6 +110,9 @@ def coerce_task_change_value(field_name: str, value: Any) -> Any:
     """Coerce task updates into the document's expected runtime types."""
     if field_name == "risk_level" and value is not None and not isinstance(value, RiskLevel):
         return RiskLevel(value)
+
+    if field_name == "holding_term" and value is not None and not isinstance(value, HoldingTerm):
+        return HoldingTerm(value)
 
     if field_name == "agent_mode" and value is not None and not isinstance(value, AgentMode):
         return AgentMode(value)
@@ -167,6 +179,7 @@ class AgentTask(Document):
     # Trading parameters
     symbols: list[str] = Field(default_factory=list)  # Trading pairs to analyze
     risk_level: RiskLevel = RiskLevel.MODERATE
+    holding_term: HoldingTerm = HoldingTerm.MEDIUM
     agent_mode: AgentMode = AgentMode.ASK
     task_modification_mode: TaskModificationMode = TaskModificationMode.DISABLED
     max_position_size: float | None = None  # Max position in quote currency

@@ -56,6 +56,7 @@ function transformTask(data: Record<string, unknown>): AgentTask {
 		lastRunAt: data.last_run_at as string | undefined,
 		symbols: (data.symbols as string[]) ?? [],
 		riskLevel: data.risk_level as AgentTask["riskLevel"],
+		holdingTerm: data.holding_term as AgentTask["holdingTerm"],
 		agentMode: data.agent_mode as AgentTask["agentMode"],
 		taskModificationMode:
 			data.task_modification_mode as AgentTask["taskModificationMode"],
@@ -154,6 +155,7 @@ function toTaskPayload(data: TaskCreate | TaskUpdate): Record<string, unknown> {
 	if (data.timezone !== undefined) payload.timezone = data.timezone;
 	if (data.symbols !== undefined) payload.symbols = data.symbols;
 	if (data.riskLevel !== undefined) payload.risk_level = data.riskLevel;
+	if (data.holdingTerm !== undefined) payload.holding_term = data.holdingTerm;
 	if (data.agentMode !== undefined) payload.agent_mode = data.agentMode;
 	if (data.taskModificationMode !== undefined) {
 		payload.task_modification_mode = data.taskModificationMode;

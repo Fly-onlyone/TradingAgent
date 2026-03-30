@@ -31,6 +31,8 @@ import {
 	Slider,
 	Switch,
 	TextField,
+	ToggleButton,
+	ToggleButtonGroup,
 	Tooltip,
 	Typography,
 } from "@mui/material";
@@ -55,6 +57,7 @@ import { useSymbolOptions } from "@/hooks/useSymbolOptions";
 import { useUIStore } from "@/store/uiStore";
 import type {
 	AgentMode,
+	HoldingTerm,
 	MonitoringCondition,
 	MonitoringConditionType,
 	RiskLevel,
@@ -64,7 +67,7 @@ import type {
 	TaskSchedule,
 	TaskUpdate,
 } from "@/types/task";
-import { MONITORING_CONDITION_CONFIG } from "@/types/task";
+import { HOLDING_TERM_CONFIG, MONITORING_CONDITION_CONFIG } from "@/types/task";
 import { staggerCascade } from "@/utils/animations/variants";
 import { formatDateTime } from "@/utils/formatters";
 import { requireAuth } from "../-guards";
@@ -92,6 +95,7 @@ const DEFAULT_FORM: TaskCreate = {
 	schedules: [{ frequency: "daily", scheduledTime: "09:00", enabled: true }],
 	symbols: [],
 	riskLevel: "moderate",
+	holdingTerm: "medium",
 	agentMode: "ask",
 	monitoringConditions: [],
 	alertCooldownMinutes: 60,
@@ -225,6 +229,7 @@ function TaskConfigPage() {
 					: [{ frequency: "daily", scheduledTime: "09:00", enabled: true }],
 			symbols: task.symbols,
 			riskLevel: task.riskLevel,
+			holdingTerm: task.holdingTerm ?? "medium",
 			agentMode: task.agentMode,
 			maxPositionSize: task.maxPositionSize,
 			maxDailyTrades: task.maxDailyTrades,
@@ -268,6 +273,7 @@ function TaskConfigPage() {
 			tradingEnabled: formData.tradingEnabled,
 			agentMode: formData.agentMode,
 			riskLevel: formData.riskLevel,
+			holdingTerm: formData.holdingTerm,
 			useSubagents: formData.useSubagents,
 			maxPositionSize: formData.maxPositionSize,
 			maxDailyTrades: formData.maxDailyTrades,
@@ -962,6 +968,72 @@ function TaskConfigPage() {
 														</MenuItem>
 													</ZoomAwareSelect>
 												</FormControl>
+
+												<Box>
+													<Typography gutterBottom>
+														Holding Term
+													</Typography>
+													<Typography
+														variant="caption"
+														color="text.secondary"
+														sx={{ display: "block", mb: 1 }}
+													>
+														How long the agent should hold positions
+														before considering exit
+													</Typography>
+													<ToggleButtonGroup
+														value={formData.holdingTerm ?? "medium"}
+														exclusive
+														onChange={(_, value) => {
+															if (value !== null) {
+																setFormData({
+																	...formData,
+																	holdingTerm:
+																		value as HoldingTerm,
+																});
+															}
+														}}
+														fullWidth
+														size="small"
+													>
+														{(
+															Object.keys(
+																HOLDING_TERM_CONFIG,
+															) as HoldingTerm[]
+														).map((term) => (
+															<ToggleButton
+																key={term}
+																value={term}
+																sx={{
+																	display: "flex",
+																	flexDirection: "column",
+																	gap: 0.25,
+																	py: 1,
+																	textTransform: "none",
+																}}
+															>
+																<Typography
+																	variant="body2"
+																	fontWeight={600}
+																>
+																	{
+																		HOLDING_TERM_CONFIG[term]
+																			.label
+																	}
+																</Typography>
+																<Typography
+																	variant="caption"
+																	color="text.secondary"
+																>
+																	{
+																		HOLDING_TERM_CONFIG[term]
+																			.description
+																	}
+																</Typography>
+															</ToggleButton>
+														))}
+													</ToggleButtonGroup>
+												</Box>
 
 												<Box sx={{ px: 4 }}>
 													<Typography gutterBottom>Risk Level</Typography>
