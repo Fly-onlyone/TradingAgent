@@ -4,7 +4,7 @@
 
 import * as Sentry from "@sentry/react";
 import {useQueryClient} from "@tanstack/react-query";
-import {useCallback, useRef, useState} from "react";
+import {useCallback, useRef} from "react";
 import {getAccessToken} from "@/api/client";
 import {agentSessionQueryOptions, agentSessionsGroupedQueryOptions} from "@/api/queryOptions/agent";
 import {useAgentStore} from "@/store/agentStore";
@@ -117,12 +117,12 @@ export function useAgentSocket() {
         createDraftSession,
         replaceSessionId,
         hydrateSessionMessages,
+        setSessionTotalTokens,
         selectedSessionId,
         activeRunSessionId,
     } = useAgentStore();
     const recentIncomingMessageKeysRef = useRef<Map<string, number>>(new Map());
     const pendingChartDataRef = useRef<ChartData | null>(null);
-    const [sessionTokens, setSessionTokens] = useState(0);
 
     const getTargetSessionId = useCallback(() => {
         const state = useAgentStore.getState();
@@ -326,8 +326,11 @@ export function useAgentSocket() {
                     break;
                 }
                 case "usage": {
+                    const targetSessionId = getTargetSessionId();
                     const usage = agentMessage.data as UsageData;
-                    setSessionTokens(usage.totalTokens);
+                    if (targetSessionId) {
+                        setSessionTotalTokens(targetSessionId, usage.totalTokens);
+                    }
                     break;
                 }
                 case "cancel_ack": {
@@ -364,6 +367,7 @@ export function useAgentSocket() {
             setActiveRunSessionId,
             setCancelling,
             setSelectedSessionId,
+            setSessionTotalTokens,
             setThinking,
             updateGroupedSessions,
             updateStatus,
@@ -488,7 +492,6 @@ export function useAgentSocket() {
         sendCancel,
         disconnect,
         reconnect,
-        sessionTokens,
     };
 }
 

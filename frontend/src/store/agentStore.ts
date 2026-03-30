@@ -13,6 +13,7 @@ interface SessionRuntimeState {
     currentTurnToolCalls: ToolCall[];
     thinkingContent: string;
     streamingText: string;
+    totalTokens: number | null;
     isThinking: boolean;
     isCancelling: boolean;
     lastDecision: AgentDecision | null;
@@ -41,6 +42,7 @@ interface AgentState {
     replaceSessionId: (oldSessionId: string, newSessionId: string) => void;
     removeSession: (sessionId: string) => void;
     hydrateSessionMessages: (sessionId: string, messages: AgentMessage[]) => void;
+    setSessionTotalTokens: (sessionId: string, totalTokens: number) => void;
     addMessage: (sessionId: string, message: AgentMessage) => void;
     addToolCall: (sessionId: string, toolCall: ToolCall) => void;
     updateToolCallResult: (
@@ -77,6 +79,7 @@ function createEmptySessionState(): SessionRuntimeState {
         currentTurnToolCalls: [],
         thinkingContent: "",
         streamingText: "",
+        totalTokens: null,
         isThinking: false,
         isCancelling: false,
         lastDecision: null,
@@ -203,6 +206,22 @@ export const useAgentStore = create<AgentState>()(
                                 ...(existingState ?? createEmptySessionState()),
                                 messages,
                                 hasLocalUpdates: false,
+                            },
+                        },
+                    };
+                }),
+
+            setSessionTotalTokens: (sessionId, totalTokens) =>
+                set((state) => {
+                    const sessionState =
+                        state.sessionStates[sessionId] ?? createEmptySessionState();
+
+                    return {
+                        sessionStates: {
+                            ...state.sessionStates,
+                            [sessionId]: {
+                                ...sessionState,
+                                totalTokens,
                             },
                         },
                     };

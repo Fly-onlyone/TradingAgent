@@ -122,6 +122,7 @@ function AgentPage() {
         setSelectedSessionId,
         removeSession,
         hydrateSessionMessages,
+        setSessionTotalTokens,
         setDecisions,
         appendDecisions,
         setDecisionSymbols,
@@ -147,7 +148,6 @@ function AgentPage() {
         requestRecommendation,
         requestStrategyReview,
         sendCancel,
-        sessionTokens,
     } = useAgentSocket();
 
     const selectedSessionState = selectedSessionId
@@ -288,7 +288,8 @@ function AgentPage() {
         );
 
         hydrateSessionMessages(selectedSessionId, agentMessages);
-    }, [hydrateSessionMessages, selectedSessionId, sessionData]);
+        setSessionTotalTokens(selectedSessionId, sessionData.totalTokens);
+    }, [hydrateSessionMessages, selectedSessionId, sessionData, setSessionTotalTokens]);
 
     // Handle stale session ID on mount (deleted session)
     useEffect(() => {
@@ -497,6 +498,11 @@ function AgentPage() {
         .find((session) => session.id === selectedSessionId);
     const selectedSessionTitle =
         sessionData?.title || selectedSessionSummary?.title || "New Chat";
+    const selectedSessionTokens =
+        selectedSessionState?.totalTokens ??
+        sessionData?.totalTokens ??
+        selectedSessionSummary?.totalTokens ??
+        0;
 
     // Sidebar content
     const sidebarContent = (
@@ -865,7 +871,7 @@ function AgentPage() {
                             isThinking={hasActiveRun}
                             isCancelling={activeRunIsCancelling}
                             disabled={!isConnected}
-                            totalTokens={sessionTokens}
+                            totalTokens={selectedSessionTokens}
                         />
                     </Box>
                 </Card>
