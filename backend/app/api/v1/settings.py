@@ -1276,3 +1276,30 @@ async def test_apprise_notification(
     if result:
         return {"success": True, "message": f"Test sent to {len(all_urls)} channel(s)"}
     return {"success": False, "message": "One or more channels failed to deliver"}
+
+
+# ── System Processes (for process selector dialog) ─────────────
+
+
+@router.get("/system-processes")
+async def get_system_processes(
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """List unique running processes with memory usage for the process selector UI."""
+    import psutil
+
+    processes: dict[str, dict] = {}
+    for proc in psutil.process_iter(["pid", "name", "memory_info"]):
+        try:
+            info = proc.info
+            name = info["name"]
+            if name and name not in processes:
+                mem = info["memory_info"]
+                processes[name] = {
+                    "name": name,
+                    "pid": info["pid"],
+                    "memory_mb": round(mem.rss / (1024 * 1024), 1) if mem else 0,
+                }
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    return {"processes": sorted(processes.values(), key=lambda x: x["memory_mb"], reverse=True)}

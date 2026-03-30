@@ -284,6 +284,22 @@ export const settingsApi = {
 		};
 	},
 
+	async getSystemProcesses(): Promise<{ processes: SystemProcess[] }> {
+		const response = await apiClient.get<Record<string, unknown>>(
+			"/settings/system-processes",
+		);
+		const rawProcesses = response.data.processes as Array<
+			Record<string, unknown>
+		>;
+		return {
+			processes: rawProcesses.map((p) => ({
+				name: p.name as string,
+				pid: p.pid as number,
+				memoryMb: p.memory_mb as number,
+			})),
+		};
+	},
+
 	async getEmbeddingConfig(): Promise<EmbeddingConfig> {
 		const response = await apiClient.get<Record<string, unknown>>(
 			"/settings/embedding",
@@ -557,6 +573,12 @@ export interface AppriseConfigUpdate {
 export interface AppriseTestResult {
 	success: boolean;
 	message: string;
+}
+
+export interface SystemProcess {
+	name: string;
+	pid: number;
+	memoryMb: number;
 }
 
 export interface AutostartConfig {
