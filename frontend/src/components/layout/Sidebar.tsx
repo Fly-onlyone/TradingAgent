@@ -4,6 +4,7 @@
 
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
 import ArticleIcon from "@mui/icons-material/Article";
+import BackupIcon from "@mui/icons-material/Backup";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import LibraryBooksIcon from "@mui/icons-material/LibraryBooks";
 import ListAltIcon from "@mui/icons-material/ListAlt";
@@ -89,6 +90,7 @@ const adminGroup: NavGroup = {
 	label: "Admin",
 	items: [
 		{ path: "/admin/database", label: "Database", icon: StorageIcon },
+		{ path: "/admin/backup", label: "Backup", icon: BackupIcon },
 		{ path: "/admin/logs", label: "Logs", icon: ArticleIcon },
 	],
 };
