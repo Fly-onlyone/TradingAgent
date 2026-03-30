@@ -52,6 +52,7 @@ import {
 	settingsApi,
 } from "@/api/endpoints/settings";
 import { AgentConfigPanel } from "@/components/agent/AgentConfigPanel";
+import { AppriseConfigCard } from "@/components/settings/AppriseConfigCard";
 import { PageTransition } from "@/components/common/PageTransition";
 import { SaveIndicator } from "@/components/common/SaveIndicator";
 import { SectionHeader } from "@/components/common/SectionHeader";
@@ -1998,6 +1999,7 @@ function SettingsPage() {
 				{/* Tab 3: Admin (superuser only) */}
 				{isSuperuser && settingsTab === 3 && (
 					<>
+						<AppriseConfigCard />
 						<EmbeddingModelCard />
 						<EmbeddingConfigCard />
 					</>

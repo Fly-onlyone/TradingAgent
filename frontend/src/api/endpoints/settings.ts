@@ -542,6 +542,23 @@ function transformStrategyDiscoveryConfig(
 	};
 }
 
+export interface AppriseConfig {
+	notificationUrls: string[];
+	urlCount: number;
+	hasEmailUrl: boolean;
+	maskedEmailUrl: string;
+}
+
+export interface AppriseConfigUpdate {
+	notificationUrls?: string[];
+	emailUrl?: string;
+}
+
+export interface AppriseTestResult {
+	success: boolean;
+	message: string;
+}
+
 export interface AutostartConfig {
 	enabled: boolean;
 }
@@ -566,6 +583,50 @@ export const nativeNotificationApi = {
 			{ enabled },
 		);
 		return { enabled: response.data.enabled as boolean };
+	},
+};
+
+export const appriseApi = {
+	async getAppriseConfig(): Promise<AppriseConfig> {
+		const response = await apiClient.get<Record<string, unknown>>(
+			"/settings/notifications/apprise",
+		);
+		return {
+			notificationUrls: response.data.notification_urls as string[],
+			urlCount: response.data.url_count as number,
+			hasEmailUrl: response.data.has_email_url as boolean,
+			maskedEmailUrl: response.data.masked_email_url as string,
+		};
+	},
+
+	async updateAppriseConfig(
+		update: AppriseConfigUpdate,
+	): Promise<AppriseConfig> {
+		const payload: Record<string, unknown> = {};
+		if (update.notificationUrls !== undefined)
+			payload.notification_urls = update.notificationUrls;
+		if (update.emailUrl !== undefined) payload.email_url = update.emailUrl;
+
+		const response = await apiClient.put<Record<string, unknown>>(
+			"/settings/notifications/apprise",
+			payload,
+		);
+		return {
+			notificationUrls: response.data.notification_urls as string[],
+			urlCount: response.data.url_count as number,
+			hasEmailUrl: response.data.has_email_url as boolean,
+			maskedEmailUrl: response.data.masked_email_url as string,
+		};
+	},
+
+	async testAppriseNotification(): Promise<AppriseTestResult> {
+		const response = await apiClient.post<Record<string, unknown>>(
+			"/settings/notifications/apprise/test",
+		);
+		return {
+			success: response.data.success as boolean,
+			message: response.data.message as string,
+		};
 	},
 };
 
