@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import UTC, datetime
 from enum import Enum
@@ -43,6 +44,8 @@ class AppSettings(Document):
         "okx_secret_key",
         "okx_passphrase",
         "brave_search_api_key",
+        "email_url",
+        "notification_urls_encrypted",
     )
 
     singleton_key: str = SINGLETON_KEY
@@ -63,6 +66,10 @@ class AppSettings(Document):
 
     # Brave Search configuration
     brave_search_api_key: str = ""
+
+    # Apprise notification configuration (URLs contain credentials, stored encrypted)
+    notification_urls_encrypted: str = ""  # Encrypted JSON array of Apprise URLs
+    email_url: str = ""  # Encrypted mailto:// URL with SMTP credentials
 
     # Auth / token settings
     access_token_expire_minutes: int = 0  # 0 = use env var fallback, then no expiry
@@ -249,6 +256,32 @@ class AppSettings(Document):
     def set_brave_search_api_key(self, value: str) -> None:
         """Set Brave Search API key in encrypted storage format."""
         self._set_secret_value("brave_search_api_key", value)
+
+    def get_notification_urls(self) -> list[str]:
+        """Get decrypted list of Apprise notification URLs."""
+        raw = self._get_secret_value("notification_urls_encrypted")
+        if not raw:
+            return []
+        try:
+            urls = json.loads(raw)
+            return [u for u in urls if isinstance(u, str)]
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    def set_notification_urls(self, urls: list[str]) -> None:
+        """Set Apprise notification URLs as an encrypted JSON array."""
+        if not urls:
+            self._set_secret_value("notification_urls_encrypted", "")
+            return
+        self._set_secret_value("notification_urls_encrypted", json.dumps(urls))
+
+    def get_email_url(self) -> str:
+        """Get decrypted transactional email URL."""
+        return self._get_secret_value("email_url")
+
+    def set_email_url(self, value: str) -> None:
+        """Set transactional email URL in encrypted storage format."""
+        self._set_secret_value("email_url", value)
 
     def has_persisted_secret_values(self) -> bool:
         """Return True when any secret field has a non-empty stored value."""

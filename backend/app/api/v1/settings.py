@@ -1167,3 +1167,112 @@ async def update_native_notification_config(
         app_settings.native_notifications_enabled,
     )
     return {"enabled": app_settings.native_notifications_enabled}
+
+
+# ── Apprise Notification Configuration ────────────────────────
+
+
+def _mask_url(url: str) -> str:
+    """Mask an Apprise URL for display, preserving the service scheme."""
+    if not url:
+        return ""
+    # Split on :// to keep scheme visible
+    if "://" in url:
+        scheme, _rest = url.split("://", 1)
+        return f"{scheme}://***"
+    return "***"
+
+
+class AppriseConfigResponse(BaseModel):
+    notification_urls: list[str]
+    url_count: int
+    has_email_url: bool
+    masked_email_url: str
+
+
+class AppriseConfigUpdate(BaseModel):
+    notification_urls: list[str] | None = None
+    email_url: str | None = None
+
+
+class AppriseTestResponse(BaseModel):
+    success: bool
+    message: str
+
+
+@router.get("/notifications/apprise", response_model=AppriseConfigResponse)
+async def get_apprise_config(
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Get masked Apprise notification configuration."""
+    app_settings = await AppSettings.get_instance()
+    urls = app_settings.get_notification_urls()
+    email_url = app_settings.get_email_url()
+    return {
+        "notification_urls": [_mask_url(u) for u in urls],
+        "url_count": len(urls),
+        "has_email_url": bool(email_url),
+        "masked_email_url": _mask_url(email_url),
+    }
+
+
+@router.put("/notifications/apprise", response_model=AppriseConfigResponse)
+async def update_apprise_config(
+    body: AppriseConfigUpdate,
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Update Apprise notification URLs and/or email URL."""
+    app_settings = await AppSettings.get_instance()
+
+    if body.notification_urls is not None or body.email_url is not None:
+        _ensure_encryption_available()
+
+    if body.notification_urls is not None:
+        app_settings.set_notification_urls(body.notification_urls)
+    if body.email_url is not None:
+        app_settings.set_email_url(body.email_url)
+
+    await app_settings.save_with_timestamp()
+    logger.info(
+        "Apprise config updated (url_count=%d, has_email=%s)",
+        len(app_settings.get_notification_urls()),
+        bool(app_settings.get_email_url()),
+    )
+
+    urls = app_settings.get_notification_urls()
+    email_url = app_settings.get_email_url()
+    return {
+        "notification_urls": [_mask_url(u) for u in urls],
+        "url_count": len(urls),
+        "has_email_url": bool(email_url),
+        "masked_email_url": _mask_url(email_url),
+    }
+
+
+@router.post("/notifications/apprise/test", response_model=AppriseTestResponse)
+async def test_apprise_notification(
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Send a test notification via all configured Apprise channels."""
+    from app.services.email_service import NotifyService
+
+    service = NotifyService()
+    urls = service.notification_urls
+    email_url = service.email_url
+
+    if not urls and not email_url:
+        return {"success": False, "message": "No notification URLs configured"}
+
+    all_urls = [*urls]
+    if email_url:
+        all_urls.append(email_url)
+
+    result = await service._send(
+        all_urls,
+        "Trading Agent — Test Notification",
+        "This is a test notification from Trading Agent. If you see this, your Apprise configuration is working.",
+        "info",
+    )
+    if result:
+        return {"success": True, "message": f"Test sent to {len(all_urls)} channel(s)"}
+    return {"success": False, "message": "One or more channels failed to deliver"}
