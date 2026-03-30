@@ -546,6 +546,29 @@ export interface AutostartConfig {
 	enabled: boolean;
 }
 
+export interface NativeNotificationConfig {
+	enabled: boolean;
+}
+
+export const nativeNotificationApi = {
+	async getNativeNotificationConfig(): Promise<NativeNotificationConfig> {
+		const response = await apiClient.get<Record<string, unknown>>(
+			"/settings/notifications/native",
+		);
+		return { enabled: response.data.enabled as boolean };
+	},
+
+	async updateNativeNotificationConfig(
+		enabled: boolean,
+	): Promise<NativeNotificationConfig> {
+		const response = await apiClient.put<Record<string, unknown>>(
+			"/settings/notifications/native",
+			{ enabled },
+		);
+		return { enabled: response.data.enabled as boolean };
+	},
+};
+
 export const autostartApi = {
 	async getAutostartConfig(): Promise<AutostartConfig> {
 		const response =

@@ -78,6 +78,9 @@ class AppSettings(Document):
     # Desktop app autostart
     app_autostart_enabled: bool = False
 
+    # Native toast notifications
+    native_notifications_enabled: bool = True
+
     # Chat session retention
     session_retention_days: int = 0  # 0 = keep forever
     session_cleanup_last_run_at: datetime | None = None
