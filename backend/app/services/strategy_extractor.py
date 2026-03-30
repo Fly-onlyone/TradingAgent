@@ -105,6 +105,7 @@ class ExtractedStrategy(BaseModel):
     timeframes: list[str] = []
     market_conditions: list[str] = []
     asset_classes: list[str] = []
+    extraction_messages: list[dict] = []
 
 
 class StrategyExtractor:
@@ -147,6 +148,17 @@ class StrategyExtractor:
         """Extract using the raw Anthropic client with forced tool_use."""
         truncated = content[:MAX_CONTENT_LENGTH]
         hint = f"\n\nSource: {source_hint}" if source_hint else ""
+        word_count = len(truncated.split())
+
+        messages: list[dict] = []
+        if source_hint:
+            messages.append({"role": "system", "content": f"Fetching content from: {source_hint}"})
+        messages.append(
+            {
+                "role": "system",
+                "content": f"Content loaded ({word_count} words). Starting AI extraction...",
+            }
+        )
 
         response = self._client.messages.create(
             model="claude-sonnet-4-6",
@@ -164,13 +176,27 @@ class StrategyExtractor:
 
         for block in response.content:
             if block.type == "tool_use" and block.name == "save_strategy":
-                return ExtractedStrategy(**block.input)
+                result = ExtractedStrategy(**block.input)
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": f"I found a trading strategy. Extracted: {result.name} — {result.description}",
+                    }
+                )
+                messages.append({"role": "system", "content": "Strategy extracted successfully"})
+                result.extraction_messages = messages
+                return result
 
         logger.warning("Claude did not call save_strategy tool, using fallback")
-        return ExtractedStrategy(
+        messages.append(
+            {"role": "system", "content": "AI did not return structured data; using fallback"}
+        )
+        result = ExtractedStrategy(
             name="Imported Strategy",
             description="Strategy extracted from provided content (extraction incomplete)",
         )
+        result.extraction_messages = messages
+        return result
 
     async def _extract_via_sdk(self, content: str, source_hint: str) -> ExtractedStrategy:
         """Extract using the Agent SDK (works with subscription/CLI credentials)."""
@@ -186,6 +212,17 @@ class StrategyExtractor:
 
         truncated = content[:MAX_CONTENT_LENGTH]
         hint = f"\n\nSource: {source_hint}" if source_hint else ""
+        word_count = len(truncated.split())
+
+        messages: list[dict] = []
+        if source_hint:
+            messages.append({"role": "system", "content": f"Fetching content from: {source_hint}"})
+        messages.append(
+            {
+                "role": "system",
+                "content": f"Content loaded ({word_count} words). Starting AI extraction (SDK)...",
+            }
+        )
 
         app_settings = await AppSettings.get_instance()
         api_key = await resolve_anthropic_api_key()
@@ -221,13 +258,25 @@ class StrategyExtractor:
                 raw_text = raw_text.split("```")[1].split("```")[0].strip()
 
             data = json.loads(raw_text)
-            return ExtractedStrategy(**data)
+            result = ExtractedStrategy(**data)
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": f"I found a trading strategy. Extracted: {result.name} — {result.description}",
+                }
+            )
+            messages.append({"role": "system", "content": "Strategy extracted successfully"})
+            result.extraction_messages = messages
+            return result
         except (json.JSONDecodeError, KeyError, TypeError) as exc:
             logger.warning("Failed to parse SDK extraction response: %s", exc)
-            return ExtractedStrategy(
+            messages.append({"role": "system", "content": f"SDK extraction failed: {exc}"})
+            result = ExtractedStrategy(
                 name="Imported Strategy",
                 description="Strategy extracted from provided content (extraction incomplete)",
             )
+            result.extraction_messages = messages
+            return result
         finally:
             try:
                 await client.disconnect()

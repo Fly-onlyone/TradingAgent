@@ -65,6 +65,11 @@ export interface BacktestResults {
 	endDate: string;
 }
 
+export interface ExtractionMessage {
+	role: "system" | "assistant";
+	content: string;
+}
+
 export interface ExtractedStrategy {
 	name: string;
 	description: string;
@@ -77,6 +82,7 @@ export interface ExtractedStrategy {
 	assetClasses: string[];
 	sourceUrl?: string;
 	sourceFilename?: string;
+	extractionMessages: ExtractionMessage[];
 }
 
 export interface StrategyImportConfirm {
@@ -91,6 +97,13 @@ export interface StrategyImportConfirm {
 	assetClasses: string[];
 	sourceUrl?: string;
 	sourceFilename?: string;
+	extractionMessages: ExtractionMessage[];
+}
+
+export interface StrategyKnowledge {
+	extractionMessages: ExtractionMessage[];
+	sourceUrl?: string;
+	createdAt?: string;
 }
 
 export interface StrategyImportResult {
