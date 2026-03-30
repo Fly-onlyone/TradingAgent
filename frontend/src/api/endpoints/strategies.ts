@@ -5,10 +5,12 @@
 import type {
 	BacktestResults,
 	ExtractedStrategy,
+	ExtractionMessage,
 	Strategy,
 	StrategyCreate,
 	StrategyImportConfirm,
 	StrategyImportResult,
+	StrategyKnowledge,
 	StrategyRiskParams,
 	StrategySignal,
 	StrategyUpdate,
@@ -126,6 +128,7 @@ export const strategiesApi = {
 			asset_classes: data.assetClasses,
 			source_url: data.sourceUrl,
 			source_filename: data.sourceFilename,
+			extraction_messages: data.extractionMessages,
 		};
 		const response = await apiClient.post<Record<string, unknown>>(
 			"/strategies/import/confirm",
@@ -134,6 +137,18 @@ export const strategiesApi = {
 		return {
 			strategyId: response.data.strategy_id as string,
 			knowledgeId: response.data.knowledge_id as string,
+		};
+	},
+
+	async getStrategyKnowledge(strategyId: string): Promise<StrategyKnowledge> {
+		const response = await apiClient.get<Record<string, unknown>>(
+			`/strategies/${strategyId}/knowledge`,
+		);
+		return {
+			extractionMessages:
+				(response.data.extraction_messages as ExtractionMessage[]) ?? [],
+			sourceUrl: response.data.source_url as string | undefined,
+			createdAt: response.data.created_at as string | undefined,
 		};
 	},
 };
@@ -180,6 +195,7 @@ function transformExtractedStrategy(
 		assetClasses: (data.asset_classes as string[]) || [],
 		sourceUrl: data.source_url as string | undefined,
 		sourceFilename: data.source_filename as string | undefined,
+		extractionMessages: (data.extraction_messages as ExtractionMessage[]) || [],
 	};
 }
 

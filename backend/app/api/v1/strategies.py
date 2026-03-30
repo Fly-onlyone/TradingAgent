@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.api.v1.auth import get_current_active_user
+from app.db.models.knowledge import StrategyKnowledge
 from app.db.models.strategy import Strategy
 from app.db.models.user import User
 
@@ -226,3 +227,36 @@ async def deactivate_strategy(
     strategy.update_timestamp()
     await strategy.save()
     return strategy_to_response(strategy)
+
+
+class StrategyKnowledgeResponse(BaseModel):
+    extraction_messages: list[dict] = []
+    source_url: str | None = None
+    created_at: str | None = None
+
+
+@router.get("/{strategy_id}/knowledge", response_model=StrategyKnowledgeResponse)
+async def get_strategy_knowledge(
+    strategy_id: str,
+    current_user: User = Depends(get_current_active_user),
+) -> StrategyKnowledgeResponse:
+    """Get knowledge data (including extraction chat) for a strategy."""
+    strategy = await Strategy.find_one(
+        Strategy.id == PydanticObjectId(strategy_id),
+        Strategy.user_id == current_user.id,
+    )
+    if not strategy:
+        raise HTTPException(status_code=404, detail="Strategy not found")
+
+    if not strategy.knowledge_id:
+        return StrategyKnowledgeResponse()
+
+    knowledge = await StrategyKnowledge.get(strategy.knowledge_id)
+    if not knowledge:
+        return StrategyKnowledgeResponse()
+
+    return StrategyKnowledgeResponse(
+        extraction_messages=knowledge.extraction_messages,
+        source_url=knowledge.source_url,
+        created_at=knowledge.created_at.isoformat() if knowledge.created_at else None,
+    )

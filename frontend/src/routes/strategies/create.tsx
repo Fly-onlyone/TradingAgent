@@ -48,6 +48,7 @@ const EMPTY_FORM: StrategyImportConfirm = {
 	timeframes: [],
 	marketConditions: [],
 	assetClasses: [],
+	extractionMessages: [],
 };
 
 function CreateStrategyPage() {

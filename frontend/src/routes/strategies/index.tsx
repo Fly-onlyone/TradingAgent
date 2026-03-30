@@ -3,6 +3,7 @@
  */
 
 import AddIcon from "@mui/icons-material/Add";
+import ChatIcon from "@mui/icons-material/Chat";
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
@@ -16,6 +17,7 @@ import {
 	Card,
 	CardContent,
 	Chip,
+	CircularProgress,
 	Dialog,
 	DialogActions,
 	DialogContent,
@@ -25,6 +27,8 @@ import {
 	Menu,
 	MenuItem,
 	Switch,
+	Tab,
+	Tabs,
 	TextField,
 	Typography,
 } from "@mui/material";
@@ -42,7 +46,12 @@ import { ShimmerSkeleton } from "@/components/common/ShimmerSkeleton";
 import { StrategyDiscoveryCard } from "@/components/strategies/StrategyDiscoveryCard";
 import { useZoomAwareMenu } from "@/hooks/useZoomAwareMenu";
 import { notify } from "@/store/uiStore";
-import type { Strategy, StrategyRiskParams, StrategyUpdate } from "@/types";
+import type {
+	ExtractionMessage,
+	Strategy,
+	StrategyRiskParams,
+	StrategyUpdate,
+} from "@/types";
 import { staggerCascade } from "@/utils/animations/variants";
 import { formatPercent } from "@/utils/formatters";
 import { requireAuth } from "../-guards";
@@ -245,6 +254,7 @@ function StrategyDetailDialog({
 }) {
 	const queryClient = useQueryClient();
 	const [editing, setEditing] = useState(false);
+	const [dialogTab, setDialogTab] = useState(0);
 
 	// Edit form state
 	const [editName, setEditName] = useState("");
@@ -257,6 +267,13 @@ function StrategyDetailDialog({
 	const [entryError, setEntryError] = useState(false);
 	const [exitError, setExitError] = useState(false);
 	const [riskError, setRiskError] = useState(false);
+
+	// Fetch knowledge data (extraction chat) when the chat tab is selected
+	const { data: knowledge, isLoading: knowledgeLoading } = useQuery({
+		queryKey: ["strategy-knowledge", strategy?.id],
+		queryFn: () => strategiesApi.getStrategyKnowledge(strategy?.id ?? ""),
+		enabled: !!strategy && dialogTab === 1,
+	});
 
 	const populateForm = useCallback((s: Strategy) => {
 		setEditName(s.name);
@@ -274,6 +291,7 @@ function StrategyDetailDialog({
 		if (strategy) {
 			populateForm(strategy);
 			setEditing(false);
+			setDialogTab(0);
 		}
 	}, [strategy, populateForm]);
 
@@ -349,6 +367,7 @@ function StrategyDetailDialog({
 
 	const handleClose = () => {
 		setEditing(false);
+		setDialogTab(0);
 		onClose();
 	};
 
@@ -384,7 +403,7 @@ function StrategyDetailDialog({
 							</Typography>
 						)}
 						<Box sx={{ display: "flex", gap: 0.5, flexShrink: 0 }}>
-							{!editing && (
+							{!editing && dialogTab === 0 && (
 								<IconButton size="small" onClick={handleStartEdit} title="Edit">
 									<EditIcon fontSize="small" />
 								</IconButton>
@@ -394,218 +413,292 @@ function StrategyDetailDialog({
 							</IconButton>
 						</Box>
 					</DialogTitle>
-					<DialogContent>
-						{editing ? (
-							<Box
-								sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}
-							>
-								<TextField
-									label="Description"
-									value={editDescription}
-									onChange={(e) => setEditDescription(e.target.value)}
-									multiline
-									minRows={2}
-									fullWidth
-									size="small"
-								/>
-								<TextField
-									label="Entry Rules (JSON)"
-									value={editEntryRules}
-									onChange={(e) => {
-										setEditEntryRules(e.target.value);
-										setEntryError(false);
-									}}
-									multiline
-									minRows={3}
-									fullWidth
-									size="small"
-									error={entryError}
-									helperText={entryError ? "Invalid JSON" : undefined}
-									slotProps={{
-										htmlInput: {
-											style: { fontFamily: "monospace", fontSize: 13 },
-										},
-									}}
-								/>
-								<TextField
-									label="Exit Rules (JSON)"
-									value={editExitRules}
-									onChange={(e) => {
-										setEditExitRules(e.target.value);
-										setExitError(false);
-									}}
-									multiline
-									minRows={3}
-									fullWidth
-									size="small"
-									error={exitError}
-									helperText={exitError ? "Invalid JSON" : undefined}
-									slotProps={{
-										htmlInput: {
-											style: { fontFamily: "monospace", fontSize: 13 },
-										},
-									}}
-								/>
-								<TextField
-									label="Risk Parameters (JSON)"
-									value={editRiskParams}
-									onChange={(e) => {
-										setEditRiskParams(e.target.value);
-										setRiskError(false);
-									}}
-									multiline
-									minRows={3}
-									fullWidth
-									size="small"
-									error={riskError}
-									helperText={riskError ? "Invalid JSON" : undefined}
-									slotProps={{
-										htmlInput: {
-											style: { fontFamily: "monospace", fontSize: 13 },
-										},
-									}}
-								/>
-							</Box>
-						) : (
-							<>
-								<Typography variant="body2" color="text.secondary" gutterBottom>
-									{strategy.description || "No description"}
-								</Typography>
 
-								<Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mt: 1 }}>
-									<Chip
-										label={strategy.isActive ? "Active" : "Inactive"}
-										color={strategy.isActive ? "success" : "default"}
+					{!editing && (
+						<Tabs
+							value={dialogTab}
+							onChange={(_, v) => setDialogTab(v)}
+							sx={{ px: 3, borderBottom: 1, borderColor: "divider" }}
+						>
+							<Tab label="Details" />
+							<Tab
+								label="Extraction Chat"
+								icon={<ChatIcon sx={{ fontSize: 16 }} />}
+								iconPosition="start"
+							/>
+						</Tabs>
+					)}
+
+					<DialogContent>
+						{dialogTab === 0 &&
+							(editing ? (
+								<Box
+									sx={{
+										display: "flex",
+										flexDirection: "column",
+										gap: 2,
+										mt: 1,
+									}}
+								>
+									<TextField
+										label="Description"
+										value={editDescription}
+										onChange={(e) => setEditDescription(e.target.value)}
+										multiline
+										minRows={2}
+										fullWidth
 										size="small"
 									/>
-									{strategy.autoDiscovered && (
-										<Chip
-											label="Auto-discovered"
-											size="small"
-											color="info"
-											variant="outlined"
-										/>
-									)}
+									<TextField
+										label="Entry Rules (JSON)"
+										value={editEntryRules}
+										onChange={(e) => {
+											setEditEntryRules(e.target.value);
+											setEntryError(false);
+										}}
+										multiline
+										minRows={3}
+										fullWidth
+										size="small"
+										error={entryError}
+										helperText={entryError ? "Invalid JSON" : undefined}
+										slotProps={{
+											htmlInput: {
+												style: { fontFamily: "monospace", fontSize: 13 },
+											},
+										}}
+									/>
+									<TextField
+										label="Exit Rules (JSON)"
+										value={editExitRules}
+										onChange={(e) => {
+											setEditExitRules(e.target.value);
+											setExitError(false);
+										}}
+										multiline
+										minRows={3}
+										fullWidth
+										size="small"
+										error={exitError}
+										helperText={exitError ? "Invalid JSON" : undefined}
+										slotProps={{
+											htmlInput: {
+												style: { fontFamily: "monospace", fontSize: 13 },
+											},
+										}}
+									/>
+									<TextField
+										label="Risk Parameters (JSON)"
+										value={editRiskParams}
+										onChange={(e) => {
+											setEditRiskParams(e.target.value);
+											setRiskError(false);
+										}}
+										multiline
+										minRows={3}
+										fullWidth
+										size="small"
+										error={riskError}
+										helperText={riskError ? "Invalid JSON" : undefined}
+										slotProps={{
+											htmlInput: {
+												style: { fontFamily: "monospace", fontSize: 13 },
+											},
+										}}
+									/>
 								</Box>
-
-								{strategy.symbols?.length > 0 && (
-									<Box sx={{ mt: 2 }}>
-										<Typography variant="subtitle2" gutterBottom>
-											Symbols
-										</Typography>
-										<Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
-											{strategy.symbols.map((s) => (
-												<Chip
-													key={s}
-													label={s}
-													size="small"
-													variant="outlined"
-												/>
-											))}
-										</Box>
-									</Box>
-								)}
-
-								{strategy.timeframes?.length > 0 && (
-									<Box sx={{ mt: 2 }}>
-										<Typography variant="subtitle2" gutterBottom>
-											Timeframes
-										</Typography>
-										<Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
-											{strategy.timeframes.map((t) => (
-												<Chip
-													key={t}
-													label={t}
-													size="small"
-													variant="outlined"
-												/>
-											))}
-										</Box>
-									</Box>
-								)}
-
-								{strategy.entryRules &&
-									Object.keys(strategy.entryRules).length > 0 && (
-										<Box sx={{ mt: 2 }}>
-											<Typography variant="subtitle2" gutterBottom>
-												Entry Rules
-											</Typography>
-											{Object.entries(strategy.entryRules).map(([key, val]) => (
-												<Typography key={key} variant="body2" sx={{ ml: 1 }}>
-													<strong>{key}:</strong> {String(val)}
-												</Typography>
-											))}
-										</Box>
-									)}
-
-								{strategy.exitRules &&
-									Object.keys(strategy.exitRules).length > 0 && (
-										<Box sx={{ mt: 2 }}>
-											<Typography variant="subtitle2" gutterBottom>
-												Exit Rules
-											</Typography>
-											{Object.entries(strategy.exitRules).map(([key, val]) => (
-												<Typography key={key} variant="body2" sx={{ ml: 1 }}>
-													<strong>{key}:</strong> {String(val)}
-												</Typography>
-											))}
-										</Box>
-									)}
-
-								{strategy.riskParams &&
-									Object.keys(strategy.riskParams).length > 0 && (
-										<Box sx={{ mt: 2 }}>
-											<Typography variant="subtitle2" gutterBottom>
-												Risk Parameters
-											</Typography>
-											{Object.entries(strategy.riskParams).map(([key, val]) => (
-												<Typography key={key} variant="body2" sx={{ ml: 1 }}>
-													<strong>{key}:</strong> {String(val)}
-												</Typography>
-											))}
-										</Box>
-									)}
-
-								{strategy.sourceUrl && (
+							) : (
+								<>
 									<Typography
 										variant="body2"
 										color="text.secondary"
-										sx={{ mt: 2 }}
+										gutterBottom
 									>
-										<strong>Source:</strong>{" "}
-										<a
-											href={strategy.sourceUrl}
-											target="_blank"
-											rel="noopener noreferrer"
-										>
-											{strategy.sourceUrl}
-										</a>
+										{strategy.description || "No description"}
 									</Typography>
-								)}
 
-								{strategy.backtestResults && (
-									<Box sx={{ mt: 2 }}>
-										<Typography variant="subtitle2" gutterBottom>
-											Backtest Results
-										</Typography>
-										<Typography variant="body2">
-											Win Rate:{" "}
-											{formatPercent(strategy.backtestResults.winRate)}
-										</Typography>
-										<Typography variant="body2">
-											Total Trades: {strategy.backtestResults.totalTrades}
-										</Typography>
-										<Typography variant="body2">
-											P&L:{" "}
-											{formatPercent(strategy.backtestResults.totalPnlPercent)}
-										</Typography>
-										<Typography variant="body2">
-											Max Drawdown:{" "}
-											{formatPercent(-strategy.backtestResults.maxDrawdown)}
-										</Typography>
+									<Box
+										sx={{
+											display: "flex",
+											gap: 1,
+											flexWrap: "wrap",
+											mt: 1,
+										}}
+									>
+										<Chip
+											label={strategy.isActive ? "Active" : "Inactive"}
+											color={strategy.isActive ? "success" : "default"}
+											size="small"
+										/>
+										{strategy.autoDiscovered && (
+											<Chip
+												label="Auto-discovered"
+												size="small"
+												color="info"
+												variant="outlined"
+											/>
+										)}
 									</Box>
-								)}
-							</>
+
+									{strategy.symbols?.length > 0 && (
+										<Box sx={{ mt: 2 }}>
+											<Typography variant="subtitle2" gutterBottom>
+												Symbols
+											</Typography>
+											<Box
+												sx={{
+													display: "flex",
+													gap: 0.5,
+													flexWrap: "wrap",
+												}}
+											>
+												{strategy.symbols.map((s) => (
+													<Chip
+														key={s}
+														label={s}
+														size="small"
+														variant="outlined"
+													/>
+												))}
+											</Box>
+										</Box>
+									)}
+
+									{strategy.timeframes?.length > 0 && (
+										<Box sx={{ mt: 2 }}>
+											<Typography variant="subtitle2" gutterBottom>
+												Timeframes
+											</Typography>
+											<Box
+												sx={{
+													display: "flex",
+													gap: 0.5,
+													flexWrap: "wrap",
+												}}
+											>
+												{strategy.timeframes.map((t) => (
+													<Chip
+														key={t}
+														label={t}
+														size="small"
+														variant="outlined"
+													/>
+												))}
+											</Box>
+										</Box>
+									)}
+
+									{strategy.entryRules &&
+										Object.keys(strategy.entryRules).length > 0 && (
+											<Box sx={{ mt: 2 }}>
+												<Typography variant="subtitle2" gutterBottom>
+													Entry Rules
+												</Typography>
+												{Object.entries(strategy.entryRules).map(
+													([key, val]) => (
+														<Typography
+															key={key}
+															variant="body2"
+															sx={{ ml: 1 }}
+														>
+															<strong>{key}:</strong> {String(val)}
+														</Typography>
+													),
+												)}
+											</Box>
+										)}
+
+									{strategy.exitRules &&
+										Object.keys(strategy.exitRules).length > 0 && (
+											<Box sx={{ mt: 2 }}>
+												<Typography variant="subtitle2" gutterBottom>
+													Exit Rules
+												</Typography>
+												{Object.entries(strategy.exitRules).map(
+													([key, val]) => (
+														<Typography
+															key={key}
+															variant="body2"
+															sx={{ ml: 1 }}
+														>
+															<strong>{key}:</strong> {String(val)}
+														</Typography>
+													),
+												)}
+											</Box>
+										)}
+
+									{strategy.riskParams &&
+										Object.keys(strategy.riskParams).length > 0 && (
+											<Box sx={{ mt: 2 }}>
+												<Typography variant="subtitle2" gutterBottom>
+													Risk Parameters
+												</Typography>
+												{Object.entries(strategy.riskParams).map(
+													([key, val]) => (
+														<Typography
+															key={key}
+															variant="body2"
+															sx={{ ml: 1 }}
+														>
+															<strong>{key}:</strong> {String(val)}
+														</Typography>
+													),
+												)}
+											</Box>
+										)}
+
+									{strategy.sourceUrl && (
+										<Typography
+											variant="body2"
+											color="text.secondary"
+											sx={{ mt: 2 }}
+										>
+											<strong>Source:</strong>{" "}
+											<a
+												href={strategy.sourceUrl}
+												target="_blank"
+												rel="noopener noreferrer"
+											>
+												{strategy.sourceUrl}
+											</a>
+										</Typography>
+									)}
+
+									{strategy.backtestResults && (
+										<Box sx={{ mt: 2 }}>
+											<Typography variant="subtitle2" gutterBottom>
+												Backtest Results
+											</Typography>
+											<Typography variant="body2">
+												Win Rate:{" "}
+												{formatPercent(strategy.backtestResults.winRate)}
+											</Typography>
+											<Typography variant="body2">
+												Total Trades: {strategy.backtestResults.totalTrades}
+											</Typography>
+											<Typography variant="body2">
+												P&L:{" "}
+												{formatPercent(
+													strategy.backtestResults.totalPnlPercent,
+												)}
+											</Typography>
+											<Typography variant="body2">
+												Max Drawdown:{" "}
+												{formatPercent(-strategy.backtestResults.maxDrawdown)}
+											</Typography>
+										</Box>
+									)}
+								</>
+							))}
+
+						{dialogTab === 1 && (
+							<ExtractionChatTab
+								messages={knowledge?.extractionMessages ?? []}
+								sourceUrl={knowledge?.sourceUrl}
+								createdAt={knowledge?.createdAt}
+								isLoading={knowledgeLoading}
+							/>
 						)}
 					</DialogContent>
 					{editing && (
@@ -628,6 +721,113 @@ function StrategyDetailDialog({
 				</>
 			)}
 		</Dialog>
+	);
+}
+
+function ExtractionChatTab({
+	messages,
+	sourceUrl,
+	createdAt,
+	isLoading,
+}: {
+	messages: ExtractionMessage[];
+	sourceUrl?: string;
+	createdAt?: string;
+	isLoading: boolean;
+}) {
+	if (isLoading) {
+		return (
+			<Box
+				sx={{
+					display: "flex",
+					justifyContent: "center",
+					alignItems: "center",
+					py: 6,
+				}}
+			>
+				<CircularProgress size={28} />
+			</Box>
+		);
+	}
+
+	if (messages.length === 0) {
+		return (
+			<Box sx={{ py: 4, textAlign: "center" }}>
+				<ChatIcon sx={{ fontSize: 40, color: "text.disabled", mb: 1 }} />
+				<Typography variant="body2" color="text.secondary">
+					No extraction data available.
+				</Typography>
+				<Typography variant="caption" color="text.disabled">
+					This strategy was not imported via AI extraction.
+				</Typography>
+			</Box>
+		);
+	}
+
+	return (
+		<Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mt: 1 }}>
+			{sourceUrl && (
+				<Typography variant="caption" color="text.secondary">
+					Source:{" "}
+					<a href={sourceUrl} target="_blank" rel="noopener noreferrer">
+						{sourceUrl}
+					</a>
+				</Typography>
+			)}
+			{createdAt && (
+				<Typography variant="caption" color="text.disabled">
+					Extracted: {new Date(createdAt).toLocaleString()}
+				</Typography>
+			)}
+
+			{messages.map((msg, idx) => (
+				<Box
+					key={`extraction-msg-${msg.role}-${idx}`}
+					sx={{
+						display: "flex",
+						justifyContent: msg.role === "assistant" ? "flex-start" : "center",
+					}}
+				>
+					{msg.role === "system" ? (
+						<Chip
+							label={msg.content}
+							size="small"
+							variant="outlined"
+							sx={{
+								maxWidth: "90%",
+								height: "auto",
+								"& .MuiChip-label": {
+									whiteSpace: "normal",
+									py: 0.5,
+								},
+								color: "text.secondary",
+								borderColor: "divider",
+								fontSize: "0.75rem",
+							}}
+						/>
+					) : (
+						<Box
+							sx={{
+								bgcolor: "action.hover",
+								borderRadius: 2,
+								px: 2,
+								py: 1,
+								maxWidth: "90%",
+							}}
+						>
+							<Typography
+								variant="caption"
+								color="primary"
+								sx={{ fontWeight: 600, mb: 0.5, display: "block" }}
+							>
+								AI Assistant
+							</Typography>
+							<Typography variant="body2">{msg.content}</Typography>
+						</Box>
+					)}
+				</Box>
+			))}
+		</Box>
 	);
 }
 

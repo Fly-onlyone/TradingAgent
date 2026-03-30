@@ -37,6 +37,7 @@ class ExtractedStrategyResponse(BaseModel):
     asset_classes: list[str] = []
     source_url: str | None = None
     source_filename: str | None = None
+    extraction_messages: list[dict] = []
 
 
 class StrategyImportConfirm(BaseModel):
@@ -51,6 +52,7 @@ class StrategyImportConfirm(BaseModel):
     asset_classes: list[str] = []
     source_url: str | None = None
     source_filename: str | None = None
+    extraction_messages: list[dict] = []
 
 
 class StrategyImportResult(BaseModel):
@@ -128,6 +130,7 @@ async def confirm_import(
         asset_classes=data.asset_classes,
         timeframes=data.timeframes,
         source_url=data.source_url,
+        extraction_messages=data.extraction_messages,
     )
     await knowledge.insert()
 

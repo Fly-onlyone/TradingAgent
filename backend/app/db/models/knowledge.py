@@ -61,6 +61,9 @@ class StrategyKnowledge(Document):
         le=1.0,
     )  # Sentiment of the source article at extraction time
 
+    # Extraction conversation history (populated during AI import)
+    extraction_messages: list[dict] = Field(default_factory=list)
+
     # Embedding for semantic search (768-dim nomic-embed-text-v1.5 vector stored inline)
     embedding: list[float] | None = None
 
