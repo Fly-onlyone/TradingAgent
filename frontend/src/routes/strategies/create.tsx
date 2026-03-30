@@ -155,9 +155,8 @@ function UrlImportTab({
 
 	const extractMutation = useMutation({
 		mutationFn: (u: string) =>
-			Sentry.startSpan(
-				{ name: "strategy.extract.url", op: "ui.action" },
-				() => strategiesApi.extractFromUrl(u),
+			Sentry.startSpan({ name: "strategy.extract.url", op: "ui.action" }, () =>
+				strategiesApi.extractFromUrl(u),
 			),
 		onSuccess: (data: ExtractedStrategy) => {
 			setExtracted({ ...data });
@@ -186,8 +185,7 @@ function UrlImportTab({
 				sx={{
 					mt: 3,
 					p: 3,
-					border: (theme) =>
-						`1px solid ${theme.trading.border.medium}`,
+					border: (theme) => `1px solid ${theme.trading.border.medium}`,
 				}}
 			>
 				<Typography
@@ -271,9 +269,8 @@ function FileUploadTab({
 
 	const extractMutation = useMutation({
 		mutationFn: (file: File) =>
-			Sentry.startSpan(
-				{ name: "strategy.extract.file", op: "ui.action" },
-				() => strategiesApi.extractFromFile(file),
+			Sentry.startSpan({ name: "strategy.extract.file", op: "ui.action" }, () =>
+				strategiesApi.extractFromFile(file),
 			),
 		onSuccess: (data: ExtractedStrategy) => {
 			setExtracted({ ...data });
@@ -309,8 +306,7 @@ function FileUploadTab({
 				sx={{
 					mt: 3,
 					p: 3,
-					border: (theme) =>
-						`1px solid ${theme.trading.border.medium}`,
+					border: (theme) => `1px solid ${theme.trading.border.medium}`,
 				}}
 			>
 				<Typography
@@ -355,8 +351,7 @@ function FileUploadTab({
 				<Box
 					onClick={() => fileInputRef.current?.click()}
 					sx={{
-						border: (theme) =>
-							`2px dashed ${theme.trading.border.medium}`,
+						border: (theme) => `2px dashed ${theme.trading.border.medium}`,
 						borderRadius: 2,
 						p: 4,
 						textAlign: "center",
@@ -379,13 +374,8 @@ function FileUploadTab({
 						Supports TXT, JSON, YAML, PDF files
 					</Typography>
 					{selectedFile && (
-						<Typography
-							variant="body2"
-							color="text.secondary"
-							sx={{ mt: 1 }}
-						>
-							{selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)}{" "}
-							KB)
+						<Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+							{selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
 						</Typography>
 					)}
 				</Box>

@@ -1,11 +1,10 @@
 """Log record model for persistent log storage in MongoDB."""
 
-from datetime import datetime, timezone, UTC
-from typing import Optional
+from datetime import UTC, datetime
 
 from beanie import Document
-from pymongo import IndexModel, ASCENDING, DESCENDING
 from pydantic import Field
+from pymongo import ASCENDING, DESCENDING, IndexModel
 
 
 class LogRecord(Document):
@@ -15,13 +14,13 @@ class LogRecord(Document):
     level: str  # INFO, WARNING, ERROR, CRITICAL
     logger_name: str  # e.g. "app.agent.trading_agent"
     message: str
-    module: Optional[str] = None
-    function: Optional[str] = None
-    line: Optional[int] = None
-    request_id: Optional[str] = None
-    user_id: Optional[str] = None
-    extra: Optional[dict] = None
-    traceback: Optional[str] = None
+    module: str | None = None
+    function: str | None = None
+    line: int | None = None
+    request_id: str | None = None
+    user_id: str | None = None
+    extra: dict | None = None
+    traceback: str | None = None
 
     class Settings:
         name = "logs"

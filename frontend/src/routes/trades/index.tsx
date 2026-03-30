@@ -149,9 +149,7 @@ function TradesPage() {
 								onToggleSymbol={toggleSymbolExpanded}
 								onExpandAll={() =>
 									expandAllSymbols(
-										(bySymbolQuery.data ?? []).map(
-											(item) => item.symbol,
-										),
+										(bySymbolQuery.data ?? []).map((item) => item.symbol),
 									)
 								}
 								onCollapseAll={collapseAllSymbols}

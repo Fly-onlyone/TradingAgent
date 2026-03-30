@@ -1,7 +1,6 @@
 """Agent decision endpoints for viewing decision history."""
 
-from datetime import datetime, UTC
-from typing import Optional
+from datetime import UTC, datetime
 
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -24,21 +23,21 @@ class DecisionSummaryResponse(BaseModel):
     """Compact decision response for list views."""
 
     id: str
-    session_id: Optional[str]
-    task_id: Optional[str]
+    session_id: str | None
+    task_id: str | None
 
     decision_type: str
-    symbol: Optional[str]
-    action: Optional[str]
-    confidence: Optional[float]
+    symbol: str | None
+    action: str | None
+    confidence: float | None
     status: str
     summary: str
 
     created_at: datetime
-    executed_at: Optional[datetime]
-    execution_status: Optional[str]
-    execution_error_code: Optional[str]
-    execution_error_message: Optional[str]
+    executed_at: datetime | None
+    execution_status: str | None
+    execution_error_code: str | None
+    execution_error_message: str | None
 
     class Config:
         from_attributes = True
@@ -49,72 +48,72 @@ class ToolUsageResponse(BaseModel):
 
     name: str
     arguments: dict
-    result_summary: Optional[str]
-    execution_time_ms: Optional[int]
+    result_summary: str | None
+    execution_time_ms: int | None
 
 
 class MarketContextResponse(BaseModel):
     """Market context at decision time."""
 
-    price: Optional[float]
-    price_change_24h: Optional[float]
-    volume_24h: Optional[float]
-    rsi: Optional[float]
-    macd_signal: Optional[str]
-    trend: Optional[str]
+    price: float | None
+    price_change_24h: float | None
+    volume_24h: float | None
+    rsi: float | None
+    macd_signal: str | None
+    trend: str | None
     support_levels: list[float]
     resistance_levels: list[float]
-    news_sentiment: Optional[float]
+    news_sentiment: float | None
 
 
 class DecisionDetailResponse(BaseModel):
     """Full decision response with all details."""
 
     id: str
-    session_id: Optional[str]
-    task_id: Optional[str]
+    session_id: str | None
+    task_id: str | None
 
     # Classification
     decision_type: str
-    symbol: Optional[str]
-    action: Optional[str]
-    confidence: Optional[float]
+    symbol: str | None
+    action: str | None
+    confidence: float | None
     status: str
 
     # Content
     summary: str
     reasoning: str
     key_factors: list[str]
-    proposed_changes: Optional[dict] = None  # For task modification decisions
+    proposed_changes: dict | None = None  # For task modification decisions
 
     # Trade specifics
-    suggested_entry: Optional[float]
-    suggested_stop_loss: Optional[float]
-    suggested_take_profit: Optional[float]
-    suggested_position_size: Optional[float]
-    risk_reward_ratio: Optional[float]
+    suggested_entry: float | None
+    suggested_stop_loss: float | None
+    suggested_take_profit: float | None
+    suggested_position_size: float | None
+    risk_reward_ratio: float | None
 
     # Execution
-    order_id: Optional[str]
-    execution_price: Optional[float]
-    execution_status: Optional[str]
-    execution_error_code: Optional[str]
-    execution_error_message: Optional[str]
+    order_id: str | None
+    execution_price: float | None
+    execution_status: str | None
+    execution_error_code: str | None
+    execution_error_message: str | None
 
     # Context
     tools_used: list[dict]
-    market_context: Optional[dict]
+    market_context: dict | None
     model_used: str
 
     # Feedback
-    user_feedback: Optional[str]
-    feedback_comment: Optional[str]
+    user_feedback: str | None
+    feedback_comment: str | None
 
     # Timestamps
     created_at: datetime
-    confirmed_at: Optional[datetime]
-    executed_at: Optional[datetime]
-    expires_at: Optional[datetime]
+    confirmed_at: datetime | None
+    executed_at: datetime | None
+    expires_at: datetime | None
 
     class Config:
         from_attributes = True
@@ -138,14 +137,14 @@ class DecisionStatsResponse(BaseModel):
     by_type: dict[str, int]
     by_action: dict[str, int]
     by_symbol: dict[str, int]
-    avg_confidence: Optional[float]
+    avg_confidence: float | None
 
 
 class FeedbackCreate(BaseModel):
     """User feedback on a decision."""
 
     feedback: str = Field(..., pattern="^(thumbs_up|thumbs_down|neutral)$")
-    comment: Optional[str] = Field(None, max_length=500)
+    comment: str | None = Field(None, max_length=500)
 
 
 def decision_to_summary(decision: AgentDecision) -> DecisionSummaryResponse:
@@ -194,9 +193,7 @@ def decision_to_detail(decision: AgentDecision) -> DecisionDetailResponse:
         execution_error_message=decision.execution_error_message,
         tools_used=[tool.model_dump(mode="json") for tool in decision.tools_used],
         market_context=(
-            decision.market_context.model_dump(mode="json")
-            if decision.market_context
-            else None
+            decision.market_context.model_dump(mode="json") if decision.market_context else None
         ),
         model_used=decision.model_used,
         user_feedback=decision.user_feedback,
@@ -210,13 +207,13 @@ def decision_to_detail(decision: AgentDecision) -> DecisionDetailResponse:
 
 @router.get("", response_model=DecisionListResponse)
 async def list_decisions(
-    decision_type: Optional[DecisionType] = None,
-    symbol: Optional[str] = None,
-    action: Optional[DecisionAction] = None,
-    status: Optional[DecisionStatus] = None,
-    session_id: Optional[str] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    decision_type: DecisionType | None = None,
+    symbol: str | None = None,
+    action: DecisionAction | None = None,
+    status: DecisionStatus | None = None,
+    session_id: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_active_user),
@@ -242,10 +239,7 @@ async def list_decisions(
     total = await query.count()
 
     decisions = (
-        await query.sort("-created_at")
-        .skip((page - 1) * page_size)
-        .limit(page_size)
-        .to_list()
+        await query.sort("-created_at").skip((page - 1) * page_size).limit(page_size).to_list()
     )
 
     return {
@@ -276,10 +270,7 @@ async def list_pending_decisions(
     total = await query.count()
 
     decisions = (
-        await query.sort("-created_at")
-        .skip((page - 1) * page_size)
-        .limit(page_size)
-        .to_list()
+        await query.sort("-created_at").skip((page - 1) * page_size).limit(page_size).to_list()
     )
 
     return {
@@ -341,9 +332,7 @@ async def get_decision_stats(
         if d.status == DecisionStatus.PENDING:
             pending_count += 1
 
-    avg_confidence = (
-        total_confidence / confidence_count if confidence_count > 0 else None
-    )
+    avg_confidence = total_confidence / confidence_count if confidence_count > 0 else None
 
     return {
         "total_decisions": len(decisions),

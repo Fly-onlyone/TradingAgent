@@ -1,7 +1,6 @@
 """Agent session management endpoints for chat history persistence."""
 
 from datetime import UTC, datetime, timedelta
-from typing import Optional
 
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -16,20 +15,20 @@ router = APIRouter()
 
 # Request/Response schemas
 class SessionCreate(BaseModel):
-    title: Optional[str] = Field(None, max_length=200)
-    description: Optional[str] = Field(None, max_length=500)
+    title: str | None = Field(None, max_length=200)
+    description: str | None = Field(None, max_length=500)
 
 
 class SessionUpdate(BaseModel):
-    title: Optional[str] = Field(None, max_length=200)
-    description: Optional[str] = Field(None, max_length=500)
+    title: str | None = Field(None, max_length=200)
+    description: str | None = Field(None, max_length=500)
 
 
 class MessageCreate(BaseModel):
     role: str = Field(..., pattern="^(user|assistant|system)$")
     content: str = Field(..., min_length=1)
-    decision_id: Optional[str] = None
-    tool_calls: Optional[list[dict]] = None
+    decision_id: str | None = None
+    tool_calls: list[dict] | None = None
     tokens: int = 0
 
 
@@ -37,15 +36,15 @@ class MessageResponse(BaseModel):
     role: str
     content: str
     timestamp: str
-    decision_id: Optional[str] = None
-    tool_calls: Optional[list[dict]] = None
-    thinking_content: Optional[str] = None
+    decision_id: str | None = None
+    tool_calls: list[dict] | None = None
+    thinking_content: str | None = None
 
 
 class SessionResponse(BaseModel):
     id: str
-    title: Optional[str]
-    description: Optional[str]
+    title: str | None
+    description: str | None
     is_active: bool
 
     # Statistics
@@ -59,8 +58,8 @@ class SessionResponse(BaseModel):
 
     # Timestamps
     started_at: datetime
-    ended_at: Optional[datetime]
-    last_message_at: Optional[datetime]
+    ended_at: datetime | None
+    last_message_at: datetime | None
 
     class Config:
         from_attributes = True
@@ -191,8 +190,8 @@ async def create_session(
 
 @router.get("", response_model=SessionListResponse)
 async def list_sessions(
-    is_active: Optional[bool] = None,
-    symbol: Optional[str] = None,
+    is_active: bool | None = None,
+    symbol: str | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_active_user),

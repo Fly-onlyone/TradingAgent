@@ -120,11 +120,15 @@ Separate Sentry projects per layer (org: `fly-theonlyone`):
   `ruff check --fix` to auto-fix
 - **Biome**: Enforces tabs (not spaces), double quotes, sorted imports. PyCharm reformatter uses spaces — always run
   `biome check --write` AFTER `reformat_file` to reconcile
-- **Skeleton keys**: `noArrayIndexKey` warnings on skeleton loaders are pre-existing false positives (static
-  placeholders) — same pattern in `logs.tsx`
+- **Skeleton keys**: Biome enforces `noArrayIndexKey` even for loading placeholders. Use stable string keys for
+  skeleton rows/cards instead of array indexes.
 - **Hook ordering**: Biome enforces `useHookAtTopLevel` — early returns (like auth guards) must come AFTER all hooks,
   not before
-- **Pre-existing errors**: ~351 ruff errors and ~178 biome errors across the codebase — only verify new/modified files
+- **Current CI state**: `uv run ruff check backend/`, `uv run ruff format --check backend/`,
+  `uv run pytest --tb=short -q`,
+  `cd frontend && bun run check`, `cd frontend && bun run test`, and `cd frontend && bun run build` are currently
+  green. Remaining warnings are non-blocking (for example Pydantic v2 deprecation warnings in tests and Vite chunk-size
+  warnings in frontend builds).
 
 ## Context7 IDs
 

@@ -2,10 +2,14 @@
  * WebSocket Hooks Exports
  */
 
-export { useWebSocket, type UseWebSocketOptions, type UseWebSocketReturn } from './useWebSocket';
 export {
-  useAgentSocket,
-  type AgentMessage,
-  type ToolCall,
-  type AgentDecision,
-} from './useAgentSocket';
+	type AgentDecision,
+	type AgentMessage,
+	type ToolCall,
+	useAgentSocket,
+} from "./useAgentSocket";
+export {
+	type UseWebSocketOptions,
+	type UseWebSocketReturn,
+	useWebSocket,
+} from "./useWebSocket";

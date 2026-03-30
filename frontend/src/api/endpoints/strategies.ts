@@ -9,6 +9,7 @@ import type {
 	StrategyCreate,
 	StrategyImportConfirm,
 	StrategyImportResult,
+	StrategyRiskParams,
 	StrategySignal,
 	StrategyUpdate,
 } from "@/types";
@@ -138,6 +139,12 @@ export const strategiesApi = {
 };
 
 function transformStrategy(data: Record<string, unknown>): Strategy {
+	const riskParams = (data.risk_params as StrategyRiskParams | undefined) ?? {
+		maxPositionSize: 0,
+		riskPerTrade: 0,
+		maxDrawdown: 0,
+	};
+
 	return {
 		id: data.id as string,
 		name: data.name as string,
@@ -149,7 +156,7 @@ function transformStrategy(data: Record<string, unknown>): Strategy {
 		timeframes: (data.timeframes as string[]) || [],
 		entryRules: (data.entry_rules as Record<string, unknown>) || {},
 		exitRules: (data.exit_rules as Record<string, unknown>) || {},
-		riskParams: (data.risk_params as Record<string, unknown>) || {},
+		riskParams,
 		backtestResults: data.backtest_results as Strategy["backtestResults"],
 		autoDiscovered: (data.auto_discovered as boolean) ?? false,
 		sourceUrl: data.source_url as string | undefined,

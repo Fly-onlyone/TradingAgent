@@ -44,6 +44,11 @@ export const Route = createFileRoute("/knowledge/")({
 	component: KnowledgePage,
 });
 
+const KNOWLEDGE_SKELETON_KEYS = Array.from(
+	{ length: 6 },
+	(_, index) => `knowledge-skeleton-${index}`,
+);
+
 function KnowledgePage() {
 	const [tabValue, setTabValue] = useState(0);
 	const [searchQuery, setSearchQuery] = useState("");
@@ -66,21 +71,33 @@ function KnowledgePage() {
 		enabled: debouncedQuery.length > 0,
 	});
 
-	const { data: strategies, isLoading: loadingStrategies, isFetching: fetchingStrategies } = useQuery({
+	const {
+		data: strategies,
+		isLoading: loadingStrategies,
+		isFetching: fetchingStrategies,
+	} = useQuery({
 		queryKey: ["knowledge-strategies", strategiesLimit],
 		queryFn: () => knowledgeApi.getStrategies(strategiesLimit),
 		enabled: tabValue === 0 && !debouncedQuery,
 		placeholderData: keepPreviousData,
 	});
 
-	const { data: lessons, isLoading: loadingLessons, isFetching: fetchingLessons } = useQuery({
+	const {
+		data: lessons,
+		isLoading: loadingLessons,
+		isFetching: fetchingLessons,
+	} = useQuery({
 		queryKey: ["knowledge-lessons", lessonsLimit],
 		queryFn: () => knowledgeApi.getLessons({ limit: lessonsLimit }),
 		enabled: tabValue === 1 && !debouncedQuery,
 		placeholderData: keepPreviousData,
 	});
 
-	const { data: patterns, isLoading: loadingPatterns, isFetching: fetchingPatterns } = useQuery({
+	const {
+		data: patterns,
+		isLoading: loadingPatterns,
+		isFetching: fetchingPatterns,
+	} = useQuery({
 		queryKey: ["knowledge-patterns", patternsLimit],
 		queryFn: () => knowledgeApi.getPatterns({ limit: patternsLimit }),
 		enabled: tabValue === 2 && !debouncedQuery,
@@ -154,8 +171,8 @@ function KnowledgePage() {
 				{/* Content */}
 				{isLoading ? (
 					<Grid container spacing={2}>
-						{Array.from({ length: 6 }).map((_, i) => (
-							<Grid key={i} size={{ xs: 12, md: 6, lg: 4 }}>
+						{KNOWLEDGE_SKELETON_KEYS.map((key) => (
+							<Grid key={key} size={{ xs: 12, md: 6, lg: 4 }}>
 								<ShimmerSkeleton shimmerVariant="card" sx={{ height: 180 }} />
 							</Grid>
 						))}
@@ -177,16 +194,10 @@ function KnowledgePage() {
 								<Grid container spacing={2}>
 									{/* Strategies Tab */}
 									{tabValue === 0 &&
-										(displayStrategies &&
-										displayStrategies.length > 0 ? (
+										(displayStrategies && displayStrategies.length > 0 ? (
 											displayStrategies.map((strategy) => (
-												<Grid
-													key={strategy.id}
-													size={{ xs: 12, md: 6, lg: 4 }}
-												>
-													<motion.div
-														variants={staggerCascade.item}
-													>
+												<Grid key={strategy.id} size={{ xs: 12, md: 6, lg: 4 }}>
+													<motion.div variants={staggerCascade.item}>
 														<StrategyCard
 															strategy={strategy}
 															onClick={() => {
@@ -215,13 +226,8 @@ function KnowledgePage() {
 									{tabValue === 1 &&
 										(displayLessons && displayLessons.length > 0 ? (
 											displayLessons.map((lesson) => (
-												<Grid
-													key={lesson.id}
-													size={{ xs: 12, md: 6 }}
-												>
-													<motion.div
-														variants={staggerCascade.item}
-													>
+												<Grid key={lesson.id} size={{ xs: 12, md: 6 }}>
+													<motion.div variants={staggerCascade.item}>
 														<LessonCard
 															lesson={lesson}
 															onClick={() => {
@@ -244,16 +250,10 @@ function KnowledgePage() {
 
 									{/* Patterns Tab */}
 									{tabValue === 2 &&
-										(displayPatterns &&
-										displayPatterns.length > 0 ? (
+										(displayPatterns && displayPatterns.length > 0 ? (
 											displayPatterns.map((pattern) => (
-												<Grid
-													key={pattern.id}
-													size={{ xs: 12, md: 6, lg: 4 }}
-												>
-													<motion.div
-														variants={staggerCascade.item}
-													>
+												<Grid key={pattern.id} size={{ xs: 12, md: 6, lg: 4 }}>
+													<motion.div variants={staggerCascade.item}>
 														<PatternCard
 															pattern={pattern}
 															onClick={() => {
@@ -275,38 +275,65 @@ function KnowledgePage() {
 										))}
 								</Grid>
 
-									{/* Load More buttons (only in non-search mode) */}
-									{!debouncedQuery && tabValue === 0 && displayStrategies && displayStrategies.length >= strategiesLimit && (
-										<Box sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
+								{/* Load More buttons (only in non-search mode) */}
+								{!debouncedQuery &&
+									tabValue === 0 &&
+									displayStrategies &&
+									displayStrategies.length >= strategiesLimit && (
+										<Box
+											sx={{ display: "flex", justifyContent: "center", mt: 3 }}
+										>
 											<Button
 												variant="outlined"
 												onClick={() => setStrategiesLimit((prev) => prev + 20)}
 												disabled={fetchingStrategies}
-												startIcon={fetchingStrategies ? <CircularProgress size={16} /> : undefined}
+												startIcon={
+													fetchingStrategies ? (
+														<CircularProgress size={16} />
+													) : undefined
+												}
 											>
 												{fetchingStrategies ? "Loading..." : "Load More"}
 											</Button>
 										</Box>
 									)}
-									{!debouncedQuery && tabValue === 1 && displayLessons && displayLessons.length >= lessonsLimit && (
-										<Box sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
+								{!debouncedQuery &&
+									tabValue === 1 &&
+									displayLessons &&
+									displayLessons.length >= lessonsLimit && (
+										<Box
+											sx={{ display: "flex", justifyContent: "center", mt: 3 }}
+										>
 											<Button
 												variant="outlined"
 												onClick={() => setLessonsLimit((prev) => prev + 20)}
 												disabled={fetchingLessons}
-												startIcon={fetchingLessons ? <CircularProgress size={16} /> : undefined}
+												startIcon={
+													fetchingLessons ? (
+														<CircularProgress size={16} />
+													) : undefined
+												}
 											>
 												{fetchingLessons ? "Loading..." : "Load More"}
 											</Button>
 										</Box>
 									)}
-									{!debouncedQuery && tabValue === 2 && displayPatterns && displayPatterns.length >= patternsLimit && (
-										<Box sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
+								{!debouncedQuery &&
+									tabValue === 2 &&
+									displayPatterns &&
+									displayPatterns.length >= patternsLimit && (
+										<Box
+											sx={{ display: "flex", justifyContent: "center", mt: 3 }}
+										>
 											<Button
 												variant="outlined"
 												onClick={() => setPatternsLimit((prev) => prev + 20)}
 												disabled={fetchingPatterns}
-												startIcon={fetchingPatterns ? <CircularProgress size={16} /> : undefined}
+												startIcon={
+													fetchingPatterns ? (
+														<CircularProgress size={16} />
+													) : undefined
+												}
 											>
 												{fetchingPatterns ? "Loading..." : "Load More"}
 											</Button>
@@ -341,8 +368,7 @@ function KnowledgePage() {
 									<Typography variant="body2" sx={{ mb: 2 }}>
 										{(selectedItem as StrategyKnowledge).description}
 									</Typography>
-									{(selectedItem as StrategyKnowledge).winRate !=
-										null && (
+									{(selectedItem as StrategyKnowledge).winRate != null && (
 										<MetricRow
 											label="Win Rate"
 											value={`${((selectedItem as StrategyKnowledge).winRate ?? 0).toFixed(1)}%`}
@@ -356,27 +382,18 @@ function KnowledgePage() {
 								<>
 									<MetricRow
 										label="Symbol"
-										value={
-											(selectedItem as TradeLesson).symbol
-										}
+										value={(selectedItem as TradeLesson).symbol}
 									/>
 									<MetricRow
 										label="Side"
-										value={(
-											selectedItem as TradeLesson
-										).side.toUpperCase()}
+										value={(selectedItem as TradeLesson).side.toUpperCase()}
 									/>
 									<MetricRow
 										label="Outcome"
-										value={
-											(selectedItem as TradeLesson).outcome
-										}
+										value={(selectedItem as TradeLesson).outcome}
 									/>
 									<Typography variant="body2" sx={{ mt: 2 }}>
-										{
-											(selectedItem as TradeLesson)
-												.lessonSummary
-										}
+										{(selectedItem as TradeLesson).lessonSummary}
 									</Typography>
 								</>
 							)}
@@ -386,20 +403,14 @@ function KnowledgePage() {
 								<>
 									<MetricRow
 										label="Type"
-										value={
-											(selectedItem as TradingPattern)
-												.patternType
-										}
+										value={(selectedItem as TradingPattern).patternType}
 									/>
 									<MetricRow
 										label="Success Rate"
 										value={`${(selectedItem as TradingPattern).successRate.toFixed(1)}%`}
 									/>
 									<Typography variant="body2" sx={{ mt: 2 }}>
-										{
-											(selectedItem as TradingPattern)
-												.description
-										}
+										{(selectedItem as TradingPattern).description}
 									</Typography>
 								</>
 							)}
@@ -413,7 +424,10 @@ function KnowledgePage() {
 function StrategyCard({
 	strategy,
 	onClick,
-}: { strategy: StrategyKnowledge; onClick?: () => void }) {
+}: {
+	strategy: StrategyKnowledge;
+	onClick?: () => void;
+}) {
 	return (
 		<Card onClick={onClick} sx={{ cursor: onClick ? "pointer" : "default" }}>
 			<CardContent>
@@ -442,7 +456,10 @@ function StrategyCard({
 function LessonCard({
 	lesson,
 	onClick,
-}: { lesson: TradeLesson; onClick?: () => void }) {
+}: {
+	lesson: TradeLesson;
+	onClick?: () => void;
+}) {
 	const outcomeColor =
 		lesson.outcome === "profit"
 			? "success"
@@ -482,7 +499,10 @@ function LessonCard({
 function PatternCard({
 	pattern,
 	onClick,
-}: { pattern: TradingPattern; onClick?: () => void }) {
+}: {
+	pattern: TradingPattern;
+	onClick?: () => void;
+}) {
 	return (
 		<Card onClick={onClick} sx={{ cursor: onClick ? "pointer" : "default" }}>
 			<CardContent>

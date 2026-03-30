@@ -7,7 +7,6 @@ import threading
 
 import numpy as np
 import pytest
-
 from app.knowledge import embeddings
 
 

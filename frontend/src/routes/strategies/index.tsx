@@ -42,7 +42,7 @@ import { ShimmerSkeleton } from "@/components/common/ShimmerSkeleton";
 import { StrategyDiscoveryCard } from "@/components/strategies/StrategyDiscoveryCard";
 import { useZoomAwareMenu } from "@/hooks/useZoomAwareMenu";
 import { notify } from "@/store/uiStore";
-import type { Strategy, StrategyUpdate } from "@/types";
+import type { Strategy, StrategyRiskParams, StrategyUpdate } from "@/types";
 import { staggerCascade } from "@/utils/animations/variants";
 import { formatPercent } from "@/utils/formatters";
 import { requireAuth } from "../-guards";
@@ -51,6 +51,11 @@ export const Route = createFileRoute("/strategies/")({
 	beforeLoad: requireAuth,
 	component: StrategiesPage,
 });
+
+const STRATEGY_CARD_SKELETON_KEYS = Array.from(
+	{ length: 3 },
+	(_, index) => `strategy-card-skeleton-${index}`,
+);
 
 function StrategiesPage() {
 	const navigate = useNavigate();
@@ -149,8 +154,8 @@ function StrategiesPage() {
 
 				{isLoading ? (
 					<Grid container spacing={3}>
-						{Array.from({ length: 3 }).map((_, i) => (
-							<Grid key={i} size={{ xs: 12, md: 6, lg: 4 }}>
+						{STRATEGY_CARD_SKELETON_KEYS.map((key) => (
+							<Grid key={key} size={{ xs: 12, md: 6, lg: 4 }}>
 								<ShimmerSkeleton shimmerVariant="card" sx={{ height: 250 }} />
 							</Grid>
 						))}
@@ -213,16 +218,18 @@ function StrategiesPage() {
 }
 
 /** Formats a rules/params object as a JSON string for editing. */
-function rulesAsText(rules: Record<string, unknown>): string {
+function rulesAsText(
+	rules: Record<string, unknown> | StrategyRiskParams,
+): string {
 	return JSON.stringify(rules, null, 2);
 }
 
 /** Safely parses JSON text back to a Record. Returns null on invalid JSON. */
-function parseRulesText(text: string): Record<string, unknown> | null {
+function parseRulesText<T extends object>(text: string): T | null {
 	try {
 		const parsed = JSON.parse(text);
 		if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed))
-			return parsed as Record<string, unknown>;
+			return parsed as T;
 		return null;
 	} catch {
 		return null;
@@ -271,8 +278,13 @@ function StrategyDetailDialog({
 	}, [strategy, populateForm]);
 
 	const updateMutation = useMutation({
-		mutationFn: (data: StrategyUpdate) =>
-			strategiesApi.updateStrategy(strategy!.id, data),
+		mutationFn: ({
+			strategyId,
+			data,
+		}: {
+			strategyId: string;
+			data: StrategyUpdate;
+		}) => strategiesApi.updateStrategy(strategyId, data),
 		onSuccess: async () => {
 			notify.success("Strategy updated");
 			await queryClient.invalidateQueries({ queryKey: ["strategies"] });
@@ -294,9 +306,13 @@ function StrategyDetailDialog({
 	};
 
 	const handleSave = () => {
-		const entry = parseRulesText(editEntryRules);
-		const exit = parseRulesText(editExitRules);
-		const risk = parseRulesText(editRiskParams);
+		if (!strategy) {
+			return;
+		}
+
+		const entry = parseRulesText<Record<string, unknown>>(editEntryRules);
+		const exit = parseRulesText<Record<string, unknown>>(editExitRules);
+		const risk = parseRulesText<StrategyRiskParams>(editRiskParams);
 
 		let hasError = false;
 		if (!entry) {
@@ -317,14 +333,17 @@ function StrategyDetailDialog({
 		} else {
 			setRiskError(false);
 		}
-		if (hasError) return;
+		if (hasError || !entry || !exit || !risk) return;
 
 		updateMutation.mutate({
-			name: editName,
-			description: editDescription,
-			entryRules: entry!,
-			exitRules: exit!,
-			riskParams: risk! as Strategy["riskParams"],
+			strategyId: strategy.id,
+			data: {
+				name: editName,
+				description: editDescription,
+				entryRules: entry,
+				exitRules: exit,
+				riskParams: risk,
+			},
 		});
 	};
 
@@ -351,7 +370,13 @@ function StrategyDetailDialog({
 								onChange={(e) => setEditName(e.target.value)}
 								variant="standard"
 								fullWidth
-								sx={{ mr: 2, "& .MuiInputBase-input": { fontSize: "1.25rem", fontWeight: 600 } }}
+								sx={{
+									mr: 2,
+									"& .MuiInputBase-input": {
+										fontSize: "1.25rem",
+										fontWeight: 600,
+									},
+								}}
 							/>
 						) : (
 							<Typography variant="h6" component="span">
@@ -371,7 +396,9 @@ function StrategyDetailDialog({
 					</DialogTitle>
 					<DialogContent>
 						{editing ? (
-							<Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
+							<Box
+								sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}
+							>
 								<TextField
 									label="Description"
 									value={editDescription}
@@ -394,7 +421,11 @@ function StrategyDetailDialog({
 									size="small"
 									error={entryError}
 									helperText={entryError ? "Invalid JSON" : undefined}
-									slotProps={{ htmlInput: { style: { fontFamily: "monospace", fontSize: 13 } } }}
+									slotProps={{
+										htmlInput: {
+											style: { fontFamily: "monospace", fontSize: 13 },
+										},
+									}}
 								/>
 								<TextField
 									label="Exit Rules (JSON)"
@@ -409,7 +440,11 @@ function StrategyDetailDialog({
 									size="small"
 									error={exitError}
 									helperText={exitError ? "Invalid JSON" : undefined}
-									slotProps={{ htmlInput: { style: { fontFamily: "monospace", fontSize: 13 } } }}
+									slotProps={{
+										htmlInput: {
+											style: { fontFamily: "monospace", fontSize: 13 },
+										},
+									}}
 								/>
 								<TextField
 									label="Risk Parameters (JSON)"
@@ -424,7 +459,11 @@ function StrategyDetailDialog({
 									size="small"
 									error={riskError}
 									helperText={riskError ? "Invalid JSON" : undefined}
-									slotProps={{ htmlInput: { style: { fontFamily: "monospace", fontSize: 13 } } }}
+									slotProps={{
+										htmlInput: {
+											style: { fontFamily: "monospace", fontSize: 13 },
+										},
+									}}
 								/>
 							</Box>
 						) : (
@@ -491,13 +530,11 @@ function StrategyDetailDialog({
 											<Typography variant="subtitle2" gutterBottom>
 												Entry Rules
 											</Typography>
-											{Object.entries(strategy.entryRules).map(
-												([key, val]) => (
-													<Typography key={key} variant="body2" sx={{ ml: 1 }}>
-														<strong>{key}:</strong> {String(val)}
-													</Typography>
-												),
-											)}
+											{Object.entries(strategy.entryRules).map(([key, val]) => (
+												<Typography key={key} variant="body2" sx={{ ml: 1 }}>
+													<strong>{key}:</strong> {String(val)}
+												</Typography>
+											))}
 										</Box>
 									)}
 
@@ -507,13 +544,11 @@ function StrategyDetailDialog({
 											<Typography variant="subtitle2" gutterBottom>
 												Exit Rules
 											</Typography>
-											{Object.entries(strategy.exitRules).map(
-												([key, val]) => (
-													<Typography key={key} variant="body2" sx={{ ml: 1 }}>
-														<strong>{key}:</strong> {String(val)}
-													</Typography>
-												),
-											)}
+											{Object.entries(strategy.exitRules).map(([key, val]) => (
+												<Typography key={key} variant="body2" sx={{ ml: 1 }}>
+													<strong>{key}:</strong> {String(val)}
+												</Typography>
+											))}
 										</Box>
 									)}
 
@@ -523,13 +558,11 @@ function StrategyDetailDialog({
 											<Typography variant="subtitle2" gutterBottom>
 												Risk Parameters
 											</Typography>
-											{Object.entries(strategy.riskParams).map(
-												([key, val]) => (
-													<Typography key={key} variant="body2" sx={{ ml: 1 }}>
-														<strong>{key}:</strong> {String(val)}
-													</Typography>
-												),
-											)}
+											{Object.entries(strategy.riskParams).map(([key, val]) => (
+												<Typography key={key} variant="body2" sx={{ ml: 1 }}>
+													<strong>{key}:</strong> {String(val)}
+												</Typography>
+											))}
 										</Box>
 									)}
 
@@ -564,15 +597,11 @@ function StrategyDetailDialog({
 										</Typography>
 										<Typography variant="body2">
 											P&L:{" "}
-											{formatPercent(
-												strategy.backtestResults.totalPnlPercent,
-											)}
+											{formatPercent(strategy.backtestResults.totalPnlPercent)}
 										</Typography>
 										<Typography variant="body2">
 											Max Drawdown:{" "}
-											{formatPercent(
-												-strategy.backtestResults.maxDrawdown,
-											)}
+											{formatPercent(-strategy.backtestResults.maxDrawdown)}
 										</Typography>
 									</Box>
 								)}
@@ -581,7 +610,10 @@ function StrategyDetailDialog({
 					</DialogContent>
 					{editing && (
 						<DialogActions sx={{ px: 3, pb: 2 }}>
-							<Button onClick={handleCancelEdit} disabled={updateMutation.isPending}>
+							<Button
+								onClick={handleCancelEdit}
+								disabled={updateMutation.isPending}
+							>
 								Cancel
 							</Button>
 							<Button

@@ -184,9 +184,7 @@ class TradingAgent:
         self._input_tokens = 0
         self._output_tokens = 0
 
-        with sentry_sdk.start_span(
-            op="ai.agent.chat", description="claude.chat"
-        ) as span:
+        with sentry_sdk.start_span(op="ai.agent.chat", description="claude.chat") as span:
             await self._client.query(user_message)
 
             final_text_parts: list[str] = []
@@ -223,9 +221,7 @@ class TradingAgent:
                             if block.name == "get_candlesticks" and on_event:
                                 chart_data = pop_pending_chart_data()
                                 if chart_data:
-                                    await on_event(
-                                        {"type": "chart_data", "data": chart_data}
-                                    )
+                                    await on_event({"type": "chart_data", "data": chart_data})
 
                             logger.info(f"Tool called: {block.name}")
 
@@ -271,9 +267,7 @@ class TradingAgent:
 
                 elif isinstance(message, ResultMessage):
                     if message.is_error:
-                        raise RuntimeError(
-                            message.result or "Agent SDK returned an error"
-                        )
+                        raise RuntimeError(message.result or "Agent SDK returned an error")
 
                     # Use result text as fallback if no text blocks were collected
                     if message.result and not final_text_parts:
@@ -362,9 +356,7 @@ class TradingAgent:
         )
         return float(match.group(1)) if match else None
 
-    async def analyze(
-        self, user_message: str, user_id: str | None = None
-    ) -> dict[str, Any]:
+    async def analyze(self, user_message: str, user_id: str | None = None) -> dict[str, Any]:
         """Analyze market/trading prompt and normalize output for task scheduler.
 
         Prefers structured data from the submit_recommendation tool.
@@ -378,9 +370,7 @@ class TradingAgent:
         recommendation = get_pending_recommendation(request_id)
 
         if recommendation:
-            logger.info(
-                "Using structured recommendation from submit_recommendation tool"
-            )
+            logger.info("Using structured recommendation from submit_recommendation tool")
             summary = recommendation.get("summary", "")
             if len(summary) > 300:
                 summary = f"{summary[:297]}..."

@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import pytest
-from cryptography.fernet import Fernet
-
 from app.security import secrets_crypto
 from app.security.secrets_crypto import SecretDecryptionError
+from cryptography.fernet import Fernet
 
 
 @pytest.fixture(autouse=True)

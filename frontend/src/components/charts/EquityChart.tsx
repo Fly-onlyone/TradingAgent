@@ -5,9 +5,13 @@
 
 import { Box, Card, CardContent, Typography } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-import { motion } from "framer-motion";
-import { useReducedMotion } from "framer-motion";
-import { ColorType, createChart, type IChartApi, type Time } from "lightweight-charts";
+import { motion, useReducedMotion } from "framer-motion";
+import {
+	ColorType,
+	createChart,
+	type IChartApi,
+	type Time,
+} from "lightweight-charts";
 import { useEffect, useRef } from "react";
 import { ShimmerSkeleton } from "@/components/common/ShimmerSkeleton";
 
@@ -18,7 +22,7 @@ interface EquityChartProps {
 
 /** Convert ISO date string to lightweight-charts UTCTimestamp (seconds). */
 function toUTCTimestamp(isoString: string): Time {
-	return (Math.floor(new Date(isoString).getTime() / 1000)) as Time;
+	return Math.floor(new Date(isoString).getTime() / 1000) as Time;
 }
 
 export function EquityChart({ trades, loading }: EquityChartProps) {
@@ -34,7 +38,10 @@ export function EquityChart({ trades, loading }: EquityChartProps) {
 		// Compute equity curve: sort by time, accumulate netPnl
 		const sorted = [...trades]
 			.filter((t) => t.entryTime && t.netPnl !== undefined)
-			.sort((a, b) => new Date(a.entryTime).getTime() - new Date(b.entryTime).getTime());
+			.sort(
+				(a, b) =>
+					new Date(a.entryTime).getTime() - new Date(b.entryTime).getTime(),
+			);
 
 		if (sorted.length === 0) return;
 

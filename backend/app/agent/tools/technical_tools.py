@@ -315,13 +315,13 @@ async def get_price_action(
         if i >= -len(df):
             o = df["open"].iloc[i]
             h = df["high"].iloc[i]
-            l = df["low"].iloc[i]
+            low = df["low"].iloc[i]
             c = df["close"].iloc[i]
 
             body = abs(c - o)
             upper_wick = h - max(o, c)
-            lower_wick = min(o, c) - l
-            total_range = h - l
+            lower_wick = min(o, c) - low
+            total_range = h - low
 
             if total_range > 0:
                 body_ratio = body / total_range

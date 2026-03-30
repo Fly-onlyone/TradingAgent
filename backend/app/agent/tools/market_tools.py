@@ -51,9 +51,7 @@ async def get_orderbook(symbol: str, depth: int = 20) -> dict[str, Any]:
         Order book with bids and asks
     """
     client = await OKXClient.create()
-    result = await asyncio.wait_for(
-        client.get_orderbook(symbol.upper(), depth), timeout=10.0
-    )
+    result = await asyncio.wait_for(client.get_orderbook(symbol.upper(), depth), timeout=10.0)
 
     if result.get("code") != "0" or not result.get("data"):
         return {"error": f"Failed to get orderbook for {symbol}"}

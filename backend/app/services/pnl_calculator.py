@@ -1,7 +1,6 @@
 """P&L Calculator Service for trade performance tracking."""
 
 from datetime import datetime
-from typing import Optional
 
 from beanie import PydanticObjectId
 from pydantic import BaseModel
@@ -16,16 +15,16 @@ class TradePnL(BaseModel):
     symbol: str
     side: str
     entry_price: float
-    exit_price: Optional[float] = None
+    exit_price: float | None = None
     quantity: float
-    realized_pnl: Optional[float] = None
-    realized_pnl_percent: Optional[float] = None
-    fees_paid: Optional[float] = None
-    net_pnl: Optional[float] = None
+    realized_pnl: float | None = None
+    realized_pnl_percent: float | None = None
+    fees_paid: float | None = None
+    net_pnl: float | None = None
     entry_time: datetime
-    exit_time: Optional[datetime] = None
+    exit_time: datetime | None = None
     status: str  # "open" | "closed"
-    related_order_id: Optional[str] = None
+    related_order_id: str | None = None
 
 
 class TradeSummary(BaseModel):
@@ -84,11 +83,11 @@ def order_to_trade_pnl(order: Order) -> TradePnL:
 
 async def get_trades(
     user_id: PydanticObjectId,
-    symbol: Optional[str] = None,
-    side: Optional[str] = None,
-    status: Optional[str] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    symbol: str | None = None,
+    side: str | None = None,
+    status: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[TradePnL], int]:
@@ -97,7 +96,7 @@ async def get_trades(
     query = Order.find(
         Order.user_id == user_id,
         Order.status == OrderStatus.FILLED,
-        Order.is_closing_order == False,  # Only entry orders, not closing orders
+        not Order.is_closing_order,  # Only entry orders, not closing orders
     )
 
     if symbol:
@@ -125,8 +124,8 @@ async def get_trades(
 
 async def get_trades_summary(
     user_id: PydanticObjectId,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
 ) -> TradeSummary:
     """Calculate aggregated trade statistics."""
     # Get all closed trades for the user
@@ -134,7 +133,7 @@ async def get_trades_summary(
         Order.user_id == user_id,
         Order.status == OrderStatus.FILLED,
         Order.trade_status == TradeStatus.CLOSED,
-        Order.is_closing_order == False,
+        not Order.is_closing_order,
     )
 
     if start_date:
@@ -207,15 +206,15 @@ async def get_trades_summary(
 
 async def get_trades_by_symbol(
     user_id: PydanticObjectId,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
 ) -> list[TradesBySymbol]:
     """Get trades grouped by symbol with P&L totals."""
     # Get all filled trades for the user
     query = Order.find(
         Order.user_id == user_id,
         Order.status == OrderStatus.FILLED,
-        Order.is_closing_order == False,
+        not Order.is_closing_order,
     )
 
     if start_date:
@@ -274,7 +273,7 @@ async def close_trade(
     order_id: PydanticObjectId,
     exit_price: float,
     fees: float = 0.0,
-) -> Optional[Order]:
+) -> Order | None:
     """Close a trade and calculate P&L."""
     order = await Order.get(order_id)
     if not order:
@@ -293,8 +292,8 @@ async def close_trade(
 async def export_trades(
     user_id: PydanticObjectId,
     format: str = "json",
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
 ) -> str:
     """Export trades to CSV or JSON format."""
     import csv
@@ -305,7 +304,7 @@ async def export_trades(
     query = Order.find(
         Order.user_id == user_id,
         Order.status == OrderStatus.FILLED,
-        Order.is_closing_order == False,
+        not Order.is_closing_order,
     )
 
     if start_date:

@@ -99,18 +99,10 @@ class TaskSchedule(BaseModel):
 
 def coerce_task_change_value(field_name: str, value: Any) -> Any:
     """Coerce task updates into the document's expected runtime types."""
-    if (
-        field_name == "risk_level"
-        and value is not None
-        and not isinstance(value, RiskLevel)
-    ):
+    if field_name == "risk_level" and value is not None and not isinstance(value, RiskLevel):
         return RiskLevel(value)
 
-    if (
-        field_name == "agent_mode"
-        and value is not None
-        and not isinstance(value, AgentMode)
-    ):
+    if field_name == "agent_mode" and value is not None and not isinstance(value, AgentMode):
         return AgentMode(value)
 
     if (
@@ -124,11 +116,7 @@ def coerce_task_change_value(field_name: str, value: Any) -> Any:
         if not isinstance(value, list):
             raise ValueError("schedules must be a list")
         return [
-            (
-                item
-                if isinstance(item, TaskSchedule)
-                else TaskSchedule.model_validate(item)
-            )
+            (item if isinstance(item, TaskSchedule) else TaskSchedule.model_validate(item))
             for item in value
         ]
 

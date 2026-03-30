@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api.websocket import market, orders, agent
+from app.api.websocket import agent, market, orders
 
 router = APIRouter()
 

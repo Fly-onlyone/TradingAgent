@@ -18,9 +18,7 @@ class NotificationType(str, Enum):
     TASK_FAILED = "task_failed"  # Scheduled task failed
     PRICE_ALERT = "price_alert"  # Price reached target
     ANALYSIS_READY = "analysis_ready"  # Analysis complete
-    TASK_MODIFICATION_PROPOSED = (
-        "task_modification_proposed"  # Agent proposed task changes
-    )
+    TASK_MODIFICATION_PROPOSED = "task_modification_proposed"  # Agent proposed task changes
     TASK_MODIFICATION_APPLIED = "task_modification_applied"  # Task changes applied
     STRATEGY_DISCOVERED = "strategy_discovered"  # Auto-discovered strategy from news
 
@@ -125,9 +123,7 @@ class Notification(Document):
             self.status = NotificationStatus.READ
         self.read_at = datetime.now(UTC)
 
-    def take_action(
-        self, action: NotificationAction, comment: str | None = None
-    ) -> None:
+    def take_action(self, action: NotificationAction, comment: str | None = None) -> None:
         """Record user action on notification."""
         self.status = NotificationStatus.ACTIONED
         self.action_taken = action

@@ -1,7 +1,7 @@
 """News deduplication to prevent refetching the same articles."""
 
 import hashlib
-from urllib.parse import urlparse, parse_qs, urlencode
+from urllib.parse import parse_qs, urlencode, urlparse
 
 from app.db.models.news import NewsArticle
 
@@ -75,4 +75,3 @@ class NewsDeduplicator:
         if content and await self.is_duplicate_content(content):
             return True
         return False
-

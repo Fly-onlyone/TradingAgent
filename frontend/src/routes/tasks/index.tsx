@@ -275,8 +275,7 @@ function TaskConfigPage() {
 			monitoringConditions: formData.monitoringConditions,
 			alertCooldownMinutes: formData.alertCooldownMinutes,
 		});
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [formData, taskId]);
+	}, [formData, taskId, triggerSave]);
 
 	// ── Retry on reconnect ──────────────────────────────────────────────
 

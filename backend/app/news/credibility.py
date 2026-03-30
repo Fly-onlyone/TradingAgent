@@ -1,11 +1,11 @@
 """Source credibility scoring system using MongoDB."""
 
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from beanie import PydanticObjectId
 
-from app.db.models.news import NewsSource, NewsArticle, CredibilityEvent
+from app.db.models.news import CredibilityEvent, NewsArticle, NewsSource
 
 
 class CredibilityScorer:

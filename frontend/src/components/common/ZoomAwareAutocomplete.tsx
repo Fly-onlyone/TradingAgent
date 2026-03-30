@@ -64,8 +64,11 @@ function mergeStyle(
 	};
 }
 
-function mergeSx(base: SxProps<Theme> | undefined, extra: SxProps<Theme>) {
-	return base ? [base, extra] : [extra];
+function mergeSx(
+	base: SxProps<Theme> | undefined,
+	extra: SxProps<Theme>,
+): SxProps<Theme> {
+	return base ? ([base, extra] as SxProps<Theme>) : extra;
 }
 
 function mergeSlotProp(slotProp: unknown, extra: Record<string, unknown>) {

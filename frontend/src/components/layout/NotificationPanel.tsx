@@ -9,17 +9,11 @@ import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
-import {
-	Box,
-	IconButton,
-	Popover,
-	Typography,
-	useTheme,
-} from "@mui/material";
+import { Box, IconButton, Popover, Typography, useTheme } from "@mui/material";
 import type { PopoverPosition } from "@mui/material/Popover";
 import { AnimatePresence, motion } from "framer-motion";
-import { useUIStore } from "@/store/uiStore";
 import type { NotificationConfig } from "@/store/uiStore";
+import { useUIStore } from "@/store/uiStore";
 import { useReducedMotion } from "@/utils/animations/hooks";
 import { spring, staggerCascade } from "@/utils/animations/variants";
 
@@ -124,34 +118,24 @@ export function NotificationPanel({
 							color: "text.secondary",
 						}}
 					>
-						<NotificationsNoneIcon
-							sx={{ fontSize: 40, mb: 1, opacity: 0.4 }}
-						/>
+						<NotificationsNoneIcon sx={{ fontSize: 40, mb: 1, opacity: 0.4 }} />
 						<Typography variant="body2" color="text.secondary">
 							No notifications
 						</Typography>
 					</Box>
 				) : (
 					<motion.div
-						variants={
-							reducedMotion ? undefined : staggerCascade.container
-						}
+						variants={reducedMotion ? undefined : staggerCascade.container}
 						initial="hidden"
 						animate="visible"
 					>
 						<AnimatePresence>
 							{allItems.map((item) => {
-								const isActive = notifications.some(
-									(n) => n.id === item.id,
-								);
+								const isActive = notifications.some((n) => n.id === item.id);
 								return (
 									<motion.div
 										key={item.id}
-										variants={
-											reducedMotion
-												? undefined
-												: staggerCascade.item
-										}
+										variants={reducedMotion ? undefined : staggerCascade.item}
 										exit={{ opacity: 0, x: 40 }}
 										transition={spring.snappy}
 										layout
@@ -173,15 +157,9 @@ export function NotificationPanel({
 												},
 											}}
 										>
-											<Box sx={{ pt: 0.25 }}>
-												{typeIcon[item.type]}
-											</Box>
+											<Box sx={{ pt: 0.25 }}>{typeIcon[item.type]}</Box>
 											<Box sx={{ flex: 1, minWidth: 0 }}>
-												<Typography
-													variant="body2"
-													fontWeight={600}
-													noWrap
-												>
+												<Typography variant="body2" fontWeight={600} noWrap>
 													{item.title}
 												</Typography>
 												{item.message && (
@@ -191,8 +169,7 @@ export function NotificationPanel({
 														sx={{
 															display: "-webkit-box",
 															WebkitLineClamp: 2,
-															WebkitBoxOrient:
-																"vertical",
+															WebkitBoxOrient: "vertical",
 															overflow: "hidden",
 														}}
 													>
@@ -210,19 +187,13 @@ export function NotificationPanel({
 											{isActive && (
 												<IconButton
 													size="small"
-													onClick={() =>
-														removeNotification(
-															item.id,
-														)
-													}
+													onClick={() => removeNotification(item.id)}
 													sx={{
 														color: "text.secondary",
 														p: 0.25,
 													}}
 												>
-													<CloseIcon
-														sx={{ fontSize: 16 }}
-													/>
+													<CloseIcon sx={{ fontSize: 16 }} />
 												</IconButton>
 											)}
 										</Box>

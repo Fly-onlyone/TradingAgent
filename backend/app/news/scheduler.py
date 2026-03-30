@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -11,8 +11,8 @@ from beanie import PydanticObjectId
 
 from app.db.models.news import NewsSource
 from app.news.crawler import NewsCrawler
-from app.news.summarizer import NewsSummarizer
 from app.news.credibility import CredibilityScorer
+from app.news.summarizer import NewsSummarizer
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ class NewsScheduler:
         """Crawl all enabled news sources."""
         logger.info("Starting news crawl...")
 
-        sources = await NewsSource.find(NewsSource.crawl_enabled == True).to_list()
+        sources = await NewsSource.find(NewsSource.crawl_enabled).to_list()
 
         for source in sources:
             if source.last_crawled:

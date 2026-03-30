@@ -1,8 +1,7 @@
 """Order model for MongoDB."""
 
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Optional
 
 from beanie import Document, Indexed, PydanticObjectId
 from pydantic import Field
@@ -52,9 +51,9 @@ class Order(Document):
     user_id: Indexed(PydanticObjectId)  # type: ignore[valid-type]
 
     # Exchange order info
-    exchange_order_id: Optional[Indexed(str)] = None  # type: ignore[valid-type]
-    client_order_id: Optional[str] = None
-    execution_idempotency_key: Optional[Indexed(str)] = None  # type: ignore[valid-type]
+    exchange_order_id: Indexed(str) | None = None  # type: ignore[valid-type]
+    client_order_id: str | None = None
+    execution_idempotency_key: Indexed(str) | None = None  # type: ignore[valid-type]
 
     # Order details
     symbol: Indexed(str)  # type: ignore[valid-type]
@@ -65,36 +64,36 @@ class Order(Document):
     # Quantities and prices (using float for MongoDB, convert from Decimal as needed)
     quantity: float
     filled_quantity: float = 0.0
-    price: Optional[float] = None  # For limit orders
-    avg_fill_price: Optional[float] = None
-    stop_price: Optional[float] = None
+    price: float | None = None  # For limit orders
+    avg_fill_price: float | None = None
+    stop_price: float | None = None
 
     # Risk management
-    stop_loss_price: Optional[float] = None
-    take_profit_price: Optional[float] = None
+    stop_loss_price: float | None = None
+    take_profit_price: float | None = None
 
     # P&L Tracking Fields
-    entry_price: Optional[float] = None  # Actual entry execution price
-    exit_price: Optional[float] = None  # Exit execution price (for closed trades)
-    realized_pnl: Optional[float] = None  # Realized P&L in quote currency (USDT)
-    realized_pnl_percent: Optional[float] = None  # Realized P&L as percentage
-    fees_paid: Optional[float] = None  # Total fees for this trade
-    net_pnl: Optional[float] = None  # Realized P&L minus fees
+    entry_price: float | None = None  # Actual entry execution price
+    exit_price: float | None = None  # Exit execution price (for closed trades)
+    realized_pnl: float | None = None  # Realized P&L in quote currency (USDT)
+    realized_pnl_percent: float | None = None  # Realized P&L as percentage
+    fees_paid: float | None = None  # Total fees for this trade
+    net_pnl: float | None = None  # Realized P&L minus fees
 
     # Position Tracking
-    related_order_id: Optional[PydanticObjectId] = None  # Links entry/exit orders
+    related_order_id: PydanticObjectId | None = None  # Links entry/exit orders
     is_closing_order: bool = False  # True if this closes a position
     trade_status: TradeStatus = TradeStatus.OPEN  # Whether trade is open or closed
-    closed_at: Optional[datetime] = None  # When position was closed
+    closed_at: datetime | None = None  # When position was closed
 
     # Agent info
-    agent_reasoning: Optional[dict] = None
-    strategy_id: Optional[PydanticObjectId] = None
+    agent_reasoning: dict | None = None
+    strategy_id: PydanticObjectId | None = None
 
     # Timestamps
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    filled_at: Optional[datetime] = None
+    filled_at: datetime | None = None
 
     class Settings:
         name = "orders"

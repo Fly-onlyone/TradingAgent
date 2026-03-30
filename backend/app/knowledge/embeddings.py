@@ -25,6 +25,7 @@ from app.knowledge.embedding_models import (
 
 logger = logging.getLogger(__name__)
 
+SentenceTransformer: Any | None = None
 _model: Any = None
 _model_name: str | None = None
 _model_lock = threading.Lock()
@@ -51,7 +52,7 @@ def _get_active_model_name() -> str:
 
 def _get_model() -> Any:
     """Lazy-load the sentence-transformers model (singleton, reloads on model change)."""
-    global _model, _model_name
+    global _model, _model_name, SentenceTransformer
 
     active_name = _get_active_model_name()
 
@@ -62,7 +63,14 @@ def _get_model() -> Any:
         # Re-check after acquiring lock
         active_name = _get_active_model_name()
         if _model is None or _model_name != active_name:
-            from sentence_transformers import SentenceTransformer
+            if SentenceTransformer is None:
+                from sentence_transformers import (
+                    SentenceTransformer as ImportedSentenceTransformer,
+                )
+
+                SentenceTransformer = ImportedSentenceTransformer
+
+            sentence_transformer_cls = SentenceTransformer
 
             config = get_model_config(active_name)
             logger.info(
@@ -70,14 +78,12 @@ def _get_model() -> Any:
                 config.hf_id,
                 config.params_millions,
             )
-            _model = SentenceTransformer(
+            _model = sentence_transformer_cls(
                 config.hf_id,
                 trust_remote_code=True,
             )
             _model_name = active_name
-            logger.info(
-                "Embedding model loaded successfully (dim=%d)", config.dimension
-            )
+            logger.info("Embedding model loaded successfully (dim=%d)", config.dimension)
     return _model
 
 
@@ -158,9 +164,7 @@ class EmbeddingService:
             await self._wait_if_gaming()
 
         config = self._get_config()
-        prefixed = [
-            f"{config.prefix_document}{t[:30000]}" if t.strip() else "" for t in texts
-        ]
+        prefixed = [f"{config.prefix_document}{t[:30000]}" if t.strip() else "" for t in texts]
         try:
             loop = asyncio.get_running_loop()
             non_empty = [(i, t) for i, t in enumerate(prefixed) if t]
@@ -168,9 +172,7 @@ class EmbeddingService:
                 return [None] * len(texts)
 
             indices, batch_texts = zip(*non_empty)
-            embeddings = await loop.run_in_executor(
-                _executor, _encode_sync, list(batch_texts)
-            )
+            embeddings = await loop.run_in_executor(_executor, _encode_sync, list(batch_texts))
 
             results: list[list[float] | None] = [None] * len(texts)
             for idx, emb in zip(indices, embeddings):
@@ -183,13 +185,9 @@ class EmbeddingService:
     async def _encode_single(self, prefixed_text: str) -> list[float] | None:
         """Encode a single text string."""
         try:
-            with sentry_sdk.start_span(
-                op="ai.embedding.generate", description="embedding.encode"
-            ):
+            with sentry_sdk.start_span(op="ai.embedding.generate", description="embedding.encode"):
                 loop = asyncio.get_running_loop()
-                embeddings = await loop.run_in_executor(
-                    _executor, _encode_sync, [prefixed_text]
-                )
+                embeddings = await loop.run_in_executor(_executor, _encode_sync, [prefixed_text])
                 return embeddings[0].tolist()
         except Exception:
             logger.exception("Embedding generation failed")
@@ -202,10 +200,7 @@ class EmbeddingService:
             from app.knowledge.game_detector import is_game_running, wait_for_game_exit
 
             settings = await AppSettings.get_instance()
-            if (
-                not settings.defer_embedding_when_gaming
-                or not settings.gaming_process_list
-            ):
+            if not settings.defer_embedding_when_gaming or not settings.gaming_process_list:
                 return
 
             if await is_game_running(settings.gaming_process_list):
@@ -215,9 +210,7 @@ class EmbeddingService:
                     settings.gaming_check_interval_minutes,
                 )
         except Exception:
-            logger.debug(
-                "Game detection check failed, proceeding with embedding", exc_info=True
-            )
+            logger.debug("Game detection check failed, proceeding with embedding", exc_info=True)
 
     # ── Legacy compatibility alias ──
 
@@ -306,9 +299,7 @@ class StrategyEmbeddingGenerator:
 
         return "; ".join(parts)
 
-    async def generate_strategy_embedding(
-        self, strategy: dict[str, Any]
-    ) -> list[float] | None:
+    async def generate_strategy_embedding(self, strategy: dict[str, Any]) -> list[float] | None:
         """Generate embedding for a trading strategy."""
         text = self.format_strategy_text(strategy)
         return await get_embedding_service().generate_document_embedding(text)

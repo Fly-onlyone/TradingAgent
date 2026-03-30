@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from app.db.models.app_settings import AppSettings
 from app.security.secrets_crypto import SecretDecryptionError
 

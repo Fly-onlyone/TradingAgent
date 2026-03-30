@@ -106,9 +106,7 @@ async def rate_strategy(
     all_ratings = await StrategyRating.find(
         StrategyRating.strategy_knowledge_id == strategy_knowledge_id
     ).to_list()
-    avg_user = (
-        sum(r.rating for r in all_ratings) / len(all_ratings) if all_ratings else None
-    )
+    avg_user = sum(r.rating for r in all_ratings) / len(all_ratings) if all_ratings else None
 
     strategy.average_user_rating = avg_user
     strategy.rating_count = len(all_ratings)

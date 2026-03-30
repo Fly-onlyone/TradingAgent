@@ -27,9 +27,7 @@ router = APIRouter()
 router.include_router(auth.router, prefix="/auth", tags=["auth"])
 router.include_router(users.router, prefix="/users", tags=["users"])
 router.include_router(orders.router, prefix="/orders", tags=["orders"])
-router.include_router(
-    strategy_import.router, prefix="/strategies/import", tags=["strategy-import"]
-)
+router.include_router(strategy_import.router, prefix="/strategies/import", tags=["strategy-import"])
 router.include_router(
     strategy_ratings.router, prefix="/strategies/ratings", tags=["strategy-ratings"]
 )
@@ -38,15 +36,9 @@ router.include_router(knowledge.router, prefix="/knowledge", tags=["knowledge"])
 router.include_router(news.router, prefix="/news", tags=["news"])
 router.include_router(market.router, prefix="/market", tags=["market"])
 router.include_router(agent_tasks.router, prefix="/agent/tasks", tags=["agent-tasks"])
-router.include_router(
-    agent_sessions.router, prefix="/agent/sessions", tags=["agent-sessions"]
-)
-router.include_router(
-    agent_decisions.router, prefix="/agent/decisions", tags=["agent-decisions"]
-)
-router.include_router(
-    notifications.router, prefix="/notifications", tags=["notifications"]
-)
+router.include_router(agent_sessions.router, prefix="/agent/sessions", tags=["agent-sessions"])
+router.include_router(agent_decisions.router, prefix="/agent/decisions", tags=["agent-decisions"])
+router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 router.include_router(settings.router, prefix="/settings", tags=["settings"])
 router.include_router(client_logs.router, prefix="/logs", tags=["logs"])
 router.include_router(logs.router, prefix="/admin/logs", tags=["logs"])

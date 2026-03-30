@@ -82,7 +82,7 @@ async def get_onchain_metrics(symbol: str) -> dict[str, Any]:
                     },
                     "note": "On-chain metrics (exchange flows, whale activity) require premium API access",
                 }
-    except Exception as e:
+    except Exception:
         pass
 
     return {

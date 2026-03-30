@@ -2,23 +2,17 @@
  * Components Exports
  */
 
-// Common
-export * from './common';
-
-// Layout
-export * from './layout';
-
-// Data Display
-export * from './data-display';
-
-// Charts
-export * from './charts';
-
-// Trading
-export * from './trading';
-
 // Agent
-export * from './agent';
-
+export * from "./agent";
+// Charts
+export * from "./charts";
+// Common
+export * from "./common";
+// Data Display
+export * from "./data-display";
+// Layout
+export * from "./layout";
 // Trades
-export * from './trades';
+export * from "./trades";
+// Trading
+export * from "./trading";

@@ -79,7 +79,12 @@ class SourceDiscoveryService:
         sources_at_limit = current_count >= max_sources
 
         if sources_at_limit:
-            await emit({"step": "info", "message": f"Source limit reached ({current_count}/{max_sources}), skipping new source creation but still extracting"})
+            await emit(
+                {
+                    "step": "info",
+                    "message": f"Source limit reached ({current_count}/{max_sources}), skipping new source creation but still extracting",
+                }
+            )
 
         async with httpx.AsyncClient(timeout=15.0, headers={"User-Agent": _USER_AGENT}) as client:
             for query in _SEARCH_QUERIES:
@@ -96,7 +101,10 @@ class SourceDiscoveryService:
                         continue
                     domain = urlparse(url).netloc.lower().removeprefix("www.")
                     try:
-                        if not sources_at_limit and current_count + stats["new_sources"] < max_sources:
+                        if (
+                            not sources_at_limit
+                            and current_count + stats["new_sources"] < max_sources
+                        ):
                             source_created = await self._ensure_source(client, url)
                             if source_created:
                                 stats["new_sources"] += 1
@@ -126,13 +134,20 @@ class SourceDiscoveryService:
             ).count()
             if total_auto > max_sources:
                 excess = total_auto - max_sources
-                oldest = await NewsSource.find(
-                    NewsSource.auto_discovered == True,  # noqa: E712
-                ).sort("+created_at").limit(excess).to_list()
+                oldest = (
+                    await NewsSource.find(
+                        NewsSource.auto_discovered == True,  # noqa: E712
+                    )
+                    .sort("+created_at")
+                    .limit(excess)
+                    .to_list()
+                )
                 for old_source in oldest:
                     await old_source.delete()
                 stats["sources_cleaned_up"] = excess
-                await emit({"step": "cleanup", "removed": excess, "reason": "exceeded max sources limit"})
+                await emit(
+                    {"step": "cleanup", "removed": excess, "reason": "exceeded max sources limit"}
+                )
                 logger.info("Cleaned up %d excess auto-discovered sources", excess)
 
         logger.info(
@@ -213,7 +228,10 @@ class SourceDiscoveryService:
             return None
 
     async def _extract_strategy(
-        self, content: str, url: str, user_id: PydanticObjectId | None = None,
+        self,
+        content: str,
+        url: str,
+        user_id: PydanticObjectId | None = None,
     ) -> bool:
         """Run AI extraction and deduplicate. Returns True if a new strategy was saved."""
         from app.db.models.knowledge import StrategyKnowledge

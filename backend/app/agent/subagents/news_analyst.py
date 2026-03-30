@@ -173,13 +173,9 @@ Based on this news data, provide your analysis and trading implications.
 
             web_results = await brave_search_news(query=query, count=5, freshness="pd")
             if web_results.get("articles"):
-                web_news_section = "\n## Real-time Web News:\n" + self._format_web_news(
-                    web_results
-                )
+                web_news_section = "\n## Real-time Web News:\n" + self._format_web_news(web_results)
         except Exception:
-            logger.debug(
-                "Web search unavailable for breaking news query", exc_info=True
-            )
+            logger.debug("Web search unavailable for breaking news query", exc_info=True)
 
         if not news.get("articles") and not web_news_section:
             return {
@@ -250,9 +246,7 @@ Analyze this news and provide:
         for i, article in enumerate(articles, 1):
             breaking = " [BREAKING]" if article.get("breaking") else ""
             lines.append(f"{i}. {article.get('title')}{breaking}")
-            lines.append(
-                f"   Source: {article.get('source')} | {article.get('age', 'recent')}"
-            )
+            lines.append(f"   Source: {article.get('source')} | {article.get('age', 'recent')}")
             if article.get("description"):
                 lines.append(f"   {article['description'][:200]}")
             lines.append("")

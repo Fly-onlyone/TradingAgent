@@ -1,8 +1,7 @@
 """Agent session model for chat history persistence."""
 
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Optional
 
 from beanie import Document, Indexed, PydanticObjectId
 from pydantic import BaseModel, Field
@@ -25,12 +24,12 @@ class SessionMessage(BaseModel):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # Optional references
-    decision_id: Optional[PydanticObjectId] = None  # If message includes a decision
+    decision_id: PydanticObjectId | None = None  # If message includes a decision
     tool_calls: list[dict] = Field(default_factory=list)  # Tools used in this turn
-    thinking_content: Optional[str] = None
+    thinking_content: str | None = None
 
     # Message metadata
-    tokens_used: Optional[int] = None
+    tokens_used: int | None = None
 
 
 class AgentSession(Document):
@@ -39,8 +38,8 @@ class AgentSession(Document):
     user_id: Indexed(PydanticObjectId)  # type: ignore[valid-type]
 
     # Session identification
-    title: Optional[str] = None  # Auto-generated or user-provided
-    description: Optional[str] = None
+    title: str | None = None  # Auto-generated or user-provided
+    description: str | None = None
 
     # Conversation history
     messages: list[SessionMessage] = Field(default_factory=list)
@@ -61,8 +60,8 @@ class AgentSession(Document):
 
     # Timestamps
     started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    ended_at: Optional[datetime] = None
-    last_message_at: Optional[Indexed(datetime)] = None  # type: ignore[valid-type]
+    ended_at: datetime | None = None
+    last_message_at: Indexed(datetime) | None = None  # type: ignore[valid-type]
 
     class Settings:
         name = "agent_sessions"
@@ -98,9 +97,9 @@ class AgentSession(Document):
         self,
         role: str,
         content: str,
-        decision_id: Optional[PydanticObjectId] = None,
-        tool_calls: Optional[list[dict]] = None,
-        thinking_content: Optional[str] = None,
+        decision_id: PydanticObjectId | None = None,
+        tool_calls: list[dict] | None = None,
+        thinking_content: str | None = None,
         tokens: int = 0,
     ) -> SessionMessage:
         """Add a message to the session."""

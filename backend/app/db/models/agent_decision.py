@@ -1,8 +1,7 @@
 """Agent decision model for persisting AI trading decisions."""
 
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Optional
 
 from beanie import Document, Indexed, PydanticObjectId
 from pydantic import BaseModel, Field
@@ -55,38 +54,38 @@ class ToolUsage(BaseModel):
 
     name: str = "unknown"
     arguments: dict = Field(default_factory=dict)
-    result_summary: Optional[str] = None
-    execution_time_ms: Optional[int] = None
+    result_summary: str | None = None
+    execution_time_ms: int | None = None
 
 
 class MarketContext(BaseModel):
     """Snapshot of market conditions at decision time."""
 
-    price: Optional[float] = None
-    price_change_24h: Optional[float] = None
-    volume_24h: Optional[float] = None
-    rsi: Optional[float] = None
-    macd_signal: Optional[str] = None  # bullish, bearish, neutral
-    trend: Optional[str] = None  # up, down, sideways
+    price: float | None = None
+    price_change_24h: float | None = None
+    volume_24h: float | None = None
+    rsi: float | None = None
+    macd_signal: str | None = None  # bullish, bearish, neutral
+    trend: str | None = None  # up, down, sideways
     support_levels: list[float] = Field(default_factory=list)
     resistance_levels: list[float] = Field(default_factory=list)
-    news_sentiment: Optional[float] = None  # -1 to 1
+    news_sentiment: float | None = None  # -1 to 1
 
 
 class AgentDecision(Document):
     """Agent decision document - stores all AI trading decisions."""
 
     user_id: Indexed(PydanticObjectId)  # type: ignore[valid-type]
-    session_id: Optional[PydanticObjectId] = None
-    task_id: Optional[PydanticObjectId] = None
+    session_id: PydanticObjectId | None = None
+    task_id: PydanticObjectId | None = None
 
     # Decision classification (indexes defined in Settings)
     decision_type: DecisionType
-    symbol: Optional[str] = None
+    symbol: str | None = None
 
     # Decision details
-    action: Optional[DecisionAction] = None
-    confidence: Optional[float] = None  # 0-100
+    action: DecisionAction | None = None
+    confidence: float | None = None  # 0-100
     status: DecisionStatus = DecisionStatus.EXECUTED
 
     # Content
@@ -96,33 +95,33 @@ class AgentDecision(Document):
     proposed_changes: dict | None = None  # Before/after for task modifications
 
     # Trade specifics (if applicable)
-    suggested_entry: Optional[float] = None
-    suggested_stop_loss: Optional[float] = None
-    suggested_take_profit: Optional[float] = None
-    suggested_position_size: Optional[float] = None
-    risk_reward_ratio: Optional[float] = None
+    suggested_entry: float | None = None
+    suggested_stop_loss: float | None = None
+    suggested_take_profit: float | None = None
+    suggested_position_size: float | None = None
+    risk_reward_ratio: float | None = None
 
     # Execution tracking
-    order_id: Optional[PydanticObjectId] = None  # If trade was executed
-    execution_price: Optional[float] = None
+    order_id: PydanticObjectId | None = None  # If trade was executed
+    execution_price: float | None = None
     execution_status: ExecutionStatus = ExecutionStatus.QUEUED
-    execution_error_code: Optional[str] = None
-    execution_error_message: Optional[str] = None
+    execution_error_code: str | None = None
+    execution_error_message: str | None = None
 
     # Tool and context tracking
     tools_used: list[ToolUsage] = Field(default_factory=list)
-    market_context: Optional[MarketContext] = None
+    market_context: MarketContext | None = None
     model_used: str = "claude-sonnet-4-6"
 
     # User feedback (for learning)
-    user_feedback: Optional[str] = None  # thumbs_up, thumbs_down, neutral
-    feedback_comment: Optional[str] = None
+    user_feedback: str | None = None  # thumbs_up, thumbs_down, neutral
+    feedback_comment: str | None = None
 
     # Timestamps
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    confirmed_at: Optional[datetime] = None
-    executed_at: Optional[datetime] = None
-    expires_at: Optional[datetime] = None  # For ASK mode confirmations
+    confirmed_at: datetime | None = None
+    executed_at: datetime | None = None
+    expires_at: datetime | None = None  # For ASK mode confirmations
 
     class Settings:
         name = "agent_decisions"

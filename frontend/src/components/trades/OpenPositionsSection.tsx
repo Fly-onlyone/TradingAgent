@@ -76,26 +76,17 @@ function OrderRow({ order }: { order: OkxOrder }) {
 				/>
 			</TableCell>
 			<TableCell align="right">
-				<Typography
-					variant="body2"
-					sx={{ fontFamily: theme.trading.mono }}
-				>
+				<Typography variant="body2" sx={{ fontFamily: theme.trading.mono }}>
 					{order.quantity.toFixed(6)}
 				</Typography>
 			</TableCell>
 			<TableCell align="right">
-				<Typography
-					variant="body2"
-					sx={{ fontFamily: theme.trading.mono }}
-				>
+				<Typography variant="body2" sx={{ fontFamily: theme.trading.mono }}>
 					{order.filledQuantity.toFixed(6)}
 				</Typography>
 			</TableCell>
 			<TableCell align="right">
-				<Typography
-					variant="body2"
-					sx={{ fontFamily: theme.trading.mono }}
-				>
+				<Typography variant="body2" sx={{ fontFamily: theme.trading.mono }}>
 					{order.price !== undefined ? `$${formatPrice(order.price)}` : "-"}
 				</Typography>
 			</TableCell>
@@ -128,10 +119,7 @@ function LoadingSkeleton() {
 					/>
 				</Box>
 				{[0, 1, 2].map((i) => (
-					<ShimmerSkeleton
-						key={i}
-						shimmerVariant="table-row"
-					/>
+					<ShimmerSkeleton key={i} shimmerVariant="table-row" />
 				))}
 			</CardContent>
 		</Card>
@@ -199,18 +187,13 @@ export function OpenPositionsSection() {
 						</Box>
 						{openOrdersQuery.dataUpdatedAt > 0 && (
 							<Typography variant="caption" color="text.secondary">
-								Updated{" "}
-								{formatTimestamp(openOrdersQuery.dataUpdatedAt)}
+								Updated {formatTimestamp(openOrdersQuery.dataUpdatedAt)}
 							</Typography>
 						)}
 					</Box>
 
 					{apiError && (
-						<Typography
-							variant="body2"
-							color="warning.main"
-							sx={{ mb: 2 }}
-						>
+						<Typography variant="body2" color="warning.main" sx={{ mb: 2 }}>
 							{apiError}
 						</Typography>
 					)}
@@ -244,10 +227,7 @@ export function OpenPositionsSection() {
 									animate="visible"
 								>
 									{orders.map((order) => (
-										<OrderRow
-											key={order.orderId}
-											order={order}
-										/>
+										<OrderRow key={order.orderId} order={order} />
 									))}
 								</TableBody>
 							</Table>

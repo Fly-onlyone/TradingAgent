@@ -294,7 +294,7 @@ async def list_trade_lessons(
         .to_list()
     )
 
-    return [lesson_to_response(l) for l in lessons]
+    return [lesson_to_response(lesson) for lesson in lessons]
 
 
 @router.get("/lessons/{lesson_id}", response_model=TradeLessonResponse)

@@ -91,9 +91,7 @@ export const notificationsApi = {
 		return transformSettings(response.data);
 	},
 
-	async subscribeWebPush(
-		subscription: PushSubscriptionJSON,
-	): Promise<void> {
+	async subscribeWebPush(subscription: PushSubscriptionJSON): Promise<void> {
 		await apiClient.post("/notifications/subscribe", {
 			endpoint: subscription.endpoint,
 			keys: subscription.keys,

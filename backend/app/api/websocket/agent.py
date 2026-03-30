@@ -44,16 +44,12 @@ async def get_user_from_token(token: str) -> User | None:
         )
 
     try:
-        payload = jwt.decode(
-            token, settings.secret_key, algorithms=[settings.algorithm]
-        )
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         email = payload.get("sub")
         if email:
             user = await User.find_one(User.email == email)
             if user and is_token_revoked_by_password_change(user, payload):
-                logger.warning(
-                    "WebSocket token invalidated by password change for %s", email
-                )
+                logger.warning("WebSocket token invalidated by password change for %s", email)
                 return None
             return user
     except JWTError as e:
@@ -204,14 +200,9 @@ async def agent_chat_websocket(
                 from app.api.v1.settings import _check_cli_login
 
                 if not _check_cli_login():
-                    auth_error = (
-                        "Claude CLI not logged in. Use the gear icon to log in."
-                    )
+                    auth_error = "Claude CLI not logged in. Use the gear icon to log in."
             elif app_settings.agent_auth_mode == AgentAuthMode.API_KEY:
-                if (
-                    not app_settings.get_agent_api_key()
-                    and not settings.anthropic_api_key
-                ):
+                if not app_settings.get_agent_api_key() and not settings.anthropic_api_key:
                     auth_error = "No API key configured. Use the gear icon to add one."
 
         if auth_error:

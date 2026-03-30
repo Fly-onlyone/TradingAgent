@@ -7,7 +7,15 @@
 
 import BuildIcon from "@mui/icons-material/Build";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
-import { Avatar, Box, Chip, Link, Paper, Typography } from "@mui/material";
+import {
+	Avatar,
+	Box,
+	Chip,
+	Link,
+	Paper,
+	type Theme,
+	Typography,
+} from "@mui/material";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import type { ToolCall } from "@/api/websocket/useAgentSocket";
@@ -129,7 +137,7 @@ export function ThinkingIndicator({
 								height: 2,
 								borderRadius: 1,
 								mb: thinkingContent || toolCalls.length > 0 ? 1 : 0,
-								background: (theme: any) =>
+								background: (theme: Theme) =>
 									`linear-gradient(90deg, transparent 0%, ${theme.palette.primary.main}66 50%, transparent 100%)`,
 								backgroundSize: "200% 100%",
 								animation: "shimmerSlide 1.5s ease-in-out infinite",

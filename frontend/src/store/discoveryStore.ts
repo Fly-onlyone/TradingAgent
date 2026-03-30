@@ -91,7 +91,11 @@ export const useDiscoveryStore = create<DiscoveryState>()(
 async function runDiscoveryStream(
 	token: string,
 	signal: AbortSignal,
-	set: (partial: Partial<DiscoveryState>) => void,
+	set: (
+		partial:
+			| Partial<DiscoveryState>
+			| ((state: DiscoveryState) => Partial<DiscoveryState>),
+	) => void,
 ) {
 	try {
 		const response = await fetch(

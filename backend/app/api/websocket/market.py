@@ -1,6 +1,6 @@
 """Market data WebSocket endpoints."""
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from app.api.websocket.connection_manager import manager
 

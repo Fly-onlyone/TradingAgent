@@ -59,7 +59,6 @@ def get_model_config(model_name: str) -> EmbeddingModelConfig:
     config = EMBEDDING_MODELS.get(model_name)
     if config is None:
         raise ValueError(
-            f"Unknown embedding model: {model_name}. "
-            f"Supported: {', '.join(SUPPORTED_MODEL_NAMES)}"
+            f"Unknown embedding model: {model_name}. Supported: {', '.join(SUPPORTED_MODEL_NAMES)}"
         )
     return config

@@ -1,6 +1,6 @@
 """News summarizer using Claude for article summarization and sentiment analysis."""
 
-from typing import Any, Optional
+from typing import Any
 
 from anthropic import Anthropic
 
@@ -123,7 +123,7 @@ Response:"""
         self,
         title: str,
         content: str,
-        assets: Optional[list[str]] = None,
+        assets: list[str] | None = None,
     ) -> float:
         """Analyze how relevant an article is for trading."""
         truncated_content = content[:3000] if len(content) > 3000 else content

@@ -3,7 +3,6 @@
 import json
 import logging
 from datetime import datetime
-from typing import Optional
 
 from beanie import PydanticObjectId
 
@@ -24,9 +23,9 @@ class NotificationService:
     """Service for managing notifications and Web Push delivery."""
 
     def __init__(self) -> None:
-        self._vapid_private_key: Optional[str] = None
-        self._vapid_public_key: Optional[str] = None
-        self._vapid_claims: Optional[dict] = None
+        self._vapid_private_key: str | None = None
+        self._vapid_public_key: str | None = None
+        self._vapid_claims: dict | None = None
 
     def configure_vapid(
         self,
@@ -40,7 +39,7 @@ class NotificationService:
         self._vapid_claims = {"sub": f"mailto:{claims_email}"}
 
     @property
-    def vapid_public_key(self) -> Optional[str]:
+    def vapid_public_key(self) -> str | None:
         """Get the VAPID public key for client subscription."""
         return self._vapid_public_key
 
@@ -83,12 +82,12 @@ class NotificationService:
         title: str,
         body: str,
         notification_type: NotificationType,
-        decision_id: Optional[PydanticObjectId] = None,
-        task_id: Optional[PydanticObjectId] = None,
-        order_id: Optional[PydanticObjectId] = None,
-        session_id: Optional[PydanticObjectId] = None,
-        data: Optional[dict] = None,
-        expires_at: Optional[datetime] = None,
+        decision_id: PydanticObjectId | None = None,
+        task_id: PydanticObjectId | None = None,
+        order_id: PydanticObjectId | None = None,
+        session_id: PydanticObjectId | None = None,
+        data: dict | None = None,
+        expires_at: datetime | None = None,
     ) -> Notification:
         """Create a new notification."""
         notification = Notification(
@@ -132,7 +131,7 @@ class NotificationService:
             return False
 
         try:
-            from pywebpush import webpush, WebPushException
+            from pywebpush import webpush
 
             subscription = user_settings.web_push_subscription
             payload = json.dumps(
@@ -198,7 +197,7 @@ class NotificationService:
         self,
         notification_id: PydanticObjectId,
         user_id: PydanticObjectId,
-    ) -> Optional[Notification]:
+    ) -> Notification | None:
         """Mark a notification as read."""
         notification = await Notification.find_one(
             Notification.id == notification_id,
@@ -214,8 +213,8 @@ class NotificationService:
         notification_id: PydanticObjectId,
         user_id: PydanticObjectId,
         action: NotificationAction,
-        comment: Optional[str] = None,
-    ) -> Optional[Notification]:
+        comment: str | None = None,
+    ) -> Notification | None:
         """Take action on a notification (confirm/reject trade)."""
         notification = await Notification.find_one(
             Notification.id == notification_id,
@@ -273,7 +272,7 @@ class NotificationService:
 
 
 # Global service instance
-_notification_service: Optional[NotificationService] = None
+_notification_service: NotificationService | None = None
 
 
 def get_notification_service() -> NotificationService:

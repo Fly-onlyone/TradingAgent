@@ -1,6 +1,6 @@
 """Knowledge base tools for the trading agent."""
 
-from typing import Any, Optional
+from typing import Any
 
 from app.db.models.knowledge import StrategyKnowledge, TradeLesson, TradingPattern
 from app.knowledge.retriever import get_retriever
@@ -46,7 +46,7 @@ async def search_strategies(
             "strategies": strategies,
             "count": len(strategies),
         }
-    except Exception as e:
+    except Exception:
         # Fallback to simple text search if vector search fails
         strategies = (
             await StrategyKnowledge.find({"$text": {"$search": query}}).limit(limit).to_list()
@@ -87,7 +87,7 @@ async def search_strategies(
 
 async def search_lessons(
     query: str,
-    symbol: Optional[str] = None,
+    symbol: str | None = None,
     limit: int = 5,
 ) -> dict[str, Any]:
     """Search past trade lessons for relevant insights.
@@ -128,7 +128,7 @@ async def search_lessons(
             "lessons": lessons,
             "count": len(lessons),
         }
-    except Exception as e:
+    except Exception:
         # Fallback to simple query
         query_filter = {}
         if symbol:
@@ -146,13 +146,13 @@ async def search_lessons(
             "symbol_filter": symbol,
             "lessons": [
                 {
-                    "id": str(l.id),
-                    "symbol": l.symbol,
-                    "outcome": l.outcome,
-                    "profit_pct": l.profit_pct,
-                    "lesson_summary": l.lesson_summary,
+                    "id": str(lesson.id),
+                    "symbol": lesson.symbol,
+                    "outcome": lesson.outcome,
+                    "profit_pct": lesson.profit_pct,
+                    "lesson_summary": lesson.lesson_summary,
                 }
-                for l in lessons
+                for lesson in lessons
             ],
             "count": len(lessons),
             "search_type": "recent_fallback",
@@ -161,8 +161,8 @@ async def search_lessons(
 
 async def search_patterns(
     query: str,
-    pattern_type: Optional[str] = None,
-    min_success_rate: Optional[float] = None,
+    pattern_type: str | None = None,
+    min_success_rate: float | None = None,
     limit: int = 5,
 ) -> dict[str, Any]:
     """Search for trading patterns.
@@ -212,7 +212,7 @@ async def search_patterns(
             "patterns": patterns,
             "count": len(patterns),
         }
-    except Exception as e:
+    except Exception:
         # Fallback query
         query_filter = {}
         if pattern_type:

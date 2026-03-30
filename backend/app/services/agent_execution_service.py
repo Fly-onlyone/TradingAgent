@@ -37,9 +37,7 @@ class AgentExecutionService:
             raise ValueError("Decision not found")
 
         if decision.status != DecisionStatus.PENDING:
-            raise RuntimeError(
-                f"Decision is not pending (current status: {decision.status.value})"
-            )
+            raise RuntimeError(f"Decision is not pending (current status: {decision.status.value})")
 
         if decision.expires_at and datetime.now(UTC) > decision.expires_at:
             decision.expire()
@@ -92,17 +90,13 @@ class AgentExecutionService:
     async def _apply_task_modification(self, decision: AgentDecision) -> AgentDecision:
         """Apply proposed task changes from a confirmed TASK_MODIFICATION decision."""
         if not decision.task_id:
-            decision.mark_execution_failed(
-                "No associated task", error_code="missing_task"
-            )
+            decision.mark_execution_failed("No associated task", error_code="missing_task")
             await decision.save()
             return decision
 
         task = await AgentTask.get(decision.task_id)
         if not task:
-            decision.mark_execution_failed(
-                "Task not found", error_code="task_not_found"
-            )
+            decision.mark_execution_failed("Task not found", error_code="task_not_found")
             await decision.save()
             return decision
 
@@ -110,9 +104,7 @@ class AgentExecutionService:
         after = proposed.get("after", {})
 
         if not after:
-            decision.mark_execution_failed(
-                "No changes to apply", error_code="empty_changes"
-            )
+            decision.mark_execution_failed("No changes to apply", error_code="empty_changes")
             await decision.save()
             return decision
 
@@ -160,9 +152,7 @@ class AgentExecutionService:
         )
         await notification.insert()
 
-        logger.info(
-            "Task %s modification applied: %s", decision.task_id, changed_fields
-        )
+        logger.info("Task %s modification applied: %s", decision.task_id, changed_fields)
         return decision
 
 

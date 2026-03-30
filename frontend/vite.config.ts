@@ -36,7 +36,7 @@ function suppressWsProxyErrors(): Plugin {
 							err instanceof Error &&
 							(err as NodeJS.ErrnoException).code === "ECONNRESET"
 						) {
-							return true as any;
+							return true;
 						}
 					}
 					return origEmit.apply(this, [event, ...args] as Parameters<

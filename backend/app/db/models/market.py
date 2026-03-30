@@ -4,8 +4,7 @@ Note: For high-frequency market data, MongoDB time-series collections are used.
 These are created in init_db with specific settings for efficient time-series queries.
 """
 
-from datetime import datetime, timezone, UTC
-from typing import Optional
+from datetime import UTC, datetime
 
 from beanie import Document, Indexed
 from pydantic import Field
@@ -24,12 +23,12 @@ class MarketData(Document):
     low: float
     close: float
     volume: float
-    quote_volume: Optional[float] = None
+    quote_volume: float | None = None
 
     # Additional metrics
-    trade_count: Optional[int] = None
-    taker_buy_volume: Optional[float] = None
-    taker_sell_volume: Optional[float] = None
+    trade_count: int | None = None
+    taker_buy_volume: float | None = None
+    taker_sell_volume: float | None = None
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

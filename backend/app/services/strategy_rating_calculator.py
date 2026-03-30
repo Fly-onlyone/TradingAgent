@@ -9,9 +9,7 @@ from app.db.models.strategy_rating import StrategyRating
 class StrategyRatingCalculator:
     """Calculates overall strategy ratings from multiple signals."""
 
-    async def calculate_overall_rating(
-        self, strategy: StrategyKnowledge
-    ) -> tuple[float, float]:
+    async def calculate_overall_rating(self, strategy: StrategyKnowledge) -> tuple[float, float]:
         """Return (rating: 0-100, confidence: 0-1) for a strategy."""
         components: list[tuple[float, float]] = []  # (score, weight)
         data_points = 0

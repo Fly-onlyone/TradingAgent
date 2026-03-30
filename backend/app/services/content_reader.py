@@ -41,11 +41,15 @@ async def read_uploaded_file(file: UploadFile) -> str:
     ext = PurePosixPath(filename).suffix.lower()
 
     if ext not in ALLOWED_EXTENSIONS:
-        raise ValueError(f"Unsupported file type: {ext}. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}")
+        raise ValueError(
+            f"Unsupported file type: {ext}. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
+        )
 
     content_bytes = await file.read()
     if len(content_bytes) > MAX_FILE_SIZE:
-        raise ValueError(f"File too large ({len(content_bytes)} bytes). Maximum: {MAX_FILE_SIZE} bytes")
+        raise ValueError(
+            f"File too large ({len(content_bytes)} bytes). Maximum: {MAX_FILE_SIZE} bytes"
+        )
 
     if ext == ".pdf":
         return _extract_pdf_text(content_bytes)

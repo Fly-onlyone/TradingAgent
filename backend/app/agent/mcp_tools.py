@@ -25,6 +25,7 @@ def pop_pending_chart_data() -> dict[str, Any] | None:
     _last_chart_data = None
     return data
 
+
 # ============================================================
 # Active User Context
 # ============================================================
@@ -544,17 +545,28 @@ async def mcp_toggle_strategy(args: dict[str, Any]) -> dict[str, Any]:
 
         strategy = await Strategy.get(PydanticObjectId(args["strategy_id"]))
         if not strategy or str(strategy.user_id) != user_id:
-            return {"content": [{"type": "text", "text": json.dumps({"error": "Strategy not found"})}]}
+            return {
+                "content": [{"type": "text", "text": json.dumps({"error": "Strategy not found"})}]
+            }
 
         strategy.is_active = args["activate"]
         strategy.update_timestamp()
         await strategy.save()
 
         action = "activated" if args["activate"] else "deactivated"
-        return {"content": [{"type": "text", "text": json.dumps({
-            "status": "success",
-            "message": f"Strategy '{strategy.name}' has been {action}",
-        })}]}
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(
+                        {
+                            "status": "success",
+                            "message": f"Strategy '{strategy.name}' has been {action}",
+                        }
+                    ),
+                }
+            ]
+        }
     except Exception as e:
         return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
 
@@ -758,9 +770,7 @@ async def mcp_submit_recommendation(args: dict[str, Any]) -> dict[str, Any]:
             "content": [
                 {
                     "type": "text",
-                    "text": json.dumps(
-                        {"status": "ok", "message": "Recommendation recorded."}
-                    ),
+                    "text": json.dumps({"status": "ok", "message": "Recommendation recorded."}),
                 }
             ]
         }
@@ -780,14 +790,10 @@ def get_pending_recommendation(request_id: str) -> dict[str, Any] | None:
 # ============================================================
 
 _task_execution_context: dict[str, dict[str, Any]] = {}
-_active_task_request_id: ContextVar[str | None] = ContextVar(
-    "active_task_request_id", default=None
-)
+_active_task_request_id: ContextVar[str | None] = ContextVar("active_task_request_id", default=None)
 
 
-def set_task_execution_context(
-    request_id: str, task_id: str, user_id: str, mode: str
-) -> None:
+def set_task_execution_context(request_id: str, task_id: str, user_id: str, mode: str) -> None:
     """Register execution context so the modify_task tool can access the current task."""
     _task_execution_context[request_id] = {
         "task_id": task_id,
@@ -869,9 +875,7 @@ async def mcp_modify_task(args: dict[str, Any]) -> dict[str, Any]:
 
         ctx = _get_task_context()
         if not ctx:
-            return _text_result(
-                {"status": "error", "message": "No active task context."}
-            )
+            return _text_result({"status": "error", "message": "No active task context."})
 
         invalid_fields = set(changes.keys()) - AGENT_MODIFIABLE_FIELDS
         if invalid_fields:
@@ -932,13 +936,9 @@ async def mcp_modify_task(args: dict[str, Any]) -> dict[str, Any]:
                     scheduler = get_scheduler()
                     await scheduler.schedule_task(task)
                 except Exception:
-                    _logger.warning(
-                        "Failed to reschedule after modification", exc_info=True
-                    )
+                    _logger.warning("Failed to reschedule after modification", exc_info=True)
 
-            _logger.info(
-                "Task %s auto-modified: %s", ctx["task_id"], list(changes.keys())
-            )
+            _logger.info("Task %s auto-modified: %s", ctx["task_id"], list(changes.keys()))
             return _text_result(
                 {
                     "status": "ok",

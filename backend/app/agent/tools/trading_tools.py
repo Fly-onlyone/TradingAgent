@@ -1,10 +1,10 @@
 """Trading execution tools for the trading agent."""
 
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
-from app.exchange.okx_client import OKXClient
 from app.config import get_settings
+from app.exchange.okx_client import OKXClient
 
 settings = get_settings()
 
@@ -42,7 +42,7 @@ async def get_account_balance() -> dict[str, Any]:
     }
 
 
-async def get_open_orders(symbol: Optional[str] = None) -> dict[str, Any]:
+async def get_open_orders(symbol: str | None = None) -> dict[str, Any]:
     """Get list of open orders.
 
     Args:
@@ -85,9 +85,9 @@ async def place_order(
     side: str,
     order_type: str,
     quantity: float,
-    price: Optional[float] = None,
-    stop_loss: Optional[float] = None,
-    take_profit: Optional[float] = None,
+    price: float | None = None,
+    stop_loss: float | None = None,
+    take_profit: float | None = None,
 ) -> dict[str, Any]:
     """Place a trading order.
 
