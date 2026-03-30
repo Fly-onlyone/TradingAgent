@@ -11,6 +11,8 @@ import {
 	CardContent,
 	CircularProgress,
 	Grid2 as Grid,
+	Tab,
+	Tabs,
 	TextField,
 	ToggleButton,
 	ToggleButtonGroup,
@@ -18,7 +20,7 @@ import {
 } from "@mui/material";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SymbolOption } from "@/api/endpoints/market";
 import { marketApi } from "@/api/endpoints/market";
@@ -36,17 +38,16 @@ import { SectionHeader } from "@/components/common/SectionHeader";
 import { ZoomAwareAutocomplete } from "@/components/common/ZoomAwareAutocomplete";
 import { StatCard } from "@/components/data-display/StatCard";
 import {
-	HoldingsCard,
+	HoldingsTab,
 	MarketOverviewPanel,
-	PositionCard,
+	PositionsTab,
 	RecentOrderActivity,
-	TickerCard,
+	WatchlistTab,
 } from "@/components/trading";
 import { useDebouncedSave } from "@/hooks/useDebouncedSave";
 import { useSymbolOptions } from "@/hooks/useSymbolOptions";
 import { useMarketStore } from "@/store/marketStore";
-import { useOrderStore } from "@/store/orderStore";
-import { spring } from "@/utils/animations/variants";
+import { spring, tabSwitch } from "@/utils/animations/variants";
 import { TIMEFRAMES } from "@/utils/constants";
 import { getErrorMessage } from "@/utils/errors";
 import { formatPercent, formatPrice, formatVolume } from "@/utils/formatters";
@@ -65,16 +66,13 @@ function TradingPage() {
 	);
 	const setSelectedSymbol = useMarketStore((state) => state.setSelectedSymbol);
 	const loadPreferences = useMarketStore((state) => state.loadPreferences);
-	const watchlist = useMarketStore((state) => state.watchlist);
 	const liveTicker = useMarketStore(
 		(state) => state.tickers[state.selectedSymbol],
 	);
 
-	const currentPosition = useOrderStore((state) =>
-		state.positions.find((position) => position.symbol === selectedSymbol),
-	);
-
 	const queryClient = useQueryClient();
+
+	const [bottomTab, setBottomTab] = useState(0);
 
 	// Local state for the preferences form
 	const [prefSymbol, setPrefSymbol] = useState(selectedSymbol);
@@ -403,71 +401,68 @@ function TradingPage() {
 						</Grid>
 					</Grid>
 
-					<Grid size={{ xs: 12, lg: 8 }}>
+					<Grid size={{ xs: 12 }}>
 						<MarketOverviewPanel
 							overview={overviewQuery.data ?? null}
 							isLoading={overviewQuery.isLoading}
 						/>
 					</Grid>
 
-					<Grid size={{ xs: 12, lg: 4 }}>
-						<Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-							<Card>
-								<CardContent>
-									<Typography variant="h6" gutterBottom>
-										Agent Watchlist
-									</Typography>
-									<Box
-										sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}
-									>
-										{watchlist.length > 0 ? (
-											watchlist.map((symbol) => (
-												<TickerCard
-													key={symbol}
-													symbol={symbol}
-													compact
-													onClick={() => setSelectedSymbol(symbol)}
-												/>
-											))
-										) : (
-											<Typography variant="body2" color="text.secondary">
-												No symbols in watchlist.
-											</Typography>
-										)}
-									</Box>
-								</CardContent>
-							</Card>
-
-							{currentPosition ? (
-								<PositionCard position={currentPosition} />
-							) : (
-								<Card>
-									<CardContent>
-										<Typography variant="h6" gutterBottom>
-											Current Position
-										</Typography>
-										<Typography variant="body2" color="text.secondary">
-											No open position for {selectedSymbol.replace("-", "/")}.
-										</Typography>
-									</CardContent>
-								</Card>
-							)}
-
-							<HoldingsCard
-								currencies={accountQuery.data?.currencies ?? []}
-								isLoading={accountQuery.isPending}
-								error={accountQuery.data?.error ?? null}
-								onSelectSymbol={setSelectedSymbol}
-							/>
-						</Box>
-					</Grid>
-
 					<Grid size={{ xs: 12 }}>
-						<RecentOrderActivity
-							orders={orderHistoryQuery.data?.orders ?? []}
-							isLoading={orderHistoryQuery.isLoading}
-							error={orderHistoryError}
-						/>
+						<Card>
+							<Tabs
+								value={bottomTab}
+								onChange={(_, v) => setBottomTab(v)}
+								sx={{ borderBottom: 1, borderColor: "divider", px: 2 }}
+							>
+								<Tab label="Watchlist" />
+								<Tab label="Holdings" />
+								<Tab label="Positions" />
+								<Tab label="Orders" />
+							</Tabs>
+							<CardContent>
+								<AnimatePresence mode="wait">
+									<motion.div
+										key={bottomTab}
+										variants={tabSwitch}
+										initial="initial"
+										animate="animate"
+										exit="exit"
+									>
+										{bottomTab === 0 && (
+											<WatchlistTab
+												onSelectSymbol={setSelectedSymbol}
+											/>
+										)}
+										{bottomTab === 1 && (
+											<HoldingsTab
+												currencies={
+													accountQuery.data?.currencies ?? []
+												}
+												isLoading={accountQuery.isPending}
+												error={accountQuery.data?.error ?? null}
+												onSelectSymbol={setSelectedSymbol}
+											/>
+										)}
+										{bottomTab === 2 && (
+											<PositionsTab
+												onSelectSymbol={setSelectedSymbol}
+											/>
+										)}
+										{bottomTab === 3 && (
+											<RecentOrderActivity
+												orders={
+													orderHistoryQuery.data?.orders ?? []
+												}
+												isLoading={orderHistoryQuery.isLoading}
+												error={orderHistoryError}
+												embedded
+											/>
+										)}
+									</motion.div>
+								</AnimatePresence>
+							</CardContent>
+						</Card>
 					</Grid>
 				</Grid>
 			</Box>
