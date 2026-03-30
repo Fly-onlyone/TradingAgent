@@ -427,7 +427,7 @@ async def setup_2fa(
     """
     secret = pyotp.random_base32()
     totp = pyotp.TOTP(secret)
-    provisioning_uri = totp.provisioning_uri(name=current_user.email, issuer_name="Trading Agent")
+    provisioning_uri = totp.provisioning_uri(name=current_user.email, issuer_name="Trading agent")
 
     # Generate QR code as base64 PNG
     img = qrcode.make(provisioning_uri)

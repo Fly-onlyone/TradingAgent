@@ -59,7 +59,7 @@ pub struct BuildCompleteEvent {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Resolves the parent Trading Agent project root (../../ from this crate).
+/// Resolves the parent Trading agent project root (../../ from this crate).
 fn project_root() -> Result<PathBuf, String> {
     let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     crate_dir

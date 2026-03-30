@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Trading Agent",
+  "productName": "Trading agent",
   "version": "0.1.0",
-  "identifier": "com.trading-agent.app",
+  "identifier": "com.fly.tradingagent",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:3000",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Trading Agent",
+        "title": "Trading agent",
         "width": 1400,
         "height": 900,
         "minWidth": 1024,

@@ -290,7 +290,7 @@ export default function App() {
             {/* Header */}
             <div className="app-header">
                 <span className="icon">&#x2692;</span>
-                <h1>Trading Agent Build Tool</h1>
+                <h1>Trading agent Build Tool</h1>
             </div>
 
             {/* Version Sync */}

@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Build GUI",
   "version": "0.1.0",
-  "identifier": "com.trading-agent.build-gui",
+  "identifier": "com.fly.tradingagent.build-gui",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:3100",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Trading Agent Build Tool",
+        "title": "Trading agent Build Tool",
         "width": 720,
         "height": 680,
         "minWidth": 600,

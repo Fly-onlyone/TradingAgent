@@ -1,4 +1,4 @@
-"""Main Trading Agent using Claude Agent SDK with MCP tools."""
+"""Main Trading agent using Claude Agent SDK with MCP tools."""
 
 import asyncio
 import logging
@@ -76,7 +76,7 @@ After completing your analysis, you MUST call the `submit_recommendation` tool w
 
 
 class TradingAgent:
-    """Trading Agent using Claude Agent SDK with in-process MCP tools.
+    """Trading agent using Claude Agent SDK with in-process MCP tools.
 
     Uses ClaudeSDKClient for conversation continuity and automatic tool execution.
     Authentication falls back to Claude Code CLI credentials when no API key is set,

@@ -506,7 +506,7 @@ function Dashboard() {
 				{isFirstTimeUser && (
 					<Card sx={{ mb: 3, p: 3 }}>
 						<Typography variant="h5" fontWeight={700} sx={{ mb: 1 }}>
-							Welcome to Trading Agent
+							Welcome to Trading agent
 						</Typography>
 						<Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
 							Get started with automated trading in 3 steps:

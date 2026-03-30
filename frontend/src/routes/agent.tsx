@@ -676,7 +676,7 @@ function AgentPage() {
 							<SmartToyIcon sx={{ color: "primary.main" }} />
 							<Box sx={{ minWidth: 0 }}>
 								<Typography variant="h6" noWrap>
-									Trading Agent
+									Trading agent
 								</Typography>
 								{selectedSessionId && (
 									<Typography
@@ -752,7 +752,7 @@ function AgentPage() {
 									}}
 								/>
 								<Typography variant="h6" sx={{ mb: 1 }}>
-									Trading Agent
+									Trading agent
 								</Typography>
 								<Typography
 									variant="body2"

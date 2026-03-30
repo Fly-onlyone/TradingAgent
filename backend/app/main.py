@@ -141,7 +141,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(
     title=settings.app_name,
-    description="Automatic Trading Agent with Claude AI",
+    description="Automatic Trading agent with Claude AI",
     version="0.1.0",
     lifespan=lifespan,
 )

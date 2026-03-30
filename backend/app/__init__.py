@@ -1,1 +1,1 @@
-"""Trading Agent Backend Application."""
+"""Trading agent Backend Application."""

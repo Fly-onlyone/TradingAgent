@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     )
 
     # Application
-    app_name: str = "Trading Agent"
+    app_name: str = "Trading agent"
     debug: bool = False
     secret_key: str = ""
     algorithm: str = "HS256"

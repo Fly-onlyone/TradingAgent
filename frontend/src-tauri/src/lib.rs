@@ -22,7 +22,7 @@ use tauri_plugin_shell::{
 // Constants (overridable via env vars where noted)
 // ---------------------------------------------------------------------------
 
-const APP_NAME: &str = "Trading Agent";
+const APP_NAME: &str = "Trading agent";
 
 /// Max time (ms) to wait for backend TCP health check response.
 const BACKEND_HEALTH_TIMEOUT_MS: u64 = 5000;

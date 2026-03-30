@@ -1,4 +1,4 @@
-# Trading Agent
+# Trading agent
 
 AI-powered cryptocurrency trading platform with automated task scheduling, multi-agent analysis, and real-time
 monitoring.
@@ -33,7 +33,7 @@ monitoring.
 
 ## Features
 
-- **AI Trading Agent** — Chat with Claude AI via WebSocket, get structured trade recommendations with confidence scores
+- **AI Trading agent** — Chat with Claude AI via WebSocket, get structured trade recommendations with confidence scores
 - **Multi-Agent Analysis** — Parallel subagents for technical, fundamental, and news sentiment analysis
 - **Scheduled Tasks** — Cron-based automation with ASK (confirm before trading) and AUTO (immediate execution) modes
 - **Real-Time Market Data** — Live tickers, watchlists, and technical indicator charts via OKX
@@ -152,7 +152,7 @@ Frontend (React 19 + MUI 6 + TanStack Router)
   ↕  REST / WebSocket
 Backend (FastAPI + Beanie/MongoDB)
   ↕
-Trading Agent (Claude SDK)
+Trading agent (Claude SDK)
   ├── TechnicalAnalyst   — chart patterns, indicators (RSI, MACD, Bollinger)
   ├── FundamentalAnalyst  — on-chain metrics, tokenomics, macro
   ├── NewsAnalyst         — sentiment, credibility-weighted signals

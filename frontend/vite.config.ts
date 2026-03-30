@@ -63,8 +63,8 @@ export default defineConfig({
 						injectRegister: "auto",
 						includeAssets: ["coin.png"],
 						manifest: {
-							name: "Trading Agent",
-							short_name: "Trading Agent",
+							name: "Trading agent",
+							short_name: "Trading agent",
 							description: "AI-powered cryptocurrency trading dashboard",
 							theme_color: "#000000",
 							background_color: "#ffffff",

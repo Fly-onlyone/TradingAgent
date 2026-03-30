@@ -59,7 +59,7 @@ Separate Sentry projects per layer (org: `fly-theonlyone`):
 
 ## Project Overview
 
-**Trading Agent** is a full-stack application for automated cryptocurrency trading with AI-powered analysis.
+**Trading agent** is a full-stack application for automated cryptocurrency trading with AI-powered analysis.
 
 ### Backend (Python)
 
