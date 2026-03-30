@@ -542,4 +542,24 @@ function transformStrategyDiscoveryConfig(
 	};
 }
 
+export interface AutostartConfig {
+	enabled: boolean;
+}
+
+export const autostartApi = {
+	async getAutostartConfig(): Promise<AutostartConfig> {
+		const response =
+			await apiClient.get<Record<string, unknown>>("/settings/autostart");
+		return { enabled: response.data.enabled as boolean };
+	},
+
+	async updateAutostartConfig(enabled: boolean): Promise<AutostartConfig> {
+		const response = await apiClient.put<Record<string, unknown>>(
+			"/settings/autostart",
+			{ enabled },
+		);
+		return { enabled: response.data.enabled as boolean };
+	},
+};
+
 export default settingsApi;

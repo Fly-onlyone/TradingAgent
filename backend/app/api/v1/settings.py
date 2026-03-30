@@ -1098,3 +1098,36 @@ async def update_session_retention_config(
 
     logger.info("Session retention updated (days=%d)", app_settings.session_retention_days)
     return {"session_retention_days": app_settings.session_retention_days}
+
+
+# ── Autostart Configuration ────────────────────────────────────
+
+
+class AutostartConfigResponse(BaseModel):
+    enabled: bool
+
+
+class AutostartConfigUpdate(BaseModel):
+    enabled: bool
+
+
+@router.get("/autostart", response_model=AutostartConfigResponse)
+async def get_autostart_config(
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Get current autostart configuration."""
+    app_settings = await AppSettings.get_instance()
+    return {"enabled": app_settings.app_autostart_enabled}
+
+
+@router.put("/autostart", response_model=AutostartConfigResponse)
+async def update_autostart_config(
+    body: AutostartConfigUpdate,
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Update autostart configuration."""
+    app_settings = await AppSettings.get_instance()
+    app_settings.app_autostart_enabled = body.enabled
+    await app_settings.save_with_timestamp()
+    logger.info("Autostart updated (enabled=%s)", app_settings.app_autostart_enabled)
+    return {"enabled": app_settings.app_autostart_enabled}

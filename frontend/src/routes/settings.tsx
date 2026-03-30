@@ -46,7 +46,7 @@ import type {
 	ExchangeConfigUpdate,
 	SessionRetentionConfigUpdate,
 } from "@/api/endpoints/settings";
-import { settingsApi } from "@/api/endpoints/settings";
+import { autostartApi, settingsApi } from "@/api/endpoints/settings";
 import { AgentConfigPanel } from "@/components/agent/AgentConfigPanel";
 import { PageTransition } from "@/components/common/PageTransition";
 import { SaveIndicator } from "@/components/common/SaveIndicator";
@@ -1672,6 +1672,78 @@ function NotificationPreferencesCard() {
 	);
 }
 
+function DesktopCard() {
+	const { user } = useAuthStore();
+	const isSuperuser = user?.isSuperuser ?? false;
+	const queryClient = useQueryClient();
+
+	const configQuery = useQuery({
+		queryKey: ["autostart-config"],
+		queryFn: () => autostartApi.getAutostartConfig(),
+		enabled: isSuperuser || import.meta.env.DEV,
+		staleTime: 60_000,
+	});
+
+	const updateMutation = useMutation({
+		mutationFn: async (enabled: boolean) => {
+			const [result] = await Promise.all([
+				autostartApi.updateAutostartConfig(enabled),
+				enabled
+					? import("@/utils/autostart").then((m) => m.enableAutostart())
+					: import("@/utils/autostart").then((m) => m.disableAutostart()),
+			]);
+			return result;
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["autostart-config"] });
+			notify.success("Autostart setting updated");
+		},
+		onError: (error) => {
+			notify.error("Failed to update autostart setting", getErrorMessage(error));
+		},
+	});
+
+	if (!isSuperuser && !import.meta.env.DEV) return null;
+
+	return (
+		<Card sx={{ mb: 3 }}>
+			<CardContent>
+				<Typography variant="h6" gutterBottom>
+					Desktop
+				</Typography>
+
+				{configQuery.isLoading ? (
+					<Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
+						<CircularProgress size={24} />
+					</Box>
+				) : configQuery.error ? (
+					<Alert severity="error">Failed to load autostart configuration</Alert>
+				) : configQuery.data ? (
+					<Box
+						sx={{
+							display: "flex",
+							alignItems: "center",
+							justifyContent: "space-between",
+						}}
+					>
+						<Box>
+							<Typography variant="body2">Start on login</Typography>
+							<Typography variant="caption" color="text.secondary">
+								Automatically launch when you sign in to Windows
+							</Typography>
+						</Box>
+						<Switch
+							checked={configQuery.data.enabled}
+							onChange={(_, checked) => updateMutation.mutate(checked)}
+							disabled={updateMutation.isPending}
+						/>
+					</Box>
+				) : null}
+			</CardContent>
+		</Card>
+	);
+}
+
 function SettingsPage() {
 	const { user } = useAuth();
 	const isSuperuser = user?.isSuperuser ?? false;
@@ -1800,63 +1872,67 @@ function SettingsPage() {
 
 				{/* Tab 2: Appearance */}
 				{settingsTab === 2 && (
-					<Card>
-						<CardContent>
-							<Typography variant="h6" sx={{ mb: 2 }}>
-								Appearance
-							</Typography>
-
-							{/* Theme Selector */}
-							<Box sx={{ mb: 3 }}>
-								<Typography variant="subtitle2" sx={{ mb: 1 }}>
-									Theme
+					<>
+						<Card sx={{ mb: 3 }}>
+							<CardContent>
+								<Typography variant="h6" sx={{ mb: 2 }}>
+									Appearance
 								</Typography>
-								<ThemeSelector />
-							</Box>
 
-							{/* Reduced Motion */}
-							<Box
-								sx={{
-									display: "flex",
-									alignItems: "center",
-									justifyContent: "space-between",
-									mb: 2,
-								}}
-							>
-								<Box>
-									<Typography variant="body2">Reduced Motion</Typography>
-									<Typography variant="caption" color="text.secondary">
-										Minimize animations for accessibility
+								{/* Theme Selector */}
+								<Box sx={{ mb: 3 }}>
+									<Typography variant="subtitle2" sx={{ mb: 1 }}>
+										Theme
 									</Typography>
+									<ThemeSelector />
 								</Box>
-								<Switch
-									checked={reducedMotion}
-									onChange={(_, checked) => setReducedMotion(checked)}
-								/>
-							</Box>
 
-							{/* Effects */}
-							<Box
-								sx={{
-									display: "flex",
-									alignItems: "center",
-									justifyContent: "space-between",
-									mb: 2,
-								}}
-							>
-								<Box>
-									<Typography variant="body2">Background Effects</Typography>
-									<Typography variant="caption" color="text.secondary">
-										Mesh blobs, particle grid, cursor glow
-									</Typography>
+								{/* Reduced Motion */}
+								<Box
+									sx={{
+										display: "flex",
+										alignItems: "center",
+										justifyContent: "space-between",
+										mb: 2,
+									}}
+								>
+									<Box>
+										<Typography variant="body2">Reduced Motion</Typography>
+										<Typography variant="caption" color="text.secondary">
+											Minimize animations for accessibility
+										</Typography>
+									</Box>
+									<Switch
+										checked={reducedMotion}
+										onChange={(_, checked) => setReducedMotion(checked)}
+									/>
 								</Box>
-								<Switch
-									checked={effectsEnabled}
-									onChange={(_, checked) => setEffectsEnabled(checked)}
-								/>
-							</Box>
-						</CardContent>
-					</Card>
+
+								{/* Effects */}
+								<Box
+									sx={{
+										display: "flex",
+										alignItems: "center",
+										justifyContent: "space-between",
+										mb: 2,
+									}}
+								>
+									<Box>
+										<Typography variant="body2">Background Effects</Typography>
+										<Typography variant="caption" color="text.secondary">
+											Mesh blobs, particle grid, cursor glow
+										</Typography>
+									</Box>
+									<Switch
+										checked={effectsEnabled}
+										onChange={(_, checked) => setEffectsEnabled(checked)}
+									/>
+								</Box>
+							</CardContent>
+						</Card>
+
+						<DesktopCard />
+					</>
 				)}
 
 				{/* Tab 3: Admin (superuser only) */}

@@ -75,6 +75,9 @@ class AppSettings(Document):
     gaming_process_list: list[str] = []  # e.g. ["cs2.exe", "valorant.exe"]
     gaming_check_interval_minutes: int = 3
 
+    # Desktop app autostart
+    app_autostart_enabled: bool = False
+
     # Chat session retention
     session_retention_days: int = 0  # 0 = keep forever
     session_cleanup_last_run_at: datetime | None = None
