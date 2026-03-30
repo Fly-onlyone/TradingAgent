@@ -53,12 +53,12 @@ import {
 	settingsApi,
 } from "@/api/endpoints/settings";
 import { AgentConfigPanel } from "@/components/agent/AgentConfigPanel";
-import { AppriseConfigCard } from "@/components/settings/AppriseConfigCard";
-import { ProcessSelectorDialog } from "@/components/settings/ProcessSelectorDialog";
 import { PageTransition } from "@/components/common/PageTransition";
 import { SaveIndicator } from "@/components/common/SaveIndicator";
 import { SectionHeader } from "@/components/common/SectionHeader";
 import { ThemeSelector } from "@/components/common/ThemeSelector";
+import { AppriseConfigCard } from "@/components/settings/AppriseConfigCard";
+import { ProcessSelectorDialog } from "@/components/settings/ProcessSelectorDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { useDebouncedSave } from "@/hooks/useDebouncedSave";
 import { useZoomAwareMenu } from "@/hooks/useZoomAwareMenu";
@@ -1731,7 +1731,10 @@ function DesktopCard() {
 			notify.success("Autostart setting updated");
 		},
 		onError: (error) => {
-			notify.error("Failed to update autostart setting", getErrorMessage(error));
+			notify.error(
+				"Failed to update autostart setting",
+				getErrorMessage(error),
+			);
 		},
 	});
 
@@ -1779,9 +1782,7 @@ function DesktopCard() {
 						<CircularProgress size={24} />
 					</Box>
 				) : hasError ? (
-					<Alert severity="error">
-						Failed to load desktop configuration
-					</Alert>
+					<Alert severity="error">Failed to load desktop configuration</Alert>
 				) : configQuery.data && notifQuery.data ? (
 					<Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
 						<Box
@@ -1811,9 +1812,7 @@ function DesktopCard() {
 							}}
 						>
 							<Box>
-								<Typography variant="body2">
-									Desktop Notifications
-								</Typography>
+								<Typography variant="body2">Desktop Notifications</Typography>
 								<Typography variant="caption" color="text.secondary">
 									Show native toast notifications for agent events
 								</Typography>

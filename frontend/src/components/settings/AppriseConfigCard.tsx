@@ -32,8 +32,8 @@ import type { AppriseConfigUpdate } from "@/api/endpoints/settings";
 import { appriseApi } from "@/api/endpoints/settings";
 import { useAuthStore } from "@/store/authStore";
 import { notify } from "@/store/uiStore";
-import { getErrorMessage } from "@/utils/errors";
 import { staggerCascade } from "@/utils/animations/variants";
+import { getErrorMessage } from "@/utils/errors";
 
 /** Detect Apprise service type from a masked or full URL prefix. */
 function detectServiceType(url: string): {
@@ -52,7 +52,8 @@ function detectServiceType(url: string): {
 	if (lower.startsWith("discord://"))
 		return { label: "Discord", color: "secondary" };
 	if (lower.startsWith("slack://")) return { label: "Slack", color: "warning" };
-	if (lower.startsWith("mailto://")) return { label: "Email", color: "success" };
+	if (lower.startsWith("mailto://"))
+		return { label: "Email", color: "success" };
 	if (lower.startsWith("json://") || lower.startsWith("jsons://"))
 		return { label: "Webhook", color: "default" };
 	if (lower.startsWith("gotify://") || lower.startsWith("gotifys://"))
@@ -386,11 +387,7 @@ export function AppriseConfigCard() {
 							<Typography variant="subtitle2" gutterBottom>
 								Transactional Email URL
 							</Typography>
-							<Typography
-								variant="body2"
-								color="text.secondary"
-								sx={{ mb: 1 }}
-							>
+							<Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
 								Used for password resets and email verification. Format:{" "}
 								<code>mailto://user:pass@smtp.example.com</code>
 							</Typography>
@@ -415,10 +412,7 @@ export function AppriseConfigCard() {
 									>
 										{config.maskedEmailUrl}
 									</Typography>
-									<Button
-										size="small"
-										onClick={() => setEmailEditing(true)}
-									>
+									<Button size="small" onClick={() => setEmailEditing(true)}>
 										Change
 									</Button>
 									<Button
@@ -431,9 +425,7 @@ export function AppriseConfigCard() {
 									</Button>
 								</Box>
 							) : (
-								<Box
-									sx={{ display: "flex", gap: 1, alignItems: "center" }}
-								>
+								<Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
 									<TextField
 										size="small"
 										placeholder="mailto://user:pass@smtp.example.com"
@@ -452,9 +444,7 @@ export function AppriseConfigCard() {
 										size="small"
 										variant="contained"
 										onClick={handleSaveEmailUrl}
-										disabled={
-											!emailUrlInput.trim() || updateMutation.isPending
-										}
+										disabled={!emailUrlInput.trim() || updateMutation.isPending}
 									>
 										Save
 									</Button>
@@ -516,11 +506,7 @@ export function AppriseConfigCard() {
 									)}
 									<Typography
 										variant="body2"
-										color={
-											testResult.success
-												? "success.main"
-												: "error.main"
-										}
+										color={testResult.success ? "success.main" : "error.main"}
 									>
 										{testResult.message}
 									</Typography>

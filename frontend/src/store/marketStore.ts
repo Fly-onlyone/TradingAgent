@@ -74,10 +74,7 @@ export const useMarketStore = create<MarketState>()(
 			addTrade: (trade) =>
 				set((state) => {
 					const existing = state.recentTrades[trade.symbol] || [];
-					const updated = [trade, ...existing].slice(
-						0,
-						MAX_TRADES_PER_SYMBOL,
-					);
+					const updated = [trade, ...existing].slice(0, MAX_TRADES_PER_SYMBOL);
 					return {
 						recentTrades: {
 							...state.recentTrades,

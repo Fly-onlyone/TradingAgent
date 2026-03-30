@@ -162,11 +162,7 @@ export function PositionsTab({ onSelectSymbol }: PositionsTabProps) {
 									: undefined,
 							}}
 						>
-							<Typography
-								variant="body2"
-								fontWeight={600}
-								sx={{ width: 120 }}
-							>
+							<Typography variant="body2" fontWeight={600} sx={{ width: 120 }}>
 								{pos.symbol.replace("-", "/")}
 							</Typography>
 
@@ -207,9 +203,7 @@ export function PositionsTab({ onSelectSymbol }: PositionsTabProps) {
 									fontWeight={600}
 									sx={{
 										fontFamily: (theme) => theme.trading.mono,
-										color: isProfitable
-											? "success.main"
-											: "error.main",
+										color: isProfitable ? "success.main" : "error.main",
 									}}
 								>
 									{formatUSD(pos.unrealizedPnl)}
@@ -217,9 +211,7 @@ export function PositionsTab({ onSelectSymbol }: PositionsTabProps) {
 								<Typography
 									variant="caption"
 									sx={{
-										color: isProfitable
-											? "success.main"
-											: "error.main",
+										color: isProfitable ? "success.main" : "error.main",
 									}}
 								>
 									{formatPercent(pos.unrealizedPnlPercent)}

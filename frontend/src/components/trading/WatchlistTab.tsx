@@ -112,9 +112,7 @@ export function WatchlistTab({ onSelectSymbol }: WatchlistTabProps) {
 										...params.InputProps,
 										endAdornment: (
 											<>
-												{symbolsLoading ? (
-													<CircularProgress size={18} />
-												) : null}
+												{symbolsLoading ? <CircularProgress size={18} /> : null}
 												{params.InputProps.endAdornment}
 											</>
 										),
@@ -136,9 +134,7 @@ export function WatchlistTab({ onSelectSymbol }: WatchlistTabProps) {
 						gap: 1,
 					}}
 				>
-					<StarBorderIcon
-						sx={{ fontSize: 48, color: "text.disabled" }}
-					/>
+					<StarBorderIcon sx={{ fontSize: 48, color: "text.disabled" }} />
 					<Typography variant="body1" color="text.secondary">
 						No symbols in your watchlist yet.
 					</Typography>
@@ -154,10 +150,7 @@ export function WatchlistTab({ onSelectSymbol }: WatchlistTabProps) {
 				>
 					<Grid container spacing={2}>
 						{watchlist.map((symbol) => (
-							<Grid
-								key={symbol}
-								size={{ xs: 12, sm: 6, md: 4, lg: 3 }}
-							>
+							<Grid key={symbol} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
 								<motion.div variants={staggerCascade.item}>
 									<TickerCard
 										symbol={symbol}

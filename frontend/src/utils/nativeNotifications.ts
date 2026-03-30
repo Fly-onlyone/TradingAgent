@@ -10,9 +10,7 @@ let notificationsEnabled = true;
 /** Fetch the native notification setting from the API and cache it locally. */
 export async function refreshNativeNotificationSetting(): Promise<void> {
 	try {
-		const { nativeNotificationApi } = await import(
-			"@/api/endpoints/settings"
-		);
+		const { nativeNotificationApi } = await import("@/api/endpoints/settings");
 		const config = await nativeNotificationApi.getNativeNotificationConfig();
 		notificationsEnabled = config.enabled;
 	} catch {

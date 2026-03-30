@@ -8,9 +8,9 @@ import type {
 	ExtractionMessage,
 	Strategy,
 	StrategyCreate,
+	StrategyExtractionDetail,
 	StrategyImportConfirm,
 	StrategyImportResult,
-	StrategyKnowledge,
 	StrategyRiskParams,
 	StrategySignal,
 	StrategyUpdate,
@@ -140,7 +140,9 @@ export const strategiesApi = {
 		};
 	},
 
-	async getStrategyKnowledge(strategyId: string): Promise<StrategyKnowledge> {
+	async getStrategyKnowledge(
+		strategyId: string,
+	): Promise<StrategyExtractionDetail> {
 		const response = await apiClient.get<Record<string, unknown>>(
 			`/strategies/${strategyId}/knowledge`,
 		);

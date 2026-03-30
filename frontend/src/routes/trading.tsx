@@ -430,30 +430,22 @@ function TradingPage() {
 										exit="exit"
 									>
 										{bottomTab === 0 && (
-											<WatchlistTab
-												onSelectSymbol={setSelectedSymbol}
-											/>
+											<WatchlistTab onSelectSymbol={setSelectedSymbol} />
 										)}
 										{bottomTab === 1 && (
 											<HoldingsTab
-												currencies={
-													accountQuery.data?.currencies ?? []
-												}
+												currencies={accountQuery.data?.currencies ?? []}
 												isLoading={accountQuery.isPending}
 												error={accountQuery.data?.error ?? null}
 												onSelectSymbol={setSelectedSymbol}
 											/>
 										)}
 										{bottomTab === 2 && (
-											<PositionsTab
-												onSelectSymbol={setSelectedSymbol}
-											/>
+											<PositionsTab onSelectSymbol={setSelectedSymbol} />
 										)}
 										{bottomTab === 3 && (
 											<RecentOrderActivity
-												orders={
-													orderHistoryQuery.data?.orders ?? []
-												}
+												orders={orderHistoryQuery.data?.orders ?? []}
 												isLoading={orderHistoryQuery.isLoading}
 												error={orderHistoryError}
 												embedded

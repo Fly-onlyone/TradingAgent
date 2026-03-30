@@ -136,6 +136,7 @@ export default defineConfig({
 	build: {
 		sourcemap: "hidden",
 		rollupOptions: {
+			external: ["@tauri-apps/plugin-autostart"],
 			output: {
 				manualChunks: (id: string) => {
 					if (id.includes("@mui/") || id.includes("@emotion/"))

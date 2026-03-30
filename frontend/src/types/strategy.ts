@@ -100,7 +100,7 @@ export interface StrategyImportConfirm {
 	extractionMessages: ExtractionMessage[];
 }
 
-export interface StrategyKnowledge {
+export interface StrategyExtractionDetail {
 	extractionMessages: ExtractionMessage[];
 	sourceUrl?: string;
 	createdAt?: string;

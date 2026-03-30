@@ -970,16 +970,14 @@ function TaskConfigPage() {
 												</FormControl>
 
 												<Box>
-													<Typography gutterBottom>
-														Holding Term
-													</Typography>
+													<Typography gutterBottom>Holding Term</Typography>
 													<Typography
 														variant="caption"
 														color="text.secondary"
 														sx={{ display: "block", mb: 1 }}
 													>
-														How long the agent should hold positions
-														before considering exit
+														How long the agent should hold positions before
+														considering exit
 													</Typography>
 													<ToggleButtonGroup
 														value={formData.holdingTerm ?? "medium"}
@@ -988,8 +986,7 @@ function TaskConfigPage() {
 															if (value !== null) {
 																setFormData({
 																	...formData,
-																	holdingTerm:
-																		value as HoldingTerm,
+																	holdingTerm: value as HoldingTerm,
 																});
 															}
 														}}
@@ -997,9 +994,7 @@ function TaskConfigPage() {
 														size="small"
 													>
 														{(
-															Object.keys(
-																HOLDING_TERM_CONFIG,
-															) as HoldingTerm[]
+															Object.keys(HOLDING_TERM_CONFIG) as HoldingTerm[]
 														).map((term) => (
 															<ToggleButton
 																key={term}
@@ -1012,23 +1007,14 @@ function TaskConfigPage() {
 																	textTransform: "none",
 																}}
 															>
-																<Typography
-																	variant="body2"
-																	fontWeight={600}
-																>
-																	{
-																		HOLDING_TERM_CONFIG[term]
-																			.label
-																	}
+																<Typography variant="body2" fontWeight={600}>
+																	{HOLDING_TERM_CONFIG[term].label}
 																</Typography>
 																<Typography
 																	variant="caption"
 																	color="text.secondary"
 																>
-																	{
-																		HOLDING_TERM_CONFIG[term]
-																			.description
-																	}
+																	{HOLDING_TERM_CONFIG[term].description}
 																</Typography>
 															</ToggleButton>
 														))}

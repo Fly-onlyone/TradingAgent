@@ -202,9 +202,7 @@ export function HoldingsTab({
 											: "error.main",
 							}}
 						>
-							{c.upl === 0
-								? "-"
-								: `${c.upl > 0 ? "+" : ""}${formatUSD(c.upl)}`}
+							{c.upl === 0 ? "-" : `${c.upl > 0 ? "+" : ""}${formatUSD(c.upl)}`}
 						</Typography>
 					</Box>
 				</motion.div>

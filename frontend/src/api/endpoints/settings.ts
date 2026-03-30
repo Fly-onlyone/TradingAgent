@@ -654,8 +654,9 @@ export const appriseApi = {
 
 export const autostartApi = {
 	async getAutostartConfig(): Promise<AutostartConfig> {
-		const response =
-			await apiClient.get<Record<string, unknown>>("/settings/autostart");
+		const response = await apiClient.get<Record<string, unknown>>(
+			"/settings/autostart",
+		);
 		return { enabled: response.data.enabled as boolean };
 	},
 
