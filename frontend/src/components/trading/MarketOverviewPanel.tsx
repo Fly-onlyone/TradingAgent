@@ -104,7 +104,6 @@ export function MarketOverviewPanel({
 			animate={{ opacity: 1, y: 0 }}
 			transition={{ type: "spring", stiffness: 380, damping: 30, delay: 0.15 }}
 			sx={{
-				height: "100%",
 				borderTop: "2px solid",
 				borderImage: (theme: Theme) =>
 					`linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%) 1`,

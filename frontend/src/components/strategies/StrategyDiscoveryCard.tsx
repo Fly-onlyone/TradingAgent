@@ -1,5 +1,6 @@
 /**
- * Strategy Auto-Discovery configuration card for the Strategies page.
+ * Strategy Auto-Discovery sidebar panel for the Strategies page.
+ * Superuser-only — returns null for non-superusers.
  */
 
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
@@ -12,8 +13,8 @@ import {
 	CardContent,
 	Chip,
 	CircularProgress,
+	Divider,
 	FormControl,
-	FormControlLabel,
 	InputLabel,
 	MenuItem,
 	Slider,
@@ -80,47 +81,77 @@ export function StrategyDiscoveryCard() {
 	const config = configQuery.data;
 
 	return (
-		<Card sx={{ mb: 3 }}>
-			<CardContent>
+		<Card
+			sx={{
+				height: "100%",
+				display: "flex",
+				flexDirection: "column",
+			}}
+		>
+			<CardContent
+				sx={{
+					p: 2.5,
+					"&:last-child": { pb: 2.5 },
+					display: "flex",
+					flexDirection: "column",
+					flex: 1,
+					overflow: "auto",
+				}}
+			>
+				{/* Header */}
 				<Box
 					sx={{
 						display: "flex",
-						justifyContent: "space-between",
 						alignItems: "center",
-						mb: 2,
+						gap: 1,
+						mb: 0.5,
 					}}
 				>
-					<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-						<SearchIcon color="primary" />
-						<Typography variant="h6" fontWeight={600}>
-							Strategy Auto-Discovery
-						</Typography>
-					</Box>
-					{config && (
-						<FormControlLabel
-							control={
-								<Switch
-									checked={config.enabled}
-									onChange={(_, checked) =>
-										updateMutation.mutate({ enabled: checked })
-									}
-								/>
-							}
-							label={config.enabled ? "Enabled" : "Disabled"}
-						/>
-					)}
+					<SearchIcon color="primary" fontSize="small" />
+					<Typography variant="subtitle1" fontWeight={600}>
+						Auto-Discovery
+					</Typography>
 				</Box>
 
-				<Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-					Search the web for trading strategy articles using Brave Search, then
-					extract and save strategies to the knowledge base (RAG).
+				{/* Enable toggle */}
+				{config && (
+					<Box
+						sx={{
+							display: "flex",
+							alignItems: "center",
+							gap: 1,
+							mb: 1,
+						}}
+					>
+						<Switch
+							checked={config.enabled}
+							onChange={(_, checked) =>
+								updateMutation.mutate({ enabled: checked })
+							}
+							size="small"
+						/>
+						<Typography
+							variant="body2"
+							color={config.enabled ? "primary" : "text.secondary"}
+							fontWeight={500}
+						>
+							{config.enabled ? "Enabled" : "Disabled"}
+						</Typography>
+					</Box>
+				)}
+
+				<Typography variant="caption" color="text.secondary" sx={{ mb: 1.5 }}>
+					Crawl news sources and extract strategies using AI.
 				</Typography>
+
+				<Divider sx={{ mb: 2 }} />
 
 				{configQuery.isLoading && <CircularProgress size={24} />}
 
 				{config && (
-					<Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
-						<FormControl size="small" sx={{ maxWidth: 250 }}>
+					<Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+						{/* Check Interval */}
+						<FormControl size="small" fullWidth>
 							<InputLabel>Check Interval</InputLabel>
 							<ZoomAwareSelect
 								value={config.intervalHours}
@@ -140,59 +171,92 @@ export function StrategyDiscoveryCard() {
 							</ZoomAwareSelect>
 						</FormControl>
 
-						<Box sx={{ maxWidth: 350 }}>
-							<Typography variant="body2" gutterBottom>
-								Min. Extraction Confidence:{" "}
-								{(config.minConfidence * 100).toFixed(0)}%
+						{/* Confidence slider */}
+						<Box>
+							<Typography variant="caption" color="text.secondary" gutterBottom>
+								Min. Confidence: {(config.minConfidence * 100).toFixed(0)}%
 							</Typography>
 							<Slider
 								value={config.minConfidence}
 								onChange={(_, val) =>
-									updateMutation.mutate({
-										minConfidence: val as number,
-									})
+									updateMutation.mutate({ minConfidence: val as number })
 								}
 								min={0.1}
 								max={1.0}
 								step={0.05}
+								size="small"
 								disabled={!config.enabled}
 								valueLabelDisplay="auto"
 								valueLabelFormat={(v) => `${(v * 100).toFixed(0)}%`}
 							/>
 						</Box>
 
-						<Box sx={{ maxWidth: 350 }}>
-							<Typography variant="body2" gutterBottom>
-								Max Auto-Discovered Sources: {config.maxSources}
+						{/* Max Sources slider */}
+						<Box>
+							<Typography variant="caption" color="text.secondary" gutterBottom>
+								Max Sources: {config.maxSources}
 							</Typography>
 							<Slider
 								value={config.maxSources}
 								onChange={(_, val) =>
-									updateMutation.mutate({
-										maxSources: val as number,
-									})
+									updateMutation.mutate({ maxSources: val as number })
 								}
 								min={5}
 								max={100}
 								step={5}
+								size="small"
 								disabled={!config.enabled}
 								valueLabelDisplay="auto"
 							/>
 						</Box>
 
-						{/* Sources with strategy extraction enabled */}
+						<Divider />
+
+						{/* Run Now */}
 						<Box>
-							<Typography variant="body2" fontWeight={600} gutterBottom>
-								Sources ({config.sources.length})
+							<Button
+								variant="outlined"
+								size="small"
+								fullWidth
+								startIcon={
+									isRunning ? <CircularProgress size={14} /> : <PlayArrowIcon />
+								}
+								onClick={() => startRun(token ?? "")}
+								disabled={isRunning}
+							>
+								{isRunning ? "Running..." : "Run Now"}
+							</Button>
+							{config.lastRunAt && !isRunning && (
+								<Typography
+									variant="caption"
+									color="text.secondary"
+									display="block"
+									sx={{ mt: 0.5 }}
+								>
+									Last run: {formatRelativeTime(config.lastRunAt)}
+								</Typography>
+							)}
+							{runResult && !isRunning && (
+								<Alert severity="info" sx={{ py: 0, mt: 1 }}>
+									{runResult}
+								</Alert>
+							)}
+						</Box>
+
+						<Divider />
+
+						{/* Discovered Sources */}
+						<Box>
+							<Typography
+								variant="caption"
+								color="text.secondary"
+								fontWeight={700}
+								sx={{ letterSpacing: "0.06em", mb: 1, display: "block" }}
+							>
+								SOURCES ({config.sources.length})
 							</Typography>
 							{config.sources.length > 0 ? (
-								<Box
-									sx={{
-										display: "flex",
-										flexWrap: "wrap",
-										gap: 1,
-									}}
-								>
+								<Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
 									{config.sources.map((source) => (
 										<Chip
 											key={source.id}
@@ -204,68 +268,37 @@ export function StrategyDiscoveryCard() {
 									))}
 								</Box>
 							) : (
-								<Typography variant="body2" color="text.secondary">
-									No pre-configured sources yet. Click Run Now to auto-discover
-									sources via Brave Search.
+								<Typography variant="caption" color="text.secondary">
+									No sources yet. Run discovery to find sources.
 								</Typography>
 							)}
 						</Box>
 
-						{/* Run Now button + progress */}
-						<Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-							<Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-								<Button
-									variant="outlined"
-									size="small"
-									startIcon={
-										isRunning ? (
-											<CircularProgress size={16} />
-										) : (
-											<PlayArrowIcon />
-										)
-									}
-									onClick={() => startRun(token ?? "")}
-									disabled={isRunning}
-								>
-									{isRunning ? "Running..." : "Run Now"}
-								</Button>
-								{config?.lastRunAt && !isRunning && (
-									<Typography variant="caption" color="text.secondary">
-										Last run: {formatRelativeTime(config.lastRunAt)}
+						{/* Progress log */}
+						{isRunning && progressMessages.length > 0 && (
+							<Box
+								ref={logRef}
+								sx={{
+									maxHeight: 160,
+									overflow: "auto",
+									bgcolor: "action.hover",
+									borderRadius: 1,
+									p: 1,
+								}}
+							>
+								{progressMessages.map((msg, i) => (
+									<Typography
+										key={`${i}-${msg}`}
+										variant="caption"
+										display="block"
+										color="text.secondary"
+										sx={{ fontFamily: "monospace", lineHeight: 1.6 }}
+									>
+										{msg}
 									</Typography>
-								)}
-								{runResult && !isRunning && (
-									<Alert severity="info" sx={{ py: 0 }}>
-										{runResult}
-									</Alert>
-								)}
+								))}
 							</Box>
-
-							{isRunning && progressMessages.length > 0 && (
-								<Box
-									ref={logRef}
-									sx={{
-										maxHeight: 160,
-										overflow: "auto",
-										bgcolor: "action.hover",
-										borderRadius: 1,
-										p: 1,
-									}}
-								>
-									{progressMessages.map((msg, i) => (
-										<Typography
-											key={`${i}-${msg}`}
-											variant="caption"
-											display="block"
-											color="text.secondary"
-											sx={{ fontFamily: "monospace", lineHeight: 1.6 }}
-										>
-											{msg}
-										</Typography>
-									))}
-								</Box>
-							)}
-						</Box>
+						)}
 					</Box>
 				)}
 			</CardContent>

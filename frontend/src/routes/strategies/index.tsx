@@ -1,5 +1,5 @@
 /**
- * Strategies List Page
+ * Strategies List Page — sidebar discovery panel + refreshed card grid.
  */
 
 import AddIcon from "@mui/icons-material/Add";
@@ -24,6 +24,7 @@ import {
 	DialogTitle,
 	Grid2 as Grid,
 	IconButton,
+	InputAdornment,
 	Menu,
 	MenuItem,
 	Switch,
@@ -41,10 +42,10 @@ import { PerformanceGauge } from "@/components/charts/PerformanceGauge";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { EmptyState } from "@/components/common/EmptyState";
 import { PageTransition } from "@/components/common/PageTransition";
-import { SectionHeader } from "@/components/common/SectionHeader";
 import { ShimmerSkeleton } from "@/components/common/ShimmerSkeleton";
 import { StrategyDiscoveryCard } from "@/components/strategies/StrategyDiscoveryCard";
 import { useZoomAwareMenu } from "@/hooks/useZoomAwareMenu";
+import { useAuthStore } from "@/store/authStore";
 import { notify } from "@/store/uiStore";
 import type {
 	ExtractionMessage,
@@ -62,13 +63,16 @@ export const Route = createFileRoute("/strategies/")({
 });
 
 const STRATEGY_CARD_SKELETON_KEYS = Array.from(
-	{ length: 3 },
+	{ length: 4 },
 	(_, index) => `strategy-card-skeleton-${index}`,
 );
+
+type SortOption = "name" | "performance" | "winRate" | "newest";
 
 function StrategiesPage() {
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
+	const isSuperuser = useAuthStore((s) => s.user?.isSuperuser);
 	const {
 		data: strategies,
 		isLoading,
@@ -79,6 +83,8 @@ function StrategiesPage() {
 	});
 
 	const [filter, setFilter] = useState<"all" | "active" | "inactive">("all");
+	const [search, setSearch] = useState("");
+	const [sort] = useState<SortOption>("performance");
 	const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 	const [detailsTarget, setDetailsTarget] = useState<Strategy | null>(null);
 
@@ -96,10 +102,48 @@ function StrategiesPage() {
 
 	const filteredStrategies = useMemo(() => {
 		if (!strategies) return [];
-		if (filter === "active") return strategies.filter((s) => s.isActive);
-		if (filter === "inactive") return strategies.filter((s) => !s.isActive);
-		return strategies;
-	}, [strategies, filter]);
+		let result = strategies;
+
+		// Filter by status
+		if (filter === "active") result = result.filter((s) => s.isActive);
+		if (filter === "inactive") result = result.filter((s) => !s.isActive);
+
+		// Search by name
+		if (search.trim()) {
+			const q = search.toLowerCase();
+			result = result.filter(
+				(s) =>
+					s.name.toLowerCase().includes(q) ||
+					s.description?.toLowerCase().includes(q),
+			);
+		}
+
+		// Sort
+		result = [...result].sort((a, b) => {
+			switch (sort) {
+				case "name":
+					return a.name.localeCompare(b.name);
+				case "performance":
+					return (
+						(b.backtestResults?.totalPnlPercent ?? 0) -
+						(a.backtestResults?.totalPnlPercent ?? 0)
+					);
+				case "winRate":
+					return (
+						(b.backtestResults?.winRate ?? 0) -
+						(a.backtestResults?.winRate ?? 0)
+					);
+				case "newest":
+					return (
+						new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+					);
+				default:
+					return 0;
+			}
+		});
+
+		return result;
+	}, [strategies, filter, search, sort]);
 
 	const handleToggleActive = async (strategy: Strategy) => {
 		try {
@@ -114,92 +158,177 @@ function StrategiesPage() {
 		}
 	};
 
+	const counts = useMemo(() => {
+		if (!strategies) return { all: 0, active: 0, inactive: 0 };
+		return {
+			all: strategies.length,
+			active: strategies.filter((s) => s.isActive).length,
+			inactive: strategies.filter((s) => !s.isActive).length,
+		};
+	}, [strategies]);
+
+	// Use 2-column grid when sidebar visible, 3-column when not
+	const cardGridSize = isSuperuser
+		? { xs: 12, md: 6 }
+		: { xs: 12, md: 6, lg: 4 };
+
 	return (
 		<PageTransition pageKey="strategies">
-			<Box>
-				<SectionHeader
-					title="Strategies"
-					subtitle="Manage automated trading strategies for the agent"
-					action={
-						<Button
-							component={Link}
-							to="/strategies/create"
-							variant="contained"
-							startIcon={<AddIcon />}
-						>
-							Import Strategy
-						</Button>
-					}
-				/>
+			<Box
+				sx={{
+					display: "flex",
+					flexDirection: "column",
+					height: "calc(100vh - 64px)",
+					overflow: "hidden",
+				}}
+			>
+				{/* ====== PINNED HEADER — single compact row ====== */}
+				<Box
+					sx={{
+						flexShrink: 0,
+						display: "flex",
+						alignItems: "center",
+						gap: 1.5,
+						flexWrap: "wrap",
+						py: 1.5,
+						borderBottom: 1,
+						borderColor: "divider",
+					}}
+				>
+					<Typography variant="h5" fontWeight={700} sx={{ mr: 1 }}>
+						Strategies
+					</Typography>
 
-				<StrategyDiscoveryCard />
+					<Chip
+						label={`All (${counts.all})`}
+						variant={filter === "all" ? "filled" : "outlined"}
+						color={filter === "all" ? "primary" : "default"}
+						onClick={() => setFilter("all")}
+						size="small"
+					/>
+					<Chip
+						label={`Active (${counts.active})`}
+						color={filter === "active" ? "success" : "default"}
+						variant={filter === "active" ? "filled" : "outlined"}
+						onClick={() => setFilter("active")}
+						size="small"
+					/>
+					<Chip
+						label={`Inactive (${counts.inactive})`}
+						variant={filter === "inactive" ? "filled" : "outlined"}
+						onClick={() => setFilter("inactive")}
+						size="small"
+					/>
 
+					<Box sx={{ flex: 1 }} />
+
+					<TextField
+						size="small"
+						placeholder="Search..."
+						value={search}
+						onChange={(e) => setSearch(e.target.value)}
+						slotProps={{
+							input: {
+								startAdornment: (
+									<InputAdornment position="start">
+										<Typography color="text.secondary" variant="body2">
+											&#x1F50D;
+										</Typography>
+									</InputAdornment>
+								),
+							},
+						}}
+						sx={{ width: 180 }}
+					/>
+
+					<Button
+						component={Link}
+						to="/strategies/create"
+						variant="contained"
+						size="small"
+						startIcon={<AddIcon />}
+					>
+						Import
+					</Button>
+				</Box>
+
+				{/* ====== SCROLLABLE CONTENT AREA ====== */}
 				<Box
 					sx={{
 						display: "flex",
-						gap: 2,
-						mb: 3,
-						flexWrap: "wrap",
-						alignItems: "center",
+						gap: 3,
+						flexDirection: { xs: "column", md: "row" },
+						flex: 1,
+						minHeight: 0,
+						pt: 2,
 					}}
 				>
-					<Chip
-						label="All"
-						variant={filter === "all" ? "filled" : "outlined"}
-						onClick={() => setFilter("all")}
-					/>
-					<Chip
-						label="Active"
-						color="success"
-						variant={filter === "active" ? "filled" : "outlined"}
-						onClick={() => setFilter("active")}
-					/>
-					<Chip
-						label="Inactive"
-						variant={filter === "inactive" ? "filled" : "outlined"}
-						onClick={() => setFilter("inactive")}
-					/>
-				</Box>
+					{/* Left sidebar: Auto-Discovery (scrolls independently) */}
+					{isSuperuser && (
+						<Box
+							sx={{
+								width: { xs: "100%", md: 300 },
+								flexShrink: 0,
+								overflowY: { md: "auto" },
+							}}
+						>
+							<StrategyDiscoveryCard />
+						</Box>
+					)}
 
-				{isLoading ? (
-					<Grid container spacing={3}>
-						{STRATEGY_CARD_SKELETON_KEYS.map((key) => (
-							<Grid key={key} size={{ xs: 12, md: 6, lg: 4 }}>
-								<ShimmerSkeleton shimmerVariant="card" sx={{ height: 250 }} />
-							</Grid>
-						))}
-					</Grid>
-				) : filteredStrategies.length > 0 ? (
-					<motion.div
-						variants={staggerCascade.container}
-						initial="hidden"
-						animate="visible"
-					>
-						<Grid container spacing={3}>
-							{filteredStrategies.map((strategy) => (
-								<Grid key={strategy.id} size={{ xs: 12, md: 6, lg: 4 }}>
-									<motion.div variants={staggerCascade.item}>
-										<StrategyCard
-											strategy={strategy}
-											onToggle={() => handleToggleActive(strategy)}
-											onDelete={() => setDeleteTarget(strategy.id)}
-											onViewDetails={() => setDetailsTarget(strategy)}
-										/>
-									</motion.div>
-								</Grid>
-							))}
-						</Grid>
-					</motion.div>
-				) : (
-					<EmptyState
-						title="No strategies yet"
-						description="Create your first automated trading strategy to get started"
-						action={{
-							label: "Import Strategy",
-							onClick: () => navigate({ to: "/strategies/create" }),
+					{/* Right: scrollable strategy cards */}
+					<Box
+						sx={{
+							flex: 1,
+							minWidth: 0,
+							overflowY: "auto",
+							pb: 2,
 						}}
-					/>
-				)}
+					>
+						{isLoading ? (
+							<Grid container spacing={3}>
+								{STRATEGY_CARD_SKELETON_KEYS.map((key) => (
+									<Grid key={key} size={cardGridSize}>
+										<ShimmerSkeleton
+											shimmerVariant="card"
+											sx={{ height: 320 }}
+										/>
+									</Grid>
+								))}
+							</Grid>
+						) : filteredStrategies.length > 0 ? (
+							<motion.div
+								variants={staggerCascade.container}
+								initial="hidden"
+								animate="visible"
+							>
+								<Grid container spacing={3}>
+									{filteredStrategies.map((strategy) => (
+										<Grid key={strategy.id} size={cardGridSize}>
+											<motion.div variants={staggerCascade.item}>
+												<StrategyCard
+													strategy={strategy}
+													onToggle={() => handleToggleActive(strategy)}
+													onDelete={() => setDeleteTarget(strategy.id)}
+													onViewDetails={() => setDetailsTarget(strategy)}
+												/>
+											</motion.div>
+										</Grid>
+									))}
+								</Grid>
+							</motion.div>
+						) : (
+							<EmptyState
+								title="No strategies yet"
+								description="Create your first automated trading strategy to get started"
+								action={{
+									label: "Import Strategy",
+									onClick: () => navigate({ to: "/strategies/create" }),
+								}}
+							/>
+						)}
+					</Box>
+				</Box>
 
 				<ConfirmDialog
 					open={!!deleteTarget}
@@ -845,57 +974,64 @@ function StrategyCard({
 	const { anchorRef, handleClose, handleOpen, menuProps, open } =
 		useZoomAwareMenu();
 
-	const winRate = strategy.backtestResults?.winRate || 0;
+	const backtest = strategy.backtestResults;
+	const winRate = backtest?.winRate || 0;
+	const isProfitable = (backtest?.totalPnlPercent ?? 0) >= 0;
+
+	// Accent color: green for profitable active, red for losing active, muted for inactive
+	const accentColor = !strategy.isActive
+		? "text.disabled"
+		: isProfitable
+			? "success.main"
+			: "error.main";
+
+	// Source label
+	const sourceLabel = strategy.autoDiscovered
+		? "AI Extracted"
+		: strategy.sourceUrl
+			? "URL Import"
+			: "Manual";
 
 	return (
 		<Card
 			component={motion.div}
 			whileHover={{
-				y: -6,
+				y: -4,
 				transition: { type: "spring", stiffness: 400, damping: 30 },
 			}}
 			whileTap={{ scale: 0.98 }}
 			sx={{
 				height: "100%",
-				border: strategy.isActive ? "1px solid" : "none",
-				borderColor: "success.main",
-				boxShadow: strategy.isActive
-					? (theme) =>
-							`0 0 12px rgba(${theme.trading.semanticRgb.success}, 0.2)`
-					: "none",
+				borderTop: "3px solid",
+				borderColor: accentColor,
+				display: "flex",
+				flexDirection: "column",
 			}}
 		>
-			<CardContent>
+			<CardContent
+				sx={{
+					flex: 1,
+					display: "flex",
+					flexDirection: "column",
+					p: 2.5,
+					"&:last-child": { pb: 2 },
+				}}
+			>
+				{/* Header: Name + menu */}
 				<Box
 					sx={{
 						display: "flex",
 						justifyContent: "space-between",
 						alignItems: "flex-start",
-						mb: 2,
+						mb: 1,
 					}}
 				>
-					<Box>
-						<Box
-							sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}
-						>
-							<Typography variant="h6" fontWeight={600}>
-								{strategy.name}
-							</Typography>
-							<Chip
-								label={strategy.isActive ? "Active" : "Inactive"}
-								size="small"
-								color={strategy.isActive ? "success" : "default"}
-							/>
-						</Box>
-						{strategy.symbol && (
-							<Typography variant="body2" color="text.secondary">
-								{strategy.symbol} | {strategy.timeframe}
-							</Typography>
-						)}
-					</Box>
+					<Typography variant="subtitle1" fontWeight={700} sx={{ pr: 1 }}>
+						{strategy.name}
+					</Typography>
 					<Box ref={anchorRef}>
 						<IconButton size="small" onClick={handleOpen}>
-							<MoreVertIcon />
+							<MoreVertIcon fontSize="small" />
 						</IconButton>
 					</Box>
 					<Menu open={open} onClose={handleClose} {...menuProps}>
@@ -935,78 +1071,177 @@ function StrategyCard({
 					</Menu>
 				</Box>
 
+				{/* Status + source chips */}
+				<Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap", mb: 1.5 }}>
+					<Chip
+						label={strategy.isActive ? "Active" : "Inactive"}
+						size="small"
+						color={strategy.isActive ? "success" : "default"}
+					/>
+					<Chip label={sourceLabel} size="small" variant="outlined" />
+				</Box>
+
+				{/* Description */}
 				<Typography
 					variant="body2"
 					color="text.secondary"
-					sx={{ mb: 2, minHeight: 40 }}
+					sx={{
+						mb: 1.5,
+						minHeight: 36,
+						display: "-webkit-box",
+						WebkitLineClamp: 2,
+						WebkitBoxOrient: "vertical",
+						overflow: "hidden",
+					}}
 				>
 					{strategy.description || "No description"}
 				</Typography>
 
-				{/* Performance */}
-				<Box sx={{ display: "flex", justifyContent: "space-around", mb: 2 }}>
+				{/* Symbol + timeframe chips */}
+				<Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", mb: 2 }}>
+					{strategy.symbols?.slice(0, 3).map((s) => (
+						<Chip key={s} label={s} size="small" variant="outlined" />
+					))}
+					{strategy.timeframes?.slice(0, 2).map((t) => (
+						<Chip
+							key={t}
+							label={t}
+							size="small"
+							variant="outlined"
+							color="primary"
+						/>
+					))}
+				</Box>
+
+				{/* Performance section */}
+				<Box
+					sx={{
+						display: "flex",
+						alignItems: "center",
+						gap: 2,
+						flex: 1,
+					}}
+				>
+					{/* Win Rate gauge */}
 					<PerformanceGauge
 						value={winRate}
 						label="Win Rate"
-						size={80}
-						thickness={6}
+						size={64}
+						thickness={5}
 					/>
+
+					{/* Metrics grid */}
+					{backtest && (
+						<Box
+							sx={{
+								display: "grid",
+								gridTemplateColumns: "repeat(3, 1fr)",
+								gap: 1,
+								flex: 1,
+							}}
+						>
+							<Box>
+								<Typography variant="caption" color="text.secondary">
+									Trades
+								</Typography>
+								<Typography variant="body2" fontWeight={700}>
+									{backtest.totalTrades}
+								</Typography>
+							</Box>
+							<Box>
+								<Typography variant="caption" color="text.secondary">
+									P&L
+								</Typography>
+								<Typography
+									variant="body2"
+									fontWeight={700}
+									color={isProfitable ? "success.main" : "error.main"}
+								>
+									{formatPercent(backtest.totalPnlPercent)}
+								</Typography>
+							</Box>
+							<Box>
+								<Typography variant="caption" color="text.secondary">
+									Max DD
+								</Typography>
+								<Typography variant="body2" fontWeight={700} color="error.main">
+									{formatPercent(-backtest.maxDrawdown)}
+								</Typography>
+							</Box>
+							{backtest.sharpeRatio != null && (
+								<Box>
+									<Typography variant="caption" color="text.secondary">
+										Sharpe
+									</Typography>
+									<Typography
+										variant="body2"
+										fontWeight={700}
+										color={
+											backtest.sharpeRatio >= 1.5
+												? "success.main"
+												: "text.primary"
+										}
+									>
+										{backtest.sharpeRatio.toFixed(2)}
+									</Typography>
+								</Box>
+							)}
+							<Box>
+								<Typography variant="caption" color="text.secondary">
+									Profit Factor
+								</Typography>
+								<Typography
+									variant="body2"
+									fontWeight={700}
+									color={
+										backtest.profitFactor >= 2 ? "success.main" : "text.primary"
+									}
+								>
+									{backtest.profitFactor.toFixed(1)}
+								</Typography>
+							</Box>
+						</Box>
+					)}
 				</Box>
 
-				{/* Stats */}
-				{strategy.backtestResults && (
-					<Box
-						sx={{
-							display: "grid",
-							gridTemplateColumns: "repeat(3, 1fr)",
-							gap: 1,
-							p: 1.5,
-							bgcolor: "background.default",
-							borderRadius: 1,
-						}}
-					>
-						<Box sx={{ textAlign: "center" }}>
-							<Typography variant="caption" color="text.secondary">
-								Trades
-							</Typography>
-							<Typography variant="body2" fontWeight={600}>
-								{strategy.backtestResults.totalTrades}
-							</Typography>
-						</Box>
-						<Box sx={{ textAlign: "center" }}>
-							<Typography variant="caption" color="text.secondary">
-								P&L
-							</Typography>
-							<Typography
-								variant="body2"
-								fontWeight={600}
-								color={
-									strategy.backtestResults.totalPnlPercent >= 0
-										? "success.main"
-										: "error.main"
-								}
-							>
-								{formatPercent(strategy.backtestResults.totalPnlPercent)}
-							</Typography>
-						</Box>
-						<Box sx={{ textAlign: "center" }}>
-							<Typography variant="caption" color="text.secondary">
-								Max DD
-							</Typography>
-							<Typography variant="body2" fontWeight={600} color="error.main">
-								{formatPercent(-strategy.backtestResults.maxDrawdown)}
-							</Typography>
-						</Box>
+				{/* Bottom: toggle + view */}
+				<Box
+					sx={{
+						display: "flex",
+						justifyContent: "space-between",
+						alignItems: "center",
+						mt: 2,
+						pt: 1.5,
+						borderTop: 1,
+						borderColor: "divider",
+					}}
+				>
+					<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+						<Switch
+							checked={strategy.isActive}
+							onChange={onToggle}
+							size="small"
+							color="success"
+						/>
+						<Typography
+							variant="caption"
+							color={strategy.isActive ? "success.main" : "text.secondary"}
+							fontWeight={500}
+						>
+							{strategy.isActive ? "Active" : "Inactive"}
+						</Typography>
 					</Box>
-				)}
-
-				{/* Toggle */}
-				<Box sx={{ display: "flex", justifyContent: "flex-end", mt: 2 }}>
-					<Switch
-						checked={strategy.isActive}
-						onChange={onToggle}
-						color="success"
-					/>
+					<Typography
+						variant="body2"
+						color="primary"
+						sx={{
+							cursor: "pointer",
+							"&:hover": { textDecoration: "underline" },
+						}}
+						onClick={onViewDetails}
+					>
+						View
+					</Typography>
 				</Box>
 			</CardContent>
 		</Card>
