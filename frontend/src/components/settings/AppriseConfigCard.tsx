@@ -1,13 +1,11 @@
 /**
- * Apprise notification URL configuration card.
+ * Apprise notification configuration card.
  *
  * Manages multi-channel notification URLs (Telegram, Discord, Slack, etc.)
  * and a transactional email URL via the Apprise library.
  */
 
-import AddIcon from "@mui/icons-material/Add";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import DeleteIcon from "@mui/icons-material/Delete";
 import ErrorIcon from "@mui/icons-material/Error";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import SendIcon from "@mui/icons-material/Send";
@@ -20,61 +18,24 @@ import {
 	Chip,
 	CircularProgress,
 	Divider,
-	IconButton,
 	TextField,
-	Tooltip,
 	Typography,
 } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { motion } from "framer-motion";
 import { useState } from "react";
 import type { AppriseConfigUpdate } from "@/api/endpoints/settings";
 import { appriseApi } from "@/api/endpoints/settings";
 import { useAuthStore } from "@/store/authStore";
 import { notify } from "@/store/uiStore";
-import { staggerCascade } from "@/utils/animations/variants";
 import { getErrorMessage } from "@/utils/errors";
-
-/** Detect Apprise service type from a masked or full URL prefix. */
-function detectServiceType(url: string): {
-	label: string;
-	color:
-		| "primary"
-		| "secondary"
-		| "success"
-		| "warning"
-		| "error"
-		| "info"
-		| "default";
-} {
-	const lower = url.toLowerCase();
-	if (lower.startsWith("tgram://")) return { label: "Telegram", color: "info" };
-	if (lower.startsWith("discord://"))
-		return { label: "Discord", color: "secondary" };
-	if (lower.startsWith("slack://")) return { label: "Slack", color: "warning" };
-	if (lower.startsWith("mailto://"))
-		return { label: "Email", color: "success" };
-	if (lower.startsWith("json://") || lower.startsWith("jsons://"))
-		return { label: "Webhook", color: "default" };
-	if (lower.startsWith("gotify://") || lower.startsWith("gotifys://"))
-		return { label: "Gotify", color: "default" };
-	if (lower.startsWith("ntfy://") || lower.startsWith("ntfys://"))
-		return { label: "ntfy", color: "default" };
-	if (lower.startsWith("pushover://"))
-		return { label: "Pushover", color: "default" };
-	if (lower.startsWith("msteams://"))
-		return { label: "Teams", color: "primary" };
-	if (lower.startsWith("matrix://"))
-		return { label: "Matrix", color: "default" };
-	const scheme = lower.split("://")[0] ?? "unknown";
-	return { label: scheme, color: "default" };
-}
+import { PendingChannelsList } from "./PendingChannelsList";
+import { ProviderChannelForm } from "./ProviderChannelForm";
+import { SavedChannelsList } from "./SavedChannelsList";
 
 export function AppriseConfigCard() {
 	const { user } = useAuthStore();
 	const isSuperuser = user?.isSuperuser ?? false;
 	const queryClient = useQueryClient();
-	const [newUrl, setNewUrl] = useState("");
 	const [pendingUrls, setPendingUrls] = useState<string[]>([]);
 	const [emailUrlInput, setEmailUrlInput] = useState("");
 	const [emailEditing, setEmailEditing] = useState(false);
@@ -96,7 +57,6 @@ export function AppriseConfigCard() {
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["apprise-config"] });
 			notify.success("Notification configuration updated");
-			setNewUrl("");
 			setPendingUrls([]);
 			setEmailEditing(false);
 		},
@@ -127,11 +87,10 @@ export function AppriseConfigCard() {
 
 	const config = configQuery.data;
 
-	const handleAddUrl = () => {
-		const trimmed = newUrl.trim();
+	const handleAddUrl = (url: string) => {
+		const trimmed = url.trim();
 		if (!trimmed) return;
 		setPendingUrls((prev) => [...prev, trimmed]);
-		setNewUrl("");
 	};
 
 	const handleRemovePending = (index: number) => {
@@ -173,8 +132,8 @@ export function AppriseConfigCard() {
 					<Typography variant="h6">Notification Channels</Typography>
 				</Box>
 				<Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-					Configure Apprise notification URLs for 80+ services (Telegram,
-					Discord, Slack, email, webhooks, etc.). See{" "}
+					Select a notification service below to add a channel. Supports
+					Telegram, Discord, Slack, email, and{" "}
 					<Typography
 						component="a"
 						href="https://github.com/caronc/apprise/wiki"
@@ -183,9 +142,9 @@ export function AppriseConfigCard() {
 						variant="body2"
 						color="primary"
 					>
-						Apprise Wiki
-					</Typography>{" "}
-					for all supported services and URL formats.
+						80+ more via Apprise
+					</Typography>
+					.
 				</Typography>
 
 				{configQuery.isLoading ? (
@@ -198,76 +157,12 @@ export function AppriseConfigCard() {
 					</Alert>
 				) : config ? (
 					<Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-						{/* Existing (saved) notification URLs */}
-						{config.urlCount > 0 && (
-							<Box>
-								<Typography variant="subtitle2" gutterBottom>
-									Configured Channels ({config.urlCount})
-								</Typography>
-								<motion.div
-									variants={staggerCascade.container}
-									initial="hidden"
-									animate="visible"
-								>
-									<Box
-										sx={{
-											display: "flex",
-											flexDirection: "column",
-											gap: 0.75,
-										}}
-									>
-										{config.notificationUrls.map((maskedUrl, index) => {
-											const service = detectServiceType(maskedUrl);
-											return (
-												<motion.div
-													key={`saved-${maskedUrl}-${index.toString()}`}
-													variants={staggerCascade.item}
-												>
-													<Box
-														sx={{
-															display: "flex",
-															alignItems: "center",
-															gap: 1,
-															p: 1,
-															borderRadius: 1,
-															border: "1px solid",
-															borderColor: "divider",
-															bgcolor: "action.hover",
-														}}
-													>
-														<Chip
-															label={service.label}
-															size="small"
-															color={service.color}
-															variant="outlined"
-														/>
-														<Typography
-															variant="body2"
-															sx={{
-																flex: 1,
-																fontFamily: "monospace",
-																fontSize: "0.8rem",
-															}}
-														>
-															{maskedUrl}
-														</Typography>
-													</Box>
-												</motion.div>
-											);
-										})}
-									</Box>
-								</motion.div>
-								<Button
-									size="small"
-									color="error"
-									onClick={handleClearAllUrls}
-									disabled={updateMutation.isPending}
-									sx={{ mt: 1 }}
-								>
-									Clear All
-								</Button>
-							</Box>
-						)}
+						{/* Saved channels */}
+						<SavedChannelsList
+							maskedUrls={config.notificationUrls}
+							onClearAll={handleClearAllUrls}
+							isClearing={updateMutation.isPending}
+						/>
 
 						{config.urlCount === 0 && pendingUrls.length === 0 && (
 							<Typography
@@ -275,110 +170,21 @@ export function AppriseConfigCard() {
 								color="text.secondary"
 								sx={{ fontStyle: "italic" }}
 							>
-								No notification channels configured. Add a URL below to get
-								started.
+								No notification channels configured. Select a service below to
+								get started.
 							</Typography>
 						)}
 
-						{/* Pending (unsaved) URLs */}
-						{pendingUrls.length > 0 && (
-							<Box>
-								<Typography variant="subtitle2" gutterBottom>
-									New Channels (unsaved)
-								</Typography>
-								<Box
-									sx={{
-										display: "flex",
-										flexDirection: "column",
-										gap: 0.5,
-									}}
-								>
-									{pendingUrls.map((url, index) => {
-										const service = detectServiceType(url);
-										return (
-											<Box
-												key={`pending-${url}-${index.toString()}`}
-												sx={{
-													display: "flex",
-													alignItems: "center",
-													gap: 1,
-													p: 1,
-													borderRadius: 1,
-													border: "1px dashed",
-													borderColor: "primary.main",
-													bgcolor: "action.selected",
-												}}
-											>
-												<Chip
-													label={service.label}
-													size="small"
-													color={service.color}
-													variant="filled"
-												/>
-												<Typography
-													variant="body2"
-													sx={{
-														flex: 1,
-														fontFamily: "monospace",
-														fontSize: "0.8rem",
-														wordBreak: "break-all",
-													}}
-												>
-													{url}
-												</Typography>
-												<Tooltip title="Remove">
-													<IconButton
-														size="small"
-														onClick={() => handleRemovePending(index)}
-													>
-														<DeleteIcon fontSize="small" />
-													</IconButton>
-												</Tooltip>
-											</Box>
-										);
-									})}
-								</Box>
-								<Button
-									size="small"
-									variant="contained"
-									onClick={handleSaveUrls}
-									disabled={updateMutation.isPending}
-									sx={{ mt: 1 }}
-								>
-									{updateMutation.isPending ? (
-										<CircularProgress size={16} sx={{ mr: 1 }} />
-									) : null}
-									Save {pendingUrls.length} Channel
-									{pendingUrls.length > 1 ? "s" : ""}
-								</Button>
-							</Box>
-						)}
+						{/* Pending channels */}
+						<PendingChannelsList
+							pendingUrls={pendingUrls}
+							onRemove={handleRemovePending}
+							onSave={handleSaveUrls}
+							isSaving={updateMutation.isPending}
+						/>
 
-						{/* Add URL input */}
-						<Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-							<TextField
-								size="small"
-								placeholder="e.g. tgram://bottoken/ChatID"
-								value={newUrl}
-								onChange={(e) => setNewUrl(e.target.value)}
-								onKeyDown={(e) => {
-									if (e.key === "Enter") {
-										e.preventDefault();
-										handleAddUrl();
-									}
-								}}
-								sx={{ flex: 1 }}
-							/>
-							<Button
-								size="small"
-								variant="outlined"
-								startIcon={<AddIcon />}
-								onClick={handleAddUrl}
-								disabled={!newUrl.trim()}
-							>
-								Add
-							</Button>
-						</Box>
+						{/* Provider form */}
+						<ProviderChannelForm onAddUrl={handleAddUrl} />
 
 						<Divider />
 
@@ -408,7 +214,10 @@ export function AppriseConfigCard() {
 									/>
 									<Typography
 										variant="body2"
-										sx={{ fontFamily: "monospace", fontSize: "0.8rem" }}
+										sx={{
+											fontFamily: "monospace",
+											fontSize: "0.8rem",
+										}}
 									>
 										{config.maskedEmailUrl}
 									</Typography>
@@ -425,7 +234,13 @@ export function AppriseConfigCard() {
 									</Button>
 								</Box>
 							) : (
-								<Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+								<Box
+									sx={{
+										display: "flex",
+										gap: 1,
+										alignItems: "center",
+									}}
+								>
 									<TextField
 										size="small"
 										placeholder="mailto://user:pass@smtp.example.com"
@@ -495,7 +310,13 @@ export function AppriseConfigCard() {
 								Send Test Notification
 							</Button>
 							{testResult && (
-								<Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+								<Box
+									sx={{
+										display: "flex",
+										alignItems: "center",
+										gap: 0.5,
+									}}
+								>
 									{testResult.success ? (
 										<CheckCircleIcon
 											color="success"
