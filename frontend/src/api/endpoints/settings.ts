@@ -300,6 +300,24 @@ export const settingsApi = {
 		};
 	},
 
+	async getInstalledApps(): Promise<{ apps: InstalledApp[] }> {
+		const response = await apiClient.get<Record<string, unknown>>(
+			"/settings/installed-apps",
+		);
+		const rawApps = response.data.apps as Array<Record<string, unknown>>;
+		return {
+			apps: rawApps.map((a) => ({
+				displayName: a.display_name as string,
+				exeName: (a.exe_name as string | null) ?? null,
+				publisher: (a.publisher as string | null) ?? null,
+				installLocation: (a.install_location as string | null) ?? null,
+				source: a.source as "registry" | "steam",
+				iconBase64: (a.icon_base64 as string | null) ?? null,
+				installSizeMb: (a.install_size_mb as number | null) ?? null,
+			})),
+		};
+	},
+
 	async getEmbeddingConfig(): Promise<EmbeddingConfig> {
 		const response = await apiClient.get<Record<string, unknown>>(
 			"/settings/embedding",
@@ -579,6 +597,16 @@ export interface SystemProcess {
 	name: string;
 	pid: number;
 	memoryMb: number;
+}
+
+export interface InstalledApp {
+	displayName: string;
+	exeName: string | null;
+	publisher: string | null;
+	installLocation: string | null;
+	source: "registry" | "steam";
+	iconBase64: string | null;
+	installSizeMb: number | null;
 }
 
 export interface AutostartConfig {

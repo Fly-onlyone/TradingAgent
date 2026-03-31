@@ -1,13 +1,16 @@
 /**
- * Dialog for browsing and selecting running system processes.
- * Used by the embedding config to pick game processes from a live list.
+ * Dialog for browsing installed applications to select game processes.
+ * Used by the embedding config to pick game exe names for deferral.
  */
 
 import SearchIcon from "@mui/icons-material/Search";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import {
+	Avatar,
 	Box,
 	Button,
 	Checkbox,
+	Chip,
 	CircularProgress,
 	Dialog,
 	DialogActions,
@@ -15,11 +18,13 @@ import {
 	DialogTitle,
 	InputAdornment,
 	TextField,
+	Tooltip,
 	Typography,
 } from "@mui/material";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useMemo, useState } from "react";
+import type { InstalledApp } from "@/api/endpoints/settings";
 import { settingsApi } from "@/api/endpoints/settings";
 import { useReducedMotion } from "@/utils/animations/hooks";
 import { listStagger, scaleIn } from "@/utils/animations/variants";
@@ -29,6 +34,45 @@ interface ProcessSelectorDialogProps {
 	onClose: () => void;
 	onSelect: (processes: string[]) => void;
 	currentProcesses: string[];
+}
+
+function formatSize(mb: number): string {
+	if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
+	return `${mb} MB`;
+}
+
+function AppIcon({ app }: { app: InstalledApp }) {
+	if (app.iconBase64) {
+		return (
+			<Avatar
+				src={`data:image/png;base64,${app.iconBase64}`}
+				variant="rounded"
+				sx={{ width: 28, height: 28 }}
+			/>
+		);
+	}
+	// Fallback: colored initials
+	const initials = app.displayName
+		.split(/[\s-]+/)
+		.slice(0, 2)
+		.map((w) => w[0])
+		.join("")
+		.toUpperCase();
+	return (
+		<Avatar
+			variant="rounded"
+			sx={{
+				width: 28,
+				height: 28,
+				fontSize: 11,
+				fontWeight: 700,
+				bgcolor: "action.selected",
+				color: "text.secondary",
+			}}
+		>
+			{initials}
+		</Avatar>
+	);
 }
 
 export function ProcessSelectorDialog({
@@ -41,33 +85,37 @@ export function ProcessSelectorDialog({
 	const [search, setSearch] = useState("");
 	const [selected, setSelected] = useState<Set<string>>(new Set());
 
-	const processQuery = useQuery({
-		queryKey: ["system-processes"],
-		queryFn: () => settingsApi.getSystemProcesses(),
+	const appsQuery = useQuery({
+		queryKey: ["installed-apps"],
+		queryFn: () => settingsApi.getInstalledApps(),
 		enabled: open,
-		staleTime: 10_000,
+		staleTime: 120_000,
 	});
 
-	// Sync selection state when dialog opens with current processes
 	const handleEntered = useCallback(() => {
 		setSelected(new Set(currentProcesses));
 		setSearch("");
 	}, [currentProcesses]);
 
 	const filtered = useMemo(() => {
-		const processes = processQuery.data?.processes ?? [];
-		if (!search.trim()) return processes;
+		const apps = appsQuery.data?.apps ?? [];
+		if (!search.trim()) return apps;
 		const lower = search.toLowerCase();
-		return processes.filter((p) => p.name.toLowerCase().includes(lower));
-	}, [processQuery.data, search]);
+		return apps.filter(
+			(a) =>
+				a.displayName.toLowerCase().includes(lower) ||
+				a.exeName?.toLowerCase().includes(lower),
+		);
+	}, [appsQuery.data, search]);
 
-	const handleToggle = (name: string) => {
+	const handleToggle = (exeName: string | null) => {
+		if (!exeName) return;
 		setSelected((prev) => {
 			const next = new Set(prev);
-			if (next.has(name)) {
-				next.delete(name);
+			if (next.has(exeName)) {
+				next.delete(exeName);
 			} else {
-				next.add(name);
+				next.add(exeName);
 			}
 			return next;
 		});
@@ -98,9 +146,17 @@ export function ProcessSelectorDialog({
 						<DialogContent
 							sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}
 						>
+							<Typography
+								variant="body2"
+								color="text.secondary"
+								sx={{ mt: -0.5 }}
+							>
+								Browse installed applications to select game processes
+							</Typography>
+
 							<TextField
 								size="small"
-								placeholder="Filter by name..."
+								placeholder="Search applications..."
 								value={search}
 								onChange={(e) => setSearch(e.target.value)}
 								fullWidth
@@ -114,19 +170,18 @@ export function ProcessSelectorDialog({
 										),
 									},
 								}}
-								sx={{ mt: 0.5 }}
 							/>
 
 							<Box
 								sx={{
-									maxHeight: 380,
+									maxHeight: 400,
 									overflow: "auto",
 									border: 1,
 									borderColor: "divider",
 									borderRadius: 1,
 								}}
 							>
-								{processQuery.isLoading ? (
+								{appsQuery.isLoading ? (
 									<Box
 										sx={{
 											display: "flex",
@@ -136,13 +191,13 @@ export function ProcessSelectorDialog({
 									>
 										<CircularProgress size={28} />
 									</Box>
-								) : processQuery.error ? (
+								) : appsQuery.error ? (
 									<Typography
 										color="error"
 										variant="body2"
 										sx={{ p: 2, textAlign: "center" }}
 									>
-										Failed to load processes
+										Failed to load installed applications
 									</Typography>
 								) : filtered.length === 0 ? (
 									<Typography
@@ -151,8 +206,8 @@ export function ProcessSelectorDialog({
 										sx={{ p: 2, textAlign: "center", fontStyle: "italic" }}
 									>
 										{search.trim()
-											? "No processes match your filter"
-											: "No processes found"}
+											? "No applications match your search"
+											: "No installed applications found"}
 									</Typography>
 								) : (
 									<motion.div
@@ -162,62 +217,158 @@ export function ProcessSelectorDialog({
 										initial="hidden"
 										animate="visible"
 									>
-										{filtered.map((proc) => {
-											const isChecked = selected.has(proc.name);
+										{filtered.map((app) => {
+											const isChecked = app.exeName
+												? selected.has(app.exeName)
+												: false;
+											const isDisabled = !app.exeName;
+
 											return (
 												<motion.div
-													key={proc.name}
+													key={`${app.displayName}-${app.source}`}
 													variants={
 														prefersReduced ? undefined : listStagger.item
 													}
 												>
-													<Box
-														onClick={() => handleToggle(proc.name)}
-														sx={{
-															display: "flex",
-															alignItems: "center",
-															gap: 1,
-															px: 1.5,
-															py: 0.75,
-															cursor: "pointer",
-															"&:hover": {
-																bgcolor: "action.hover",
-															},
-															borderBottom: 1,
-															borderColor: "divider",
-															"&:last-child": { borderBottom: 0 },
-														}}
+													<Tooltip
+														title={
+															isDisabled
+																? "Executable not detected — cannot select"
+																: ""
+														}
+														placement="left"
+														disableHoverListener={!isDisabled}
 													>
-														<Checkbox
-															checked={isChecked}
-															size="small"
-															tabIndex={-1}
-															disableRipple
-														/>
-														<Typography
-															variant="body2"
+														<Box
+															onClick={() => handleToggle(app.exeName)}
 															sx={{
-																flex: 1,
-																fontWeight: isChecked ? 600 : 400,
+																display: "flex",
+																alignItems: "center",
+																gap: 1.5,
+																px: 1.5,
+																py: 1,
+																cursor: isDisabled ? "default" : "pointer",
+																opacity: isDisabled ? 0.45 : 1,
+																"&:hover": isDisabled
+																	? {}
+																	: { bgcolor: "action.hover" },
+																borderBottom: 1,
+																borderColor: "divider",
+																"&:last-child": { borderBottom: 0 },
 															}}
 														>
-															{proc.name}
-														</Typography>
-														<Typography
-															variant="caption"
-															color="text.secondary"
-															sx={{ minWidth: 50, textAlign: "right" }}
-														>
-															PID {proc.pid}
-														</Typography>
-														<Typography
-															variant="caption"
-															color="text.secondary"
-															sx={{ minWidth: 70, textAlign: "right" }}
-														>
-															{proc.memoryMb} MB
-														</Typography>
-													</Box>
+															<Checkbox
+																checked={isChecked}
+																disabled={isDisabled}
+																size="small"
+																tabIndex={-1}
+																disableRipple
+															/>
+
+															<AppIcon app={app} />
+
+															<Box sx={{ flex: 1, minWidth: 0 }}>
+																<Box
+																	sx={{
+																		display: "flex",
+																		alignItems: "center",
+																		gap: 0.75,
+																	}}
+																>
+																	<Typography
+																		variant="body2"
+																		noWrap
+																		sx={{
+																			fontWeight: isChecked ? 600 : 400,
+																		}}
+																	>
+																		{app.displayName}
+																	</Typography>
+																	{app.source === "steam" && (
+																		<Chip
+																			label="Steam"
+																			size="small"
+																			sx={{
+																				height: 18,
+																				fontSize: 10,
+																				fontWeight: 600,
+																				bgcolor: "info.dark",
+																				color: "info.light",
+																			}}
+																		/>
+																	)}
+																</Box>
+																<Typography
+																	variant="caption"
+																	sx={{
+																		display: "flex",
+																		alignItems: "center",
+																		gap: 0.5,
+																	}}
+																>
+																	{app.exeName ? (
+																		<>
+																			<Box
+																				component="span"
+																				sx={{
+																					color: isChecked
+																						? "primary.main"
+																						: "text.secondary",
+																					fontFamily: "monospace",
+																					fontSize: 11,
+																				}}
+																			>
+																				{app.exeName}
+																			</Box>
+																			{app.publisher && (
+																				<Box
+																					component="span"
+																					sx={{ color: "text.secondary" }}
+																				>
+																					&middot; {app.publisher}
+																				</Box>
+																			)}
+																		</>
+																	) : (
+																		<Box
+																			component="span"
+																			sx={{
+																				display: "flex",
+																				alignItems: "center",
+																				gap: 0.5,
+																				color: "warning.main",
+																			}}
+																		>
+																			<WarningAmberIcon sx={{ fontSize: 12 }} />
+																			exe not detected
+																			{app.publisher && (
+																				<Box
+																					component="span"
+																					sx={{ color: "text.secondary" }}
+																				>
+																					&middot; {app.publisher}
+																				</Box>
+																			)}
+																		</Box>
+																	)}
+																</Typography>
+															</Box>
+
+															{app.installSizeMb != null && (
+																<Typography
+																	variant="caption"
+																	color="text.secondary"
+																	sx={{
+																		minWidth: 55,
+																		textAlign: "right",
+																		flexShrink: 0,
+																	}}
+																>
+																	{formatSize(app.installSizeMb)}
+																</Typography>
+															)}
+														</Box>
+													</Tooltip>
 												</motion.div>
 											);
 										})}

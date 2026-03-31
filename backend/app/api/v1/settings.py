@@ -1303,3 +1303,30 @@ async def get_system_processes(
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
     return {"processes": sorted(processes.values(), key=lambda x: x["memory_mb"], reverse=True)}
+
+
+# ── Installed Applications (for process selector dialog) ─────────────
+
+
+@router.get("/installed-apps")
+async def get_installed_apps(
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """List installed applications from Windows registry and game launchers."""
+    from app.services.installed_apps_scanner import scan_installed_apps
+
+    apps = await scan_installed_apps()
+    return {
+        "apps": [
+            {
+                "display_name": app.display_name,
+                "exe_name": app.exe_name,
+                "publisher": app.publisher,
+                "install_location": app.install_location,
+                "source": app.source,
+                "icon_base64": app.icon_base64,
+                "install_size_mb": app.install_size_mb,
+            }
+            for app in apps
+        ]
+    }
