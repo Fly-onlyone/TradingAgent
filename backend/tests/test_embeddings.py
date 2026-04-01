@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+import time
 
 import numpy as np
 import pytest
@@ -51,6 +52,8 @@ async def test_preload_and_first_request_share_single_model_init(
 ) -> None:
     monkeypatch.setattr(embeddings, "SentenceTransformer", FakeSentenceTransformer)
     monkeypatch.setattr(embeddings, "_model", None)
+    monkeypatch.setattr(embeddings, "_model_name", None)
+    monkeypatch.setattr(embeddings, "_get_active_model_name", lambda: embeddings.MODEL_NAME)
 
     FakeSentenceTransformer.calls = 0
     FakeSentenceTransformer.active_inits = 0
@@ -75,3 +78,66 @@ async def test_preload_and_first_request_share_single_model_init(
     assert len(query_embedding) == embeddings.DIMENSION
     assert FakeSentenceTransformer.calls == 1
     assert not FakeSentenceTransformer.concurrent_init_detected.is_set()
+
+
+class RaceySentenceTransformer:
+    """Fake model that fails when two encode calls overlap on shared mutable state."""
+
+    first_encode_started = threading.Event()
+    shared_seq_len: int | None = None
+
+    def __init__(self, model_name: str, *, trust_remote_code: bool) -> None:
+        assert model_name == embeddings.MODEL_NAME
+        assert trust_remote_code is True
+
+    @staticmethod
+    def encode(
+        texts: list[str],
+        *,
+        normalize_embeddings: bool,
+        show_progress_bar: bool,
+    ) -> np.ndarray:
+        assert normalize_embeddings is True
+        assert show_progress_bar is False
+
+        seq_len = len(texts[0])
+        cls = RaceySentenceTransformer
+
+        if not cls.first_encode_started.is_set():
+            cls.shared_seq_len = seq_len
+            cls.first_encode_started.set()
+            time.sleep(0.1)
+            if cls.shared_seq_len != seq_len:
+                raise RuntimeError("simulated rotary cache corruption")
+        else:
+            cls.shared_seq_len = seq_len
+            time.sleep(0.01)
+
+        return np.array([[float(seq_len)] * embeddings.DIMENSION for _ in texts])
+
+
+@pytest.mark.asyncio
+async def test_concurrent_encode_calls_are_serialized(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(embeddings, "SentenceTransformer", RaceySentenceTransformer)
+    monkeypatch.setattr(embeddings, "_model", None)
+    monkeypatch.setattr(embeddings, "_model_name", None)
+    monkeypatch.setattr(embeddings, "_get_active_model_name", lambda: embeddings.MODEL_NAME)
+
+    RaceySentenceTransformer.first_encode_started.clear()
+    RaceySentenceTransformer.shared_seq_len = None
+
+    service = embeddings.EmbeddingService()
+
+    first_task = asyncio.create_task(service.generate_query_embedding("alpha"))
+    assert await asyncio.to_thread(RaceySentenceTransformer.first_encode_started.wait, 1)
+
+    second_task = asyncio.create_task(
+        service.generate_query_embedding("beta beta beta beta beta beta beta beta")
+    )
+
+    first_embedding, second_embedding = await asyncio.gather(first_task, second_task)
+
+    assert first_embedding is not None
+    assert second_embedding is not None

@@ -714,11 +714,17 @@ async def update_strategy_discovery_config(
     from app.db.models.news import NewsSource
 
     app_settings = await AppSettings.get_instance()
+    reschedule_required = False
 
     if body.enabled is not None:
-        app_settings.auto_discover_enabled = body.enabled
+        if app_settings.auto_discover_enabled != body.enabled:
+            app_settings.auto_discover_enabled = body.enabled
+            reschedule_required = True
     if body.interval_hours is not None:
-        app_settings.auto_discover_interval_hours = max(1, body.interval_hours)
+        next_interval = max(1, body.interval_hours)
+        if app_settings.auto_discover_interval_hours != next_interval:
+            app_settings.auto_discover_interval_hours = next_interval
+            reschedule_required = True
     if body.min_confidence is not None:
         app_settings.auto_discover_min_confidence = max(0.0, min(1.0, body.min_confidence))
     if body.max_sources is not None:
@@ -726,14 +732,14 @@ async def update_strategy_discovery_config(
 
     await app_settings.save_with_timestamp()
 
-    # Reschedule the discovery job
-    try:
-        from app.agent.task_scheduler import get_scheduler
+    if reschedule_required:
+        try:
+            from app.agent.task_scheduler import get_scheduler
 
-        scheduler = get_scheduler()
-        await scheduler.reschedule_auto_discovery()
-    except Exception:
-        logger.warning("Could not reschedule auto-discovery", exc_info=True)
+            scheduler = get_scheduler()
+            await scheduler.reschedule_auto_discovery()
+        except Exception:
+            logger.warning("Could not reschedule auto-discovery", exc_info=True)
 
     sources = await NewsSource.find(
         NewsSource.strategy_extraction == True  # noqa: E712

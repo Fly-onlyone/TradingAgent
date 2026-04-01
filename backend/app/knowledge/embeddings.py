@@ -29,6 +29,7 @@ SentenceTransformer: Any | None = None
 _model: Any = None
 _model_name: str | None = None
 _model_lock = threading.Lock()
+_encode_lock = threading.Lock()
 _executor = ThreadPoolExecutor(max_workers=2)
 
 # Keep module-level constants for backwards compatibility
@@ -110,7 +111,10 @@ async def preload_model() -> None:
 def _encode_sync(texts: list[str], *, normalize: bool = True) -> Any:
     """Run synchronous encoding in the thread pool."""
     model = _get_model()
-    return model.encode(texts, normalize_embeddings=normalize, show_progress_bar=False)
+    # SentenceTransformer models with remote code can mutate shared rotary caches during encode.
+    # Serialize access to the singleton model to avoid cross-request cache corruption.
+    with _encode_lock:
+        return model.encode(texts, normalize_embeddings=normalize, show_progress_bar=False)
 
 
 class EmbeddingService:

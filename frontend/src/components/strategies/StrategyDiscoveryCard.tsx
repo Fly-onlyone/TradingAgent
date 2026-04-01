@@ -22,7 +22,7 @@ import {
 	Typography,
 } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
 	type StrategyDiscoveryConfig,
 	settingsApi,
@@ -51,6 +51,10 @@ export function StrategyDiscoveryCard() {
 	const runResult = useDiscoveryStore((s) => s.runResult);
 	const startRun = useDiscoveryStore((s) => s.startRun);
 	const logRef = useRef<HTMLDivElement>(null);
+	const [draftMinConfidence, setDraftMinConfidence] = useState<number | null>(
+		null,
+	);
+	const [draftMaxSources, setDraftMaxSources] = useState<number | null>(null);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: trigger scroll on new messages
 	useEffect(() => {
@@ -76,9 +80,20 @@ export function StrategyDiscoveryCard() {
 		onError: () => notify.error("Failed to update discovery settings"),
 	});
 
-	if (!isSuperuser) return null;
-
 	const config = configQuery.data;
+	const minConfidence = draftMinConfidence ?? config?.minConfidence ?? 0.5;
+	const maxSources = draftMaxSources ?? config?.maxSources ?? 30;
+
+	useEffect(() => {
+		if (!config) return;
+		setDraftMinConfidence(config.minConfidence);
+		setDraftMaxSources(config.maxSources);
+	}, [config]);
+
+	const getSliderNumber = (value: number | number[]) =>
+		Array.isArray(value) ? value[0] : value;
+
+	if (!isSuperuser) return null;
 
 	return (
 		<Card
@@ -174,13 +189,20 @@ export function StrategyDiscoveryCard() {
 						{/* Confidence slider */}
 						<Box>
 							<Typography variant="caption" color="text.secondary" gutterBottom>
-								Min. Confidence: {(config.minConfidence * 100).toFixed(0)}%
+								Min. Confidence: {(minConfidence * 100).toFixed(0)}%
 							</Typography>
 							<Slider
-								value={config.minConfidence}
-								onChange={(_, val) =>
-									updateMutation.mutate({ minConfidence: val as number })
+								value={minConfidence}
+								onChange={(_, value) =>
+									setDraftMinConfidence(getSliderNumber(value))
 								}
+								onChangeCommitted={(_, value) => {
+									const nextValue = getSliderNumber(value);
+									setDraftMinConfidence(nextValue);
+									if (nextValue !== config.minConfidence) {
+										updateMutation.mutate({ minConfidence: nextValue });
+									}
+								}}
 								min={0.1}
 								max={1.0}
 								step={0.05}
@@ -194,13 +216,20 @@ export function StrategyDiscoveryCard() {
 						{/* Max Sources slider */}
 						<Box>
 							<Typography variant="caption" color="text.secondary" gutterBottom>
-								Max Sources: {config.maxSources}
+								Max Sources: {maxSources}
 							</Typography>
 							<Slider
-								value={config.maxSources}
-								onChange={(_, val) =>
-									updateMutation.mutate({ maxSources: val as number })
+								value={maxSources}
+								onChange={(_, value) =>
+									setDraftMaxSources(getSliderNumber(value))
 								}
+								onChangeCommitted={(_, value) => {
+									const nextValue = getSliderNumber(value);
+									setDraftMaxSources(nextValue);
+									if (nextValue !== config.maxSources) {
+										updateMutation.mutate({ maxSources: nextValue });
+									}
+								}}
 								min={5}
 								max={100}
 								step={5}
