@@ -23,11 +23,11 @@ import {
 } from "@mui/material";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { InstalledApp } from "@/api/endpoints/settings";
 import { settingsApi } from "@/api/endpoints/settings";
 import { useReducedMotion } from "@/utils/animations/hooks";
-import { listStagger, scaleIn } from "@/utils/animations/variants";
+import { scaleIn } from "@/utils/animations/variants";
 
 interface ProcessSelectorDialogProps {
 	open: boolean;
@@ -84,6 +84,7 @@ export function ProcessSelectorDialog({
 	const prefersReduced = useReducedMotion();
 	const [search, setSearch] = useState("");
 	const [selected, setSelected] = useState<Set<string>>(new Set());
+	const listRef = useRef<HTMLDivElement | null>(null);
 
 	const appsQuery = useQuery({
 		queryKey: ["installed-apps"],
@@ -95,7 +96,19 @@ export function ProcessSelectorDialog({
 	const handleEntered = useCallback(() => {
 		setSelected(new Set(currentProcesses));
 		setSearch("");
+		listRef.current?.scrollTo({ top: 0 });
 	}, [currentProcesses]);
+
+	const handleSearchChange = useCallback(
+		(event: React.ChangeEvent<HTMLInputElement>) => {
+			const nextSearch = event.target.value;
+			if (search.trim() && !nextSearch.trim()) {
+				listRef.current?.scrollTo({ top: 0 });
+			}
+			setSearch(nextSearch);
+		},
+		[search],
+	);
 
 	const filtered = useMemo(() => {
 		const apps = appsQuery.data?.apps ?? [];
@@ -158,7 +171,7 @@ export function ProcessSelectorDialog({
 								size="small"
 								placeholder="Search applications..."
 								value={search}
-								onChange={(e) => setSearch(e.target.value)}
+								onChange={handleSearchChange}
 								fullWidth
 								autoFocus
 								slotProps={{
@@ -173,6 +186,7 @@ export function ProcessSelectorDialog({
 							/>
 
 							<Box
+								ref={listRef}
 								sx={{
 									maxHeight: 400,
 									overflow: "auto",
@@ -210,169 +224,155 @@ export function ProcessSelectorDialog({
 											: "No installed applications found"}
 									</Typography>
 								) : (
-									<motion.div
-										variants={
-											prefersReduced ? undefined : listStagger.container
-										}
-										initial="hidden"
-										animate="visible"
-									>
-										{filtered.map((app) => {
-											const isChecked = app.exeName
-												? selected.has(app.exeName)
-												: false;
-											const isDisabled = !app.exeName;
+									filtered.map((app) => {
+										const isChecked = app.exeName
+											? selected.has(app.exeName)
+											: false;
+										const isDisabled = !app.exeName;
 
-											return (
-												<motion.div
-													key={`${app.displayName}-${app.source}`}
-													variants={
-														prefersReduced ? undefined : listStagger.item
-													}
+										return (
+											<Tooltip
+												key={`${app.displayName}-${app.source}`}
+												title={
+													isDisabled
+														? "Executable not detected — cannot select"
+														: ""
+												}
+												placement="left"
+												disableHoverListener={!isDisabled}
+											>
+												<Box
+													onClick={() => handleToggle(app.exeName)}
+													sx={{
+														display: "flex",
+														alignItems: "center",
+														gap: 1.5,
+														px: 1.5,
+														py: 1,
+														cursor: isDisabled ? "default" : "pointer",
+														opacity: isDisabled ? 0.45 : 1,
+														"&:hover": isDisabled
+															? {}
+															: { bgcolor: "action.hover" },
+														borderBottom: 1,
+														borderColor: "divider",
+														"&:last-child": { borderBottom: 0 },
+													}}
 												>
-													<Tooltip
-														title={
-															isDisabled
-																? "Executable not detected — cannot select"
-																: ""
-														}
-														placement="left"
-														disableHoverListener={!isDisabled}
-													>
+													<Checkbox
+														checked={isChecked}
+														disabled={isDisabled}
+														size="small"
+														tabIndex={-1}
+														disableRipple
+													/>
+
+													<AppIcon app={app} />
+
+													<Box sx={{ flex: 1, minWidth: 0 }}>
 														<Box
-															onClick={() => handleToggle(app.exeName)}
 															sx={{
 																display: "flex",
 																alignItems: "center",
-																gap: 1.5,
-																px: 1.5,
-																py: 1,
-																cursor: isDisabled ? "default" : "pointer",
-																opacity: isDisabled ? 0.45 : 1,
-																"&:hover": isDisabled
-																	? {}
-																	: { bgcolor: "action.hover" },
-																borderBottom: 1,
-																borderColor: "divider",
-																"&:last-child": { borderBottom: 0 },
+																gap: 0.75,
 															}}
 														>
-															<Checkbox
-																checked={isChecked}
-																disabled={isDisabled}
-																size="small"
-																tabIndex={-1}
-																disableRipple
-															/>
-
-															<AppIcon app={app} />
-
-															<Box sx={{ flex: 1, minWidth: 0 }}>
-																<Box
+															<Typography
+																variant="body2"
+																noWrap
+																sx={{
+																	fontWeight: isChecked ? 600 : 400,
+																}}
+															>
+																{app.displayName}
+															</Typography>
+															{app.source === "steam" && (
+																<Chip
+																	label="Steam"
+																	size="small"
 																	sx={{
-																		display: "flex",
-																		alignItems: "center",
-																		gap: 0.75,
+																		height: 18,
+																		fontSize: 10,
+																		fontWeight: 600,
+																		bgcolor: "info.dark",
+																		color: "info.light",
 																	}}
-																>
-																	<Typography
-																		variant="body2"
-																		noWrap
+																/>
+															)}
+														</Box>
+														<Typography
+															variant="caption"
+															sx={{
+																display: "flex",
+																alignItems: "center",
+																gap: 0.5,
+															}}
+														>
+															{app.exeName ? (
+																<>
+																	<Box
+																		component="span"
 																		sx={{
-																			fontWeight: isChecked ? 600 : 400,
+																			color: isChecked
+																				? "primary.main"
+																				: "text.secondary",
+																			fontFamily: "monospace",
+																			fontSize: 11,
 																		}}
 																	>
-																		{app.displayName}
-																	</Typography>
-																	{app.source === "steam" && (
-																		<Chip
-																			label="Steam"
-																			size="small"
-																			sx={{
-																				height: 18,
-																				fontSize: 10,
-																				fontWeight: 600,
-																				bgcolor: "info.dark",
-																				color: "info.light",
-																			}}
-																		/>
+																		{app.exeName}
+																	</Box>
+																	{app.publisher && (
+																		<Box
+																			component="span"
+																			sx={{ color: "text.secondary" }}
+																		>
+																			&middot; {app.publisher}
+																		</Box>
 																	)}
-																</Box>
-																<Typography
-																	variant="caption"
+																</>
+															) : (
+																<Box
+																	component="span"
 																	sx={{
 																		display: "flex",
 																		alignItems: "center",
 																		gap: 0.5,
+																		color: "warning.main",
 																	}}
 																>
-																	{app.exeName ? (
-																		<>
-																			<Box
-																				component="span"
-																				sx={{
-																					color: isChecked
-																						? "primary.main"
-																						: "text.secondary",
-																					fontFamily: "monospace",
-																					fontSize: 11,
-																				}}
-																			>
-																				{app.exeName}
-																			</Box>
-																			{app.publisher && (
-																				<Box
-																					component="span"
-																					sx={{ color: "text.secondary" }}
-																				>
-																					&middot; {app.publisher}
-																				</Box>
-																			)}
-																		</>
-																	) : (
+																	<WarningAmberIcon sx={{ fontSize: 12 }} />
+																	exe not detected
+																	{app.publisher && (
 																		<Box
 																			component="span"
-																			sx={{
-																				display: "flex",
-																				alignItems: "center",
-																				gap: 0.5,
-																				color: "warning.main",
-																			}}
+																			sx={{ color: "text.secondary" }}
 																		>
-																			<WarningAmberIcon sx={{ fontSize: 12 }} />
-																			exe not detected
-																			{app.publisher && (
-																				<Box
-																					component="span"
-																					sx={{ color: "text.secondary" }}
-																				>
-																					&middot; {app.publisher}
-																				</Box>
-																			)}
+																			&middot; {app.publisher}
 																		</Box>
 																	)}
-																</Typography>
-															</Box>
-
-															{app.installSizeMb != null && (
-																<Typography
-																	variant="caption"
-																	color="text.secondary"
-																	sx={{
-																		minWidth: 55,
-																		textAlign: "right",
-																		flexShrink: 0,
-																	}}
-																>
-																	{formatSize(app.installSizeMb)}
-																</Typography>
+																</Box>
 															)}
-														</Box>
-													</Tooltip>
-												</motion.div>
-											);
-										})}
-									</motion.div>
+														</Typography>
+													</Box>
+
+													{app.installSizeMb != null && (
+														<Typography
+															variant="caption"
+															color="text.secondary"
+															sx={{
+																minWidth: 55,
+																textAlign: "right",
+																flexShrink: 0,
+															}}
+														>
+															{formatSize(app.installSizeMb)}
+														</Typography>
+													)}
+												</Box>
+											</Tooltip>
+										);
+									})
 								)}
 							</Box>
 
