@@ -11,7 +11,6 @@ import {
 	CardContent,
 	CircularProgress,
 	Divider,
-	Grid2 as Grid,
 	Tab,
 	Tabs,
 	TextField,
@@ -37,7 +36,6 @@ import { PageTransition } from "@/components/common/PageTransition";
 import { SaveIndicator } from "@/components/common/SaveIndicator";
 import { SectionHeader } from "@/components/common/SectionHeader";
 import { ZoomAwareAutocomplete } from "@/components/common/ZoomAwareAutocomplete";
-import { StatCard } from "@/components/data-display/StatCard";
 import {
 	HoldingsTab,
 	MarketOverviewPanel,
@@ -50,12 +48,7 @@ import { useMarketStore } from "@/store/marketStore";
 import { spring, tabSwitch } from "@/utils/animations/variants";
 import { TIMEFRAMES } from "@/utils/constants";
 import { getErrorMessage } from "@/utils/errors";
-import {
-	formatPercent,
-	formatPrice,
-	formatUSD,
-	formatVolume,
-} from "@/utils/formatters";
+import { formatPercent, formatPrice, formatVolume } from "@/utils/formatters";
 import { requireAuth } from "./-guards";
 
 export const Route = createFileRoute("/trading")({
@@ -601,53 +594,6 @@ function TradingPage() {
 
 					{/* ====== MAIN CONTENT ====== */}
 					<Box sx={{ flex: 1, minWidth: 0 }}>
-						{/* Account Summary Cards */}
-						<Grid container spacing={2} sx={{ mb: 3 }}>
-							<Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-								<StatCard
-									title="Total Equity"
-									value={
-										account?.totalEquity ? formatUSD(account.totalEquity) : "-"
-									}
-									loading={accountQuery.isPending}
-								/>
-							</Grid>
-							<Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-								<StatCard
-									title="Available Balance"
-									value={
-										account?.availableBalance
-											? formatUSD(account.availableBalance)
-											: "-"
-									}
-									loading={accountQuery.isPending}
-								/>
-							</Grid>
-							<Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-								<StatCard
-									title="Unrealized PnL"
-									value={
-										account?.unrealizedPnl !== undefined
-											? formatUSD(account.unrealizedPnl)
-											: "-"
-									}
-									trend={(account?.unrealizedPnl ?? 0) >= 0 ? "up" : "down"}
-									loading={accountQuery.isPending}
-								/>
-							</Grid>
-							<Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-								<StatCard
-									title="Margin Ratio"
-									value={
-										account?.marginRatio != null
-											? `${(account.marginRatio * 100).toFixed(1)}%`
-											: "-"
-									}
-									loading={accountQuery.isPending}
-								/>
-							</Grid>
-						</Grid>
-
 						{/* Market Overview (Gainers / Losers) */}
 						<MarketOverviewPanel
 							overview={overviewQuery.data ?? null}
