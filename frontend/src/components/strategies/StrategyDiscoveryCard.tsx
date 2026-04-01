@@ -15,10 +15,12 @@ import {
 	CircularProgress,
 	Divider,
 	FormControl,
+	InputAdornment,
 	InputLabel,
 	MenuItem,
 	Slider,
 	Switch,
+	TextField,
 	Typography,
 } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -27,7 +29,9 @@ import {
 	type StrategyDiscoveryConfig,
 	settingsApi,
 } from "@/api/endpoints/settings";
+import { SaveIndicator } from "@/components/common/SaveIndicator";
 import { ZoomAwareSelect } from "@/components/common/ZoomAwareSelect";
+import { useMutationSaveStatus } from "@/hooks/useMutationSaveStatus";
 import { useAuthStore } from "@/store/authStore";
 import { useDiscoveryStore } from "@/store/discoveryStore";
 import { notify } from "@/store/uiStore";
@@ -55,6 +59,8 @@ export function StrategyDiscoveryCard() {
 		null,
 	);
 	const [draftMaxSources, setDraftMaxSources] = useState<number | null>(null);
+	const [confidenceInput, setConfidenceInput] = useState("");
+	const [sourcesInput, setSourcesInput] = useState("");
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: trigger scroll on new messages
 	useEffect(() => {
@@ -80,6 +86,8 @@ export function StrategyDiscoveryCard() {
 		onError: () => notify.error("Failed to update discovery settings"),
 	});
 
+	const saveStatus = useMutationSaveStatus(updateMutation);
+
 	const config = configQuery.data;
 	const minConfidence = draftMinConfidence ?? config?.minConfidence ?? 0.5;
 	const maxSources = draftMaxSources ?? config?.maxSources ?? 30;
@@ -88,10 +96,41 @@ export function StrategyDiscoveryCard() {
 		if (!config) return;
 		setDraftMinConfidence(config.minConfidence);
 		setDraftMaxSources(config.maxSources);
+		setConfidenceInput((config.minConfidence * 100).toFixed(0));
+		setSourcesInput(String(config.maxSources));
 	}, [config]);
 
 	const getSliderNumber = (value: number | number[]) =>
 		Array.isArray(value) ? value[0] : value;
+
+	const handleConfidenceInputCommit = () => {
+		const parsed = Number(confidenceInput);
+		if (Number.isNaN(parsed) || confidenceInput === "") {
+			setConfidenceInput((minConfidence * 100).toFixed(0));
+			return;
+		}
+		const clamped = Math.min(100, Math.max(10, Math.round(parsed / 5) * 5));
+		const asDecimal = clamped / 100;
+		setConfidenceInput(String(clamped));
+		setDraftMinConfidence(asDecimal);
+		if (asDecimal !== config?.minConfidence) {
+			updateMutation.mutate({ minConfidence: asDecimal });
+		}
+	};
+
+	const handleSourcesInputCommit = () => {
+		const parsed = Number(sourcesInput);
+		if (Number.isNaN(parsed) || sourcesInput === "") {
+			setSourcesInput(String(maxSources));
+			return;
+		}
+		const clamped = Math.min(100, Math.max(5, Math.round(parsed / 5) * 5));
+		setSourcesInput(String(clamped));
+		setDraftMaxSources(clamped);
+		if (clamped !== config?.maxSources) {
+			updateMutation.mutate({ maxSources: clamped });
+		}
+	};
 
 	if (!isSuperuser) return null;
 
@@ -126,6 +165,9 @@ export function StrategyDiscoveryCard() {
 					<Typography variant="subtitle1" fontWeight={600}>
 						Auto-Discovery
 					</Typography>
+					<Box sx={{ ml: "auto" }}>
+						<SaveIndicator status={saveStatus} />
+					</Box>
 				</Box>
 
 				{/* Enable toggle */}
@@ -188,17 +230,68 @@ export function StrategyDiscoveryCard() {
 
 						{/* Confidence slider */}
 						<Box>
-							<Typography variant="caption" color="text.secondary" gutterBottom>
-								Min. Confidence: {(minConfidence * 100).toFixed(0)}%
-							</Typography>
+							<Box
+								sx={{
+									display: "flex",
+									alignItems: "center",
+									justifyContent: "space-between",
+									mb: 0.5,
+								}}
+							>
+								<Typography variant="caption" color="text.secondary">
+									Min. Confidence
+								</Typography>
+								<TextField
+									size="small"
+									type="number"
+									value={confidenceInput}
+									onChange={(e) => setConfidenceInput(e.target.value)}
+									onBlur={handleConfidenceInputCommit}
+									onKeyDown={(e) => {
+										if (e.key === "Enter") handleConfidenceInputCommit();
+									}}
+									onFocus={(e) => e.target.select()}
+									disabled={!config.enabled}
+									slotProps={{
+										htmlInput: {
+											min: 10,
+											max: 100,
+											step: 5,
+											style: { textAlign: "right" },
+										},
+										input: {
+											endAdornment: (
+												<InputAdornment position="end">%</InputAdornment>
+											),
+										},
+									}}
+									sx={{
+										width: 72,
+										"& .MuiInputBase-input": {
+											py: 0.5,
+											px: 1,
+											fontSize: "0.75rem",
+											MozAppearance: "textfield",
+											"&::-webkit-outer-spin-button, &::-webkit-inner-spin-button":
+												{
+													WebkitAppearance: "none",
+													margin: 0,
+												},
+										},
+									}}
+								/>
+							</Box>
 							<Slider
 								value={minConfidence}
-								onChange={(_, value) =>
-									setDraftMinConfidence(getSliderNumber(value))
-								}
+								onChange={(_, value) => {
+									const v = getSliderNumber(value);
+									setDraftMinConfidence(v);
+									setConfidenceInput((v * 100).toFixed(0));
+								}}
 								onChangeCommitted={(_, value) => {
 									const nextValue = getSliderNumber(value);
 									setDraftMinConfidence(nextValue);
+									setConfidenceInput((nextValue * 100).toFixed(0));
 									if (nextValue !== config.minConfidence) {
 										updateMutation.mutate({ minConfidence: nextValue });
 									}
@@ -215,17 +308,63 @@ export function StrategyDiscoveryCard() {
 
 						{/* Max Sources slider */}
 						<Box>
-							<Typography variant="caption" color="text.secondary" gutterBottom>
-								Max Sources: {maxSources}
-							</Typography>
+							<Box
+								sx={{
+									display: "flex",
+									alignItems: "center",
+									justifyContent: "space-between",
+									mb: 0.5,
+								}}
+							>
+								<Typography variant="caption" color="text.secondary">
+									Max Sources
+								</Typography>
+								<TextField
+									size="small"
+									type="number"
+									value={sourcesInput}
+									onChange={(e) => setSourcesInput(e.target.value)}
+									onBlur={handleSourcesInputCommit}
+									onKeyDown={(e) => {
+										if (e.key === "Enter") handleSourcesInputCommit();
+									}}
+									onFocus={(e) => e.target.select()}
+									disabled={!config.enabled}
+									slotProps={{
+										htmlInput: {
+											min: 5,
+											max: 100,
+											step: 5,
+											style: { textAlign: "right" },
+										},
+									}}
+									sx={{
+										width: 56,
+										"& .MuiInputBase-input": {
+											py: 0.5,
+											px: 1,
+											fontSize: "0.75rem",
+											MozAppearance: "textfield",
+											"&::-webkit-outer-spin-button, &::-webkit-inner-spin-button":
+												{
+													WebkitAppearance: "none",
+													margin: 0,
+												},
+										},
+									}}
+								/>
+							</Box>
 							<Slider
 								value={maxSources}
-								onChange={(_, value) =>
-									setDraftMaxSources(getSliderNumber(value))
-								}
+								onChange={(_, value) => {
+									const v = getSliderNumber(value);
+									setDraftMaxSources(v);
+									setSourcesInput(String(v));
+								}}
 								onChangeCommitted={(_, value) => {
 									const nextValue = getSliderNumber(value);
 									setDraftMaxSources(nextValue);
+									setSourcesInput(String(nextValue));
 									if (nextValue !== config.maxSources) {
 										updateMutation.mutate({ maxSources: nextValue });
 									}
