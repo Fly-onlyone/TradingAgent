@@ -653,6 +653,7 @@ class StrategyDiscoveryConfigResponse(BaseModel):
     min_confidence: float
     max_sources: int
     last_run_at: str | None = None
+    next_run_at: str | None = None
     sources: list[DiscoverySourceResponse]
 
 
@@ -684,6 +685,13 @@ async def get_strategy_discovery_config(
         NewsSource.strategy_extraction == True  # noqa: E712
     ).to_list()
 
+    try:
+        from app.agent.task_scheduler import get_scheduler
+
+        next_run = get_scheduler().discovery_next_run_at
+    except Exception:
+        next_run = None
+
     return {
         "enabled": app_settings.auto_discover_enabled,
         "interval_hours": app_settings.auto_discover_interval_hours,
@@ -692,6 +700,7 @@ async def get_strategy_discovery_config(
         "last_run_at": app_settings.auto_discover_last_run_at.isoformat()
         if app_settings.auto_discover_last_run_at
         else None,
+        "next_run_at": next_run.isoformat() if next_run else None,
         "sources": [
             {
                 "id": str(s.id),
@@ -745,6 +754,13 @@ async def update_strategy_discovery_config(
         NewsSource.strategy_extraction == True  # noqa: E712
     ).to_list()
 
+    try:
+        from app.agent.task_scheduler import get_scheduler
+
+        next_run = get_scheduler().discovery_next_run_at
+    except Exception:
+        next_run = None
+
     return {
         "enabled": app_settings.auto_discover_enabled,
         "interval_hours": app_settings.auto_discover_interval_hours,
@@ -753,6 +769,7 @@ async def update_strategy_discovery_config(
         "last_run_at": app_settings.auto_discover_last_run_at.isoformat()
         if app_settings.auto_discover_last_run_at
         else None,
+        "next_run_at": next_run.isoformat() if next_run else None,
         "sources": [
             {
                 "id": str(s.id),

@@ -166,6 +166,14 @@ class AgentTaskScheduler:
 
         await self._maybe_run_missed_discovery(app_settings, hours)
 
+    @property
+    def discovery_next_run_at(self) -> datetime | None:
+        """Next scheduled fire time for auto-discovery, or None if not scheduled."""
+        job = self.scheduler.get_job("auto_discover_strategies")
+        if job is None:
+            return None
+        return job.next_run_time
+
     async def _run_strategy_discovery(self) -> None:
         """Execute one strategy discovery cycle."""
         from app.services.strategy_discovery import StrategyDiscoveryService

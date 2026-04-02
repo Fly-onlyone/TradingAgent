@@ -3,7 +3,9 @@
  * Superuser-only — returns null for non-superusers.
  */
 
+import HistoryIcon from "@mui/icons-material/History";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import ScheduleIcon from "@mui/icons-material/Schedule";
 import SearchIcon from "@mui/icons-material/Search";
 import {
 	Alert,
@@ -35,7 +37,7 @@ import { useMutationSaveStatus } from "@/hooks/useMutationSaveStatus";
 import { useAuthStore } from "@/store/authStore";
 import { useDiscoveryStore } from "@/store/discoveryStore";
 import { notify } from "@/store/uiStore";
-import { formatRelativeTime } from "@/utils/formatters";
+import { formatDateTime } from "@/utils/formatters";
 
 const INTERVAL_OPTIONS = [
 	{ value: 1, label: "Every hour" },
@@ -394,22 +396,80 @@ export function StrategyDiscoveryCard() {
 							>
 								{isRunning ? "Running..." : "Run Now"}
 							</Button>
-							{config.lastRunAt && !isRunning && (
-								<Typography
-									variant="caption"
-									color="text.secondary"
-									display="block"
-									sx={{ mt: 0.5 }}
-								>
-									Last run: {formatRelativeTime(config.lastRunAt)}
-								</Typography>
-							)}
 							{runResult && !isRunning && (
 								<Alert severity="info" sx={{ py: 0, mt: 1 }}>
 									{runResult}
 								</Alert>
 							)}
 						</Box>
+
+						{/* Next Run / Last Run badges */}
+						{config.enabled && (
+							<Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+								<Box
+									sx={{
+										display: "flex",
+										alignItems: "center",
+										justifyContent: "space-between",
+										px: 1.5,
+										py: 0.75,
+										borderRadius: 2,
+										background: "rgba(16, 185, 129, 0.08)",
+										border: "1.5px solid rgba(16, 185, 129, 0.5)",
+									}}
+								>
+									<Box
+										sx={{ display: "flex", alignItems: "center", gap: 0.75 }}
+									>
+										<ScheduleIcon
+											sx={{ color: "#10B981", fontSize: 16 }}
+										/>
+										<Typography
+											variant="caption"
+											sx={{ letterSpacing: 0.5, color: "#34D399" }}
+										>
+											Next Run
+										</Typography>
+									</Box>
+									<Typography variant="caption" fontWeight={500}>
+										{config.nextRunAt
+											? formatDateTime(config.nextRunAt)
+											: "Not scheduled"}
+									</Typography>
+								</Box>
+								<Box
+									sx={{
+										display: "flex",
+										alignItems: "center",
+										justifyContent: "space-between",
+										px: 1.5,
+										py: 0.75,
+										borderRadius: 2,
+										background: "rgba(167, 139, 250, 0.1)",
+										border: "1.5px solid rgba(167, 139, 250, 0.55)",
+									}}
+								>
+									<Box
+										sx={{ display: "flex", alignItems: "center", gap: 0.75 }}
+									>
+										<HistoryIcon
+											sx={{ color: "#A78BFA", fontSize: 16 }}
+										/>
+										<Typography
+											variant="caption"
+											sx={{ letterSpacing: 0.5, color: "#A78BFA" }}
+										>
+											Last Run
+										</Typography>
+									</Box>
+									<Typography variant="caption" fontWeight={500}>
+										{config.lastRunAt
+											? formatDateTime(config.lastRunAt)
+											: "Never"}
+									</Typography>
+								</Box>
+							</Box>
+						)}
 
 						<Divider />
 
