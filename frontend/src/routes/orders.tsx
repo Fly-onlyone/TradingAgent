@@ -29,6 +29,7 @@ import { type Column, DataTable } from "@/components/data-display/DataTable";
 import { PositionCard } from "@/components/trading/PositionCard";
 import { useOrderStore } from "@/store/orderStore";
 import type { OkxOrder } from "@/types";
+import { usePageVisibility } from "@/utils/animations/hooks";
 import { listStagger } from "@/utils/animations/variants";
 import { ORDER_STATUSES } from "@/utils/constants";
 import { getErrorMessage } from "@/utils/errors";
@@ -49,6 +50,7 @@ function formatTimestamp(ms: number): string {
 
 function OrdersPage() {
 	const positions = useOrderStore((state) => state.positions);
+	const isPageVisible = usePageVisibility();
 
 	const [tabValue, setTabValue] = useState(0);
 	const [symbolFilter, setSymbolFilter] = useState("");
@@ -62,7 +64,7 @@ function OrdersPage() {
 				symbol: normalizedSymbol || undefined,
 				limit: 50,
 			}),
-		refetchInterval: 15_000,
+		refetchInterval: isPageVisible && tabValue === 0 ? 15_000 : false,
 		retry: 1,
 	});
 
@@ -73,7 +75,7 @@ function OrdersPage() {
 				symbol: normalizedSymbol || undefined,
 				limit: 50,
 			}),
-		refetchInterval: 15_000,
+		refetchInterval: isPageVisible && tabValue === 1 ? 15_000 : false,
 		retry: 1,
 	});
 
@@ -186,7 +188,7 @@ function OrdersPage() {
 	};
 
 	return (
-		<PageTransition pageKey="orders">
+		<PageTransition pageKey="orders" heavy>
 			<Box>
 				<SectionHeader
 					title="Orders & Positions"

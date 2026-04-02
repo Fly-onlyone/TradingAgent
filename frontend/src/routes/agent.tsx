@@ -65,13 +65,12 @@ import {
 	removeSessionFromGroups,
 	renameSessionInGroups,
 } from "@/utils/agentSessionsCache";
+import { usePageVisibility } from "@/utils/animations/hooks";
 import { requireAuth } from "./-guards";
-
-const ProfiledAgentPage = Sentry.withProfiler(AgentPage);
 
 export const Route = createFileRoute("/agent")({
 	beforeLoad: requireAuth,
-	component: ProfiledAgentPage,
+	component: AgentPage,
 });
 
 // Sidebar tab type
@@ -105,6 +104,7 @@ function AgentPage() {
 	const theme = useTheme();
 	const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 	const useDrawerSidebar = useMediaQuery(theme.breakpoints.down("lg"));
+	const isPageVisible = usePageVisibility();
 
 	const messagesContainerRef = useRef<HTMLDivElement>(null);
 	const shouldAutoScrollRef = useRef(true);
@@ -190,7 +190,7 @@ function AgentPage() {
 	// Fetch pending decisions count
 	const { data: pendingData } = useQuery({
 		...agentPendingDecisionsQueryOptions(),
-		refetchInterval: 30_000,
+		refetchInterval: isPageVisible && isDecisionsTabActive ? 30_000 : false,
 	});
 
 	// Update store when decisions data changes
@@ -586,7 +586,7 @@ function AgentPage() {
 	);
 
 	return (
-		<PageTransition pageKey="agent">
+		<PageTransition pageKey="agent" heavy>
 			<Box
 				sx={{
 					flex: 1,

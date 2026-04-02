@@ -21,16 +21,14 @@ import {
 	TableRow,
 	Typography,
 } from "@mui/material";
-import * as Sentry from "@sentry/react";
 import { type UseQueryResult, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { startTransition, useEffect, useState } from "react";
+import { lazy, Suspense, startTransition, useEffect, useState } from "react";
 import { tasksApi } from "@/api/endpoints/tasks";
 import { tradesApi } from "@/api/endpoints/trades";
 import { agentDecisionsQueryOptions } from "@/api/queryOptions/agent";
 import { marketAccountQueryOptions } from "@/api/queryOptions/market";
-import { EquityChart } from "@/components/charts";
 import { EmptyState } from "@/components/common/EmptyState";
 import { MetricRow } from "@/components/common/MetricRow";
 import { PageTransition } from "@/components/common/PageTransition";
@@ -50,6 +48,11 @@ import type {
 	TradeSummary,
 	TradeWithPnL,
 } from "@/types";
+import {
+	type MotionTier,
+	useMotionTier,
+	usePageVisibility,
+} from "@/utils/animations/hooks";
 import { staggerCascade } from "@/utils/animations/variants";
 import {
 	formatPercent,
@@ -60,31 +63,39 @@ import {
 } from "@/utils/formatters";
 import { requireAuth } from "./-guards";
 
-const ProfiledDashboard = Sentry.withProfiler(Dashboard);
+const LazyEquityChart = lazy(() => import("@/components/charts/EquityChart"));
 
 export const Route = createFileRoute("/")({
 	beforeLoad: requireAuth,
-	component: ProfiledDashboard,
+	component: Dashboard,
 });
 
 function StatsSection({
 	accountQuery,
 	summaryQuery,
 	decisionsCount,
+	motionTier,
 }: {
 	accountQuery: UseQueryResult<AccountBalance>;
 	summaryQuery: UseQueryResult<TradeSummary>;
 	decisionsCount: number;
+	motionTier: MotionTier;
 }) {
+	const shouldAnimate = motionTier === "full";
+
 	return (
 		<motion.div
 			variants={staggerCascade.container}
-			initial="hidden"
-			animate="visible"
+			initial={shouldAnimate ? "hidden" : false}
+			animate={shouldAnimate ? "visible" : undefined}
 		>
 			<Grid container spacing={3} sx={{ mb: 4 }}>
 				<Grid size={{ xs: 12, sm: 6, md: 3 }}>
-					<motion.div variants={staggerCascade.item}>
+					<motion.div
+						variants={staggerCascade.item}
+						initial={shouldAnimate ? undefined : false}
+						animate={shouldAnimate ? undefined : undefined}
+					>
 						<StatCard
 							title="Total Equity"
 							value={formatUSD(accountQuery.data?.totalEquity ?? 0)}
@@ -95,7 +106,11 @@ function StatsSection({
 					</motion.div>
 				</Grid>
 				<Grid size={{ xs: 12, sm: 6, md: 3 }}>
-					<motion.div variants={staggerCascade.item}>
+					<motion.div
+						variants={staggerCascade.item}
+						initial={shouldAnimate ? undefined : false}
+						animate={shouldAnimate ? undefined : undefined}
+					>
 						<StatCard
 							title="Unrealized P&L"
 							value={formatUSD(accountQuery.data?.unrealizedPnl ?? 0)}
@@ -115,7 +130,11 @@ function StatsSection({
 					</motion.div>
 				</Grid>
 				<Grid size={{ xs: 12, sm: 6, md: 3 }}>
-					<motion.div variants={staggerCascade.item}>
+					<motion.div
+						variants={staggerCascade.item}
+						initial={shouldAnimate ? undefined : false}
+						animate={shouldAnimate ? undefined : undefined}
+					>
 						<StatCard
 							title="Agent Win Rate"
 							value={formatPercent(summaryQuery.data?.winRate ?? 0, 1)}
@@ -124,7 +143,11 @@ function StatsSection({
 					</motion.div>
 				</Grid>
 				<Grid size={{ xs: 12, sm: 6, md: 3 }}>
-					<motion.div variants={staggerCascade.item}>
+					<motion.div
+						variants={staggerCascade.item}
+						initial={shouldAnimate ? undefined : false}
+						animate={shouldAnimate ? undefined : undefined}
+					>
 						<StatCard
 							title="Decisions Today"
 							value={decisionsCount}
@@ -420,6 +443,8 @@ function Dashboard() {
 	const navigate = useNavigate();
 	const positions = useOrderStore((state) => state.positions);
 	const [secondaryQueriesEnabled, setSecondaryQueriesEnabled] = useState(false);
+	const isPageVisible = usePageVisibility();
+	const motionTier = useMotionTier({ heavyRoute: true });
 
 	useEffect(() => {
 		const frameId = window.requestAnimationFrame(() => {
@@ -435,7 +460,7 @@ function Dashboard() {
 
 	const accountQuery = useQuery({
 		...marketAccountQueryOptions(),
-		refetchInterval: 60_000,
+		refetchInterval: isPageVisible ? 60_000 : false,
 	});
 
 	const summaryQuery = useQuery({
@@ -460,7 +485,7 @@ function Dashboard() {
 
 	const decisionsQuery = useQuery({
 		...agentDecisionsQueryOptions({}, 1, 5),
-		refetchInterval: 60_000,
+		refetchInterval: isPageVisible ? 60_000 : false,
 		enabled: secondaryQueriesEnabled,
 	});
 
@@ -478,7 +503,7 @@ function Dashboard() {
 		positions.length === 0;
 
 	return (
-		<PageTransition pageKey="dashboard">
+		<PageTransition pageKey="dashboard" heavy>
 			<Box>
 				<SectionHeader
 					title="Dashboard"
@@ -539,16 +564,23 @@ function Dashboard() {
 					accountQuery={accountQuery}
 					summaryQuery={summaryQuery}
 					decisionsCount={decisionsCount}
+					motionTier={motionTier}
 				/>
 
 				{/* Middle Row: Equity Chart + Agent Status */}
-				<ScrollReveal direction="up" delay={0.1}>
+				<ScrollReveal direction="up" delay={0.1} heavy>
 					<Grid container spacing={3} sx={{ mb: 3 }}>
 						<Grid size={{ xs: 12, md: 8 }}>
-							<EquityChart
-								trades={chartTradesQuery.data?.trades ?? []}
-								loading={chartTradesQuery.isLoading}
-							/>
+							<Suspense
+								fallback={
+									<ShimmerSkeleton variant="rectangular" height={280} />
+								}
+							>
+								<LazyEquityChart
+									trades={chartTradesQuery.data?.trades ?? []}
+									loading={chartTradesQuery.isLoading}
+								/>
+							</Suspense>
 						</Grid>
 						<Grid size={{ xs: 12, md: 4 }}>
 							<AgentStatusCard />
@@ -557,7 +589,7 @@ function Dashboard() {
 				</ScrollReveal>
 
 				{/* Bottom Row: Decisions + Recent Trades */}
-				<ScrollReveal direction="up" delay={0.2}>
+				<ScrollReveal direction="up" delay={0.2} heavy>
 					<Grid container spacing={3}>
 						<Grid size={{ xs: 12, md: 6 }}>
 							<AgentDecisionsSection

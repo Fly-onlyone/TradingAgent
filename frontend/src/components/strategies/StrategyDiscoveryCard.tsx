@@ -421,9 +421,7 @@ export function StrategyDiscoveryCard() {
 									<Box
 										sx={{ display: "flex", alignItems: "center", gap: 0.75 }}
 									>
-										<ScheduleIcon
-											sx={{ color: "#10B981", fontSize: 16 }}
-										/>
+										<ScheduleIcon sx={{ color: "#10B981", fontSize: 16 }} />
 										<Typography
 											variant="caption"
 											sx={{ letterSpacing: 0.5, color: "#34D399" }}
@@ -452,9 +450,7 @@ export function StrategyDiscoveryCard() {
 									<Box
 										sx={{ display: "flex", alignItems: "center", gap: 0.75 }}
 									>
-										<HistoryIcon
-											sx={{ color: "#A78BFA", fontSize: 16 }}
-										/>
+										<HistoryIcon sx={{ color: "#A78BFA", fontSize: 16 }} />
 										<Typography
 											variant="caption"
 											sx={{ letterSpacing: 0.5, color: "#A78BFA" }}

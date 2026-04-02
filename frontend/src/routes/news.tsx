@@ -29,6 +29,7 @@ import { SentimentBadge } from "@/components/data-display/SentimentBadge";
 import { StatCard } from "@/components/data-display/StatCard";
 import { useDebounce } from "@/hooks/useDebounce";
 import type { NewsArticle, PaginatedResponse } from "@/types";
+import { useMotionTier } from "@/utils/animations/hooks";
 import { spring } from "@/utils/animations/variants";
 import { formatRelativeTime } from "@/utils/formatters";
 import { requireAuth } from "./-guards";
@@ -46,6 +47,7 @@ function NewsPage() {
 	const [page, setPage] = useState(1);
 	const [pageSize, setPageSize] = useState(20);
 	const debouncedQuery = useDebounce(searchQuery, 300);
+	const motionTier = useMotionTier({ heavyRoute: true });
 
 	/** Reset to page 1 when filters change */
 	const handleSearchChange = useCallback((value: string) => {
@@ -57,11 +59,6 @@ function NewsPage() {
 		setSourceFilter(source);
 		setPage(1);
 	}, []);
-
-	const { data: marketSentiment, isLoading: loadingSentiment } = useQuery({
-		queryKey: ["marketSentiment"],
-		queryFn: () => newsApi.getMarketSentiment(),
-	});
 
 	const { data: articlesResponse, isLoading: loadingArticles } =
 		useQuery<NewsQueryResponse>({
@@ -86,8 +83,6 @@ function NewsPage() {
 		return articlesResponse.total ?? 0;
 	}, [articlesResponse]);
 
-	const sentimentScore = marketSentiment?.overallMarketSentiment ?? null;
-
 	const uniqueSources = useMemo(() => {
 		if (!articles) return [];
 		const sources = new Set<string>();
@@ -107,7 +102,7 @@ function NewsPage() {
 	}, [articles, sourceFilter]);
 
 	return (
-		<PageTransition pageKey="news">
+		<PageTransition pageKey="news" heavy>
 			<Box>
 				<SectionHeader
 					title="News & Sentiment"
@@ -125,84 +120,37 @@ function NewsPage() {
 							>
 								Overall Market Sentiment
 							</Typography>
-							{loadingSentiment ? (
-								<ShimmerSkeleton />
-							) : (
-								<>
-									<Box
-										sx={{
-											position: "relative",
-											height: 8,
-											borderRadius: 4,
-											overflow: "hidden",
-											bgcolor: "rgba(255,255,255,0.06)",
-										}}
-									>
-										<Box
-											sx={{
-												position: "absolute",
-												left: 0,
-												top: 0,
-												bottom: 0,
-												width: `${Math.max(5, Math.min(100, (((sentimentScore ?? 0) + 1) / 2) * 100))}%`,
-												borderRadius: 4,
-												background:
-													(sentimentScore ?? 0) > 0.2
-														? (theme) => theme.palette.success.main
-														: (sentimentScore ?? 0) < -0.2
-															? (theme) => theme.palette.error.main
-															: (theme) => theme.palette.warning.main,
-												transition: "width 0.5s ease, background 0.3s ease",
-											}}
-										/>
-									</Box>
-									<Box
-										sx={{
-											display: "flex",
-											justifyContent: "space-between",
-											mt: 0.75,
-										}}
-									>
-										<Typography variant="caption" color="error.main">
-											Bearish
-										</Typography>
-										<Typography variant="caption" fontWeight={600}>
-											{sentimentScore != null
-												? sentimentScore.toFixed(2)
-												: "N/A"}
-										</Typography>
-										<Typography variant="caption" color="success.main">
-											Bullish
-										</Typography>
-									</Box>
-								</>
-							)}
+							<Box
+								sx={{
+									display: "flex",
+									flexDirection: "column",
+									gap: 1,
+									minHeight: 70,
+									justifyContent: "center",
+								}}
+							>
+								<Typography variant="body2" color="text.secondary">
+									Summary is temporarily unavailable.
+								</Typography>
+								<Typography variant="caption" color="text.disabled">
+									Article feeds remain available while the sentiment endpoint is
+									disabled.
+								</Typography>
+							</Box>
 						</Card>
 					</Grid>
 					<Grid size={{ xs: 12, md: 4 }}>
 						<StatCard
 							title="Bullish Assets"
-							value={
-								loadingSentiment
-									? ""
-									: marketSentiment?.bullishOutliers.length
-										? marketSentiment.bullishOutliers.join(", ")
-										: "None"
-							}
-							loading={loadingSentiment}
+							value="Unavailable"
+							loading={false}
 						/>
 					</Grid>
 					<Grid size={{ xs: 12, md: 4 }}>
 						<StatCard
 							title="Bearish Assets"
-							value={
-								loadingSentiment
-									? ""
-									: marketSentiment?.bearishOutliers.length
-										? marketSentiment.bearishOutliers.join(", ")
-										: "None"
-							}
-							loading={loadingSentiment}
+							value="Unavailable"
+							loading={false}
 						/>
 					</Grid>
 				</Grid>
@@ -270,8 +218,16 @@ function NewsPage() {
 								}}
 							>
 								<motion.div
-									initial={{ opacity: 0, y: 40, scale: 0.95 }}
-									animate={{ opacity: 1, y: 0, scale: 1 }}
+									initial={
+										motionTier === "full"
+											? { opacity: 0, y: 40, scale: 0.95 }
+											: false
+									}
+									animate={
+										motionTier === "full"
+											? { opacity: 1, y: 0, scale: 1 }
+											: undefined
+									}
 									transition={{ ...spring.snappy, delay: index * 0.06 }}
 								>
 									<NewsCard article={article} featured={index === 0} />

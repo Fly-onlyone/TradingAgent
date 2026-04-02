@@ -142,8 +142,8 @@ export default defineConfig({
 					if (id.includes("@mui/") || id.includes("@emotion/"))
 						return "vendor-mui";
 					if (id.includes("framer-motion")) return "vendor-motion";
-					if (id.includes("@tanstack/")) return "vendor-tanstack";
 					if (id.includes("@sentry/")) return "vendor-sentry";
+					if (id.includes("lightweight-charts")) return "vendor-charts";
 				},
 			},
 		},

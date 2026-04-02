@@ -74,11 +74,9 @@ import {
 } from "@/utils/validators";
 import { requireAuth } from "./-guards";
 
-const ProfiledSettingsPage = Sentry.withProfiler(SettingsPage);
-
 export const Route = createFileRoute("/settings")({
 	beforeLoad: requireAuth,
-	component: ProfiledSettingsPage,
+	component: SettingsPage,
 });
 
 function EmbeddingConfigCard() {

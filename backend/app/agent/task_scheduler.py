@@ -164,8 +164,6 @@ class AgentTaskScheduler:
         )
         logger.info("Strategy auto-discovery scheduled every %d hours", hours)
 
-        await self._maybe_run_missed_discovery(app_settings, hours)
-
     @property
     def discovery_next_run_at(self) -> datetime | None:
         """Next scheduled fire time for auto-discovery, or None if not scheduled."""

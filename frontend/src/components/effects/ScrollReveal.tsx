@@ -5,6 +5,7 @@
 import { motion, useInView, useReducedMotion } from "framer-motion";
 import type { ReactNode } from "react";
 import { useRef } from "react";
+import { useMotionTier } from "@/utils/animations/hooks";
 
 type Direction = "up" | "down" | "left" | "right";
 
@@ -14,6 +15,7 @@ interface ScrollRevealProps {
 	delay?: number;
 	duration?: number;
 	distance?: number;
+	heavy?: boolean;
 	once?: boolean;
 }
 
@@ -30,16 +32,18 @@ export function ScrollReveal({
 	delay = 0,
 	duration,
 	distance = 40,
+	heavy = false,
 	once = true,
 }: ScrollRevealProps) {
 	const ref = useRef<HTMLDivElement>(null);
 	const isInView = useInView(ref, { once, margin: "-80px" });
 	const prefersReduced = useReducedMotion();
+	const motionTier = useMotionTier({ heavyRoute: heavy });
 
 	const offset = directionOffsets[direction];
 	const scale = distance / 40; // scale the offset by custom distance
 
-	if (prefersReduced) {
+	if (prefersReduced || motionTier !== "full") {
 		return (
 			<div ref={ref} style={{ height: "100%" }}>
 				{children}

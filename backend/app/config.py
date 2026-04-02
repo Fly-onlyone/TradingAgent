@@ -62,6 +62,7 @@ class Settings(BaseSettings):
 
     # OpenAI (for embeddings) — env-var-only, not covered by DB encryption
     openai_api_key: str = ""
+    preload_embeddings_on_startup: bool = False
 
     # External Data APIs — env-var-only, not covered by DB encryption
     glassnode_api_key: str = ""

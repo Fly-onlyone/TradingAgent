@@ -125,8 +125,9 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     else:
         await scheduler.start()
 
-    # Warm embeddings in the background so API startup doesn't block on model download/cache issues.
-    asyncio.create_task(preload_embedding_model())
+    # Keep heavyweight embedding warmup opt-in so idle startup stays lighter on RAM.
+    if settings.preload_embeddings_on_startup:
+        asyncio.create_task(preload_embedding_model())
 
     mongo_handler.start()
     logger.info("Application started")

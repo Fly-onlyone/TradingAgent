@@ -35,6 +35,7 @@ const LOG_ENDPOINT = `${getApiBaseUrl()}/logs/frontend`;
 const MAX_MESSAGE_LENGTH = 4000;
 const MAX_TRACEBACK_LENGTH = 16000;
 const DEDUPE_WINDOW_MS = 1000;
+const ENABLE_CONSOLE_FORWARDING = import.meta.env.DEV;
 
 let isInitialized = false;
 let nativeConsoleForwardingAvailable = true;
@@ -109,6 +110,10 @@ function shouldSend(
 }
 
 function postLog(payload: FrontendLogPayload): void {
+	if (import.meta.env.PROD && payload.level === "WARNING") {
+		return;
+	}
+
 	if (
 		!shouldSend(
 			payload.level,
@@ -244,5 +249,7 @@ export function initializeFrontendLogging(): void {
 	}
 	isInitialized = true;
 	installGlobalErrorHandlers();
-	installConsoleHooks();
+	if (ENABLE_CONSOLE_FORWARDING) {
+		installConsoleHooks();
+	}
 }

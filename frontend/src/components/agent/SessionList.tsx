@@ -28,7 +28,6 @@ import {
 	Typography,
 } from "@mui/material";
 import type { PopoverPosition } from "@mui/material/Popover";
-import { AnimatePresence, motion } from "framer-motion";
 import { type MouseEvent, useState } from "react";
 import { useUIStore } from "@/store/uiStore";
 import type { AgentSession, SessionsByDateGroup } from "@/types/session";
@@ -99,13 +98,7 @@ function SessionItem({
 	const hasDecisions = session.decisionsMade > 0;
 
 	return (
-		<ListItem
-			component={motion.li}
-			initial={{ opacity: 0, x: -20 }}
-			animate={{ opacity: 1, x: 0 }}
-			disablePadding
-			sx={{ mb: 0.5 }}
-		>
+		<ListItem disablePadding sx={{ mb: 0.5 }}>
 			<ListItemButton
 				selected={isSelected}
 				onClick={onSelect}
@@ -259,27 +252,23 @@ function DateGroup({
 
 			<Collapse in={isExpanded}>
 				<List dense disablePadding sx={{ pl: 1 }}>
-					<AnimatePresence>
-						{group.sessions.map((session) => (
-							<SessionItem
-								key={session.id}
-								session={session}
-								isSelected={session.id === currentSessionId}
-								isActive={session.id === activeSessionId}
-								onSelect={() => onSessionSelect(session.id)}
-								onDelete={
-									onDeleteSession
-										? () => onDeleteSession(session.id)
-										: undefined
-								}
-								onRename={
-									onRenameSession
-										? (newTitle) => onRenameSession(session.id, newTitle)
-										: undefined
-								}
-							/>
-						))}
-					</AnimatePresence>
+					{group.sessions.map((session) => (
+						<SessionItem
+							key={session.id}
+							session={session}
+							isSelected={session.id === currentSessionId}
+							isActive={session.id === activeSessionId}
+							onSelect={() => onSessionSelect(session.id)}
+							onDelete={
+								onDeleteSession ? () => onDeleteSession(session.id) : undefined
+							}
+							onRename={
+								onRenameSession
+									? (newTitle) => onRenameSession(session.id, newTitle)
+									: undefined
+							}
+						/>
+					))}
 				</List>
 			</Collapse>
 		</Box>
@@ -384,19 +373,17 @@ export function SessionList({
 						</Typography>
 					</Box>
 				) : (
-					<AnimatePresence>
-						{groups.map((group) => (
-							<DateGroup
-								key={group.date}
-								group={group}
-								currentSessionId={currentSessionId}
-								activeSessionId={activeSessionId}
-								onSessionSelect={onSessionSelect}
-								onDeleteSession={onDeleteSession}
-								onRenameSession={onRenameSession}
-							/>
-						))}
-					</AnimatePresence>
+					groups.map((group) => (
+						<DateGroup
+							key={group.date}
+							group={group}
+							currentSessionId={currentSessionId}
+							activeSessionId={activeSessionId}
+							onSessionSelect={onSessionSelect}
+							onDeleteSession={onDeleteSession}
+							onRenameSession={onRenameSession}
+						/>
+					))
 				)}
 			</Box>
 

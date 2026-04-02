@@ -45,6 +45,7 @@ import {
 import { useDebouncedSave } from "@/hooks/useDebouncedSave";
 import { useSymbolOptions } from "@/hooks/useSymbolOptions";
 import { useMarketStore } from "@/store/marketStore";
+import { usePageVisibility } from "@/utils/animations/hooks";
 import { spring, tabSwitch } from "@/utils/animations/variants";
 import { TIMEFRAMES } from "@/utils/constants";
 import { getErrorMessage } from "@/utils/errors";
@@ -72,6 +73,7 @@ function TradingPage() {
 	const addToWatchlist = useMarketStore((state) => state.addToWatchlist);
 
 	const queryClient = useQueryClient();
+	const isPageVisible = usePageVisibility();
 
 	const [bottomTab, setBottomTab] = useState(0);
 	const [showAddSymbol, setShowAddSymbol] = useState(false);
@@ -148,19 +150,19 @@ function TradingPage() {
 
 	const tickerQuery = useQuery({
 		...marketTickerQueryOptions(selectedSymbol),
-		refetchInterval: 15_000,
+		refetchInterval: isPageVisible ? 15_000 : false,
 		retry: 1,
 	});
 
 	const overviewQuery = useQuery({
 		...marketOverviewQueryOptions(),
-		refetchInterval: 120_000,
+		refetchInterval: isPageVisible ? 120_000 : false,
 		retry: 1,
 	});
 
 	const accountQuery = useQuery({
 		...marketAccountQueryOptions(),
-		refetchInterval: 60_000,
+		refetchInterval: isPageVisible ? 60_000 : false,
 		retry: 1,
 	});
 
@@ -169,7 +171,7 @@ function TradingPage() {
 		queryFn: () =>
 			ordersApi.getOkxOrderHistory({ symbol: selectedSymbol, limit: 20 }),
 		staleTime: 15_000,
-		refetchInterval: 20_000,
+		refetchInterval: isPageVisible && bottomTab === 2 ? 20_000 : false,
 		retry: 1,
 	});
 
@@ -190,7 +192,7 @@ function TradingPage() {
 	const isPositive = (resolvedTicker?.priceChangePercent ?? 0) >= 0;
 
 	return (
-		<PageTransition pageKey="trading">
+		<PageTransition pageKey="trading" heavy>
 			<Box>
 				<SectionHeader
 					title="Market Monitor"

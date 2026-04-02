@@ -1,6 +1,7 @@
 """Agent session management endpoints for chat history persistence."""
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -123,6 +124,28 @@ def session_to_response(session: AgentSession) -> SessionResponse:
     )
 
 
+def session_summary_to_response(session: dict[str, Any]) -> SessionResponse:
+    started_at = session["started_at"]
+    generated_title = f"Session {started_at.strftime('%Y-%m-%d %H:%M')}"
+
+    return SessionResponse(
+        id=str(session["_id"]),
+        title=session.get("title") or generated_title,
+        description=session.get("description"),
+        is_active=session.get("is_active", True),
+        total_messages=session.get("total_messages", 0),
+        user_messages=session.get("user_messages", 0),
+        assistant_messages=session.get("assistant_messages", 0),
+        decisions_made=session.get("decisions_made", 0),
+        trades_executed=session.get("trades_executed", 0),
+        total_tokens=session.get("total_tokens", 0),
+        symbols_discussed=session.get("symbols_discussed", []),
+        started_at=started_at,
+        ended_at=session.get("ended_at"),
+        last_message_at=session.get("last_message_at"),
+    )
+
+
 def message_to_response(message: SessionMessage | dict) -> MessageResponse:
     if isinstance(message, SessionMessage):
         return MessageResponse(
@@ -227,24 +250,43 @@ async def list_sessions_grouped(
     current_user: User = Depends(get_current_active_user),
 ) -> dict:
     """List sessions grouped by date for sidebar display."""
-    sessions = (
-        await AgentSession.find(AgentSession.user_id == current_user.id)
-        .sort("-last_message_at", "-started_at")
-        .limit(limit)
-        .to_list()
-    )
+    collection = AgentSession.get_pymongo_collection()
+    sessions = await collection.aggregate(
+        [
+            {"$match": {"user_id": current_user.id}},
+            {"$sort": {"last_message_at": -1, "started_at": -1}},
+            {"$limit": limit},
+            {
+                "$project": {
+                    "title": 1,
+                    "description": 1,
+                    "is_active": 1,
+                    "total_messages": 1,
+                    "user_messages": 1,
+                    "assistant_messages": 1,
+                    "decisions_made": 1,
+                    "trades_executed": 1,
+                    "total_tokens": 1,
+                    "symbols_discussed": 1,
+                    "started_at": 1,
+                    "ended_at": 1,
+                    "last_message_at": 1,
+                }
+            },
+        ]
+    ).to_list(length=limit)
 
     # Group by date
     groups_dict: dict[str, dict] = {}
     for session in sessions:
         # Use last_message_at or started_at for grouping
-        group_time = session.last_message_at or session.started_at
+        group_time = session.get("last_message_at") or session["started_at"]
         date_str, label = get_date_label(group_time)
 
         if date_str not in groups_dict:
             groups_dict[date_str] = {"date": date_str, "label": label, "sessions": []}
 
-        groups_dict[date_str]["sessions"].append(session_to_response(session))
+        groups_dict[date_str]["sessions"].append(session_summary_to_response(session))
 
     sorted_groups = sorted(groups_dict.values(), key=lambda g: g["date"], reverse=True)
 

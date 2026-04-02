@@ -19,7 +19,7 @@ import { useEffect, useRef, useState } from "react";
 import { MeshBlobs } from "@/components/effects/MeshBlobs";
 import { ParticleGrid } from "@/components/effects/ParticleGrid";
 import { useUIStore } from "@/store/uiStore";
-import { useReducedMotion } from "@/utils/animations/hooks";
+import { useMotionTier, useReducedMotion } from "@/utils/animations/hooks";
 import {
 	markNavEnd,
 	reportNavDuration,
@@ -42,8 +42,17 @@ export function AppShell({ children }: AppShellProps) {
 	});
 	const contentRef = useRef<HTMLDivElement>(null);
 	const [showParticleGrid, setShowParticleGrid] = useState(false);
+	const [showDelayedMeshBlobs, setShowDelayedMeshBlobs] = useState(false);
 	const isAuthPage = currentPath.startsWith("/auth/");
 	const isAgentPage = currentPath.startsWith("/agent");
+	const isHeavyRoute =
+		currentPath === "/" ||
+		currentPath === "/agent" ||
+		currentPath === "/trading" ||
+		currentPath === "/orders" ||
+		currentPath === "/news";
+	const motionTier = useMotionTier({ heavyRoute: isHeavyRoute });
+	const showLayout = !isAuthPage;
 
 	useEffect(() => {
 		const durationMs = markNavEnd(currentPath);
@@ -58,7 +67,7 @@ export function AppShell({ children }: AppShellProps) {
 	}, [currentPath]);
 
 	useEffect(() => {
-		if (isMobile || !effectsEnabled) {
+		if (isMobile || !effectsEnabled || motionTier !== "full") {
 			setShowParticleGrid(false);
 			return;
 		}
@@ -70,11 +79,37 @@ export function AppShell({ children }: AppShellProps) {
 		return () => {
 			window.cancelAnimationFrame(frameId);
 		};
-	}, [effectsEnabled, isMobile]);
+	}, [effectsEnabled, isMobile, motionTier]);
 
-	const showLayout = !isAuthPage;
+	useEffect(() => {
+		if (
+			isMobile ||
+			!showLayout ||
+			!effectsEnabled ||
+			!isHeavyRoute ||
+			motionTier !== "reduced"
+		) {
+			setShowDelayedMeshBlobs(false);
+			return;
+		}
 
-	const showEffects = showLayout && effectsEnabled;
+		setShowDelayedMeshBlobs(false);
+		const timeoutId = window.setTimeout(() => {
+			setShowDelayedMeshBlobs(true);
+		}, 1200);
+
+		return () => {
+			window.clearTimeout(timeoutId);
+		};
+	}, [effectsEnabled, isHeavyRoute, isMobile, motionTier, showLayout]);
+
+	const showFullEffects = showLayout && effectsEnabled && motionTier === "full";
+	const showHeavyRouteEffects =
+		showLayout &&
+		effectsEnabled &&
+		isHeavyRoute &&
+		motionTier === "reduced" &&
+		showDelayedMeshBlobs;
 
 	return (
 		<Box
@@ -85,7 +120,7 @@ export function AppShell({ children }: AppShellProps) {
 			}}
 		>
 			{/* Background Effects Layer */}
-			{showEffects && (
+			{showFullEffects && (
 				<>
 					<MeshBlobs />
 					{showParticleGrid && (
@@ -93,6 +128,7 @@ export function AppShell({ children }: AppShellProps) {
 					)}
 				</>
 			)}
+			{showHeavyRouteEffects && <MeshBlobs />}
 
 			{/* Header - only show when authenticated */}
 			{showLayout && <Header />}
