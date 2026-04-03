@@ -50,7 +50,7 @@ jobs:
         with:
           workspaces: frontend/src-tauri -> target
 
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v7
         if: runner.os == 'Windows'
         with:
           enable-cache: true
