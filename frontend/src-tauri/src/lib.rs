@@ -1,4 +1,5 @@
 use std::{
+    env,
     fs,
     path::PathBuf,
     sync::Mutex,
@@ -8,6 +9,7 @@ use std::{
 use reqwest::blocking::Client;
 use serde_json::{json, Value};
 use tauri::{
+    path::BaseDirectory,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, Position, RunEvent, Size,
@@ -49,6 +51,13 @@ const BACKEND_SHUTDOWN_POLL_INTERVAL_MS: u64 = 100;
 const WINDOW_STATE_PERSIST_DEBOUNCE_MS: u64 = 500;
 
 const WINDOW_STATE_FILE_NAME: &str = "window-state.json";
+const APP_ENV_FILE_NAME: &str = ".env";
+const BACKEND_RUNTIME_DIR: &str = "trading-agent-backend";
+#[cfg(target_os = "windows")]
+const BACKEND_RUNTIME_EXE: &str = "trading-agent-backend.exe";
+#[cfg(not(target_os = "windows"))]
+const BACKEND_RUNTIME_EXE: &str = "trading-agent-backend";
+const BACKEND_ENV_TEMPLATE_NAME: &str = ".env.example";
 
 // ---------------------------------------------------------------------------
 // Windows Job Object — auto-kill backend when this process dies
@@ -130,6 +139,8 @@ struct BackendState {
     child: Mutex<Option<CommandChild>>,
     terminated: Mutex<bool>,
     shutdown_in_progress: Mutex<bool>,
+    #[cfg(target_os = "windows")]
+    job_guard: Mutex<Option<win_job::JobGuard>>,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -244,12 +255,113 @@ fn frontend_log(level: String, message: String) {
     }
 }
 
-fn backend_command(project_root: &std::path::Path) -> (PathBuf, Vec<String>) {
-    // Signal to config.py that we're running inside Tauri (production DB name)
-    std::env::set_var("TAURI_APP", "1");
-    // Ensure run.py uses the correct port
-    std::env::set_var("BACKEND_PORT", backend_port().to_string());
+struct BackendCommand {
+    path: PathBuf,
+    args: Vec<String>,
+    cwd: PathBuf,
+    envs: Vec<(String, String)>,
+}
 
+fn project_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .unwrap_or_else(|_| std::env::current_dir().unwrap())
+}
+
+fn app_config_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir)
+}
+
+fn app_env_file_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(app_config_dir(app)?.join(APP_ENV_FILE_NAME))
+}
+
+fn bundled_backend_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let resource_dir = app
+        .path()
+        .resolve(BACKEND_RUNTIME_DIR, BaseDirectory::Resource)
+        .map_err(|e| format!("Cannot resolve bundled backend runtime: {e}"))?;
+    if resource_dir.exists() {
+        return Ok(resource_dir);
+    }
+
+    let executable_dir = env::current_exe()
+        .map_err(|e| format!("Cannot resolve desktop executable path: {e}"))?
+        .parent()
+        .map(PathBuf::from)
+        .ok_or_else(|| "Desktop executable path has no parent directory".to_string())?;
+    let sibling_dir = executable_dir.join(BACKEND_RUNTIME_DIR);
+    if sibling_dir.exists() {
+        return Ok(sibling_dir);
+    }
+
+    Err(format!(
+        "Bundled backend runtime not found at {} or {}",
+        resource_dir.display(),
+        sibling_dir.display()
+    ))
+}
+
+fn ensure_packaged_env_file(
+    app: &AppHandle,
+    bundled_backend_dir: &std::path::Path,
+) -> Result<PathBuf, String> {
+    let env_file = app_env_file_path(app)?;
+    if env_file.exists() {
+        return Ok(env_file);
+    }
+
+    let template_path = bundled_backend_dir.join(BACKEND_ENV_TEMPLATE_NAME);
+    let template = fs::read_to_string(&template_path).map_err(|e| {
+        format!(
+            "Cannot read bundled backend config template {}: {e}",
+            template_path.display()
+        )
+    })?;
+    fs::write(&env_file, template).map_err(|e| {
+        format!(
+            "Cannot seed desktop config file {}: {e}",
+            env_file.display()
+        )
+    })?;
+
+    Ok(env_file)
+}
+
+fn backend_command(app: &AppHandle) -> Result<BackendCommand, String> {
+    let mut envs = vec![
+        ("TAURI_APP".to_string(), "1".to_string()),
+        ("BACKEND_PORT".to_string(), backend_port().to_string()),
+    ];
+
+    if !cfg!(debug_assertions) {
+        let bundled_dir = bundled_backend_dir(app)?;
+        let env_file = ensure_packaged_env_file(app, &bundled_dir)?;
+        let executable = bundled_dir.join(BACKEND_RUNTIME_EXE);
+        if !executable.exists() {
+            return Err(format!(
+                "Bundled backend executable not found at {}",
+                executable.display()
+            ));
+        }
+
+        envs.push((
+            "APP_ENV_FILE".to_string(),
+            env_file.display().to_string(),
+        ));
+
+        return Ok(BackendCommand {
+            path: executable,
+            args: vec![],
+            cwd: app_config_dir(app)?,
+            envs,
+        });
+    }
+
+    let project_root = project_root();
     let python_path = if cfg!(target_os = "windows") {
         project_root
             .join(".venv")
@@ -268,18 +380,102 @@ fn backend_command(project_root: &std::path::Path) -> (PathBuf, Vec<String>) {
     };
 
     if python_path.exists() {
-        return (python_path, vec!["run.py".to_string(), mode.to_string()]);
+        return Ok(BackendCommand {
+            path: python_path,
+            args: vec!["run.py".to_string(), mode.to_string()],
+            cwd: project_root,
+            envs,
+        });
     }
 
-    (
-        PathBuf::from("uv"),
-        vec![
+    Ok(BackendCommand {
+        path: PathBuf::from("uv"),
+        args: vec![
             "run".to_string(),
             "python".to_string(),
             "run.py".to_string(),
             mode.to_string(),
         ],
-    )
+        cwd: project_root,
+        envs,
+    })
+}
+
+fn spawn_backend_once(app_handle: &AppHandle) -> Result<(), String> {
+    let launch = backend_command(app_handle)?;
+    let mut command = app_handle
+        .shell()
+        .command(&launch.path)
+        .args(&launch.args)
+        .current_dir(&launch.cwd);
+
+    for (key, value) in &launch.envs {
+        command = command.env(key, value);
+    }
+
+    let (mut rx, child) = command
+        .spawn()
+        .map_err(|e| format!("Failed to spawn backend process: {e}"))?;
+    let pid = child.pid();
+
+    if let Ok(mut guard) = app_handle.state::<BackendState>().terminated.lock() {
+        *guard = false;
+    }
+
+    let handle = app_handle.clone();
+    tauri::async_runtime::spawn(async move {
+        while let Some(event) = rx.recv().await {
+            match event {
+                CommandEvent::Stdout(bytes) => {
+                    log_backend_output(log::Level::Info, &bytes);
+                }
+                CommandEvent::Stderr(bytes) => {
+                    log_backend_output(log::Level::Warn, &bytes);
+                }
+                CommandEvent::Error(message) => {
+                    log::error!("[backend] {message}");
+                }
+                CommandEvent::Terminated(payload) => {
+                    log::info!(
+                        "[backend] process exited with code {:?} and signal {:?}",
+                        payload.code,
+                        payload.signal
+                    );
+                    if let Ok(mut guard) = handle.state::<BackendState>().terminated.lock() {
+                        *guard = true;
+                    }
+                }
+                _ => {}
+            }
+        }
+    });
+
+    #[cfg(target_os = "windows")]
+    if let Some(guard) = win_job::assign_child_to_job(pid) {
+        *app_handle.state::<BackendState>().job_guard.lock().unwrap() = Some(guard);
+    }
+
+    *app_handle.state::<BackendState>().child.lock().unwrap() = Some(child);
+    log::info!(
+        "Backend process spawned (PID {pid}) from {} with cwd {}",
+        launch.path.display(),
+        launch.cwd.display()
+    );
+
+    let health_handle = app_handle.clone();
+    std::thread::spawn(move || {
+        if wait_for_backend_ready() {
+            log::info!("Backend is healthy and ready");
+        } else {
+            log::warn!(
+                "Backend did not become healthy within {}ms",
+                env_u64("BACKEND_STARTUP_TIMEOUT_MS", BACKEND_STARTUP_TIMEOUT_MS)
+            );
+            let _ = health_handle.emit("backend-health-timeout", ());
+        }
+    });
+
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -323,87 +519,13 @@ fn wait_for_backend_ready() -> bool {
 // ---------------------------------------------------------------------------
 
 fn spawn_backend(app: &tauri::App) {
-    let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap_or_else(|_| std::env::current_dir().unwrap());
-
     let max_retries = BACKEND_SPAWN_MAX_RETRIES;
+    let app_handle = app.handle().clone();
 
     for attempt in 1..=max_retries {
-        let (command_path, command_args) = backend_command(&project_root);
-
-        match app
-            .shell()
-            .command(&command_path)
-            .args(&command_args)
-            .current_dir(&project_root)
-            .spawn()
-        {
-            Ok((mut rx, child)) => {
-                let pid = child.pid();
-
-                // Track termination state for graceful shutdown
-                if let Ok(mut guard) = app.state::<BackendState>().terminated.lock() {
-                    *guard = false;
-                }
-
-                let app_handle = app.handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    while let Some(event) = rx.recv().await {
-                        match event {
-                            CommandEvent::Stdout(bytes) => {
-                                log_backend_output(log::Level::Info, &bytes);
-                            }
-                            CommandEvent::Stderr(bytes) => {
-                                log_backend_output(log::Level::Warn, &bytes);
-                            }
-                            CommandEvent::Error(message) => {
-                                log::error!("[backend] {message}");
-                            }
-                            CommandEvent::Terminated(payload) => {
-                                log::info!(
-                                    "[backend] process exited with code {:?} and signal {:?}",
-                                    payload.code,
-                                    payload.signal
-                                );
-                                if let Ok(mut guard) =
-                                    app_handle.state::<BackendState>().terminated.lock()
-                                {
-                                    *guard = true;
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                });
-
-                #[cfg(target_os = "windows")]
-                if let Some(guard) = win_job::assign_child_to_job(pid) {
-                    app.manage(guard);
-                }
-
-                *app.state::<BackendState>().child.lock().unwrap() = Some(child);
-                log::info!(
-                    "Backend process spawned (PID {pid}, attempt {attempt}) from {:?}",
-                    project_root
-                );
-
-                // Wait for backend to become healthy
-                let app_handle = app.handle().clone();
-                std::thread::spawn(move || {
-                    if wait_for_backend_ready() {
-                        log::info!("Backend is healthy and ready");
-                    } else {
-                        log::warn!(
-                            "Backend did not become healthy within {}ms",
-                            env_u64("BACKEND_STARTUP_TIMEOUT_MS", BACKEND_STARTUP_TIMEOUT_MS)
-                        );
-                        // Emit event so frontend can show a warning
-                        let _ = app_handle.emit("backend-health-timeout", ());
-                    }
-                });
-
+        match spawn_backend_once(&app_handle) {
+            Ok(()) => {
+                log::info!("Backend startup succeeded on attempt {attempt}");
                 return;
             }
             Err(e) => {
@@ -505,6 +627,7 @@ fn force_kill_backend_processes(tracked_pid: Option<u32>) {
         &["/F", "/T", "/FI", "WINDOWTITLE eq run.py*"],
         "run-py-filter",
     );
+    run_taskkill(&["/F", "/T", "/IM", BACKEND_RUNTIME_EXE], "sidecar-image-name");
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -618,67 +741,8 @@ fn restart_backend(app: &AppHandle) {
     // don't have here, so we replicate the core spawn logic).
     let app_handle = app.clone();
     std::thread::spawn(move || {
-        let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .canonicalize()
-            .unwrap_or_else(|_| std::env::current_dir().unwrap());
-
-        let (command_path, command_args) = backend_command(&project_root);
-
-        match app_handle
-            .shell()
-            .command(&command_path)
-            .args(&command_args)
-            .current_dir(&project_root)
-            .spawn()
-        {
-            Ok((mut rx, child)) => {
-                let pid = child.pid();
-
-                if let Ok(mut guard) = app_handle.state::<BackendState>().terminated.lock() {
-                    *guard = false;
-                }
-
-                let ah = app_handle.clone();
-                tauri::async_runtime::spawn(async move {
-                    while let Some(event) = rx.recv().await {
-                        match event {
-                            CommandEvent::Stdout(bytes) => {
-                                log_backend_output(log::Level::Info, &bytes);
-                            }
-                            CommandEvent::Stderr(bytes) => {
-                                log_backend_output(log::Level::Warn, &bytes);
-                            }
-                            CommandEvent::Error(message) => {
-                                log::error!("[backend] {message}");
-                            }
-                            CommandEvent::Terminated(payload) => {
-                                log::info!(
-                                    "[backend] process exited with code {:?} and signal {:?}",
-                                    payload.code,
-                                    payload.signal
-                                );
-                                if let Ok(mut guard) = ah.state::<BackendState>().terminated.lock()
-                                {
-                                    *guard = true;
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                });
-
-                #[cfg(target_os = "windows")]
-                if let Some(guard) = win_job::assign_child_to_job(pid) {
-                    app_handle.manage(guard);
-                }
-
-                *app_handle.state::<BackendState>().child.lock().unwrap() = Some(child);
-                log::info!("Backend process restarted (PID {pid})");
-            }
-            Err(e) => {
-                log::error!("Failed to restart backend: {e}");
-            }
+        if let Err(e) = spawn_backend_once(&app_handle) {
+            log::error!("Failed to restart backend: {e}");
         }
     });
 }
@@ -715,8 +779,7 @@ fn run_task(_app: &AppHandle) {
 // ---------------------------------------------------------------------------
 
 fn window_state_file_path(app: &AppHandle) -> Result<PathBuf, String> {
-    let mut dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let mut dir = app_config_dir(app)?;
     dir.push(WINDOW_STATE_FILE_NAME);
     Ok(dir)
 }
@@ -973,6 +1036,8 @@ pub fn run() {
             child: Mutex::new(None),
             terminated: Mutex::new(false),
             shutdown_in_progress: Mutex::new(false),
+            #[cfg(target_os = "windows")]
+            job_guard: Mutex::new(None),
         })
         .manage(WindowStateCache::default())
         .setup(|app| {

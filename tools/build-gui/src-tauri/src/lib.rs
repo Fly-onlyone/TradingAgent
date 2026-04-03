@@ -28,6 +28,7 @@ pub struct BuildOptions {
     pub release: bool,
     pub wix_installer: bool,
     pub strip_symbols: bool,
+    pub force_sidecar: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -270,6 +271,13 @@ async fn start_build(app: AppHandle, options: BuildOptions) -> Result<(), String
         env_vars.push((
             "CARGO_PROFILE_RELEASE_STRIP".to_string(),
             "symbols".to_string(),
+        ));
+    }
+
+    if options.force_sidecar {
+        env_vars.push((
+            "BUILD_BACKEND_SIDECAR_FORCE".to_string(),
+            "1".to_string(),
         ));
     }
 

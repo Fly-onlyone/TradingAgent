@@ -70,6 +70,7 @@ export default function App() {
         release: true,
         wixInstaller: true,
         stripSymbols: true,
+        forceSidecar: false,
         autoRunInstaller: false,
     });
 
@@ -427,7 +428,18 @@ export default function App() {
                         />
                         <span className="option-label">Keep debug info</span>
                     </label>
-                    <label className="option-item full-width">
+                    <label className="option-item">
+                        <input
+                            type="checkbox"
+                            checked={options.forceSidecar}
+                            onChange={(e) =>
+                                setOptions((o) => ({...o, forceSidecar: e.target.checked}))
+                            }
+                            disabled={isBuilding}
+                        />
+                        <span className="option-label">Force sidecar rebuild</span>
+                    </label>
+                    <label className="option-item">
                         <input
                             type="checkbox"
                             checked={options.autoRunInstaller}

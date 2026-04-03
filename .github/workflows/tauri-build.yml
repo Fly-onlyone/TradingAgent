@@ -50,6 +50,16 @@ jobs:
         with:
           workspaces: frontend/src-tauri -> target
 
+      - uses: astral-sh/setup-uv@v4
+        if: runner.os == 'Windows'
+        with:
+          enable-cache: true
+
+      - uses: actions/setup-python@v5
+        if: runner.os == 'Windows'
+        with:
+          python-version: "3.11"
+
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
@@ -66,6 +76,7 @@ jobs:
           name: tauri-${{ matrix.os }}
           path: |
             frontend/src-tauri/target/release/bundle/**/*.msi
+            frontend/src-tauri/target/release/bundle/**/*.exe
             frontend/src-tauri/target/release/bundle/**/*.dmg
             frontend/src-tauri/target/release/bundle/**/*.AppImage
             frontend/src-tauri/target/release/bundle/**/*.deb

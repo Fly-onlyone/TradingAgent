@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 import re
 import sys
 from collections.abc import AsyncGenerator
@@ -163,6 +164,14 @@ elif settings.debug:
         "http://127.0.0.1:3000",
         "https://tauri.localhost",
         "http://tauri.localhost",
+    ]
+elif os.environ.get("TAURI_APP"):
+    _backend_port = os.environ.get("BACKEND_PORT", "7000")
+    _cors_origins = [
+        "https://tauri.localhost",
+        "http://tauri.localhost",
+        f"http://localhost:{_backend_port}",
+        f"http://127.0.0.1:{_backend_port}",
     ]
 else:
     _cors_origins = []

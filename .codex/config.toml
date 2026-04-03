@@ -15,3 +15,6 @@ approval_mode = "approve"
 
 [mcp_servers.pycharm.tools.reformat_file]
 approval_mode = "approve"
+
+[mcp_servers.pycharm.tools.get_run_configurations]
+approval_mode = "approve"

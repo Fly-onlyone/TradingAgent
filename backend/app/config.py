@@ -4,9 +4,12 @@ import os
 import secrets
 import warnings
 from functools import lru_cache
+from typing import Any, cast
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+APP_ENV_FILE_ENV_VAR = "APP_ENV_FILE"
 
 
 def _default_db_name() -> str:
@@ -92,17 +95,23 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _validate_security(self) -> "Settings":
         if not self.secret_key or self.secret_key == "change-me-in-production":
-            if not self.debug:
+            if os.environ.get("TAURI_APP"):
+                # Desktop app: generate a key and persist it so subsequent
+                # startups reuse the same value (stable JWT signatures).
+                self.secret_key = secrets.token_urlsafe(48)
+                self._persist_generated_secret_key()
+            elif not self.debug:
                 raise ValueError(
                     "SECRET_KEY is required and must not use placeholder values in non-debug mode. "
                     "Set a strong SECRET_KEY in your .env file before running in production."
                 )
-            self.secret_key = secrets.token_urlsafe(48)
-            warnings.warn(
-                "SECRET_KEY was missing in debug mode; generated an ephemeral in-memory key.",
-                UserWarning,
-                stacklevel=2,
-            )
+            else:
+                self.secret_key = secrets.token_urlsafe(48)
+                warnings.warn(
+                    "SECRET_KEY was missing in debug mode; generated an ephemeral in-memory key.",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
         if not self.debug and "localhost" in self.mongodb_url and "@" not in self.mongodb_url:
             warnings.warn(
@@ -122,6 +131,34 @@ class Settings(BaseSettings):
 
         return self
 
+    def _persist_generated_secret_key(self) -> None:
+        """Write the auto-generated SECRET_KEY back to the desktop .env file."""
+        env_path = os.environ.get(APP_ENV_FILE_ENV_VAR)
+        if not env_path:
+            return
+        try:
+            content = ""
+            if os.path.exists(env_path):
+                with open(env_path, encoding="utf-8") as f:
+                    content = f.read()
+
+            # Replace existing placeholder or empty SECRET_KEY line
+            import re
+
+            if re.search(r"(?m)^SECRET_KEY\s*=", content):
+                content = re.sub(
+                    r"(?m)^SECRET_KEY\s*=.*$",
+                    f"SECRET_KEY={self.secret_key}",
+                    content,
+                )
+            else:
+                content += f"\nSECRET_KEY={self.secret_key}\n"
+
+            with open(env_path, "w", encoding="utf-8") as f:
+                f.write(content)
+        except OSError:
+            pass  # Non-fatal: key is still valid in memory for this session
+
     @property
     def okx_base_url(self) -> str:
         """Get OKX API base URL based on sandbox mode."""
@@ -138,4 +175,8 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     """Get cached settings instance."""
-    return Settings()
+    env_file = os.environ.get(APP_ENV_FILE_ENV_VAR)
+    settings_class = cast(Any, Settings)
+    if env_file:
+        return settings_class(_env_file=env_file, _env_file_encoding="utf-8")
+    return settings_class()

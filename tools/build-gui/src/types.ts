@@ -2,6 +2,7 @@ export interface BuildOptions {
     release: boolean;
     wixInstaller: boolean;
     stripSymbols: boolean;
+    forceSidecar: boolean;
     autoRunInstaller: boolean;
 }
 
