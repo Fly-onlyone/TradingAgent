@@ -15,6 +15,7 @@ monitoring.
 - [Architecture](#architecture)
 - [Agent Chat](#agent-chat)
   - [Agent Tools](#agent-tools)
+  - [Agent Access](#agent-access)
 - [Knowledge Base (RAG)](#knowledge-base-rag)
   - [Knowledge Types](#knowledge-types)
   - [Auto-Generated Knowledge](#auto-generated-knowledge)
@@ -28,6 +29,7 @@ monitoring.
   - [Risk & Safeguards](#risk--safeguards)
 - [Production Checklist](#production-checklist)
 - [Deployment](#deployment)
+- [CI/CD](#cicd)
 - [Troubleshooting](#troubleshooting)
 - [API Overview](#api-overview)
 
@@ -44,6 +46,9 @@ monitoring.
 - **Knowledge Base (RAG)** — Semantic search over trading strategies, lessons from past trades, and discovered patterns
 - **News & Sentiment** — Aggregated market news with credibility-weighted sentiment scoring
 - **Price Monitoring** — Condition-based alerts (price thresholds, RSI, volume spikes) with cooldowns
+- **Multi-Channel Notifications** — Alerts via 80+ channels (Telegram, Discord, Slack, email, webhooks) powered by Apprise
+- **Strategy Ratings** — Rate and review strategies with aggregate scoring and confidence metrics
+- **Two-Factor Auth** — Optional TOTP-based 2FA with QR code provisioning
 - **Desktop & Web** — Runs as a web app or native desktop app via Tauri v2
 
 ## Tech Stack
@@ -89,7 +94,7 @@ Open http://localhost:3000 in your browser.
 
 ## Getting Started
 
-1. **Register** at `/auth/register` with email and password
+1. **Register** at `/auth/register` with email and password. If email delivery is configured (`EMAIL_URL`), you'll receive a verification email
 2. **Log in** at `/auth/login` — you'll receive a JWT token (auto-managed by the frontend)
 3. **Set superuser** — the first user is _not_ automatically a superuser. Set `is_superuser: true` on your user document in MongoDB manually, or use the dev mode below
 4. **Configure exchange** (superuser) — go to Settings and enter your OKX API credentials. Toggle sandbox mode for paper trading
@@ -97,9 +102,9 @@ Open http://localhost:3000 in your browser.
 
 **Dev mode:** When `DEBUG=true`, the app uses a pre-authenticated superuser (`dev@localhost.dev`) with no login required.
 
-**Superuser-only features:** OKX credentials, agent configuration, token expiry, embedding settings, admin logs, database explorer.
+**Superuser-only features:** OKX credentials, agent configuration, token expiry, embedding settings, admin logs, database explorer, database backup.
 
-**Auth details:** JWT with HS256, configurable expiry (`ACCESS_TOKEN_EXPIRE_MINUTES`), transparent refresh on 401, and token revocation on password change (all tokens issued before the change are invalidated).
+**Auth details:** JWT with HS256, configurable expiry (`ACCESS_TOKEN_EXPIRE_MINUTES`), transparent refresh on 401, token revocation on password change (all tokens issued before the change are invalidated), and optional TOTP two-factor authentication.
 
 ## Development
 
@@ -157,7 +162,7 @@ Trading agent (Claude SDK)
   ├── FundamentalAnalyst  — on-chain metrics, tokenomics, macro
   ├── NewsAnalyst         — sentiment, credibility-weighted signals
   ├── RiskManager         — position sizing, drawdown limits
-  └── OrderExecutor       — OKX exchange execution with idempotency
+  └── OrderExecutor       — OKX spot execution with idempotency
   ↕
 External: OKX Exchange │ News APIs │ Local Embeddings (nomic) │ MongoDB
 ```
@@ -199,6 +204,36 @@ Historical Context → search knowledge base for past strategies, lessons, patte
 | Trading            | `get_account_balance`, `get_open_orders`, `place_order`, `cancel_order` |
 | Web Search         | `search_web`, `search_news`                                    |
 | Output             | `submit_recommendation`, `modify_task`                         |
+
+### Agent Access
+
+Summary of what the agent can **read**, **modify**, and **not access**.
+
+| Resource | Access | Details |
+|----------|--------|---------|
+| Market data (OKX) | Read | Ticker, orderbook, candlesticks (1m–1D) |
+| Technical analysis | Read | RSI, MACD, Bollinger Bands, chart patterns, price action (calculated from candles) |
+| Fundamentals | Read | On-chain metrics, tokenomics, TVL (CoinGecko + DefiLlama), macro indicators |
+| News & web search | Read | Articles from DB with sentiment, Brave web/news search (cached 5 min) |
+| Knowledge base (RAG) | Read | Strategies, trade lessons, trading patterns via semantic search |
+| Account & positions | Read | Balance, equity, open orders from OKX |
+| Orders | **Modify** | Place market/limit orders, cancel open orders — **blocked when sandbox mode is on** |
+| User strategies | **Modify** | Toggle `is_active` only — cannot create or delete strategies |
+| Agent task config | **Modify** | 10 whitelisted fields: `symbols`, `risk_level`, `holding_term`, `max_position_size`, `max_daily_trades`, `monitoring_conditions`, `alert_cooldown_minutes`, `custom_instructions`, `schedules`, `use_subagents` — only when `task_modification_mode` is enabled |
+| Decisions | **Write** | Creates `AgentDecision` records with action, confidence, entry/SL/TP, reasoning, market snapshot |
+| App settings | Read | Model config, risk defaults, sandbox flag — cannot modify |
+| File system | None | No disk read/write access |
+| User accounts | None | Cannot create, delete, or modify users |
+| News sources | None | Cannot add, remove, or edit source configuration |
+| Knowledge base | None (direct) | Cannot directly write strategies/lessons/patterns — only auto-discovery populates these |
+
+**Guardrails:**
+
+- **Sandbox mode** — `OKX_SANDBOX=true` blocks all order placement and cancellation
+- **Position size cap** — order value limited to `max_position_size_pct` of total account equity
+- **Idempotency keys** — duplicate orders are rejected via unique index
+- **Max turns** — agent loop capped at 10 turns per execution to prevent runaway calls
+- **Task field whitelist** — enforced via `AGENT_MODIFIABLE_FIELDS` frozenset; all other fields are locked
 
 ## Knowledge Base (RAG)
 
@@ -354,6 +389,13 @@ Copy `.env.example` files and fill in production values. Never commit `.env` fil
 - Create a dedicated database user with minimal permissions
 - Set up automated backups
 
+## CI/CD
+
+| Workflow | Trigger | What it does |
+|----------|---------|--------------|
+| `ci.yml` | Push/PR to master | Ruff lint + format, pytest, Biome check, vitest, vite build |
+| `tauri-build.yml` | Version tags or manual | Multi-platform desktop builds (Windows .msi, macOS .dmg, Linux .AppImage) |
+
 ## Troubleshooting
 
 | Issue | Solution |
@@ -372,7 +414,7 @@ The backend serves a REST API at `http://localhost:7000`. Interactive docs are a
 
 | Prefix                | Description                    |
 |-----------------------|--------------------------------|
-| `/auth`               | Login, token refresh, password |
+| `/auth`               | Login, register, token refresh, password, 2FA, email verification |
 | `/api/v1/market`      | Tickers, indicators, candles   |
 | `/api/v1/orders`      | Order history and positions    |
 | `/api/v1/strategies`  | Strategy CRUD                  |
@@ -385,4 +427,6 @@ The backend serves a REST API at `http://localhost:7000`. Interactive docs are a
 | `/api/v1/notifications` | Alerts and confirmations     |
 | `/api/v1/settings`    | App configuration              |
 | `/api/v1/settings/strategy-discovery` | Auto-discovery config, run-now |
-| `/api/v1/admin`       | User management, logs (superuser) |
+| `/api/v1/users`       | User profile management        |
+| `/api/v1/strategies/ratings` | Strategy rating system  |
+| `/api/v1/admin`       | User management, logs, backup (superuser) |
