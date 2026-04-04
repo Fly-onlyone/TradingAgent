@@ -19,8 +19,8 @@ import {
 	Paper,
 	Typography,
 } from "@mui/material";
-import { AnimatePresence, motion } from "framer-motion";
-import { useMemo, useState } from "react";
+import { motion } from "framer-motion";
+import { useMemo } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { AgentMessage } from "@/api/websocket/useAgentSocket";
@@ -224,7 +224,6 @@ export function ChatMessage({
 	showThinkingContent = true,
 	isStreaming = false,
 }: ChatMessageProps) {
-	const [showReasoning, setShowReasoning] = useState(false);
 	const isUser = message.role === "user";
 	const isSystem = message.role === "system";
 	const hasThinking =
@@ -315,57 +314,27 @@ export function ChatMessage({
 					>
 						{/* Persistent thinking / reasoning block */}
 						{hasThinking && (
-							<Box sx={{ mb: 1.5 }}>
-								<Link
-									component="button"
-									variant="caption"
-									underline="hover"
-									onClick={() => setShowReasoning((v) => !v)}
+							<Box
+								sx={{
+									mb: 1.5,
+									p: 1.5,
+									maxHeight: 200,
+									overflow: "auto",
+									bgcolor: "action.hover",
+									borderRadius: 1,
+								}}
+							>
+								<Typography
+									variant="body2"
 									sx={{
+										whiteSpace: "pre-wrap",
 										color: "text.secondary",
-										cursor: "pointer",
+										fontSize: "0.8rem",
+										lineHeight: 1.6,
 									}}
 								>
-									{showReasoning ? "Hide reasoning" : "Show reasoning"}
-								</Link>
-
-								<AnimatePresence>
-									{showReasoning && (
-										<motion.div
-											initial={{ height: 0, opacity: 0 }}
-											animate={{
-												height: "auto",
-												opacity: 1,
-											}}
-											exit={{ height: 0, opacity: 0 }}
-											transition={{ duration: 0.2 }}
-											style={{ overflow: "hidden" }}
-										>
-											<Box
-												sx={{
-													mt: 1,
-													p: 1.5,
-													maxHeight: 200,
-													overflow: "auto",
-													bgcolor: "action.hover",
-													borderRadius: 1,
-												}}
-											>
-												<Typography
-													variant="body2"
-													sx={{
-														whiteSpace: "pre-wrap",
-														color: "text.secondary",
-														fontSize: "0.8rem",
-														lineHeight: 1.6,
-													}}
-												>
-													{message.thinkingContent}
-												</Typography>
-											</Box>
-										</motion.div>
-									)}
-								</AnimatePresence>
+									{message.thinkingContent}
+								</Typography>
 							</Box>
 						)}
 

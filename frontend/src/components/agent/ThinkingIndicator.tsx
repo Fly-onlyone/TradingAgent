@@ -11,13 +11,11 @@ import {
 	Avatar,
 	Box,
 	Chip,
-	Link,
 	Paper,
 	type Theme,
 	Typography,
 } from "@mui/material";
 import { AnimatePresence, motion } from "framer-motion";
-import { useState } from "react";
 import type { ToolCall } from "@/api/websocket/useAgentSocket";
 import { spring } from "@/utils/animations/variants";
 
@@ -55,8 +53,6 @@ export function ThinkingIndicator({
 	thinkingContent,
 	showThinkingContent = true,
 }: ThinkingIndicatorProps) {
-	const [showReasoning, setShowReasoning] = useState(false);
-
 	return (
 		<motion.div
 			initial={{ opacity: 0, y: 10 }}
@@ -150,51 +146,27 @@ export function ThinkingIndicator({
 
 						{/* Thinking / reasoning text */}
 						{thinkingContent && showThinkingContent && (
-							<Box sx={{ mb: toolCalls.length > 0 ? 1.5 : 0 }}>
-								<Link
-									component="button"
-									variant="caption"
-									underline="hover"
-									onClick={() => setShowReasoning((v) => !v)}
-									sx={{ color: "text.secondary", cursor: "pointer" }}
+							<Box
+								sx={{
+									mb: toolCalls.length > 0 ? 1.5 : 0,
+									p: 1.5,
+									maxHeight: 200,
+									overflow: "auto",
+									bgcolor: "action.hover",
+									borderRadius: 1,
+								}}
+							>
+								<Typography
+									variant="body2"
+									sx={{
+										whiteSpace: "pre-wrap",
+										color: "text.secondary",
+										fontSize: "0.8rem",
+										lineHeight: 1.6,
+									}}
 								>
-									{showReasoning ? "Hide reasoning" : "Show reasoning"}
-								</Link>
-
-								<AnimatePresence>
-									{showReasoning && (
-										<motion.div
-											initial={{ height: 0, opacity: 0 }}
-											animate={{ height: "auto", opacity: 1 }}
-											exit={{ height: 0, opacity: 0 }}
-											transition={{ duration: 0.2 }}
-											style={{ overflow: "hidden" }}
-										>
-											<Box
-												sx={{
-													mt: 1,
-													p: 1.5,
-													maxHeight: 200,
-													overflow: "auto",
-													bgcolor: "action.hover",
-													borderRadius: 1,
-												}}
-											>
-												<Typography
-													variant="body2"
-													sx={{
-														whiteSpace: "pre-wrap",
-														color: "text.secondary",
-														fontSize: "0.8rem",
-														lineHeight: 1.6,
-													}}
-												>
-													{thinkingContent}
-												</Typography>
-											</Box>
-										</motion.div>
-									)}
-								</AnimatePresence>
+									{thinkingContent}
+								</Typography>
 							</Box>
 						)}
 
