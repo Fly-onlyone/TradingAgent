@@ -45,6 +45,7 @@ class AgentTaskScheduler:
         self.scheduler = AsyncIOScheduler()
         self._running = False
         self._trading_agent = None  # Lazy load to avoid circular imports
+        self._running_tasks: dict[str, dict] = {}  # task_id -> progress dict
 
     def _get_trading_agent(self):
         """Lazy load trading agent to avoid circular imports."""
@@ -413,54 +414,80 @@ class AgentTaskScheduler:
 
     async def _execute_task(self, task_id: str) -> None:
         """Execute a scheduled task."""
+        if task_id in self._running_tasks:
+            logger.warning("Task %s is already running, skipping duplicate execution", task_id)
+            return
+
         logger.info(f"Executing task {task_id}")
+        self._running_tasks[task_id] = {"current_symbol": None, "completed": 0, "total": 0}
 
-        with sentry_sdk.start_transaction(op="task", name="agent-task-execution") as txn:
-            txn.set_tag("task_id", task_id)
-            try:
-                task = await AgentTask.get(PydanticObjectId(task_id))
-                if not task:
-                    logger.error(f"Task {task_id} not found")
-                    return
+        try:
+            with sentry_sdk.start_transaction(op="task", name="agent-task-execution") as txn:
+                txn.set_tag("task_id", task_id)
+                try:
+                    task = await AgentTask.get(PydanticObjectId(task_id))
+                    if not task:
+                        logger.error(f"Task {task_id} not found")
+                        return
 
-                if task.status != TaskStatus.ACTIVE:
-                    logger.info(f"Task {task_id} is not active, skipping")
-                    return
+                    if task.status != TaskStatus.ACTIVE:
+                        logger.info(f"Task {task_id} is not active, skipping")
+                        return
 
-                txn.set_tag("task_name", task.name)
-                txn.set_tag("trading_enabled", str(task.trading_enabled))
-                txn.set_tag("monitoring_enabled", str(task.monitoring_enabled))
+                    self._running_tasks[task_id]["total"] = len(task.symbols)
 
-                # Execute based on capability toggles (analysis is always the base)
-                if task.trading_enabled:
-                    await self._execute_trading_task(task)
-                else:
-                    await self._execute_analysis_task(task)
+                    txn.set_tag("task_name", task.name)
+                    txn.set_tag("trading_enabled", str(task.trading_enabled))
+                    txn.set_tag("monitoring_enabled", str(task.monitoring_enabled))
 
-                if task.monitoring_enabled:
-                    await self._execute_monitoring_task(task)
+                    # Execute based on capability toggles (analysis is always the base)
+                    if task.trading_enabled:
+                        await self._execute_trading_task(task)
+                    else:
+                        await self._execute_analysis_task(task)
 
-                # Mark as completed if all schedules are one-time
-                all_once = all(s.frequency == TaskFrequency.ONCE for s in task.schedules)
-                if all_once:
-                    task.complete()
+                    if task.monitoring_enabled:
+                        await self._execute_monitoring_task(task)
+
+                    # Mark as completed if all schedules are one-time
+                    all_once = all(s.frequency == TaskFrequency.ONCE for s in task.schedules)
+                    if all_once:
+                        task.complete()
+                        await task.save()
+                        self._remove_task_jobs(str(task.id))
+
+                    # Create completion notification
+                    try:
+                        notification = Notification(
+                            user_id=task.user_id,
+                            title=f"Task Completed: {task.name}",
+                            body=f"Analyzed {len(task.symbols)} symbol(s) successfully.",
+                            notification_type=NotificationType.TASK_COMPLETED,
+                            task_id=task.id,
+                        )
+                        await notification.insert()
+                    except Exception:
+                        logger.debug("Failed to create completion notification", exc_info=True)
+
+                except Exception as e:
+                    logger.error(f"Error executing task {task_id}: {e}")
+                    # Record failure
+                    task = await AgentTask.get(PydanticObjectId(task_id))
+                    if task:
+                        task.record_execution(success=False, error=str(e))
+                    await self._check_auto_pause(task)
                     await task.save()
-                    self._remove_task_jobs(str(task.id))
-
-            except Exception as e:
-                logger.error(f"Error executing task {task_id}: {e}")
-                # Record failure
-                task = await AgentTask.get(PydanticObjectId(task_id))
-                if task:
-                    task.record_execution(success=False, error=str(e))
-                await self._check_auto_pause(task)
-                await task.save()
+        finally:
+            self._running_tasks.pop(task_id, None)
 
     async def _execute_analysis_task(self, task: AgentTask) -> None:
         """Execute an analysis-only task."""
         agent = self._get_trading_agent()
+        task_id = str(task.id)
 
         for symbol in task.symbols:
+            if task_id in self._running_tasks:
+                self._running_tasks[task_id]["current_symbol"] = symbol
             try:
                 # Build prompt — optionally enriched with subagent results
                 subagent_context = None
@@ -508,20 +535,27 @@ class AgentTaskScheduler:
                 await task.save()
 
                 logger.info(f"Analysis completed for {symbol}")
+                if task_id in self._running_tasks:
+                    self._running_tasks[task_id]["completed"] += 1
 
             except Exception as e:
                 logger.error(f"Error analyzing {symbol}: {e}")
                 task.record_execution(success=False, error=str(e))
                 await self._check_auto_pause(task)
                 await task.save()
+                if task_id in self._running_tasks:
+                    self._running_tasks[task_id]["completed"] += 1
 
     async def _execute_trading_task(self, task: AgentTask) -> None:
         """Execute a trading task (analysis + potential trade)."""
         agent = self._get_trading_agent()
         risk_config = self._get_risk_config(task.risk_level)
         min_confidence = float(risk_config["min_confidence"])
+        task_id = str(task.id)
 
         for symbol in task.symbols:
+            if task_id in self._running_tasks:
+                self._running_tasks[task_id]["current_symbol"] = symbol
             try:
                 # Build prompt — optionally enriched with subagent results
                 subagent_context = None
@@ -632,12 +666,16 @@ class AgentTaskScheduler:
                 task.last_decision_id = decision.id
                 task.record_execution(success=True)
                 await task.save()
+                if task_id in self._running_tasks:
+                    self._running_tasks[task_id]["completed"] += 1
 
             except Exception as e:
                 logger.error(f"Error in trading task for {symbol}: {e}")
                 task.record_execution(success=False, error=str(e))
                 await self._check_auto_pause(task)
                 await task.save()
+                if task_id in self._running_tasks:
+                    self._running_tasks[task_id]["completed"] += 1
 
     async def _get_today_trade_count(self, task_id: PydanticObjectId) -> int:
         """Count today's executed trades for a task."""
@@ -1232,8 +1270,14 @@ Provide:
         logger.info(f"Unscheduled task {task_id}")
 
     async def run_task_now(self, task_id: str) -> None:
-        """Execute a task immediately."""
-        await self._execute_task(task_id)
+        """Fire-and-forget: schedule immediate execution as a background task."""
+        asyncio.create_task(self._execute_task(task_id))
+
+    def is_task_running(self, task_id: str) -> bool:
+        return task_id in self._running_tasks
+
+    def get_task_progress(self, task_id: str) -> dict | None:
+        return self._running_tasks.get(task_id)
 
     def get_status(self) -> dict[str, Any]:
         """Get scheduler status."""

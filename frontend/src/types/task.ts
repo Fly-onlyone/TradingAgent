@@ -72,6 +72,14 @@ export interface AgentTask {
 	failureCount: number;
 	lastError?: string;
 
+	// Running state
+	isRunning: boolean;
+	runningProgress?: {
+		currentSymbol: string | null;
+		completed: number;
+		total: number;
+	};
+
 	// Timestamps
 	createdAt: string;
 	updatedAt: string;

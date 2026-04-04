@@ -146,6 +146,10 @@ class TaskResponse(BaseModel):
     failure_count: int
     last_error: str | None
 
+    # Running state
+    is_running: bool = False
+    running_progress: dict | None = None
+
     # Timestamps
     created_at: datetime
     updated_at: datetime
@@ -187,8 +191,13 @@ class TaskExecutionListResponse(BaseModel):
 
 
 def task_to_response(task: AgentTask) -> TaskResponse:
+    from app.agent.task_scheduler import get_scheduler
+
+    scheduler = get_scheduler()
+    task_id = str(task.id)
+
     return TaskResponse(
-        id=str(task.id),
+        id=task_id,
         name=task.name,
         description=task.description,
         trading_enabled=task.trading_enabled,
@@ -229,6 +238,8 @@ def task_to_response(task: AgentTask) -> TaskResponse:
         success_count=task.success_count,
         failure_count=task.failure_count,
         last_error=task.last_error,
+        is_running=scheduler.is_task_running(task_id),
+        running_progress=scheduler.get_task_progress(task_id),
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -364,7 +375,7 @@ async def run_task_now_local(request: Request) -> dict:
 
     scheduler = get_scheduler()
     await scheduler.run_task_now(str(task.id))
-    return {"message": f"Task '{task.name}' started"}
+    return {"message": f"Task '{task.name}' started", "is_running": True}
 
 
 @router.get("/{task_id}", response_model=TaskResponse)
@@ -543,13 +554,12 @@ async def run_task_now(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    # Run the task
     from app.agent.task_scheduler import get_scheduler
 
     scheduler = get_scheduler()
     await scheduler.run_task_now(task_id)
 
-    return {"message": "Task execution started"}
+    return {"message": "Task execution started", "is_running": True}
 
 
 @router.get("/{task_id}/history", response_model=TaskExecutionListResponse)

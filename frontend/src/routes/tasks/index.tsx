@@ -5,7 +5,9 @@
 
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import AutoModeIcon from "@mui/icons-material/AutoMode";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
 import HistoryIcon from "@mui/icons-material/History";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import PauseIcon from "@mui/icons-material/Pause";
@@ -54,7 +56,7 @@ import { ZoomAwareSelect } from "@/components/common/ZoomAwareSelect";
 import { type Column, DataTable } from "@/components/data-display/DataTable";
 import { useDebouncedSave } from "@/hooks/useDebouncedSave";
 import { useSymbolOptions } from "@/hooks/useSymbolOptions";
-import { useUIStore } from "@/store/uiStore";
+import { notify, useUIStore } from "@/store/uiStore";
 import type {
 	AgentMode,
 	HoldingTerm,
@@ -117,11 +119,15 @@ function TaskConfigPage() {
 		string[]
 	>([]);
 	const [formData, setFormData] = useState<TaskCreate>({ ...DEFAULT_FORM });
+	const [manualRunning, setManualRunning] = useState(false);
+	const [historyExpanded, setHistoryExpanded] = useState(false);
 
 	/** Tracks whether the form was populated from the backend at least once. */
 	const initRef = useRef(false);
 	/** Guards against double auto-create. */
 	const autoCreatingRef = useRef(false);
+	const prevIsRunningRef = useRef(false);
+	const prevHistoryCountRef = useRef(0);
 
 	// ── Queries ──────────────────────────────────────────────────────────
 
@@ -129,14 +135,17 @@ function TaskConfigPage() {
 		queryKey: ["tasks"],
 		queryFn: () => tasksApi.getTasks(),
 		staleTime: 30_000,
+		refetchInterval: manualRunning || prevIsRunningRef.current ? 3_000 : false,
 	});
 
 	const task = tasksQuery.data?.tasks?.[0] ?? null;
+	const isTaskRunning = task?.isRunning || manualRunning;
 
 	const historyQuery = useQuery({
 		queryKey: ["tasks", "history", taskId],
 		queryFn: () => tasksApi.getTaskHistory(taskId as string),
 		enabled: !!taskId,
+		refetchInterval: isTaskRunning ? 3_000 : false,
 	});
 
 	// ── Mutations ────────────────────────────────────────────────────────
@@ -175,6 +184,7 @@ function TaskConfigPage() {
 
 	const runTaskMutation = useMutation({
 		mutationFn: (id: string) => tasksApi.runTaskNow(id),
+		onMutate: () => setManualRunning(true),
 		onSuccess: () => {
 			setError(null);
 			void queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -184,7 +194,10 @@ function TaskConfigPage() {
 				});
 			}
 		},
-		onError: () => setError("Failed to run task"),
+		onError: () => {
+			setError("Failed to run task");
+			setManualRunning(false);
+		},
 	});
 
 	// ── Debounced auto-save ──────────────────────────────────────────────
@@ -290,6 +303,29 @@ function TaskConfigPage() {
 		void tasksQuery.refetch();
 	}, [backendStatus, tasksQuery.isError, tasksQuery.refetch]);
 
+	// ── Clear manualRunning once server confirms not running ────────────
+
+	useEffect(() => {
+		if (manualRunning && task?.isRunning === false) {
+			setManualRunning(false);
+		}
+	}, [manualRunning, task?.isRunning]);
+
+	// ── Toast notification on run completion ────────────────────────────
+
+	useEffect(() => {
+		const wasRunning = prevIsRunningRef.current;
+		prevIsRunningRef.current = isTaskRunning;
+
+		if (wasRunning && !isTaskRunning && task) {
+			if (task.lastError) {
+				notify.error("Task Failed", `${task.name}: ${task.lastError}`);
+			} else {
+				notify.success("Task Completed", `${task.name} finished successfully`);
+			}
+		}
+	}, [isTaskRunning, task]);
+
 	// ── Derived ──────────────────────────────────────────────────────────
 
 	const selectedSymbolOptions = useMemo<SymbolOption[]>(() => {
@@ -310,6 +346,20 @@ function TaskConfigPage() {
 
 	const taskHistory = historyQuery.data?.executions ?? [];
 	const historyLoading = historyQuery.isLoading;
+
+	// ── Auto-expand history when new entries arrive ─────────────────────
+
+	useEffect(() => {
+		const currentCount = taskHistory.length;
+		if (
+			currentCount > prevHistoryCountRef.current &&
+			prevHistoryCountRef.current >= 0
+		) {
+			setHistoryExpanded(true);
+		}
+		prevHistoryCountRef.current = currentCount;
+	}, [taskHistory.length]);
+
 	const isWaitingForBackend =
 		backendStatus === "connecting" && tasksQuery.isError && !tasksQuery.data;
 	const isLoadingTasks = tasksQuery.isLoading || isWaitingForBackend;
@@ -449,6 +499,15 @@ function TaskConfigPage() {
 								}}
 							>
 								<SaveIndicator status={saveStatus} />
+								{isTaskRunning && (
+									<Chip
+										icon={<CircularProgress size={14} />}
+										label="Running"
+										size="small"
+										color="info"
+										variant="outlined"
+									/>
+								)}
 								{task && getStatusChip(task.status)}
 							</Box>
 						}
@@ -469,11 +528,17 @@ function TaskConfigPage() {
 									<Button
 										variant="outlined"
 										size="small"
-										startIcon={<PlayArrowIcon />}
+										startIcon={
+											isTaskRunning ? (
+												<CircularProgress size={16} />
+											) : (
+												<PlayArrowIcon />
+											)
+										}
 										onClick={handleRunNow}
-										disabled={runTaskMutation.isPending}
+										disabled={isTaskRunning}
 									>
-										Run Now
+										{isTaskRunning ? "Running..." : "Run Now"}
 									</Button>
 									<Button
 										variant="outlined"
@@ -587,6 +652,127 @@ function TaskConfigPage() {
 						>
 							{error ?? "Failed to load tasks"}
 						</Alert>
+					)}
+
+					{/* ── Running Progress Card ──────────────────── */}
+					{isTaskRunning && task && (
+						<Card
+							sx={{
+								mb: 2,
+								background: "rgba(59, 130, 246, 0.08)",
+								border: "1px solid rgba(59, 130, 246, 0.3)",
+							}}
+						>
+							<CardContent sx={{ py: 1.5, "&:last-child": { pb: 1.5 } }}>
+								<Box
+									sx={{
+										display: "flex",
+										alignItems: "center",
+										justifyContent: "space-between",
+										mb: 1,
+									}}
+								>
+									<Box
+										sx={{
+											display: "flex",
+											alignItems: "center",
+											gap: 1,
+										}}
+									>
+										<CircularProgress size={18} sx={{ color: "#3B82F6" }} />
+										<Typography
+											variant="body2"
+											fontWeight={600}
+											sx={{ color: "#60A5FA" }}
+										>
+											{task.runningProgress?.currentSymbol
+												? `Analyzing ${task.runningProgress.currentSymbol}...`
+												: "Starting analysis..."}
+										</Typography>
+									</Box>
+									{task.runningProgress && task.runningProgress.total > 0 && (
+										<Typography variant="body2" color="text.secondary">
+											{task.runningProgress.completed} /{" "}
+											{task.runningProgress.total} symbols
+										</Typography>
+									)}
+								</Box>
+								{task.runningProgress && task.runningProgress.total > 0 && (
+									<Box
+										sx={{
+											display: "flex",
+											alignItems: "center",
+											gap: 1,
+											flexWrap: "wrap",
+										}}
+									>
+										{task.symbols.map((symbol, idx) => {
+											const completed = task.runningProgress?.completed ?? 0;
+											const currentSymbol = task.runningProgress?.currentSymbol;
+											const isDone =
+												idx < completed ||
+												(idx === completed &&
+													currentSymbol !== symbol &&
+													completed > 0);
+											const isActive = symbol === currentSymbol;
+
+											return (
+												<Box
+													key={symbol}
+													sx={{
+														display: "flex",
+														alignItems: "center",
+														gap: 0.5,
+													}}
+												>
+													{idx > 0 && (
+														<Typography
+															variant="caption"
+															sx={{
+																color: "rgba(255,255,255,0.2)",
+																mx: 0.5,
+															}}
+														>
+															→
+														</Typography>
+													)}
+													{isDone ? (
+														<CheckCircleIcon
+															sx={{
+																fontSize: 14,
+																color: "#10B981",
+															}}
+														/>
+													) : (
+														<FiberManualRecordIcon
+															sx={{
+																fontSize: 10,
+																color: isActive
+																	? "#3B82F6"
+																	: "rgba(255,255,255,0.2)",
+															}}
+														/>
+													)}
+													<Typography
+														variant="caption"
+														fontWeight={isActive ? 600 : 400}
+														sx={{
+															color: isDone
+																? "#10B981"
+																: isActive
+																	? "#60A5FA"
+																	: "text.secondary",
+														}}
+													>
+														{symbol}
+													</Typography>
+												</Box>
+											);
+										})}
+									</Box>
+								)}
+							</CardContent>
+						</Card>
 					)}
 
 					{isLoadingTasks ? (
@@ -1337,7 +1523,11 @@ function TaskConfigPage() {
 							{taskId && (
 								<motion.div variants={staggerCascade.item}>
 									<Card>
-										<Accordion defaultExpanded={false} disableGutters>
+										<Accordion
+											expanded={historyExpanded}
+											onChange={(_, expanded) => setHistoryExpanded(expanded)}
+											disableGutters
+										>
 											<AccordionSummary expandIcon={<ExpandMoreIcon />}>
 												<Typography variant="h6">Execution History</Typography>
 											</AccordionSummary>

@@ -75,6 +75,17 @@ function transformTask(data: Record<string, unknown>): AgentTask {
 		successCount: data.success_count as number,
 		failureCount: data.failure_count as number,
 		lastError: data.last_error as string | undefined,
+		isRunning: (data.is_running as boolean) ?? false,
+		runningProgress: data.running_progress
+			? {
+					currentSymbol: (data.running_progress as Record<string, unknown>)
+						.current_symbol as string | null,
+					completed: (data.running_progress as Record<string, unknown>)
+						.completed as number,
+					total: (data.running_progress as Record<string, unknown>)
+						.total as number,
+				}
+			: undefined,
 		createdAt: data.created_at as string,
 		updatedAt: data.updated_at as string,
 	};
