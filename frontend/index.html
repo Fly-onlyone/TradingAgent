@@ -12,8 +12,25 @@
     <link rel="apple-touch-icon" href="/coin.png"/>
     <link rel="manifest" href="/manifest.json"/>
     <title>Trading agent</title>
+    <style>
+        body{margin:0;overflow:hidden}
+        #startup-loader{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:99999;background:var(--sl-bg,#211b14)}
+        #startup-loader img{width:48px;height:48px;border-radius:12px}
+        #startup-loader .spinner{width:28px;height:28px;border:2.5px solid rgba(255,255,255,.12);border-top-color:var(--sl-accent,#F97316);border-radius:50%;animation:sl-spin .7s linear infinite}
+        #startup-loader span{font:500 13px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:rgba(248,250,252,.55);letter-spacing:.03em}
+        @keyframes sl-spin{to{transform:rotate(360deg)}}
+    </style>
+    <script>
+        /* Pick theme background from persisted Zustand ui-storage */
+        try{var d=JSON.parse(localStorage.getItem("ui-storage")||"{}"),t=(d.state||{}).themeId,m={solar:"#211b14",glacier:"#111a2e",jade:"#101d19",eclipse:"#161024"},a={solar:"#F97316",glacier:"#38BDF8",jade:"#34D399",eclipse:"#A78BFA"};document.documentElement.style.setProperty("--sl-bg",m[t]||"#211b14");document.documentElement.style.setProperty("--sl-accent",a[t]||"#F97316")}catch(e){}
+    </script>
 </head>
 <body>
+<div id="startup-loader">
+    <img src="/coin.png" alt=""/>
+    <div class="spinner"></div>
+    <span>Trading agent</span>
+</div>
 <div id="app"></div>
 <script type="module" src="/src/main.tsx"></script>
 </body>

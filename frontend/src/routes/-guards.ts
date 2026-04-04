@@ -34,6 +34,12 @@ async function syncAuthState(): Promise<void> {
 		if (auth.isLoading) {
 			auth.setLoading(false);
 		}
+		// Background validation — don't block rendering for returning users
+		authApi.getMe().catch((error) => {
+			if (axios.isAxiosError(error) && error.response?.status === 401) {
+				useAuthStore.getState().logout();
+			}
+		});
 		return;
 	}
 

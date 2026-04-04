@@ -7,6 +7,7 @@ import {
 	QueryClientProvider,
 } from "@tanstack/react-query";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
+import type { ReactNode } from "react";
 import { StrictMode, useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import { ZoomIndicator } from "./components/common/ZoomIndicator";
@@ -51,6 +52,9 @@ const router = createRouter({
 	scrollRestoration: true,
 	defaultStructuralSharing: true,
 	defaultPreloadStaleTime: 30_000,
+	defaultPendingMs: 200,
+	defaultPendingMinMs: 500,
+	defaultPendingComponent: AppLoadingScreen,
 });
 
 // Register the router instance for type safety
@@ -61,6 +65,40 @@ declare module "@tanstack/react-router" {
 }
 
 initializeFrontendLogging();
+
+/** Lightweight CSS-only loading screen shown while route guards resolve. */
+function AppLoadingScreen(): ReactNode {
+	return (
+		<div
+			style={{
+				position: "fixed",
+				inset: 0,
+				display: "flex",
+				flexDirection: "column",
+				alignItems: "center",
+				justifyContent: "center",
+				gap: 16,
+				background: "var(--sl-bg, #211b14)",
+			}}
+		>
+			<img
+				src="/coin.png"
+				alt=""
+				style={{ width: 48, height: 48, borderRadius: 12 }}
+			/>
+			<div
+				style={{
+					width: 28,
+					height: 28,
+					border: "2.5px solid rgba(255,255,255,.12)",
+					borderTopColor: "var(--sl-accent, #F97316)",
+					borderRadius: "50%",
+					animation: "sl-spin .7s linear infinite",
+				}}
+			/>
+		</div>
+	);
+}
 
 const HEALTH_POLL_FAST_MS = 3000;
 const HEALTH_POLL_SLOW_MS = 30000;
@@ -241,4 +279,5 @@ if (rootElement && !rootElement.innerHTML) {
 			</Sentry.ErrorBoundary>
 		</StrictMode>,
 	);
+	document.getElementById("startup-loader")?.remove();
 }
