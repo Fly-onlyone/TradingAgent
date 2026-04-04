@@ -10,9 +10,12 @@ import {
 	agentSessionQueryOptions,
 	agentSessionsGroupedQueryOptions,
 } from "@/api/queryOptions/agent";
+import type { NotificationSettings } from "@/api/endpoints/notifications";
 import { useAgentStore } from "@/store/agentStore";
+import { notify } from "@/store/uiStore";
 import type { WebSocketMessage } from "@/types";
 import type { GroupedSessionsResponse } from "@/types/session";
+import { sendNativeNotification } from "@/utils/nativeNotifications";
 import {
 	AGENT_SESSIONS_GROUP_LIMIT,
 	createOptimisticSession,
@@ -255,6 +258,25 @@ export function useAgentSocket() {
 						void queryClient.invalidateQueries({
 							queryKey: agentSessionQueryOptions(targetSessionId).queryKey,
 						});
+
+						// Fire "analysis ready" notification
+						const notifSettings =
+							queryClient.getQueryData<NotificationSettings>([
+								"notification-settings",
+							]);
+						if (notifSettings?.analysisReady ?? true) {
+							const preview =
+								msg.content.length > 100
+									? `${msg.content.slice(0, 100)}...`
+									: msg.content;
+							notify.info("Agent response ready", preview);
+							if (document.hidden) {
+								void sendNativeNotification(
+									"Agent response ready",
+									preview,
+								);
+							}
+						}
 					}
 					break;
 				}

@@ -17,7 +17,9 @@ from app.api.websocket.connection_manager import manager
 from app.config import get_settings
 from app.db.models.agent_session import AgentSession
 from app.db.models.app_settings import AgentAuthMode, AppSettings
+from app.db.models.notification import NotificationType
 from app.db.models.user import User
+from app.services.notification_service import get_notification_service
 
 router = APIRouter()
 settings = get_settings()
@@ -188,6 +190,20 @@ async def agent_chat_websocket(
             if not session.title:
                 session.title = session.generate_title()
             await session.save()
+
+        # Fire ANALYSIS_READY notification (persisted + Web Push)
+        try:
+            notification_svc = get_notification_service()
+            preview = content[:200] + "..." if len(content) > 200 else content
+            await notification_svc.create_notification(
+                user_id=user.id,
+                title="Agent response ready",
+                body=preview,
+                notification_type=NotificationType.ANALYSIS_READY,
+                session_id=session.id,
+            )
+        except Exception:
+            logger.debug("Failed to create analysis_ready notification", exc_info=True)
 
     try:
         # Validate auth configuration before creating agent

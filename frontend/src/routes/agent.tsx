@@ -40,6 +40,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AnimatePresence } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { decisionsApi } from "@/api/endpoints/decisions";
+import { notificationsApi } from "@/api/endpoints/notifications";
 import { sessionsApi } from "@/api/endpoints/sessions";
 import {
 	agentDecisionSymbolsQueryOptions,
@@ -105,6 +106,13 @@ function AgentPage() {
 	const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 	const useDrawerSidebar = useMediaQuery(theme.breakpoints.down("lg"));
 	const isPageVisible = usePageVisibility();
+
+	// Prefetch notification settings so useAgentSocket can read from cache
+	useQuery({
+		queryKey: ["notification-settings"],
+		queryFn: () => notificationsApi.getSettings(),
+		staleTime: 5 * 60_000,
+	});
 
 	const messagesContainerRef = useRef<HTMLDivElement>(null);
 	const shouldAutoScrollRef = useRef(true);
