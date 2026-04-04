@@ -156,6 +156,7 @@ async def agent_chat_websocket(
                     "timestamp": int(datetime.now(UTC).timestamp() * 1000),
                     "toolCalls": tool_calls if tool_calls else None,
                     "thinkingContent": thinking_content,
+                    "model": agent.model,
                 },
             },
         )
@@ -168,6 +169,7 @@ async def agent_chat_websocket(
                     "inputTokens": agent.input_tokens,
                     "outputTokens": agent.output_tokens,
                     "totalTokens": session.total_tokens + turn_tokens,
+                    "model": agent.model,
                 },
             },
         )

@@ -93,6 +93,8 @@ interface ChatInputProps {
 	disabled?: boolean;
 	/** Total tokens used in the current session (for context bar) */
 	totalTokens?: number;
+	/** Model used in the current session (for accurate context window size) */
+	sessionModel?: string | null;
 }
 
 export function ChatInput({
@@ -105,6 +107,7 @@ export function ChatInput({
 	isCancelling = false,
 	disabled = false,
 	totalTokens = 0,
+	sessionModel = null,
 }: ChatInputProps) {
 	const [message, setMessage] = useState("");
 	const queryClient = useQueryClient();
@@ -208,7 +211,7 @@ export function ChatInput({
 	const currentModel = config?.model ?? "sonnet";
 	const currentThinking = config?.thinkingMode ?? "adaptive";
 	const currentEffort = config?.effort ?? "high";
-	const contextMax = contextWindowSize(currentModel);
+	const contextMax = contextWindowSize(sessionModel ?? currentModel);
 	const contextUsed = totalTokens;
 	const contextPercent = contextMax > 0 ? (contextUsed / contextMax) * 100 : 0;
 

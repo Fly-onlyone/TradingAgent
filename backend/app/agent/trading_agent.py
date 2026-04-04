@@ -25,6 +25,7 @@ from app.agent.mcp_tools import (
     get_pending_recommendation,
     pop_pending_chart_data,
 )
+from app.api.v1.settings import FAMILY_TO_API_MODEL
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -88,6 +89,7 @@ class TradingAgent:
         self._tool_calls_this_turn: list[dict] = []
         self._thinking_content_this_turn: str = ""
         self._partial_response_this_turn: str = ""
+        self._model_this_turn: str | None = None
         self._cancel_event = asyncio.Event()
 
     async def connect(self) -> None:
@@ -122,7 +124,8 @@ class TradingAgent:
             allowed_tools=ALLOWED_TOOL_NAMES,
             permission_mode="bypassPermissions",
             max_turns=10,
-            model=app_settings.agent_model or None,
+            model=FAMILY_TO_API_MODEL.get(app_settings.agent_model, app_settings.agent_model)
+            or None,
             thinking=thinking,
             effort=app_settings.agent_effort or None,
             include_partial_messages=True,
@@ -183,6 +186,7 @@ class TradingAgent:
         self._partial_response_this_turn = ""
         self._input_tokens = 0
         self._output_tokens = 0
+        self._model_this_turn = None
 
         with sentry_sdk.start_span(op="ai.agent.chat", description="claude.chat") as span:
             await self._client.query(user_message)
@@ -195,6 +199,8 @@ class TradingAgent:
                     break
 
                 if isinstance(message, AssistantMessage):
+                    if message.model:
+                        self._model_this_turn = message.model
                     for block in message.content:
                         if isinstance(block, ThinkingBlock):
                             self._thinking_content_this_turn += block.thinking + "\n"
@@ -310,6 +316,11 @@ class TradingAgent:
     def output_tokens(self) -> int:
         """Output tokens used in the most recent turn."""
         return self._output_tokens
+
+    @property
+    def model(self) -> str | None:
+        """Model ID that responded in the most recent turn."""
+        return self._model_this_turn
 
     def _extract_confidence(self, response: str) -> float:
         """Extract confidence percentage from free-form model text."""

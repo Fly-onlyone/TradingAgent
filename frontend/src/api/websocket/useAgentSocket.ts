@@ -50,6 +50,7 @@ export interface AgentMessage {
 	decision?: AgentDecision;
 	thinkingContent?: string;
 	chartData?: ChartData;
+	model?: string;
 }
 
 export interface ToolCall {
@@ -71,6 +72,7 @@ interface UsageData {
 	inputTokens: number;
 	outputTokens: number;
 	totalTokens: number;
+	model?: string;
 }
 
 interface AgentSocketMessage extends WebSocketMessage {
@@ -122,6 +124,7 @@ export function useAgentSocket() {
 		replaceSessionId,
 		hydrateSessionMessages,
 		setSessionTotalTokens,
+		setSessionModel,
 		selectedSessionId,
 		activeRunSessionId,
 	} = useAgentStore();
@@ -334,6 +337,9 @@ export function useAgentSocket() {
 					const usage = agentMessage.data as UsageData;
 					if (targetSessionId) {
 						setSessionTotalTokens(targetSessionId, usage.totalTokens);
+						if (usage.model) {
+							setSessionModel(targetSessionId, usage.model);
+						}
 					}
 					break;
 				}
@@ -371,6 +377,7 @@ export function useAgentSocket() {
 			setActiveRunSessionId,
 			setCancelling,
 			setSelectedSessionId,
+			setSessionModel,
 			setSessionTotalTokens,
 			setThinking,
 			updateGroupedSessions,

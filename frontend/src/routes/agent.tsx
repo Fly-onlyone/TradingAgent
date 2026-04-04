@@ -516,6 +516,7 @@ function AgentPage() {
 		sessionData?.totalTokens ??
 		selectedSessionSummary?.totalTokens ??
 		0;
+	const selectedSessionModel = selectedSessionState?.sessionModel ?? null;
 
 	// Sidebar content
 	const sidebarContent = (
@@ -885,6 +886,7 @@ function AgentPage() {
 							isCancelling={activeRunIsCancelling}
 							disabled={!isConnected}
 							totalTokens={selectedSessionTokens}
+							sessionModel={selectedSessionModel}
 						/>
 					</Box>
 				</Card>

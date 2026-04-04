@@ -192,8 +192,8 @@ MODEL_ALIAS_TO_FAMILY = {
 FAMILY_TO_API_MODEL = {
     "sonnet": "claude-sonnet-4-6",
     "opus": "claude-opus-4-6",
-    "sonnet-1m": "claude-sonnet-4-6",
-    "opus-1m": "claude-opus-4-6",
+    "sonnet-1m": "claude-sonnet-4-6[1m]",
+    "opus-1m": "claude-opus-4-6[1m]",
 }
 
 MODEL_FAMILY_ORDER = ("sonnet", "opus", "sonnet-1m", "opus-1m")
@@ -204,7 +204,14 @@ def _get_supported_model_families() -> tuple[str, ...]:
     if not aliases:
         return MODEL_FAMILY_ORDER
 
-    ordered = tuple(family for family in MODEL_FAMILY_ORDER if family in aliases)
+    # If the SDK supports a base family, also include its 1M variant
+    expanded = set(aliases)
+    for alias in aliases:
+        one_m = f"{alias}-1m"
+        if one_m in DEFAULT_MODEL_BY_FAMILY:
+            expanded.add(one_m)
+
+    ordered = tuple(family for family in MODEL_FAMILY_ORDER if family in expanded)
     return ordered or MODEL_FAMILY_ORDER
 
 

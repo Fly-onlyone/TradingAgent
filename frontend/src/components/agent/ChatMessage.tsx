@@ -29,6 +29,22 @@ import { AgentChart } from "./AgentChart";
 import { MdTable, MdTbody, MdTd, MdTh, MdThead, MdTr } from "./AgentTable";
 import { DecisionCard } from "./DecisionCard";
 
+/** Format a full model ID like "claude-opus-4-6" → "Opus 4.6" */
+function formatModelName(modelId: string): string {
+	const normalized = modelId.toLowerCase();
+	const family = normalized.includes("opus")
+		? "Opus"
+		: normalized.includes("sonnet")
+			? "Sonnet"
+			: null;
+	if (!family) return modelId;
+
+	const versionMatch = normalized.match(/claude-\w+-(\d+(?:-\d+)*)/);
+	const version = versionMatch ? versionMatch[1].replace(/-/g, ".") : "";
+	const suffix = normalized.includes("[1m]") ? " 1M" : "";
+	return `${family} ${version}${suffix}`.trim();
+}
+
 /** Markdown component overrides -- MUI tables + themed code blocks. */
 const markdownComponents = {
 	table: MdTable,
@@ -264,7 +280,13 @@ export function ChatMessage({
 						}}
 					>
 						<Typography variant="caption" fontWeight={600}>
-							{isUser ? "You" : isSystem ? "System" : "Agent"}
+							{isUser
+								? "You"
+								: isSystem
+									? "System"
+									: message.model
+										? `Agent · ${formatModelName(message.model)}`
+										: "Agent"}
 						</Typography>
 						<Typography variant="caption" color="text.secondary">
 							{formatRelativeTime(new Date(message.timestamp))}
