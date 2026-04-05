@@ -409,9 +409,21 @@ async def agent_chat_websocket(
                 session.add_message(role="user", content=user_message)
                 await session.save()
 
+            # Inject memory context on the first message of a new session
+            agent_message = user_message
+            if session.total_messages == 1:
+                try:
+                    from app.agent.tools.memory_tools import load_session_memories
+
+                    memory_ctx = await load_session_memories(str(user.id))
+                    if memory_ctx:
+                        agent_message = f"{memory_ctx}\n\n{user_message}"
+                except Exception:
+                    logger.debug("Failed to load session memories", exc_info=True)
+
             # Process with trading agent in a task so we can receive
             # cancel messages while the agent is running.
-            chat_task = asyncio.create_task(_process_chat(user_message))
+            chat_task = asyncio.create_task(_process_chat(agent_message))
 
     except (WebSocketDisconnect, RuntimeError):
         # RuntimeError: "WebSocket is not connected" — raised by Starlette when

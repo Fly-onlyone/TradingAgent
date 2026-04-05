@@ -434,6 +434,11 @@ class AgentTaskScheduler:
                         logger.info(f"Task {task_id} is not active, skipping")
                         return
 
+                    # Set user context so memory tools work in scheduled tasks
+                    from app.agent.mcp_tools import set_active_user_id
+
+                    set_active_user_id(str(task.user_id))
+
                     self._running_tasks[task_id]["total"] = len(task.symbols)
 
                     txn.set_tag("task_name", task.name)
@@ -497,6 +502,16 @@ class AgentTaskScheduler:
                     prompt = self._build_enriched_prompt(symbol, task, subagent_context)
                 else:
                     prompt = self._build_analysis_prompt(symbol, task)
+
+                # Inject user memory context
+                try:
+                    from app.agent.tools.memory_tools import load_session_memories
+
+                    mem_ctx = await load_session_memories(str(task.user_id))
+                    if mem_ctx:
+                        prompt = f"{mem_ctx}\n\n{prompt}"
+                except Exception:
+                    logger.debug("Failed to inject memory context for task", exc_info=True)
 
                 # Set task context for modify_task tool
                 request_id = f"task-{task.id}-{symbol}"
@@ -580,6 +595,16 @@ class AgentTaskScheduler:
                         )
                 except Exception:
                     logger.debug("Failed to inject knowledge context", exc_info=True)
+
+                # Inject user memory context
+                try:
+                    from app.agent.tools.memory_tools import load_session_memories
+
+                    mem_ctx = await load_session_memories(str(task.user_id))
+                    if mem_ctx:
+                        prompt = f"{mem_ctx}\n\n{prompt}"
+                except Exception:
+                    logger.debug("Failed to inject memory context for task", exc_info=True)
 
                 # Set task context for modify_task tool
                 request_id = f"task-{task.id}-{symbol}"

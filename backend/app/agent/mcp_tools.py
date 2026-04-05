@@ -1807,6 +1807,203 @@ async def mcp_ask_user(args: dict[str, Any]) -> dict[str, Any]:
 
 
 # ============================================================
+# Memory Tools
+# ============================================================
+
+
+@tool(
+    "save_memory",
+    "Save an important fact, preference, or observation to persistent memory. "
+    "Memories survive across sessions. Categories: preference (permanent), "
+    "watchlist (30d), trading_context (7d), market_observation (24h), "
+    "decision_rationale (14d), lesson (90d), general (30d). "
+    "Duplicates are auto-detected and updated instead of created.",
+    {
+        "type": "object",
+        "properties": {
+            "content": {
+                "type": "string",
+                "description": "The memory content to save (max 2000 chars)",
+            },
+            "category": {
+                "type": "string",
+                "enum": [
+                    "preference",
+                    "watchlist",
+                    "trading_context",
+                    "market_observation",
+                    "decision_rationale",
+                    "lesson",
+                    "general",
+                ],
+                "description": "Memory category (determines expiry TTL)",
+            },
+            "tags": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Optional tags for easier retrieval (e.g. symbol names)",
+            },
+        },
+        "required": ["content", "category"],
+    },
+)
+async def mcp_save_memory(args: dict[str, Any]) -> dict[str, Any]:
+    try:
+        from app.agent.tools.memory_tools import save_memory
+
+        user_id = get_active_user_id()
+        if not user_id:
+            return {"content": [{"type": "text", "text": json.dumps({"error": "No active user"})}]}
+
+        result = await save_memory(
+            user_id=user_id,
+            content=args["content"],
+            category=args["category"],
+            tags=args.get("tags"),
+        )
+        return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+
+
+@tool(
+    "search_memories",
+    "Search your persistent memories by semantic similarity. "
+    "Use this to recall user preferences, past observations, or trading context.",
+    {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "Natural language search query",
+            },
+            "category": {
+                "type": "string",
+                "enum": [
+                    "preference",
+                    "watchlist",
+                    "trading_context",
+                    "market_observation",
+                    "decision_rationale",
+                    "lesson",
+                    "general",
+                ],
+                "description": "Optional category filter",
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Max results to return",
+                "default": 5,
+            },
+        },
+        "required": ["query"],
+    },
+)
+async def mcp_search_memories(args: dict[str, Any]) -> dict[str, Any]:
+    try:
+        from app.agent.tools.memory_tools import search_memories
+
+        user_id = get_active_user_id()
+        if not user_id:
+            return {"content": [{"type": "text", "text": json.dumps({"error": "No active user"})}]}
+
+        result = await search_memories(
+            user_id=user_id,
+            query=args["query"],
+            category=args.get("category"),
+            limit=args.get("limit", 5),
+        )
+        return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+
+
+@tool(
+    "update_memory",
+    "Update an existing memory's content, category, or tags. "
+    "Use this instead of creating a new memory when the information has changed.",
+    {
+        "type": "object",
+        "properties": {
+            "memory_id": {
+                "type": "string",
+                "description": "ID of the memory to update",
+            },
+            "content": {
+                "type": "string",
+                "description": "New content (max 2000 chars)",
+            },
+            "category": {
+                "type": "string",
+                "enum": [
+                    "preference",
+                    "watchlist",
+                    "trading_context",
+                    "market_observation",
+                    "decision_rationale",
+                    "lesson",
+                    "general",
+                ],
+                "description": "New category (changes TTL)",
+            },
+            "tags": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "New tags",
+            },
+        },
+        "required": ["memory_id"],
+    },
+)
+async def mcp_update_memory(args: dict[str, Any]) -> dict[str, Any]:
+    try:
+        from app.agent.tools.memory_tools import update_memory
+
+        user_id = get_active_user_id()
+        if not user_id:
+            return {"content": [{"type": "text", "text": json.dumps({"error": "No active user"})}]}
+
+        result = await update_memory(
+            user_id=user_id,
+            memory_id=args["memory_id"],
+            content=args.get("content"),
+            category=args.get("category"),
+            tags=args.get("tags"),
+        )
+        return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+
+
+@tool(
+    "delete_memory",
+    "Delete a memory that is no longer relevant or accurate.",
+    {
+        "type": "object",
+        "properties": {
+            "memory_id": {
+                "type": "string",
+                "description": "ID of the memory to delete",
+            },
+        },
+        "required": ["memory_id"],
+    },
+)
+async def mcp_delete_memory(args: dict[str, Any]) -> dict[str, Any]:
+    try:
+        from app.agent.tools.memory_tools import delete_memory
+
+        user_id = get_active_user_id()
+        if not user_id:
+            return {"content": [{"type": "text", "text": json.dumps({"error": "No active user"})}]}
+
+        result = await delete_memory(user_id=user_id, memory_id=args["memory_id"])
+        return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+
+
+# ============================================================
 # MCP Server Factory
 # ============================================================
 
@@ -1843,6 +2040,11 @@ ALL_TRADING_TOOLS = [
     mcp_submit_recommendation,
     # Interactive
     mcp_ask_user,
+    # Memory
+    mcp_save_memory,
+    mcp_search_memories,
+    mcp_update_memory,
+    mcp_delete_memory,
 ]
 
 ALLOWED_TOOL_NAMES = [f"mcp__trading__{t.name}" for t in ALL_TRADING_TOOLS]
