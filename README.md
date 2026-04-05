@@ -15,6 +15,7 @@ monitoring.
 - [Architecture](#architecture)
 - [Agent Chat](#agent-chat)
   - [Agent Tools](#agent-tools)
+  - [Agent Memory](#agent-memory)
   - [Agent Access](#agent-access)
 - [Knowledge Base (RAG)](#knowledge-base-rag)
   - [Knowledge Types](#knowledge-types)
@@ -49,6 +50,8 @@ monitoring.
 - **Multi-Channel Notifications** — Alerts via 80+ channels (Telegram, Discord, Slack, email, webhooks) powered by Apprise
 - **Strategy Ratings** — Rate and review strategies with aggregate scoring and confidence metrics
 - **Two-Factor Auth** — Optional TOTP-based 2FA with QR code provisioning
+- **Agent Memory** — Cross-session memory with category-based TTL, semantic deduplication, and automatic context injection
+- **Interactive Agent** — Ask-user tool for in-chat clarification with single/multi-select options; create-task tool for agent-initiated task scheduling
 - **Desktop & Web** — Runs as a web app or native desktop app via Tauri v2
 
 ## Tech Stack
@@ -203,7 +206,33 @@ Historical Context → search knowledge base for past strategies, lessons, patte
 | Strategy Mgmt      | `list_user_strategies`, `toggle_strategy`                      |
 | Trading            | `get_account_balance`, `get_open_orders`, `place_order`, `cancel_order` |
 | Web Search         | `search_web`, `search_news`                                    |
+| Memory             | `save_memory`, `search_memories`, `update_memory`, `delete_memory` |
+| Interactive        | `ask_user`, `create_task`                                      |
 | Output             | `submit_recommendation`, `modify_task`                         |
+
+### Agent Memory
+
+The agent remembers context across sessions using a category-based memory system with automatic TTL expiry.
+
+**Memory categories:**
+
+| Category              | TTL       | Purpose                                         |
+|-----------------------|-----------|-------------------------------------------------|
+| `preference`          | Permanent | Risk tolerance, favorite pairs, timeframes      |
+| `watchlist`           | 30 days   | Symbols the user is tracking                    |
+| `trading_context`     | 7 days    | Active positions, portfolio goals               |
+| `market_observation`  | 24 hours  | Fleeting observations about market conditions   |
+| `decision_rationale`  | 14 days   | Reasoning behind important trading decisions    |
+| `lesson`              | 90 days   | Lessons learned from trades                     |
+| `general`             | 30 days   | Anything else worth remembering                 |
+
+**How it works:**
+
+- **Semantic deduplication** — When saving a memory, existing memories in the same category are checked by cosine similarity (threshold 0.95). Near-duplicates are updated instead of creating new entries.
+- **Session injection** — At session start, the most relevant memories are loaded and injected into the system prompt as a `[MEMORY CONTEXT]` block (capped at 25 entries).
+- **Auto-expiry** — MongoDB TTL index automatically deletes expired memories.
+- **Per-user limit** — 200 memories per user maximum.
+- **Embeddings** — Memories are embedded using the same local nomic model as the knowledge base, enabling semantic search via `search_memories`.
 
 ### Agent Access
 
@@ -221,6 +250,7 @@ Summary of what the agent can **read**, **modify**, and **not access**.
 | User strategies | **Modify** | Toggle `is_active` only — cannot create or delete strategies |
 | Agent task config | **Modify** | 10 whitelisted fields: `symbols`, `risk_level`, `holding_term`, `max_position_size`, `max_daily_trades`, `monitoring_conditions`, `alert_cooldown_minutes`, `custom_instructions`, `schedules`, `use_subagents` — only when `task_modification_mode` is enabled |
 | Decisions | **Write** | Creates `AgentDecision` records with action, confidence, entry/SL/TP, reasoning, market snapshot |
+| Agent memory | **Read/Write** | Save, search, update, and delete cross-session memories. Injected at session start. 200 per-user cap |
 | App settings | Read | Model config, risk defaults, sandbox flag — cannot modify |
 | File system | None | No disk read/write access |
 | User accounts | None | Cannot create, delete, or modify users |
