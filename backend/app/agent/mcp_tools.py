@@ -1323,6 +1323,312 @@ async def mcp_modify_task(args: dict[str, Any]) -> dict[str, Any]:
 
 
 # ============================================================
+# Task Creation
+# ============================================================
+
+
+@tool(
+    "create_task",
+    "Create a new scheduled task for automated trading analysis, monitoring, or trade execution. "
+    "Tasks run on a schedule and can analyze markets, monitor conditions, and optionally execute trades. "
+    "The task's agent_mode defaults to 'ask' (requires user confirmation for trades). "
+    "Use frequency 'daily' with scheduled_time for daily analysis, 'hourly' for frequent checks, "
+    "'weekly' with day_of_week (0=Mon..6=Sun) for weekly reviews, or 'custom' with a cron_expression.",
+    {
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string",
+                "description": "Task name (1-100 characters)",
+            },
+            "description": {
+                "type": "string",
+                "description": "Optional description of what this task does",
+            },
+            "trading_enabled": {
+                "type": "boolean",
+                "description": "Enable trade execution capability (default: false)",
+            },
+            "monitoring_enabled": {
+                "type": "boolean",
+                "description": "Enable condition monitoring with alerts (default: false)",
+            },
+            "schedules": {
+                "type": "array",
+                "description": "List of schedule entries (at least one required)",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "frequency": {
+                            "type": "string",
+                            "enum": ["once", "hourly", "daily", "weekly", "custom"],
+                            "description": "Execution frequency",
+                        },
+                        "cron_expression": {
+                            "type": "string",
+                            "description": "Cron expression (required when frequency is 'custom')",
+                        },
+                        "scheduled_time": {
+                            "type": "string",
+                            "description": "Time in HH:MM format (for daily/weekly schedules)",
+                        },
+                        "day_of_week": {
+                            "type": "integer",
+                            "description": "Day of week 0-6 (Mon-Sun, for weekly schedules)",
+                        },
+                        "enabled": {
+                            "type": "boolean",
+                            "description": "Whether this schedule entry is active (default: true)",
+                        },
+                    },
+                    "required": ["frequency"],
+                },
+                "minItems": 1,
+            },
+            "timezone": {
+                "type": "string",
+                "description": "Timezone for schedule (default: UTC)",
+            },
+            "symbols": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": (
+                    "Trading pair symbols (e.g. ['BTC-USDT', 'ETH-USDT']). "
+                    "Required when trading or monitoring is enabled."
+                ),
+            },
+            "risk_level": {
+                "type": "string",
+                "enum": ["conservative", "moderate", "aggressive"],
+                "description": "Risk level for position sizing (default: moderate)",
+            },
+            "agent_mode": {
+                "type": "string",
+                "enum": ["auto", "ask"],
+                "description": "Trade execution mode: 'ask' = user confirms, 'auto' = immediate (default: ask)",
+            },
+            "task_modification_mode": {
+                "type": "string",
+                "enum": ["disabled", "auto", "ask"],
+                "description": "Whether agent can modify task config during execution (default: disabled)",
+            },
+            "max_position_size": {
+                "type": "number",
+                "description": "Maximum position size in quote currency",
+            },
+            "max_daily_trades": {
+                "type": "integer",
+                "description": "Maximum number of trades per day",
+            },
+            "monitoring_conditions": {
+                "type": "array",
+                "description": "Conditions to monitor (required when monitoring is enabled)",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "condition_type": {
+                            "type": "string",
+                            "enum": [
+                                "price_above",
+                                "price_below",
+                                "price_change_pct",
+                                "rsi_above",
+                                "rsi_below",
+                                "volume_spike",
+                                "custom",
+                            ],
+                            "description": "Type of condition to monitor",
+                        },
+                        "threshold": {
+                            "type": "number",
+                            "description": "Threshold value for the condition",
+                        },
+                        "timeframe": {
+                            "type": "string",
+                            "description": "Timeframe (e.g. '1H', '4H', '1D')",
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "Human-readable description or custom AI prompt",
+                        },
+                    },
+                    "required": ["condition_type", "threshold"],
+                },
+            },
+            "alert_cooldown_minutes": {
+                "type": "integer",
+                "description": "Minutes between alerts (5-1440, default: 60)",
+            },
+            "use_subagents": {
+                "type": "boolean",
+                "description": "Run specialist subagents before main analysis (default: false)",
+            },
+            "custom_instructions": {
+                "type": "string",
+                "description": "Additional instructions for the agent when executing this task",
+            },
+        },
+        "required": ["name", "schedules"],
+    },
+)
+async def mcp_create_task(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
+    try:
+        from beanie import PydanticObjectId
+
+        from app.db.models.agent_task import (
+            AgentMode,
+            AgentTask,
+            MonitoringCondition,
+            MonitoringConditionType,
+            RiskLevel,
+            TaskFrequency,
+            TaskModificationMode,
+            TaskSchedule,
+        )
+
+        user_id = get_active_user_id()
+        if not user_id:
+            response = _text_result({"status": "error", "message": "No active user session."})
+            _buffer_tool_result("create_task", args, response, start)
+            return response
+
+        name = args.get("name", "").strip()
+        if not name or len(name) > 100:
+            response = _text_result(
+                {"status": "error", "message": "name must be 1-100 characters."}
+            )
+            _buffer_tool_result("create_task", args, response, start)
+            return response
+
+        raw_schedules = args.get("schedules", [])
+        if not raw_schedules:
+            response = _text_result(
+                {"status": "error", "message": "At least one schedule is required."}
+            )
+            _buffer_tool_result("create_task", args, response, start)
+            return response
+
+        schedules = []
+        for s in raw_schedules:
+            freq = s.get("frequency")
+            if freq == "custom" and not s.get("cron_expression"):
+                response = _text_result(
+                    {
+                        "status": "error",
+                        "message": "cron_expression is required for custom frequency.",
+                    }
+                )
+                _buffer_tool_result("create_task", args, response, start)
+                return response
+            schedules.append(
+                TaskSchedule(
+                    frequency=TaskFrequency(freq),
+                    cron_expression=s.get("cron_expression"),
+                    scheduled_time=s.get("scheduled_time"),
+                    day_of_week=s.get("day_of_week"),
+                    enabled=s.get("enabled", True),
+                )
+            )
+
+        trading_enabled = args.get("trading_enabled", False)
+        monitoring_enabled = args.get("monitoring_enabled", False)
+        symbols = args.get("symbols", [])
+
+        if (trading_enabled or monitoring_enabled) and not symbols:
+            response = _text_result(
+                {
+                    "status": "error",
+                    "message": "At least one symbol is required when trading or monitoring is enabled.",
+                }
+            )
+            _buffer_tool_result("create_task", args, response, start)
+            return response
+
+        raw_conditions = args.get("monitoring_conditions", [])
+        monitoring_conditions = [
+            MonitoringCondition(
+                condition_type=MonitoringConditionType(c["condition_type"]),
+                threshold=c["threshold"],
+                timeframe=c.get("timeframe"),
+                description=c.get("description"),
+            )
+            for c in raw_conditions
+        ]
+
+        if monitoring_enabled and not monitoring_conditions:
+            response = _text_result(
+                {
+                    "status": "error",
+                    "message": "Monitoring requires at least one monitoring condition.",
+                }
+            )
+            _buffer_tool_result("create_task", args, response, start)
+            return response
+
+        alert_cooldown = args.get("alert_cooldown_minutes", 60)
+        if not (5 <= alert_cooldown <= 1440):
+            response = _text_result(
+                {
+                    "status": "error",
+                    "message": "alert_cooldown_minutes must be between 5 and 1440.",
+                }
+            )
+            _buffer_tool_result("create_task", args, response, start)
+            return response
+
+        risk_level = RiskLevel(args.get("risk_level", "moderate"))
+        agent_mode = AgentMode(args.get("agent_mode", "ask"))
+        task_mod_mode = TaskModificationMode(args.get("task_modification_mode", "disabled"))
+
+        task = AgentTask(
+            user_id=PydanticObjectId(user_id),
+            name=name,
+            description=args.get("description"),
+            trading_enabled=trading_enabled,
+            monitoring_enabled=monitoring_enabled,
+            schedules=schedules,
+            timezone=args.get("timezone", "UTC"),
+            symbols=symbols,
+            risk_level=risk_level,
+            agent_mode=agent_mode,
+            task_modification_mode=task_mod_mode,
+            max_position_size=args.get("max_position_size"),
+            max_daily_trades=args.get("max_daily_trades"),
+            monitoring_conditions=monitoring_conditions,
+            alert_cooldown_minutes=alert_cooldown,
+            use_subagents=args.get("use_subagents", False),
+            custom_instructions=args.get("custom_instructions"),
+        )
+        await task.insert()
+
+        from app.agent.task_scheduler import get_scheduler
+
+        scheduler = get_scheduler()
+        await scheduler.schedule_task(task)
+
+        response = _text_result(
+            {
+                "status": "ok",
+                "message": f"Task '{name}' created and scheduled successfully.",
+                "task_id": str(task.id),
+                "task_name": name,
+            }
+        )
+        _buffer_tool_result("create_task", args, response, start)
+        return response
+
+    except (ValueError, TypeError) as e:
+        response = _text_result({"status": "error", "message": f"Validation error: {e}"})
+        _buffer_tool_result("create_task", args, response, start)
+        return response
+    except Exception as e:
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("create_task", args, response, start)
+        return response
+
+
+# ============================================================
 # Web Search Tools (Brave Search API)
 # ============================================================
 
@@ -1530,8 +1836,9 @@ ALL_TRADING_TOOLS = [
     mcp_get_open_orders,
     mcp_place_order,
     mcp_cancel_order,
-    # Task self-modification
+    # Task management
     mcp_modify_task,
+    mcp_create_task,
     # Structured output
     mcp_submit_recommendation,
     # Interactive
