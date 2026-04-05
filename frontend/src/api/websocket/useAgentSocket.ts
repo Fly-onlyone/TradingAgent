@@ -61,6 +61,8 @@ export interface ToolCall {
 	name: string;
 	arguments: Record<string, unknown>;
 	result?: unknown;
+	resultSummary?: string;
+	executionTimeMs?: number;
 }
 
 export interface AgentDecision {
@@ -69,6 +71,12 @@ export interface AgentDecision {
 	confidence: number;
 	reasoning: string;
 	riskAssessment?: string;
+}
+
+export interface PendingQuestion {
+	id: string;
+	question: string;
+	options: string[];
 }
 
 interface UsageData {
@@ -86,6 +94,7 @@ interface AgentSocketMessage extends WebSocketMessage {
 		| "tool_call"
 		| "decision"
 		| "chart_data"
+		| "ask_user"
 		| "error"
 		| "status"
 		| "session_created"
@@ -96,6 +105,7 @@ interface AgentSocketMessage extends WebSocketMessage {
 		| ToolCall
 		| AgentDecision
 		| ChartData
+		| PendingQuestion
 		| UsageData
 		| { status: string }
 		| { error: string }
@@ -305,6 +315,11 @@ export function useAgentSocket() {
 					if (targetSessionId) {
 						addToolCall(targetSessionId, agentMessage.data as ToolCall);
 					}
+					break;
+				}
+				case "ask_user": {
+					const { setPendingQuestion } = useAgentStore.getState();
+					setPendingQuestion(agentMessage.data as PendingQuestion);
 					break;
 				}
 				case "decision": {
@@ -534,6 +549,14 @@ export function useAgentSocket() {
 		send({ type: "cancel" });
 	}, [send, setCancelling]);
 
+	const sendAnswer = useCallback(
+		(questionId: string, answer: string) => {
+			send({ type: "answer_question", data: { id: questionId, answer } });
+			useAgentStore.getState().clearPendingQuestion();
+		},
+		[send],
+	);
+
 	return {
 		isConnected,
 		sendMessage,
@@ -542,6 +565,7 @@ export function useAgentSocket() {
 		requestStrategyReview,
 		executeDecision,
 		sendCancel,
+		sendAnswer,
 		disconnect,
 		reconnect,
 	};

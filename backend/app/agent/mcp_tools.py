@@ -4,7 +4,12 @@ Wraps existing tool functions as in-process MCP tools using the @tool decorator.
 Each wrapper delegates to the original tool function in app.agent.tools.
 """
 
+import asyncio
 import json
+import logging
+import time
+import uuid
+from collections.abc import Callable
 from contextvars import ContextVar
 from typing import Any
 
@@ -42,6 +47,214 @@ def get_active_user_id() -> str | None:
 
 
 # ============================================================
+# Tool Result Buffer & Logging
+# ============================================================
+# Captures tool results and timing so the trading agent can
+# forward them to the frontend and persist in session history.
+_tool_results: dict[str, dict[str, Any]] = {}
+_tool_logger = logging.getLogger("agent.tool")
+
+
+def pop_tool_result(tool_name: str) -> dict[str, Any] | None:
+    """Retrieve and clear the buffered result for a tool call."""
+    return _tool_results.pop(tool_name, None)
+
+
+# ============================================================
+# Ask User (Interactive Questions via WebSocket)
+# ============================================================
+# Allows the agent to ask the user a question with options and
+# wait for their response, forwarded through the WebSocket.
+_ws_event_emitter: Callable | None = None
+_pending_questions: dict[str, asyncio.Future[str]] = {}
+
+_ask_user_logger = logging.getLogger("agent.ask_user")
+
+
+def set_ws_event_emitter(emitter: Callable) -> None:
+    """Set the WebSocket event callback (called by the WS handler before chat)."""
+    global _ws_event_emitter  # noqa: PLW0603
+    _ws_event_emitter = emitter
+
+
+def clear_ws_event_emitter() -> None:
+    """Remove the WebSocket event callback (called on WS disconnect)."""
+    global _ws_event_emitter  # noqa: PLW0603
+    _ws_event_emitter = None
+
+
+def resolve_user_answer(question_id: str, answer: str) -> bool:
+    """Resolve a pending question with the user's answer. Returns True if resolved."""
+    future = _pending_questions.get(question_id)
+    if future and not future.done():
+        future.set_result(answer)
+        _ask_user_logger.info("User answered question %s", question_id)
+        return True
+    _ask_user_logger.warning("No pending question for id %s", question_id)
+    return False
+
+
+def cancel_pending_questions() -> None:
+    """Cancel all pending user questions (called on disconnect or agent cancel)."""
+    for qid, future in list(_pending_questions.items()):
+        if not future.done():
+            future.cancel()
+    _pending_questions.clear()
+
+
+def _summarize_result(tool_name: str, parsed: Any) -> str:
+    """Create a human-readable summary of a tool result, truncated for display."""
+    if isinstance(parsed, dict):
+        if "error" in parsed:
+            return f"Error: {str(parsed['error'])[:200]}"
+
+        # Ticker
+        if "last" in parsed or "lastPx" in parsed:
+            price = parsed.get("last") or parsed.get("lastPx", "?")
+            change = parsed.get("change24h") or parsed.get("change", "")
+            symbol = parsed.get("symbol", "")
+            parts = [symbol, f"${price}"] if symbol else [f"${price}"]
+            if change:
+                parts.append(f"{change}%")
+            return ", ".join(parts)
+
+        # Candlesticks
+        if "candles" in parsed:
+            count = len(parsed["candles"])
+            symbol = parsed.get("symbol", "")
+            tf = parsed.get("timeframe", "")
+            return f"{count} candles{f' for {symbol}' if symbol else ''}{f' ({tf})' if tf else ''}"
+
+        # Technical indicators
+        if "rsi" in parsed or "macd" in parsed or "indicators" in parsed:
+            parts = []
+            if "rsi" in parsed:
+                parts.append(
+                    f"RSI {parsed['rsi']:.1f}"
+                    if isinstance(parsed["rsi"], float)
+                    else f"RSI {parsed['rsi']}"
+                )
+            if "macd" in parsed:
+                macd = parsed["macd"]
+                if isinstance(macd, dict):
+                    parts.append(f"MACD {macd.get('signal', macd.get('histogram', ''))}")
+                else:
+                    parts.append(f"MACD {macd}")
+            if "indicators" in parsed:
+                names = list(parsed["indicators"].keys())[:4]
+                parts.append(f"Indicators: {', '.join(names)}")
+            return "; ".join(parts) if parts else "Technical data"
+
+        # News / articles
+        if "articles" in parsed:
+            return f"{len(parsed['articles'])} articles"
+
+        # Search results
+        if "results" in parsed:
+            return f"{len(parsed['results'])} results"
+
+        # Balance
+        if "balance" in parsed or "available" in parsed or "totalEq" in parsed:
+            val = parsed.get("totalEq") or parsed.get("available") or parsed.get("balance", "N/A")
+            return f"Balance: ${val}"
+
+        # Orders / positions
+        if "orders" in parsed:
+            return f"{len(parsed['orders'])} orders"
+        if "positions" in parsed:
+            return f"{len(parsed['positions'])} positions"
+
+        # Patterns
+        if "patterns" in parsed:
+            return f"{len(parsed['patterns'])} patterns detected"
+
+        # Sentiment
+        if "sentiment" in parsed or "overall_sentiment" in parsed:
+            score = parsed.get("overall_sentiment") or parsed.get("sentiment", "N/A")
+            return f"Sentiment: {score}"
+
+        # Status / message response
+        if "status" in parsed and "message" in parsed:
+            return str(parsed["message"])[:200]
+
+        # Strategies list
+        if isinstance(parsed, dict) and any(k in parsed for k in ("name", "strategies")):
+            if "strategies" in parsed:
+                return f"{len(parsed['strategies'])} strategies"
+            return parsed.get("name", "")[:100]
+
+        # Fallback: show top-level keys
+        keys = list(parsed.keys())[:6]
+        return f"Keys: {', '.join(keys)}"
+
+    if isinstance(parsed, list):
+        if len(parsed) > 0 and isinstance(parsed[0], dict):
+            # List of strategies or similar
+            first_name = parsed[0].get("name", "")
+            return f"{len(parsed)} items" + (f" (first: {first_name})" if first_name else "")
+        return f"{len(parsed)} items"
+
+    return str(parsed)[:200]
+
+
+def _parse_mcp_response(response: dict[str, Any]) -> Any:
+    """Extract parsed data from MCP tool response envelope."""
+    if "content" in response:
+        text = response["content"][0]["text"] if response.get("content") else "{}"
+        try:
+            return json.loads(text)
+        except (json.JSONDecodeError, TypeError):
+            return text
+    return response
+
+
+def _buffer_tool_result(
+    tool_name: str,
+    args: dict[str, Any],
+    response: dict[str, Any],
+    start_time: float,
+) -> None:
+    """Store a tool result with timing and log it."""
+    elapsed_ms = int((time.monotonic() - start_time) * 1000)
+    parsed = _parse_mcp_response(response)
+    summary = _summarize_result(tool_name, parsed)
+    has_error = isinstance(parsed, dict) and "error" in parsed
+
+    _tool_results[tool_name] = {
+        "result_summary": summary,
+        "execution_time_ms": elapsed_ms,
+    }
+
+    _tool_logger.info(
+        "Tool %s completed in %dms%s — %s",
+        tool_name,
+        elapsed_ms,
+        " [ERROR]" if has_error else "",
+        summary,
+        extra={
+            "tool_name": tool_name,
+            "arguments": _truncate_args(args),
+            "result_summary": summary,
+            "execution_time_ms": elapsed_ms,
+            "has_error": has_error,
+        },
+    )
+
+
+def _truncate_args(args: dict[str, Any]) -> dict[str, Any]:
+    """Truncate large argument values for logging."""
+    truncated = {}
+    for k, v in args.items():
+        if isinstance(v, str) and len(v) > 200:
+            truncated[k] = v[:200] + "..."
+        elif isinstance(v, list) and len(v) > 10:
+            truncated[k] = v[:10]
+        else:
+            truncated[k] = v
+    return truncated
+
+
+# ============================================================
 # Market Tools
 # ============================================================
 
@@ -61,13 +274,18 @@ def get_active_user_id() -> str | None:
     },
 )
 async def mcp_get_ticker(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
     try:
         from app.agent.tools.market_tools import get_ticker
 
         result = await get_ticker(symbol=args["symbol"])
-        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        response = {"content": [{"type": "text", "text": json.dumps(result)}]}
+        _buffer_tool_result("get_ticker", args, response, start)
+        return response
     except Exception as e:
-        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("get_ticker", args, response, start)
+        return response
 
 
 @tool(
@@ -90,13 +308,18 @@ async def mcp_get_ticker(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_get_orderbook(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
     try:
         from app.agent.tools.market_tools import get_orderbook
 
         result = await get_orderbook(symbol=args["symbol"], depth=args.get("depth", 20))
-        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        response = {"content": [{"type": "text", "text": json.dumps(result)}]}
+        _buffer_tool_result("get_orderbook", args, response, start)
+        return response
     except Exception as e:
-        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("get_orderbook", args, response, start)
+        return response
 
 
 @tool(
@@ -125,6 +348,7 @@ async def mcp_get_orderbook(args: dict[str, Any]) -> dict[str, Any]:
 )
 async def mcp_get_candlesticks(args: dict[str, Any]) -> dict[str, Any]:
     global _last_chart_data  # noqa: PLW0603
+    start = time.monotonic()
     try:
         from app.agent.tools.market_tools import get_candlesticks
 
@@ -149,9 +373,13 @@ async def mcp_get_candlesticks(args: dict[str, Any]) -> dict[str, Any]:
                     for c in result["candles"]
                 ],
             }
-        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        response = {"content": [{"type": "text", "text": json.dumps(result)}]}
+        _buffer_tool_result("get_candlesticks", args, response, start)
+        return response
     except Exception as e:
-        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("get_candlesticks", args, response, start)
+        return response
 
 
 # ============================================================
@@ -179,6 +407,7 @@ async def mcp_get_candlesticks(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_get_technical_indicators(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
     try:
         from app.agent.tools.technical_tools import get_technical_indicators
 
@@ -186,9 +415,13 @@ async def mcp_get_technical_indicators(args: dict[str, Any]) -> dict[str, Any]:
             symbol=args["symbol"],
             timeframe=args.get("timeframe", "1H"),
         )
-        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        response = {"content": [{"type": "text", "text": json.dumps(result)}]}
+        _buffer_tool_result("get_technical_indicators", args, response, start)
+        return response
     except Exception as e:
-        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("get_technical_indicators", args, response, start)
+        return response
 
 
 @tool(
@@ -208,6 +441,7 @@ async def mcp_get_technical_indicators(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_detect_chart_patterns(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
     try:
         from app.agent.tools.technical_tools import detect_chart_patterns
 
@@ -215,9 +449,13 @@ async def mcp_detect_chart_patterns(args: dict[str, Any]) -> dict[str, Any]:
             symbol=args["symbol"],
             timeframe=args.get("timeframe", "4H"),
         )
-        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        response = {"content": [{"type": "text", "text": json.dumps(result)}]}
+        _buffer_tool_result("detect_chart_patterns", args, response, start)
+        return response
     except Exception as e:
-        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("detect_chart_patterns", args, response, start)
+        return response
 
 
 # ============================================================
@@ -240,13 +478,18 @@ async def mcp_detect_chart_patterns(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_get_onchain_metrics(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
     try:
         from app.agent.tools.fundamental_tools import get_onchain_metrics
 
         result = await get_onchain_metrics(symbol=args["symbol"])
-        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        response = {"content": [{"type": "text", "text": json.dumps(result)}]}
+        _buffer_tool_result("get_onchain_metrics", args, response, start)
+        return response
     except Exception as e:
-        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("get_onchain_metrics", args, response, start)
+        return response
 
 
 @tool(
@@ -259,13 +502,18 @@ async def mcp_get_onchain_metrics(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_get_macro_indicators(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
     try:
         from app.agent.tools.fundamental_tools import get_macro_indicators
 
         result = await get_macro_indicators()
-        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        response = {"content": [{"type": "text", "text": json.dumps(result)}]}
+        _buffer_tool_result("get_macro_indicators", args, response, start)
+        return response
     except Exception as e:
-        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("get_macro_indicators", args, response, start)
+        return response
 
 
 # ============================================================
@@ -294,6 +542,7 @@ async def mcp_get_macro_indicators(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_get_latest_news(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
     try:
         from app.agent.tools.news_tools import get_latest_news
 
@@ -301,9 +550,13 @@ async def mcp_get_latest_news(args: dict[str, Any]) -> dict[str, Any]:
             assets=args.get("assets"),
             limit=args.get("limit", 10),
         )
-        return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+        response = {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+        _buffer_tool_result("get_latest_news", args, response, start)
+        return response
     except Exception as e:
-        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("get_latest_news", args, response, start)
+        return response
 
 
 @tool(
@@ -327,6 +580,7 @@ async def mcp_get_latest_news(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_get_news_sentiment(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
     try:
         from app.agent.tools.news_tools import get_news_sentiment
 
@@ -334,9 +588,13 @@ async def mcp_get_news_sentiment(args: dict[str, Any]) -> dict[str, Any]:
             assets=args.get("assets"),
             hours=args.get("hours", 24),
         )
-        return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+        response = {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+        _buffer_tool_result("get_news_sentiment", args, response, start)
+        return response
     except Exception as e:
-        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("get_news_sentiment", args, response, start)
+        return response
 
 
 # ============================================================
@@ -364,6 +622,7 @@ async def mcp_get_news_sentiment(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_search_strategies(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
     try:
         from app.agent.tools.knowledge_tools import search_strategies
 
@@ -371,9 +630,13 @@ async def mcp_search_strategies(args: dict[str, Any]) -> dict[str, Any]:
             query=args["query"],
             limit=args.get("limit", 5),
         )
-        return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+        response = {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+        _buffer_tool_result("search_strategies", args, response, start)
+        return response
     except Exception as e:
-        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("search_strategies", args, response, start)
+        return response
 
 
 @tool(
@@ -397,6 +660,7 @@ async def mcp_search_strategies(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_search_lessons(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
     try:
         from app.agent.tools.knowledge_tools import search_lessons
 
@@ -405,9 +669,13 @@ async def mcp_search_lessons(args: dict[str, Any]) -> dict[str, Any]:
             symbol=args.get("symbol"),
             limit=args.get("limit", 5),
         )
-        return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+        response = {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+        _buffer_tool_result("search_lessons", args, response, start)
+        return response
     except Exception as e:
-        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("search_lessons", args, response, start)
+        return response
 
 
 @tool(
@@ -438,6 +706,7 @@ async def mcp_search_lessons(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_search_patterns(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
     try:
         from app.agent.tools.knowledge_tools import search_patterns
 
@@ -447,9 +716,13 @@ async def mcp_search_patterns(args: dict[str, Any]) -> dict[str, Any]:
             min_success_rate=args.get("min_success_rate"),
             limit=args.get("limit", 5),
         )
-        return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+        response = {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+        _buffer_tool_result("search_patterns", args, response, start)
+        return response
     except Exception as e:
-        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("search_patterns", args, response, start)
+        return response
 
 
 # ============================================================
@@ -476,6 +749,7 @@ async def mcp_search_patterns(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_list_user_strategies(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
     try:
         from beanie import PydanticObjectId
 
@@ -483,7 +757,11 @@ async def mcp_list_user_strategies(args: dict[str, Any]) -> dict[str, Any]:
 
         user_id = get_active_user_id()
         if not user_id:
-            return {"content": [{"type": "text", "text": json.dumps({"error": "No active user"})}]}
+            response = {
+                "content": [{"type": "text", "text": json.dumps({"error": "No active user"})}]
+            }
+            _buffer_tool_result("list_user_strategies", args, response, start)
+            return response
 
         query = Strategy.find(Strategy.user_id == PydanticObjectId(user_id))
         status = args.get("status", "all")
@@ -509,9 +787,13 @@ async def mcp_list_user_strategies(args: dict[str, Any]) -> dict[str, Any]:
             }
             for s in strategies
         ]
-        return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+        response = {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+        _buffer_tool_result("list_user_strategies", args, response, start)
+        return response
     except Exception as e:
-        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("list_user_strategies", args, response, start)
+        return response
 
 
 @tool(
@@ -534,6 +816,7 @@ async def mcp_list_user_strategies(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_toggle_strategy(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
     try:
         from beanie import PydanticObjectId
 
@@ -541,20 +824,26 @@ async def mcp_toggle_strategy(args: dict[str, Any]) -> dict[str, Any]:
 
         user_id = get_active_user_id()
         if not user_id:
-            return {"content": [{"type": "text", "text": json.dumps({"error": "No active user"})}]}
+            response = {
+                "content": [{"type": "text", "text": json.dumps({"error": "No active user"})}]
+            }
+            _buffer_tool_result("toggle_strategy", args, response, start)
+            return response
 
         strategy = await Strategy.get(PydanticObjectId(args["strategy_id"]))
         if not strategy or str(strategy.user_id) != user_id:
-            return {
+            response = {
                 "content": [{"type": "text", "text": json.dumps({"error": "Strategy not found"})}]
             }
+            _buffer_tool_result("toggle_strategy", args, response, start)
+            return response
 
         strategy.is_active = args["activate"]
         strategy.update_timestamp()
         await strategy.save()
 
         action = "activated" if args["activate"] else "deactivated"
-        return {
+        response = {
             "content": [
                 {
                     "type": "text",
@@ -567,8 +856,12 @@ async def mcp_toggle_strategy(args: dict[str, Any]) -> dict[str, Any]:
                 }
             ]
         }
+        _buffer_tool_result("toggle_strategy", args, response, start)
+        return response
     except Exception as e:
-        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("toggle_strategy", args, response, start)
+        return response
 
 
 # ============================================================
@@ -586,13 +879,18 @@ async def mcp_toggle_strategy(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_get_account_balance(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
     try:
         from app.agent.tools.trading_tools import get_account_balance
 
         result = await get_account_balance()
-        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        response = {"content": [{"type": "text", "text": json.dumps(result)}]}
+        _buffer_tool_result("get_account_balance", args, response, start)
+        return response
     except Exception as e:
-        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("get_account_balance", args, response, start)
+        return response
 
 
 @tool(
@@ -610,13 +908,18 @@ async def mcp_get_account_balance(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_get_open_orders(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
     try:
         from app.agent.tools.trading_tools import get_open_orders
 
         result = await get_open_orders(symbol=args.get("symbol"))
-        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        response = {"content": [{"type": "text", "text": json.dumps(result)}]}
+        _buffer_tool_result("get_open_orders", args, response, start)
+        return response
     except Exception as e:
-        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("get_open_orders", args, response, start)
+        return response
 
 
 @tool(
@@ -657,6 +960,7 @@ async def mcp_get_open_orders(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_place_order(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
     try:
         from app.agent.tools.trading_tools import place_order
 
@@ -669,9 +973,13 @@ async def mcp_place_order(args: dict[str, Any]) -> dict[str, Any]:
             stop_loss=args.get("stop_loss"),
             take_profit=args.get("take_profit"),
         )
-        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        response = {"content": [{"type": "text", "text": json.dumps(result)}]}
+        _buffer_tool_result("place_order", args, response, start)
+        return response
     except Exception as e:
-        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("place_order", args, response, start)
+        return response
 
 
 @tool(
@@ -693,13 +1001,18 @@ async def mcp_place_order(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_cancel_order(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
     try:
         from app.agent.tools.trading_tools import cancel_order
 
         result = await cancel_order(symbol=args["symbol"], order_id=args["order_id"])
-        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        response = {"content": [{"type": "text", "text": json.dumps(result)}]}
+        _buffer_tool_result("cancel_order", args, response, start)
+        return response
     except Exception as e:
-        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("cancel_order", args, response, start)
+        return response
 
 
 # ============================================================
@@ -759,6 +1072,7 @@ _pending_recommendations: dict[str, dict[str, Any]] = {}
     },
 )
 async def mcp_submit_recommendation(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
     try:
         request_id = args.pop("_request_id", None)
         if request_id:
@@ -766,7 +1080,7 @@ async def mcp_submit_recommendation(args: dict[str, Any]) -> dict[str, Any]:
         else:
             _pending_recommendations["__latest__"] = args
 
-        return {
+        response = {
             "content": [
                 {
                     "type": "text",
@@ -774,8 +1088,12 @@ async def mcp_submit_recommendation(args: dict[str, Any]) -> dict[str, Any]:
                 }
             ]
         }
+        _buffer_tool_result("submit_recommendation", args, response, start)
+        return response
     except Exception as e:
-        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("submit_recommendation", args, response, start)
+        return response
 
 
 def get_pending_recommendation(request_id: str) -> dict[str, Any] | None:
@@ -859,6 +1177,7 @@ def _text_result(data: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_modify_task(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
     try:
         import logging
 
@@ -994,9 +1313,13 @@ async def mcp_modify_task(args: dict[str, Any]) -> dict[str, Any]:
                 }
             )
 
-        return _text_result({"status": "error", "message": f"Unknown mode: {mode}"})
+        response = _text_result({"status": "error", "message": f"Unknown mode: {mode}"})
+        _buffer_tool_result("modify_task", args, response, start)
+        return response
     except Exception as e:
-        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("modify_task", args, response, start)
+        return response
 
 
 # ============================================================
@@ -1029,6 +1352,7 @@ async def mcp_modify_task(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_search_web(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
     try:
         from app.agent.tools.web_search_tools import search_web
 
@@ -1037,9 +1361,13 @@ async def mcp_search_web(args: dict[str, Any]) -> dict[str, Any]:
             count=args.get("count", 5),
             freshness=args.get("freshness"),
         )
-        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        response = {"content": [{"type": "text", "text": json.dumps(result)}]}
+        _buffer_tool_result("search_web", args, response, start)
+        return response
     except Exception as e:
-        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("search_web", args, response, start)
+        return response
 
 
 @tool(
@@ -1067,6 +1395,7 @@ async def mcp_search_web(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_search_news(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
     try:
         from app.agent.tools.web_search_tools import search_news
 
@@ -1075,9 +1404,93 @@ async def mcp_search_news(args: dict[str, Any]) -> dict[str, Any]:
             count=args.get("count", 5),
             freshness=args.get("freshness"),
         )
-        return {"content": [{"type": "text", "text": json.dumps(result)}]}
+        response = {"content": [{"type": "text", "text": json.dumps(result)}]}
+        _buffer_tool_result("search_news", args, response, start)
+        return response
     except Exception as e:
-        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("search_news", args, response, start)
+        return response
+
+
+# ============================================================
+# Ask User Tool
+# ============================================================
+
+
+@tool(
+    "ask_user",
+    "Ask the user a question and wait for their response. "
+    "Use this to get clarification, preferences, or decisions from the user. "
+    "Provide options for multiple-choice questions, or omit for free-form input.",
+    {
+        "type": "object",
+        "properties": {
+            "question": {
+                "type": "string",
+                "description": "The question to ask the user",
+            },
+            "options": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Optional list of choices for the user to pick from",
+            },
+        },
+        "required": ["question"],
+    },
+)
+async def mcp_ask_user(args: dict[str, Any]) -> dict[str, Any]:
+    """Ask the user a question and wait for their response."""
+    question = args["question"]
+    options = args.get("options")
+    start = time.monotonic()
+    question_id = str(uuid.uuid4())
+    loop = asyncio.get_running_loop()
+    future: asyncio.Future[str] = loop.create_future()
+    _pending_questions[question_id] = future
+
+    emitter = _ws_event_emitter
+    if emitter:
+        await emitter(
+            {
+                "type": "ask_user",
+                "data": {
+                    "id": question_id,
+                    "question": question,
+                    "options": options or [],
+                },
+            }
+        )
+        _ask_user_logger.info("Sent question %s to user: %s", question_id, question)
+    else:
+        _ask_user_logger.warning("No WS emitter — cannot deliver question to user")
+        _pending_questions.pop(question_id, None)
+        response = {
+            "content": [
+                {"type": "text", "text": json.dumps({"error": "No active WebSocket connection"})}
+            ]
+        }
+        _buffer_tool_result("ask_user", {"question": question}, response, start)
+        return response
+
+    try:
+        answer = await asyncio.wait_for(future, timeout=300)
+        result = {"answer": answer}
+        response = {"content": [{"type": "text", "text": json.dumps(result)}]}
+        _buffer_tool_result("ask_user", {"question": question}, response, start)
+        return response
+    except TimeoutError:
+        result = {"error": "User did not respond within 5 minutes"}
+        response = {"content": [{"type": "text", "text": json.dumps(result)}]}
+        _buffer_tool_result("ask_user", {"question": question}, response, start)
+        return response
+    except asyncio.CancelledError:
+        result = {"error": "Question was cancelled"}
+        response = {"content": [{"type": "text", "text": json.dumps(result)}]}
+        _buffer_tool_result("ask_user", {"question": question}, response, start)
+        return response
+    finally:
+        _pending_questions.pop(question_id, None)
 
 
 # ============================================================
@@ -1114,6 +1527,8 @@ ALL_TRADING_TOOLS = [
     mcp_modify_task,
     # Structured output
     mcp_submit_recommendation,
+    # Interactive
+    mcp_ask_user,
 ]
 
 ALLOWED_TOOL_NAMES = [f"mcp__trading__{t.name}" for t in ALL_TRADING_TOOLS]

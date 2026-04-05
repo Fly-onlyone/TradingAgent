@@ -125,7 +125,13 @@ async def agent_chat_websocket(
         await manager.connect(websocket, channel, user_id=user_id_int)
 
     # Set user context for MCP tools (strategy listing, etc.)
-    from app.agent.mcp_tools import set_active_user_id
+    from app.agent.mcp_tools import (
+        cancel_pending_questions,
+        clear_ws_event_emitter,
+        resolve_user_answer,
+        set_active_user_id,
+        set_ws_event_emitter,
+    )
 
     set_active_user_id(str(user.id))
 
@@ -136,6 +142,9 @@ async def agent_chat_websocket(
     async def send_event(event: dict) -> None:
         """Callback for intermediate agent events (thinking, tool_call)."""
         await manager.send_personal(websocket, event)
+
+    # Allow the ask_user MCP tool to push questions through this WebSocket
+    set_ws_event_emitter(send_event)
 
     async def _send_and_persist_assistant_message(
         content: str,
@@ -345,6 +354,15 @@ async def agent_chat_websocket(
                 await manager.send_personal(websocket, {"type": "cancel_ack"})
                 continue
 
+            # Handle answers to agent questions (ask_user tool)
+            if message.get("type") == "answer_question":
+                answer_data = message.get("data", {})
+                resolve_user_answer(
+                    answer_data.get("id", ""),
+                    answer_data.get("answer", ""),
+                )
+                continue
+
             user_message = _build_user_message(message)
             if not user_message:
                 continue
@@ -402,6 +420,8 @@ async def agent_chat_websocket(
     except Exception as e:
         logger.error("WebSocket handler error: %s", e, exc_info=True)
     finally:
+        cancel_pending_questions()
+        clear_ws_event_emitter()
         if chat_task and not chat_task.done():
             chat_task.cancel()
             try:

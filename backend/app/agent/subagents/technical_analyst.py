@@ -56,10 +56,12 @@ class TechnicalAnalyst:
     async def connect(self) -> None:
         """Initialize the SDK client."""
         from app.agent.auth import resolve_anthropic_api_key
+        from app.agent.trading_agent import DISALLOWED_BUILTIN_TOOLS
 
         options = ClaudeAgentOptions(
             system_prompt=TECHNICAL_ANALYST_PROMPT,
             permission_mode="bypassPermissions",
+            disallowed_tools=DISALLOWED_BUILTIN_TOOLS,
             max_turns=1,
         )
         api_key = await resolve_anthropic_api_key()

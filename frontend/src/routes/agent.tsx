@@ -51,6 +51,7 @@ import {
 } from "@/api/queryOptions/agent";
 import { useAgentSocket } from "@/api/websocket/useAgentSocket";
 import { AgentStatusBadge } from "@/components/agent/AgentStatusBadge";
+import { AskUserBlock } from "@/components/agent/AskUserBlock";
 import { ChatInput } from "@/components/agent/ChatInput";
 import { ChatMessage } from "@/components/agent/ChatMessage";
 
@@ -131,6 +132,7 @@ function AgentPage() {
 		hasMoreDecisions,
 		pendingDecisionsCount,
 		showThinkingContent,
+		pendingQuestion,
 		toggleThinkingContent,
 		setSelectedSessionId,
 		removeSession,
@@ -161,6 +163,7 @@ function AgentPage() {
 		requestRecommendation,
 		requestStrategyReview,
 		sendCancel,
+		sendAnswer,
 	} = useAgentSocket();
 
 	const selectedSessionState = selectedSessionId
@@ -295,6 +298,8 @@ function AgentPage() {
 					id: `${sessionData.id}-${index}-tc-${i}`,
 					name: tc.name,
 					arguments: tc.arguments,
+					resultSummary: tc.resultSummary,
+					executionTimeMs: tc.executionTimeMs,
 				})),
 			}),
 		);
@@ -881,6 +886,14 @@ function AgentPage() {
 					</CardContent>
 
 					<Divider />
+
+					{/* Agent question (interactive menu) */}
+					{pendingQuestion && (
+						<AskUserBlock
+							question={pendingQuestion}
+							onAnswer={(answer) => sendAnswer(pendingQuestion.id, answer)}
+						/>
+					)}
 
 					{/* Input */}
 					<Box sx={{ p: 2, flexShrink: 0 }}>

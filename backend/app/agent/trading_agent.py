@@ -24,12 +24,21 @@ from app.agent.mcp_tools import (
     create_trading_mcp_server,
     get_pending_recommendation,
     pop_pending_chart_data,
+    pop_tool_result,
 )
 from app.api.v1.settings import FAMILY_TO_API_MODEL
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+# Built-in Claude Code tools that don't work in a headless subprocess.
+# The agent should ask questions via the ask_user MCP tool instead.
+DISALLOWED_BUILTIN_TOOLS = [
+    "AskUserQuestion",
+    "AskFollowupQuestion",
+    "ToolSearch",
+]
 
 
 SYSTEM_PROMPT = """You are an expert autonomous trading agent for cryptocurrency markets. Your role is to analyze market conditions and make informed trading decisions.
@@ -43,6 +52,7 @@ SYSTEM_PROMPT = """You are an expert autonomous trading agent for cryptocurrency
 6. **Web Search**: Search the web for real-time news, regulatory updates, and analyst opinions using search_web and search_news tools
 7. **Knowledge Base**: Search past trading strategies, trade lessons from completed trades, and discovered trading patterns for historical context and to avoid repeating past mistakes
 8. **Strategy Management**: List, review, and toggle the user's trading strategies (active/inactive). Proactively check inactive strategies during analysis and suggest activating ones that match current conditions
+9. **Ask User**: When you need clarification, preferences, or a decision from the user, use the ask_user tool. Provide a clear question and a list of options when applicable. The user will see interactive buttons and can pick an option or type a custom answer.
 
 ## Decision Framework:
 When asked to analyze or trade, follow this process:
@@ -122,6 +132,7 @@ class TradingAgent:
             system_prompt=SYSTEM_PROMPT,
             mcp_servers={"trading": server},
             allowed_tools=ALLOWED_TOOL_NAMES,
+            disallowed_tools=DISALLOWED_BUILTIN_TOOLS,
             permission_mode="bypassPermissions",
             max_turns=10,
             model=FAMILY_TO_API_MODEL.get(app_settings.agent_model, app_settings.agent_model)
@@ -213,11 +224,18 @@ class TradingAgent:
                                 )
 
                         elif isinstance(block, ToolUseBlock):
-                            tool_info = {
+                            tool_info: dict[str, Any] = {
                                 "id": block.id,
                                 "name": block.name,
                                 "arguments": block.input,
                             }
+
+                            # Merge captured result from the MCP tool buffer
+                            tool_result = pop_tool_result(block.name)
+                            if tool_result:
+                                tool_info["result_summary"] = tool_result["result_summary"]
+                                tool_info["execution_time_ms"] = tool_result["execution_time_ms"]
+
                             self._tool_calls_this_turn.append(tool_info)
 
                             if on_event:

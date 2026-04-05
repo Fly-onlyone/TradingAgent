@@ -7,6 +7,7 @@ import { persist } from "zustand/middleware";
 import type {
 	AgentDecision,
 	AgentMessage,
+	PendingQuestion,
 	ToolCall,
 } from "@/api/websocket/useAgentSocket";
 import type {
@@ -43,6 +44,7 @@ interface AgentState {
 	pendingDecisionsCount: number;
 
 	status: AgentStatus;
+	pendingQuestion: PendingQuestion | null;
 
 	showThinkingContent: boolean;
 
@@ -77,6 +79,8 @@ interface AgentState {
 
 	updateStatus: (status: string) => void;
 	toggleThinkingContent: () => void;
+	setPendingQuestion: (question: PendingQuestion) => void;
+	clearPendingQuestion: () => void;
 }
 
 const MAX_MESSAGES = 100;
@@ -132,6 +136,7 @@ export const useAgentStore = create<AgentState>()(
 			pendingDecisionsCount: 0,
 
 			status: "disconnected",
+			pendingQuestion: null,
 
 			showThinkingContent: true,
 
@@ -262,6 +267,29 @@ export const useAgentStore = create<AgentState>()(
 				set((state) => {
 					const sessionState =
 						state.sessionStates[sessionId] ?? createEmptySessionState();
+
+					// Merge result data from currentTurnToolCalls into message toolCalls
+					if (
+						message.toolCalls &&
+						sessionState.currentTurnToolCalls.length > 0
+					) {
+						const resultMap = new Map(
+							sessionState.currentTurnToolCalls
+								.filter((tc) => tc.resultSummary)
+								.map((tc) => [tc.id, tc]),
+						);
+						message.toolCalls = message.toolCalls.map((tc) => {
+							const enriched = resultMap.get(tc.id);
+							if (enriched && !tc.resultSummary) {
+								return {
+									...tc,
+									resultSummary: enriched.resultSummary,
+									executionTimeMs: enriched.executionTimeMs,
+								};
+							}
+							return tc;
+						});
+					}
 
 					return {
 						sessionStates: {
@@ -468,6 +496,8 @@ export const useAgentStore = create<AgentState>()(
 				set((state) => ({
 					showThinkingContent: !state.showThinkingContent,
 				})),
+			setPendingQuestion: (question) => set({ pendingQuestion: question }),
+			clearPendingQuestion: () => set({ pendingQuestion: null }),
 		}),
 		{
 			name: "agent-store",

@@ -227,11 +227,14 @@ class StrategyExtractor:
         app_settings = await AppSettings.get_instance()
         api_key = await resolve_anthropic_api_key()
 
+        from app.agent.trading_agent import DISALLOWED_BUILTIN_TOOLS
+
         options = ClaudeAgentOptions(
             system_prompt=SYSTEM_PROMPT_JSON,
             model=app_settings.agent_model or "claude-sonnet-4-6",
             max_turns=1,
             permission_mode="bypassPermissions",
+            disallowed_tools=DISALLOWED_BUILTIN_TOOLS,
         )
         if api_key:
             options.env["ANTHROPIC_API_KEY"] = api_key
