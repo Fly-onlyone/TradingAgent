@@ -1422,7 +1422,8 @@ async def mcp_search_news(args: dict[str, Any]) -> dict[str, Any]:
     "ask_user",
     "Ask the user a question and wait for their response. "
     "Use this to get clarification, preferences, or decisions from the user. "
-    "Provide options for multiple-choice questions, or omit for free-form input.",
+    "Provide options for multiple-choice questions, or omit for free-form input. "
+    "Set multi_select=true to let the user pick multiple options.",
     {
         "type": "object",
         "properties": {
@@ -1435,6 +1436,10 @@ async def mcp_search_news(args: dict[str, Any]) -> dict[str, Any]:
                 "items": {"type": "string"},
                 "description": "Optional list of choices for the user to pick from",
             },
+            "multi_select": {
+                "type": "boolean",
+                "description": "Allow the user to select multiple options (default: false)",
+            },
         },
         "required": ["question"],
     },
@@ -1443,6 +1448,7 @@ async def mcp_ask_user(args: dict[str, Any]) -> dict[str, Any]:
     """Ask the user a question and wait for their response."""
     question = args["question"]
     options = args.get("options")
+    multi_select = args.get("multi_select", False)
     start = time.monotonic()
     question_id = str(uuid.uuid4())
     loop = asyncio.get_running_loop()
@@ -1458,6 +1464,7 @@ async def mcp_ask_user(args: dict[str, Any]) -> dict[str, Any]:
                     "id": question_id,
                     "question": question,
                     "options": options or [],
+                    "multiSelect": multi_select,
                 },
             }
         )

@@ -77,6 +77,7 @@ export interface PendingQuestion {
 	id: string;
 	question: string;
 	options: string[];
+	multiSelect?: boolean;
 }
 
 interface UsageData {
