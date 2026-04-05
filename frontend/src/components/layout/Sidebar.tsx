@@ -10,6 +10,7 @@ import LibraryBooksIcon from "@mui/icons-material/LibraryBooks";
 import ListAltIcon from "@mui/icons-material/ListAlt";
 import MonitorIcon from "@mui/icons-material/Monitor";
 import NewspaperIcon from "@mui/icons-material/Newspaper";
+import PsychologyIcon from "@mui/icons-material/Psychology";
 import PushPinIcon from "@mui/icons-material/PushPin";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import ScheduleIcon from "@mui/icons-material/Schedule";
@@ -77,6 +78,7 @@ const navGroups: NavGroup[] = [
 				label: "Knowledge",
 				icon: LibraryBooksIcon,
 			},
+			{ path: "/memory", label: "Memory", icon: PsychologyIcon },
 			{ path: "/news", label: "News", icon: NewspaperIcon },
 		],
 	},

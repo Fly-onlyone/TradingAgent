@@ -8,6 +8,7 @@ export { decisionsApi } from "./decisions";
 export { knowledgeApi } from "./knowledge";
 export { logsApi } from "./logs";
 export { marketApi } from "./market";
+export { memoryApi } from "./memory";
 export { newsApi } from "./news";
 export { ordersApi } from "./orders";
 export { sessionsApi } from "./sessions";

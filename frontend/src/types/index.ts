@@ -7,6 +7,7 @@ export * from "./api";
 export * from "./knowledge";
 export * from "./log";
 export * from "./market";
+export * from "./memory";
 export * from "./news";
 export * from "./order";
 export * from "./session";

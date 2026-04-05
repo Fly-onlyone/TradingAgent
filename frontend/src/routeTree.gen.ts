@@ -18,6 +18,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as TradesIndexRouteImport } from './routes/trades/index'
 import { Route as TasksIndexRouteImport } from './routes/tasks/index'
 import { Route as StrategiesIndexRouteImport } from './routes/strategies/index'
+import { Route as MemoryIndexRouteImport } from './routes/memory/index'
 import { Route as KnowledgeIndexRouteImport } from './routes/knowledge/index'
 import { Route as StrategiesCreateRouteImport } from './routes/strategies/create'
 import { Route as AuthVerifyEmailRouteImport } from './routes/auth/verify-email'
@@ -72,6 +73,11 @@ const TasksIndexRoute = TasksIndexRouteImport.update({
 const StrategiesIndexRoute = StrategiesIndexRouteImport.update({
   id: '/strategies/',
   path: '/strategies/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MemoryIndexRoute = MemoryIndexRouteImport.update({
+  id: '/memory/',
+  path: '/memory/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const KnowledgeIndexRoute = KnowledgeIndexRouteImport.update({
@@ -142,6 +148,7 @@ export interface FileRoutesByFullPath {
   '/auth/verify-email': typeof AuthVerifyEmailRoute
   '/strategies/create': typeof StrategiesCreateRoute
   '/knowledge/': typeof KnowledgeIndexRoute
+  '/memory/': typeof MemoryIndexRoute
   '/strategies/': typeof StrategiesIndexRoute
   '/tasks/': typeof TasksIndexRoute
   '/trades/': typeof TradesIndexRoute
@@ -163,6 +170,7 @@ export interface FileRoutesByTo {
   '/auth/verify-email': typeof AuthVerifyEmailRoute
   '/strategies/create': typeof StrategiesCreateRoute
   '/knowledge': typeof KnowledgeIndexRoute
+  '/memory': typeof MemoryIndexRoute
   '/strategies': typeof StrategiesIndexRoute
   '/tasks': typeof TasksIndexRoute
   '/trades': typeof TradesIndexRoute
@@ -185,6 +193,7 @@ export interface FileRoutesById {
   '/auth/verify-email': typeof AuthVerifyEmailRoute
   '/strategies/create': typeof StrategiesCreateRoute
   '/knowledge/': typeof KnowledgeIndexRoute
+  '/memory/': typeof MemoryIndexRoute
   '/strategies/': typeof StrategiesIndexRoute
   '/tasks/': typeof TasksIndexRoute
   '/trades/': typeof TradesIndexRoute
@@ -208,6 +217,7 @@ export interface FileRouteTypes {
     | '/auth/verify-email'
     | '/strategies/create'
     | '/knowledge/'
+    | '/memory/'
     | '/strategies/'
     | '/tasks/'
     | '/trades/'
@@ -229,6 +239,7 @@ export interface FileRouteTypes {
     | '/auth/verify-email'
     | '/strategies/create'
     | '/knowledge'
+    | '/memory'
     | '/strategies'
     | '/tasks'
     | '/trades'
@@ -250,6 +261,7 @@ export interface FileRouteTypes {
     | '/auth/verify-email'
     | '/strategies/create'
     | '/knowledge/'
+    | '/memory/'
     | '/strategies/'
     | '/tasks/'
     | '/trades/'
@@ -272,6 +284,7 @@ export interface RootRouteChildren {
   AuthVerifyEmailRoute: typeof AuthVerifyEmailRoute
   StrategiesCreateRoute: typeof StrategiesCreateRoute
   KnowledgeIndexRoute: typeof KnowledgeIndexRoute
+  MemoryIndexRoute: typeof MemoryIndexRoute
   StrategiesIndexRoute: typeof StrategiesIndexRoute
   TasksIndexRoute: typeof TasksIndexRoute
   TradesIndexRoute: typeof TradesIndexRoute
@@ -340,6 +353,13 @@ declare module '@tanstack/react-router' {
       path: '/strategies'
       fullPath: '/strategies/'
       preLoaderRoute: typeof StrategiesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/memory/': {
+      id: '/memory/'
+      path: '/memory'
+      fullPath: '/memory/'
+      preLoaderRoute: typeof MemoryIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/knowledge/': {
@@ -432,6 +452,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthVerifyEmailRoute: AuthVerifyEmailRoute,
   StrategiesCreateRoute: StrategiesCreateRoute,
   KnowledgeIndexRoute: KnowledgeIndexRoute,
+  MemoryIndexRoute: MemoryIndexRoute,
   StrategiesIndexRoute: StrategiesIndexRoute,
   TasksIndexRoute: TasksIndexRoute,
   TradesIndexRoute: TradesIndexRoute,
