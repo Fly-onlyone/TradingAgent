@@ -6,6 +6,7 @@
  */
 
 import BuildIcon from "@mui/icons-material/Build";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import {
 	Avatar,
@@ -18,29 +19,7 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import type { ToolCall } from "@/api/websocket/useAgentSocket";
 import { spring } from "@/utils/animations/variants";
-
-/** Strip MCP prefix and convert snake_case tool names to human labels. */
-function humanizeToolName(name: string): string {
-	const TOOL_LABELS: Record<string, string> = {
-		get_market_price: "Fetching price",
-		get_technical_indicators: "Analyzing indicators",
-		get_order_book: "Reading order book",
-		get_recent_trades: "Checking trades",
-		get_klines: "Loading candles",
-		place_order: "Placing order",
-		get_account_balance: "Checking balance",
-		get_positions: "Checking positions",
-		cancel_order: "Cancelling order",
-		get_open_orders: "Loading orders",
-		search_knowledge: "Searching knowledge",
-		get_news: "Fetching news",
-		analyze_sentiment: "Analyzing sentiment",
-	};
-
-	// Strip common MCP prefixes
-	const stripped = name.replace(/^mcp__trading__/, "");
-	return TOOL_LABELS[stripped] || stripped.replaceAll("_", " ");
-}
+import { humanizeToolName } from "./ToolCallBlock";
 
 interface ThinkingIndicatorProps {
 	toolCalls: ToolCall[];
@@ -174,25 +153,40 @@ export function ThinkingIndicator({
 						{toolCalls.length > 0 && (
 							<Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
 								<AnimatePresence>
-									{toolCalls.map((tc) => (
-										<motion.div
-											key={tc.id}
-											initial={{ opacity: 0, scale: 0.5, x: -20 }}
-											animate={{ opacity: 1, scale: 1, x: 0 }}
-											transition={spring.bouncy}
-										>
-											<Chip
-												icon={
-													<BuildIcon sx={{ fontSize: "0.85rem !important" }} />
-												}
-												label={humanizeToolName(tc.name)}
-												size="small"
-												color="secondary"
-												variant="outlined"
-												sx={{ fontSize: "0.7rem" }}
-											/>
-										</motion.div>
-									))}
+									{toolCalls.map((tc) => {
+										const isDone = Boolean(tc.resultSummary);
+										const label =
+											isDone && tc.executionTimeMs != null
+												? `${humanizeToolName(tc.name)} (${tc.executionTimeMs}ms)`
+												: humanizeToolName(tc.name);
+										return (
+											<motion.div
+												key={tc.id}
+												initial={{ opacity: 0, scale: 0.5, x: -20 }}
+												animate={{ opacity: 1, scale: 1, x: 0 }}
+												transition={spring.bouncy}
+											>
+												<Chip
+													icon={
+														isDone ? (
+															<CheckCircleOutlineIcon
+																sx={{ fontSize: "0.85rem !important" }}
+															/>
+														) : (
+															<BuildIcon
+																sx={{ fontSize: "0.85rem !important" }}
+															/>
+														)
+													}
+													label={label}
+													size="small"
+													color={isDone ? "success" : "secondary"}
+													variant="outlined"
+													sx={{ fontSize: "0.7rem" }}
+												/>
+											</motion.div>
+										);
+									})}
 								</AnimatePresence>
 							</Box>
 						)}

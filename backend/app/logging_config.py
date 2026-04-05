@@ -123,6 +123,9 @@ class MongoDBHandler(logging.Handler):
                 pass
         await self._flush_buffer()
 
+    # Extra attributes captured from structured loggers (e.g. agent.tool)
+    _EXTRA_ATTRS = ("tool_name", "arguments", "result_summary", "execution_time_ms", "has_error")
+
     def emit(self, record: logging.LogRecord) -> None:
         entry = {
             "timestamp": datetime.fromtimestamp(record.created, tz=UTC),
@@ -135,6 +138,15 @@ class MongoDBHandler(logging.Handler):
             "request_id": request_id_var.get(None),
             "user_id": user_id_var.get(None),
         }
+
+        # Capture structured extra data from loggers like agent.tool
+        extra = {}
+        for attr in self._EXTRA_ATTRS:
+            val = getattr(record, attr, None)
+            if val is not None:
+                extra[attr] = val
+        if extra:
+            entry["extra"] = extra
 
         if record.exc_info and record.exc_info[0] is not None:
             entry["traceback"] = "".join(traceback.format_exception(*record.exc_info))
@@ -175,15 +187,32 @@ class MongoDBHandler(logging.Handler):
 # ============================================================
 
 _mongo_handler: MongoDBHandler | None = None
+_agent_tool_mongo_handler: MongoDBHandler | None = None
 
 
 def get_mongo_handler() -> MongoDBHandler | None:
     return _mongo_handler
 
 
+def start_all_mongo_handlers() -> None:
+    """Start all MongoDB log handlers. Call after event loop is running."""
+    if _mongo_handler:
+        _mongo_handler.start()
+    if _agent_tool_mongo_handler:
+        _agent_tool_mongo_handler.start()
+
+
+async def stop_all_mongo_handlers() -> None:
+    """Flush and stop all MongoDB log handlers."""
+    if _mongo_handler:
+        await _mongo_handler.stop()
+    if _agent_tool_mongo_handler:
+        await _agent_tool_mongo_handler.stop()
+
+
 def setup_logging() -> MongoDBHandler:
     """Configure application logging. Call once during startup."""
-    global _mongo_handler
+    global _mongo_handler, _agent_tool_mongo_handler  # noqa: PLW0603
 
     settings = get_settings()
     log_level = getattr(logging, settings.log_level.upper(), logging.INFO)
@@ -218,6 +247,13 @@ def setup_logging() -> MongoDBHandler:
     _mongo_handler = MongoDBHandler()
     _mongo_handler.setLevel(logging.WARNING)  # Only WARNING+ to DB
     root.addHandler(_mongo_handler)
+
+    # 4. Dedicated MongoDB handler for agent.tool at INFO level
+    agent_tool_logger = logging.getLogger("agent.tool")
+    agent_tool_logger.setLevel(logging.INFO)
+    _agent_tool_mongo_handler = MongoDBHandler()
+    _agent_tool_mongo_handler.setLevel(logging.INFO)
+    agent_tool_logger.addHandler(_agent_tool_mongo_handler)
 
     # Quieten noisy third-party loggers
     for name in ("uvicorn.access", "httpcore", "httpx", "motor", "pymongo"):

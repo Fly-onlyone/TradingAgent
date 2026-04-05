@@ -14,7 +14,6 @@ import {
 	Box,
 	Card,
 	CardContent,
-	Chip,
 	Link,
 	Paper,
 	Typography,
@@ -28,6 +27,7 @@ import { formatRelativeTime } from "@/utils/formatters";
 import { AgentChart } from "./AgentChart";
 import { MdTable, MdTbody, MdTd, MdTh, MdThead, MdTr } from "./AgentTable";
 import { DecisionCard } from "./DecisionCard";
+import { ToolCallList } from "./ToolCallList";
 
 /** Format a full model ID like "claude-opus-4-6" → "Opus 4.6" */
 function formatModelName(modelId: string): string {
@@ -403,31 +403,7 @@ export function ChatMessage({
 						{/* Tool Calls */}
 						{message.toolCalls && message.toolCalls.length > 0 && (
 							<Box sx={{ mt: 2 }}>
-								<Typography
-									variant="caption"
-									color="text.secondary"
-									gutterBottom
-								>
-									Tools Used:
-								</Typography>
-								<Box
-									sx={{
-										display: "flex",
-										gap: 0.5,
-										flexWrap: "wrap",
-										mt: 0.5,
-									}}
-								>
-									{message.toolCalls.map((tool) => (
-										<Chip
-											key={tool.id}
-											label={tool.name}
-											size="small"
-											variant="outlined"
-											sx={{ fontSize: "0.7rem" }}
-										/>
-									))}
-								</Box>
+								<ToolCallList toolCalls={message.toolCalls} />
 							</Box>
 						)}
 					</Paper>

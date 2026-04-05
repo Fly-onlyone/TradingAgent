@@ -31,7 +31,7 @@ from app.config import get_settings
 from app.core.rate_limit import limiter
 from app.db.session import close_db, init_db
 from app.knowledge.embeddings import preload_model as preload_embedding_model
-from app.logging_config import setup_logging
+from app.logging_config import setup_logging, start_all_mongo_handlers, stop_all_mongo_handlers
 from app.middleware.request_logging import RequestLoggingMiddleware
 
 settings = get_settings()
@@ -117,7 +117,7 @@ if settings.sentry_dsn:
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan manager."""
     # Startup
-    mongo_handler = setup_logging()
+    setup_logging()
     await init_db()
 
     scheduler = get_scheduler()
@@ -130,14 +130,13 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     if settings.preload_embeddings_on_startup:
         asyncio.create_task(preload_embedding_model())
 
-    mongo_handler.start()
+    start_all_mongo_handlers()
     logger.info("Application started")
     yield
     # Shutdown
     logger.info("Application shutting down")
     await scheduler.stop()
-    if mongo_handler:
-        await mongo_handler.stop()
+    await stop_all_mongo_handlers()
     await close_db()
 
 
