@@ -6,16 +6,15 @@ import * as Sentry from "@sentry/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useRef } from "react";
 import { getAccessToken } from "@/api/client";
+import type { NotificationSettings } from "@/api/endpoints/notifications";
 import {
 	agentSessionQueryOptions,
 	agentSessionsGroupedQueryOptions,
 } from "@/api/queryOptions/agent";
-import type { NotificationSettings } from "@/api/endpoints/notifications";
 import { useAgentStore } from "@/store/agentStore";
 import { notify } from "@/store/uiStore";
 import type { WebSocketMessage } from "@/types";
 import type { GroupedSessionsResponse } from "@/types/session";
-import { sendNativeNotification } from "@/utils/nativeNotifications";
 import {
 	AGENT_SESSIONS_GROUP_LIMIT,
 	createOptimisticSession,
@@ -24,6 +23,7 @@ import {
 	touchSessionInGroups,
 	upsertSessionInGroups,
 } from "@/utils/agentSessionsCache";
+import { sendNativeNotification } from "@/utils/nativeNotifications";
 import { getWsUrl } from "@/utils/tauriEnv";
 import { useWebSocket } from "./useWebSocket";
 
@@ -271,10 +271,7 @@ export function useAgentSocket() {
 									: msg.content;
 							notify.info("Agent response ready", preview);
 							if (document.hidden) {
-								void sendNativeNotification(
-									"Agent response ready",
-									preview,
-								);
+								void sendNativeNotification("Agent response ready", preview);
 							}
 						}
 					}

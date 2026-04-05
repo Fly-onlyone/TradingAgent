@@ -1,6 +1,5 @@
 import CssBaseline from "@mui/material/CssBaseline";
 import { ThemeProvider } from "@mui/material/styles";
-import * as Sentry from "@sentry/react";
 import {
 	onlineManager,
 	QueryClient,
@@ -16,19 +15,8 @@ import { useUIScaleZoom } from "./hooks/useUIScaleZoom";
 // Import the generated route tree
 import { routeTree } from "./routeTree.gen";
 import { useUIStore } from "./store/uiStore";
-import { initializeFrontendLogging } from "./utils/frontendLogger";
-import { createFrontendSentryInitOptions } from "./utils/sentryConfig";
+import { bootstrapObservability, reportReactRenderError } from "./utils/sentry";
 import { getApiBaseUrl } from "./utils/tauriEnv";
-
-Sentry.init(
-	createFrontendSentryInitOptions(import.meta.env, getApiBaseUrl(), {
-		browserTracingIntegrationFactory: () =>
-			Sentry.browserTracingIntegration({
-				enableInp: true,
-			}),
-		consoleLoggingIntegrationFactory: () => Sentry.consoleLoggingIntegration(),
-	}),
-);
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -63,8 +51,6 @@ declare module "@tanstack/react-router" {
 		router: typeof router;
 	}
 }
-
-initializeFrontendLogging();
 
 /** Lightweight CSS-only loading screen shown while route guards resolve. */
 function AppLoadingScreen(): ReactNode {
@@ -265,19 +251,21 @@ function App() {
 const rootElement = document.getElementById("app");
 if (rootElement && !rootElement.innerHTML) {
 	const root = ReactDOM.createRoot(rootElement, {
-		// React 19 error hooks — capture errors Sentry can't catch via ErrorBoundary alone
-		onUncaughtError: Sentry.reactErrorHandler(),
-		onCaughtError: Sentry.reactErrorHandler(),
-		onRecoverableError: Sentry.reactErrorHandler(),
+		// Keep early error reporting without pulling Sentry into the critical path.
+		onUncaughtError: (error, errorInfo) =>
+			reportReactRenderError(error, errorInfo),
+		onCaughtError: (error, errorInfo) =>
+			reportReactRenderError(error, errorInfo),
+		onRecoverableError: (error, errorInfo) =>
+			reportReactRenderError(error, errorInfo),
 	});
 	root.render(
 		<StrictMode>
-			<Sentry.ErrorBoundary fallback={<p>Something went wrong</p>}>
-				<QueryClientProvider client={queryClient}>
-					<App />
-				</QueryClientProvider>
-			</Sentry.ErrorBoundary>
+			<QueryClientProvider client={queryClient}>
+				<App />
+			</QueryClientProvider>
 		</StrictMode>,
 	);
 	document.getElementById("startup-loader")?.remove();
+	bootstrapObservability();
 }

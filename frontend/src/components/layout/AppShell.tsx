@@ -24,6 +24,7 @@ const NotificationStack = lazy(() =>
 		default: m.NotificationStack,
 	})),
 );
+
 import {
 	markNavEnd,
 	reportNavDuration,

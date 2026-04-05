@@ -65,6 +65,146 @@ export const Route = createFileRoute("/admin/logs")({
 
 const LEVEL_OPTIONS = ["", "INFO", "WARNING", "ERROR", "CRITICAL"];
 
+// ── Performance timing display helpers ──────────────────────────
+
+const TIMING_KEYS = [
+	"lcp_ms",
+	"fcp_ms",
+	"ttfb_ms",
+	"dom_load_ms",
+	"duration_ms",
+] as const;
+
+const TIMING_LABELS: Record<string, string> = {
+	lcp_ms: "LCP",
+	fcp_ms: "FCP",
+	ttfb_ms: "TTFB",
+	dom_load_ms: "DOM Load",
+	duration_ms: "Duration",
+};
+
+/** Web Vitals thresholds: [good, needs-improvement] in ms */
+const TIMING_THRESHOLDS: Record<string, [number, number]> = {
+	lcp_ms: [2500, 4000],
+	fcp_ms: [1800, 3000],
+	ttfb_ms: [800, 1800],
+	dom_load_ms: [1500, 3000],
+	duration_ms: [300, 1000],
+};
+
+function getTimingColor(key: string, value: number): string {
+	const thresholds = TIMING_THRESHOLDS[key];
+	if (!thresholds) return "text.primary";
+	if (value <= thresholds[0]) return "success.main";
+	if (value <= thresholds[1]) return "warning.main";
+	return "error.main";
+}
+
+function isPerformanceLog(extra: Record<string, unknown>): boolean {
+	return (
+		TIMING_KEYS.some((key) => typeof extra[key] === "number") ||
+		typeof extra.route_id === "string"
+	);
+}
+
+function PerformanceTimingDisplay({
+	extra,
+}: {
+	extra: Record<string, unknown>;
+}) {
+	const timingEntries = TIMING_KEYS.filter(
+		(key) => typeof extra[key] === "number",
+	);
+	const routeId = typeof extra.route_id === "string" ? extra.route_id : null;
+
+	return (
+		<Box sx={{ mt: 0.5 }}>
+			{routeId && (
+				<Typography
+					variant="body2"
+					fontFamily="monospace"
+					color="text.secondary"
+					sx={{ mb: 1 }}
+				>
+					Route: {routeId}
+				</Typography>
+			)}
+			<Grid container spacing={1.5}>
+				{timingEntries.map((key) => {
+					const value = extra[key] as number;
+					return (
+						<Grid key={key} size={{ xs: 6, sm: 4 }}>
+							<Box
+								sx={{
+									bgcolor: "background.default",
+									borderRadius: 1,
+									p: 1.5,
+									textAlign: "center",
+								}}
+							>
+								<Typography
+									variant="caption"
+									color="text.secondary"
+									display="block"
+								>
+									{TIMING_LABELS[key] ?? key}
+								</Typography>
+								<Typography
+									variant="h6"
+									fontWeight={700}
+									fontFamily="monospace"
+									color={getTimingColor(key, value)}
+								>
+									{value.toFixed(0)}
+									<Typography
+										component="span"
+										variant="caption"
+										color="text.secondary"
+									>
+										{" "}
+										ms
+									</Typography>
+								</Typography>
+							</Box>
+						</Grid>
+					);
+				})}
+			</Grid>
+			{/* Show remaining non-timing extra data */}
+			{Object.keys(extra).some(
+				(k) =>
+					!(TIMING_KEYS as readonly string[]).includes(k) && k !== "route_id",
+			) && (
+				<Box
+					component="pre"
+					sx={{
+						bgcolor: "background.default",
+						p: 2,
+						borderRadius: 1,
+						mt: 1.5,
+						overflow: "auto",
+						fontSize: "0.75rem",
+						fontFamily: "monospace",
+						maxHeight: 200,
+					}}
+				>
+					{JSON.stringify(
+						Object.fromEntries(
+							Object.entries(extra).filter(
+								([k]) =>
+									!(TIMING_KEYS as readonly string[]).includes(k) &&
+									k !== "route_id",
+							),
+						),
+						null,
+						2,
+					)}
+				</Box>
+			)}
+		</Box>
+	);
+}
+
 const LEVEL_COLORS: Record<
 	string,
 	"success" | "warning" | "error" | "info" | "default"
@@ -261,7 +401,7 @@ function LogViewerPage() {
 
 							<TextField
 								size="small"
-								placeholder="Module filter..."
+								placeholder="Logger filter..."
 								defaultValue={store.filters.module || ""}
 								onKeyDown={(e) => {
 									if (e.key === "Enter") {
@@ -531,21 +671,27 @@ function LogViewerPage() {
 											<Typography variant="caption" color="text.secondary">
 												Extra Data
 											</Typography>
-											<Box
-												component="pre"
-												sx={{
-													bgcolor: "background.default",
-													p: 2,
-													borderRadius: 1,
-													mt: 0.5,
-													overflow: "auto",
-													fontSize: "0.75rem",
-													fontFamily: "monospace",
-													maxHeight: 200,
-												}}
-											>
-												{JSON.stringify(store.selectedLog.extra, null, 2)}
-											</Box>
+											{isPerformanceLog(store.selectedLog.extra) ? (
+												<PerformanceTimingDisplay
+													extra={store.selectedLog.extra}
+												/>
+											) : (
+												<Box
+													component="pre"
+													sx={{
+														bgcolor: "background.default",
+														p: 2,
+														borderRadius: 1,
+														mt: 0.5,
+														overflow: "auto",
+														fontSize: "0.75rem",
+														fontFamily: "monospace",
+														maxHeight: 200,
+													}}
+												>
+													{JSON.stringify(store.selectedLog.extra, null, 2)}
+												</Box>
+											)}
 										</Box>
 									)}
 								</Box>

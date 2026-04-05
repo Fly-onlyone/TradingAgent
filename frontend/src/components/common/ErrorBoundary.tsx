@@ -5,8 +5,8 @@
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import { Box, Button, Paper, Typography } from "@mui/material";
-import * as Sentry from "@sentry/react";
 import { Component, type ReactNode } from "react";
+import { captureSentryException } from "@/utils/sentry";
 
 interface Props {
 	children: ReactNode;
@@ -29,7 +29,7 @@ export class ErrorBoundary extends Component<Props, State> {
 	}
 
 	componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-		Sentry.captureException(error, {
+		captureSentryException(error, {
 			contexts: { react: { componentStack: errorInfo.componentStack } },
 		});
 		console.error("Error boundary caught an error:", error, errorInfo);

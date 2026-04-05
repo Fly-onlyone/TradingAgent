@@ -2,13 +2,13 @@
  * Axios API Client with JWT interceptors and transparent token refresh
  */
 
-import * as Sentry from "@sentry/react";
 import axios, {
 	type AxiosError,
 	type AxiosInstance,
 	type InternalAxiosRequestConfig,
 } from "axios";
 import type { ApiError, AuthTokens } from "@/types";
+import { captureSentryException } from "@/utils/sentry";
 import { getApiBaseUrl } from "@/utils/tauriEnv";
 
 // Token storage (in memory for security)
@@ -92,7 +92,7 @@ apiClient.interceptors.response.use(
 
 		if (error.response?.status !== 401) {
 			if (error.response?.status && error.response.status >= 500) {
-				Sentry.captureException(error, {
+				captureSentryException(error, {
 					tags: {
 						"api.url": error.config?.url,
 						"api.method": error.config?.method,

@@ -2,11 +2,11 @@
  * Authentication Store
  */
 
-import * as Sentry from "@sentry/react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { setAccessToken } from "@/api/client";
 import type { User } from "@/types";
+import { setSentryUser } from "@/utils/sentry";
 
 interface AuthState {
 	user: User | null;
@@ -40,7 +40,7 @@ export const useAuthStore = create<AuthState>()(
 
 			login: (user, token) => {
 				setAccessToken(token);
-				Sentry.setUser({ id: String(user.id), email: user.email });
+				setSentryUser({ id: String(user.id), email: user.email });
 				set({
 					user,
 					token,
@@ -56,7 +56,7 @@ export const useAuthStore = create<AuthState>()(
 
 			logout: () => {
 				setAccessToken(null);
-				Sentry.setUser(null);
+				setSentryUser(null);
 				set({
 					user: null,
 					token: null,
@@ -77,7 +77,7 @@ export const useAuthStore = create<AuthState>()(
 					setAccessToken(state.token);
 				}
 				if (state?.user) {
-					Sentry.setUser({
+					setSentryUser({
 						id: String(state.user.id),
 						email: state.user.email,
 					});

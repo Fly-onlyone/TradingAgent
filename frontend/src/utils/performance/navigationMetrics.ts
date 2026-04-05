@@ -1,4 +1,5 @@
-import * as Sentry from "@sentry/react";
+import { reportFrontendLog } from "@/utils/frontendLogger";
+import { startSentrySpanManual } from "@/utils/sentry";
 
 type PendingNavigation = {
 	finish: () => void;
@@ -18,7 +19,7 @@ export function markNavStart(routeId: string): void {
 		pendingNavigations.delete(routeId);
 	}
 
-	Sentry.startSpanManual(
+	startSentrySpanManual(
 		{
 			name: `route.transition ${routeId}`,
 			op: "ui.navigation",
@@ -54,7 +55,19 @@ export function reportNavDuration(routeId: string, durationMs: number): void {
 		return;
 	}
 
+	const rounded = Math.round(durationMs * 10) / 10;
+	const message = `[navigation] ${routeId} ${rounded}ms`;
+
 	if (import.meta.env.DEV) {
-		console.info(`[navigation] ${routeId} ${durationMs.toFixed(1)}ms`);
+		console.info(message);
 	}
+
+	reportFrontendLog("INFO", message, {
+		loggerName: "frontend.performance.navigation",
+		module: "navigationMetrics",
+		extra: {
+			route_id: routeId,
+			duration_ms: rounded,
+		},
+	});
 }

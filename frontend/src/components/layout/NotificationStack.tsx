@@ -1,10 +1,4 @@
-import {
-	Alert,
-	Box,
-	Button,
-	LinearProgress,
-	Snackbar,
-} from "@mui/material";
+import { Alert, Box, Button, LinearProgress, Snackbar } from "@mui/material";
 import { AnimatePresence, motion } from "framer-motion";
 import type { NotificationConfig } from "@/store/uiStore";
 
@@ -41,9 +35,7 @@ export function NotificationStack({
 							reducedMotion ? { opacity: 1 } : { opacity: 1, x: 0, scale: 1 }
 						}
 						exit={
-							reducedMotion
-								? { opacity: 0 }
-								: { opacity: 0, x: 80, scale: 0.9 }
+							reducedMotion ? { opacity: 0 } : { opacity: 0, x: 80, scale: 0.9 }
 						}
 						transition={
 							reducedMotion

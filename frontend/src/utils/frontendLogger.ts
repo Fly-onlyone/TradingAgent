@@ -22,7 +22,7 @@ interface FrontendLogPayload {
 	extra?: Record<string, unknown>;
 }
 
-interface LogOptions {
+export interface LogOptions {
 	loggerName?: string;
 	module?: string;
 	functionName?: string;
@@ -159,7 +159,7 @@ function forwardToNativeConsole(
 	});
 }
 
-function reportFrontendLog(
+export function reportFrontendLog(
 	level: FrontendLogLevel,
 	message: string,
 	options?: LogOptions,
