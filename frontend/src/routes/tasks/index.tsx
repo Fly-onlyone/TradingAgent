@@ -104,6 +104,55 @@ const DEFAULT_FORM: TaskCreate = {
 	useSubagents: false,
 };
 
+function buildTaskForm(task: TaskCreate | TaskUpdate) {
+	return {
+		name: task.name ?? DEFAULT_FORM.name,
+		description: task.description,
+		tradingEnabled: task.tradingEnabled ?? false,
+		monitoringEnabled: task.monitoringEnabled ?? false,
+		schedules:
+			task.schedules && task.schedules.length > 0
+				? task.schedules.map((schedule) => ({
+						...schedule,
+						enabled: schedule.enabled ?? true,
+					}))
+				: [{ frequency: "daily", scheduledTime: "09:00", enabled: true }],
+		symbols: task.symbols ?? [],
+		riskLevel: task.riskLevel ?? "moderate",
+		holdingTerm: task.holdingTerm ?? "medium",
+		agentMode: task.agentMode ?? "ask",
+		maxPositionSize: task.maxPositionSize,
+		maxDailyTrades: task.maxDailyTrades,
+		monitoringConditions: task.monitoringConditions ?? [],
+		alertCooldownMinutes: task.alertCooldownMinutes ?? 60,
+		useSubagents: task.useSubagents ?? false,
+		customInstructions: task.customInstructions,
+	} satisfies TaskCreate;
+}
+
+function buildEditableTaskUpdate(formData: TaskCreate): TaskUpdate {
+	return {
+		description: formData.description,
+		symbols: formData.symbols,
+		customInstructions: formData.customInstructions,
+		schedules: formData.schedules,
+		tradingEnabled: formData.tradingEnabled,
+		agentMode: formData.agentMode,
+		riskLevel: formData.riskLevel,
+		holdingTerm: formData.holdingTerm,
+		useSubagents: formData.useSubagents,
+		maxPositionSize: formData.maxPositionSize,
+		maxDailyTrades: formData.maxDailyTrades,
+		monitoringEnabled: formData.monitoringEnabled,
+		monitoringConditions: formData.monitoringConditions,
+		alertCooldownMinutes: formData.alertCooldownMinutes,
+	};
+}
+
+function serializeEditableTaskUpdate(update: TaskUpdate): string {
+	return JSON.stringify(update);
+}
+
 function TaskConfigPage() {
 	const queryClient = useQueryClient();
 	const backendStatus = useUIStore((s) => s.backendStatus);
@@ -126,6 +175,10 @@ function TaskConfigPage() {
 	const initRef = useRef(false);
 	/** Guards against double auto-create. */
 	const autoCreatingRef = useRef(false);
+	const lastSyncedPayloadRef = useRef<string | null>(null);
+	const currentPayloadRef = useRef(
+		serializeEditableTaskUpdate(buildEditableTaskUpdate(DEFAULT_FORM)),
+	);
 	const prevIsRunningRef = useRef(false);
 	const prevHistoryCountRef = useRef(0);
 
@@ -211,52 +264,54 @@ function TaskConfigPage() {
 		delay: 1500,
 	});
 
+	useEffect(() => {
+		currentPayloadRef.current = serializeEditableTaskUpdate(
+			buildEditableTaskUpdate(formData),
+		);
+	}, [formData]);
+
 	// ── Populate form from backend task ─────────────────────────────────
 
 	useEffect(() => {
 		if (!task) {
 			initRef.current = false;
+			lastSyncedPayloadRef.current = null;
 			setTaskId(null);
 			return;
 		}
-		setTaskId(task.id);
-		setScheduleKeys(
-			(task.schedules.length > 0 ? task.schedules : [{}]).map(() =>
-				createUiKey(),
-			),
+
+		const backendFormData = buildTaskForm(task);
+		const backendPayload = serializeEditableTaskUpdate(
+			buildEditableTaskUpdate(backendFormData),
 		);
+		const previousSyncedPayload = lastSyncedPayloadRef.current;
+		const shouldHydrateForm =
+			!initRef.current ||
+			task.id !== taskId ||
+			currentPayloadRef.current === previousSyncedPayload ||
+			backendPayload !== previousSyncedPayload;
+
+		if (task.id !== taskId) {
+			setTaskId(task.id);
+		}
+
+		if (!shouldHydrateForm) {
+			return;
+		}
+
+		lastSyncedPayloadRef.current = backendPayload;
+		initRef.current = false;
+		setScheduleKeys(backendFormData.schedules.map(() => createUiKey()));
 		setMonitoringConditionKeys(
-			(task.monitoringConditions ?? []).map(() => createUiKey()),
+			backendFormData.monitoringConditions.map(() => createUiKey()),
 		);
-		setFormData({
-			name: task.name,
-			description: task.description,
-			tradingEnabled: task.tradingEnabled,
-			monitoringEnabled: task.monitoringEnabled,
-			schedules:
-				task.schedules.length > 0
-					? task.schedules.map((s) => ({
-							...s,
-							enabled: s.enabled ?? true,
-						}))
-					: [{ frequency: "daily", scheduledTime: "09:00", enabled: true }],
-			symbols: task.symbols,
-			riskLevel: task.riskLevel,
-			holdingTerm: task.holdingTerm ?? "medium",
-			agentMode: task.agentMode,
-			maxPositionSize: task.maxPositionSize,
-			maxDailyTrades: task.maxDailyTrades,
-			monitoringConditions: task.monitoringConditions ?? [],
-			alertCooldownMinutes: task.alertCooldownMinutes ?? 60,
-			useSubagents: task.useSubagents ?? false,
-			customInstructions: task.customInstructions,
-		});
+		setFormData(backendFormData);
 		// Mark initialised after a tick so the auto-save effect skips this batch.
 		const t = setTimeout(() => {
 			initRef.current = true;
 		}, 0);
 		return () => clearTimeout(t);
-	}, [createUiKey, task]);
+	}, [createUiKey, task, taskId]);
 
 	// ── Auto-create when no task exists ──────────────────────────────────
 
@@ -278,22 +333,11 @@ function TaskConfigPage() {
 
 	useEffect(() => {
 		if (!initRef.current || !taskId) return;
-		triggerSave({
-			description: formData.description,
-			symbols: formData.symbols,
-			customInstructions: formData.customInstructions,
-			schedules: formData.schedules,
-			tradingEnabled: formData.tradingEnabled,
-			agentMode: formData.agentMode,
-			riskLevel: formData.riskLevel,
-			holdingTerm: formData.holdingTerm,
-			useSubagents: formData.useSubagents,
-			maxPositionSize: formData.maxPositionSize,
-			maxDailyTrades: formData.maxDailyTrades,
-			monitoringEnabled: formData.monitoringEnabled,
-			monitoringConditions: formData.monitoringConditions,
-			alertCooldownMinutes: formData.alertCooldownMinutes,
-		});
+		const update = buildEditableTaskUpdate(formData);
+		if (serializeEditableTaskUpdate(update) === lastSyncedPayloadRef.current) {
+			return;
+		}
+		triggerSave(update);
 	}, [formData, taskId, triggerSave]);
 
 	// ── Retry on reconnect ──────────────────────────────────────────────
