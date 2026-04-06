@@ -296,11 +296,11 @@ export function ChatMessage({
 						sx={{
 							p: 2,
 							bgcolor: isUser
-								? "primary.main"
+								? (theme) => `rgba(${theme.trading.primaryRgb}, 0.15)`
 								: isSystem
 									? (theme) => `rgba(${theme.trading.semanticRgb.warning}, 0.1)`
 									: "background.paper",
-							color: isUser ? "white" : "text.primary",
+							color: "text.primary",
 							borderRadius: 2,
 							borderLeft: isUser ? "none" : isSystem ? "none" : "2px solid",
 							borderLeftColor: isUser
@@ -308,6 +308,8 @@ export function ChatMessage({
 								: isSystem
 									? undefined
 									: "secondary.main",
+							borderRight: isUser ? "2px solid" : "none",
+							borderRightColor: isUser ? "primary.main" : undefined,
 							borderTopLeftRadius: isUser ? 16 : 4,
 							borderTopRightRadius: isUser ? 4 : 16,
 						}}
