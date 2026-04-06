@@ -307,3 +307,100 @@ class StrategyEmbeddingGenerator:
         """Generate embedding for a trading strategy."""
         text = self.format_strategy_text(strategy)
         return await get_embedding_service().generate_document_embedding(text)
+
+
+class TradeLessonEmbeddingGenerator:
+    """Generate embeddings specifically for trade lessons."""
+
+    def format_lesson_text(self, lesson: dict[str, Any]) -> str:
+        """Format trade lesson data into text for embedding."""
+        parts = []
+
+        if outcome := lesson.get("outcome"):
+            symbol = lesson.get("symbol", "")
+            side = lesson.get("side", "")
+            parts.append(f"Trade: {side.upper()} {symbol} — {outcome}")
+
+        if profit_pct := lesson.get("profit_pct"):
+            parts.append(f"P&L: {profit_pct:+.2f}%")
+
+        if summary := lesson.get("lesson_summary"):
+            parts.append(f"Lesson: {summary}")
+
+        if market_context := lesson.get("market_context"):
+            parts.append(f"Market Context: {self._format_dict(market_context)}")
+
+        if mistakes := lesson.get("mistakes"):
+            parts.append(f"Mistakes: {'; '.join(mistakes)}")
+
+        if successes := lesson.get("successes"):
+            parts.append(f"Successes: {'; '.join(successes)}")
+
+        if recommendations := lesson.get("recommendations"):
+            parts.append(f"Recommendations: {'; '.join(recommendations)}")
+
+        entry = lesson.get("entry_price")
+        exit_ = lesson.get("exit_price")
+        if entry and exit_:
+            parts.append(f"Entry: {entry}, Exit: {exit_}")
+
+        return "\n".join(parts)
+
+    def _format_dict(self, d: dict[str, Any]) -> str:
+        """Format a dictionary to readable text."""
+        if not d:
+            return "None specified"
+        parts = []
+        for key, value in d.items():
+            if isinstance(value, dict):
+                parts.append(f"{key}: {self._format_dict(value)}")
+            elif isinstance(value, list):
+                parts.append(f"{key}: {', '.join(str(v) for v in value)}")
+            else:
+                parts.append(f"{key}: {value}")
+        return "; ".join(parts)
+
+    async def generate_lesson_embedding(self, lesson: dict[str, Any]) -> list[float] | None:
+        """Generate embedding for a trade lesson."""
+        text = self.format_lesson_text(lesson)
+        return await get_embedding_service().generate_document_embedding(text)
+
+
+class TradingPatternEmbeddingGenerator:
+    """Generate embeddings specifically for trading patterns."""
+
+    def format_pattern_text(self, pattern: dict[str, Any]) -> str:
+        """Format trading pattern data into text for embedding."""
+        parts = []
+
+        if name := pattern.get("pattern_name"):
+            ptype = pattern.get("pattern_type", "")
+            parts.append(f"Pattern: {name} ({ptype})")
+
+        if description := pattern.get("description"):
+            parts.append(f"Description: {description}")
+
+        if conditions := pattern.get("conditions"):
+            formatted = "; ".join(f"{k}: {v}" for k, v in conditions.items())
+            parts.append(f"Conditions: {formatted}")
+
+        if (rate := pattern.get("success_rate")) is not None:
+            count = pattern.get("sample_count", 0)
+            avg_ret = pattern.get("avg_return", 0)
+            parts.append(f"Success Rate: {rate:.0%}, Samples: {count}, Avg Return: {avg_ret:.2f}%")
+
+        if symbols := pattern.get("symbols"):
+            parts.append(f"Symbols: {', '.join(symbols)}")
+
+        if timeframes := pattern.get("timeframes"):
+            parts.append(f"Timeframes: {', '.join(timeframes)}")
+
+        if market_conditions := pattern.get("market_conditions"):
+            parts.append(f"Market Conditions: {', '.join(market_conditions)}")
+
+        return "\n".join(parts)
+
+    async def generate_pattern_embedding(self, pattern: dict[str, Any]) -> list[float] | None:
+        """Generate embedding for a trading pattern."""
+        text = self.format_pattern_text(pattern)
+        return await get_embedding_service().generate_document_embedding(text)

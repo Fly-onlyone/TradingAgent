@@ -1,11 +1,15 @@
 """P&L Calculator Service for trade performance tracking."""
 
+import asyncio
+import logging
 from datetime import datetime
 
 from beanie import PydanticObjectId
 from pydantic import BaseModel
 
 from app.db.models.order import Order, OrderSide, OrderStatus, TradeStatus
+
+logger = logging.getLogger(__name__)
 
 
 class TradePnL(BaseModel):
@@ -286,7 +290,24 @@ async def close_trade(
     # Calculate P&L
     order.calculate_pnl(exit_price, fees)
     await order.save()
+
+    # Trigger async lesson extraction (fire-and-forget)
+    asyncio.create_task(_extract_trade_lesson(order))  # noqa: RUF006
+
     return order
+
+
+async def _extract_trade_lesson(order: Order) -> None:
+    """Background task: extract a TradeLesson from a closed order."""
+    try:
+        from app.services.trade_learner import TradeLearner
+
+        learner = await TradeLearner.create()
+        lesson = await learner.extract_lesson(order)
+        if lesson:
+            logger.info("Trade lesson extracted for order %s: %s", order.id, lesson.id)
+    except Exception:
+        logger.warning("Failed to extract trade lesson for order %s", order.id, exc_info=True)
 
 
 async def export_trades(

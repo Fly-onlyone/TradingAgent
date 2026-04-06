@@ -99,6 +99,12 @@ class AppSettings(Document):
     auto_discover_max_sources: int = 30
     auto_discover_last_run_at: datetime | None = None
 
+    # Pattern mining from historical candle data
+    pattern_mining_enabled: bool = False
+    pattern_mining_interval_hours: int = 12
+    pattern_mining_symbols: list[str] = Field(default_factory=list)
+    pattern_mining_last_run_at: datetime | None = None
+
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @model_validator(mode="before")
