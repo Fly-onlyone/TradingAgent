@@ -121,6 +121,7 @@ class AgentTaskScheduler:
             self._load_active_tasks(),
             self._schedule_session_cleanup(),
             self._schedule_auto_discovery(),
+            self._schedule_pattern_mining(),
         )
 
     async def stop(self) -> None:
@@ -216,6 +217,59 @@ class AgentTaskScheduler:
         """Public method to reschedule after settings change."""
         if self._running:
             await self._schedule_auto_discovery()
+
+    async def _schedule_pattern_mining(self) -> None:
+        """Schedule or remove the pattern mining job based on settings."""
+        from app.db.models.app_settings import AppSettings
+
+        job_id = "mine_trading_patterns"
+
+        try:
+            app_settings = await AppSettings.get_instance()
+        except Exception:
+            logger.debug("Could not load AppSettings for pattern mining", exc_info=True)
+            return
+
+        if self.scheduler.get_job(job_id):
+            self.scheduler.remove_job(job_id)
+
+        if not app_settings.pattern_mining_enabled:
+            return
+
+        hours = max(1, app_settings.pattern_mining_interval_hours)
+        self.scheduler.add_job(
+            self._run_pattern_mining,
+            IntervalTrigger(hours=hours),
+            id=job_id,
+            name="Trading pattern mining",
+            replace_existing=True,
+        )
+        logger.info("Pattern mining scheduled every %d hours", hours)
+
+    async def _run_pattern_mining(self) -> None:
+        """Execute one pattern mining cycle."""
+        from app.services.pattern_miner import PatternMiner
+
+        with sentry_sdk.start_transaction(op="task", name="pattern-mining"):
+            try:
+                from app.db.models.app_settings import AppSettings
+
+                app_settings = await AppSettings.get_instance()
+                symbols = app_settings.pattern_mining_symbols or None
+
+                miner = PatternMiner()
+                stats = await miner.run_mining_cycle(symbols)
+                logger.info("Pattern mining stats: %s", stats)
+
+                app_settings.pattern_mining_last_run_at = datetime.now(UTC)
+                await app_settings.save_with_timestamp()
+            except Exception:
+                logger.exception("Pattern mining cycle failed")
+
+    async def reschedule_pattern_mining(self) -> None:
+        """Public method to reschedule after settings change."""
+        if self._running:
+            await self._schedule_pattern_mining()
 
     async def _schedule_session_cleanup(self) -> None:
         """Schedule or remove the session retention cleanup job based on settings."""

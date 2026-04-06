@@ -11,7 +11,11 @@ from app.api.v1.auth import get_current_active_user
 from app.db.models.knowledge import StrategyKnowledge, TradeLesson, TradingPattern
 from app.db.models.news import NewsArticle
 from app.db.models.user import User
-from app.knowledge.embeddings import StrategyEmbeddingGenerator
+from app.knowledge.embeddings import (
+    StrategyEmbeddingGenerator,
+    TradeLessonEmbeddingGenerator,
+    TradingPatternEmbeddingGenerator,
+)
 from app.knowledge.retriever import get_retriever
 
 logger = logging.getLogger(__name__)
@@ -29,6 +33,39 @@ class StrategyKnowledgeCreate(BaseModel):
     market_conditions: list[str] | None = None
     asset_classes: list[str] | None = None
     timeframes: list[str] | None = None
+
+
+# Trade Lesson Create Schema
+class TradeLessonCreate(BaseModel):
+    order_id: str | None = None
+    outcome: str  # "profit", "loss", "breakeven"
+    profit_pct: float
+    profit_amount: float | None = None
+    lesson_summary: str
+    market_context: dict
+    mistakes: list[str] | None = None
+    successes: list[str] | None = None
+    recommendations: list[str] | None = None
+    symbol: str
+    side: str  # "buy" or "sell"
+    entry_price: float
+    exit_price: float
+    duration_minutes: int | None = None
+
+
+# Trading Pattern Create Schema
+class TradingPatternCreate(BaseModel):
+    pattern_name: str
+    pattern_type: str  # "technical", "sentiment", "correlation"
+    description: str
+    conditions: dict
+    success_rate: float
+    sample_count: int
+    avg_return: float
+    avg_duration_hours: int | None = None
+    symbols: list[str] | None = None
+    timeframes: list[str] | None = None
+    market_conditions: list[str] | None = None
 
 
 class StrategyKnowledgeResponse(BaseModel):
@@ -316,6 +353,42 @@ async def get_trade_lesson(
     return lesson_to_response(lesson)
 
 
+@router.post("/lessons", response_model=TradeLessonResponse)
+async def create_trade_lesson(
+    data: TradeLessonCreate,
+    current_user: User = Depends(get_current_active_user),
+) -> TradeLessonResponse:
+    """Create a new trade lesson in the knowledge base."""
+    lesson = TradeLesson(
+        order_id=PydanticObjectId(data.order_id) if data.order_id else None,
+        outcome=data.outcome,
+        profit_pct=data.profit_pct,
+        profit_amount=data.profit_amount,
+        lesson_summary=data.lesson_summary,
+        market_context=data.market_context,
+        mistakes=data.mistakes,
+        successes=data.successes,
+        recommendations=data.recommendations,
+        symbol=data.symbol,
+        side=data.side,
+        entry_price=data.entry_price,
+        exit_price=data.exit_price,
+        duration_minutes=data.duration_minutes,
+    )
+    await lesson.insert()
+
+    # Generate and store embedding for semantic search
+    try:
+        generator = TradeLessonEmbeddingGenerator()
+        lesson.embedding = await generator.generate_lesson_embedding(data.model_dump())
+        if lesson.embedding is not None:
+            await lesson.save()
+    except Exception:
+        logger.warning("Failed to generate embedding for lesson %s", lesson.id, exc_info=True)
+
+    return lesson_to_response(lesson)
+
+
 # Trading Patterns Endpoints
 @router.get("/patterns", response_model=list[TradingPatternResponse])
 async def list_trading_patterns(
@@ -352,6 +425,46 @@ async def get_trading_pattern(
     pattern = await TradingPattern.get(PydanticObjectId(pattern_id))
     if not pattern:
         raise HTTPException(status_code=404, detail="Pattern not found")
+    return pattern_to_response(pattern)
+
+
+@router.post("/patterns", response_model=TradingPatternResponse)
+async def create_trading_pattern(
+    data: TradingPatternCreate,
+    current_user: User = Depends(get_current_active_user),
+) -> TradingPatternResponse:
+    """Create a new trading pattern in the knowledge base."""
+    existing = await TradingPattern.find_one(TradingPattern.pattern_name == data.pattern_name)
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A pattern named '{data.pattern_name}' already exists (id: {existing.id})",
+        )
+
+    pattern = TradingPattern(
+        pattern_name=data.pattern_name,
+        pattern_type=data.pattern_type,
+        description=data.description,
+        conditions=data.conditions,
+        success_rate=data.success_rate,
+        sample_count=data.sample_count,
+        avg_return=data.avg_return,
+        avg_duration_hours=data.avg_duration_hours,
+        symbols=data.symbols,
+        timeframes=data.timeframes,
+        market_conditions=data.market_conditions,
+    )
+    await pattern.insert()
+
+    # Generate and store embedding for semantic search
+    try:
+        generator = TradingPatternEmbeddingGenerator()
+        pattern.embedding = await generator.generate_pattern_embedding(data.model_dump())
+        if pattern.embedding is not None:
+            await pattern.save()
+    except Exception:
+        logger.warning("Failed to generate embedding for pattern %s", pattern.id, exc_info=True)
+
     return pattern_to_response(pattern)
 
 

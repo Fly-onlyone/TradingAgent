@@ -21,6 +21,7 @@ monitoring.
   - [Knowledge Types](#knowledge-types)
   - [Auto-Generated Knowledge](#auto-generated-knowledge)
   - [Agent Integration](#agent-integration)
+  - [Knowledge Refresh Schedule](#knowledge-refresh-schedule)
 - [Strategy Import](#strategy-import)
   - [Auto-Discovery](#auto-discovery)
 - [Automation Flow](#automation-flow)
@@ -295,6 +296,20 @@ The agent uses knowledge at two levels:
 
 1. **Interactive chat** — The system prompt instructs the agent to call `search_strategies`, `search_lessons`, and `search_patterns` before every analysis
 2. **Scheduled tasks** — The task scheduler automatically injects relevant knowledge context into the prompt before the agent runs
+
+### Knowledge Refresh Schedule
+
+| Knowledge Type        | Trigger                | Frequency                                                              |
+|-----------------------|------------------------|------------------------------------------------------------------------|
+| **StrategyKnowledge** | Auto-discovery         | Configurable (`auto_discover_interval_hours`, default 6h)              |
+| **StrategyKnowledge** | Manual import          | On-demand — URL/file at `/strategies/import`                           |
+| **StrategyKnowledge** | Direct API             | On-demand — `POST /knowledge/strategies`                               |
+| **NewsArticle**       | Scheduled crawl        | Every 15 min (all enabled RSS sources)                                 |
+| **NewsArticle**       | Credibility re-score   | Every 6 hours                                                         |
+| **TradeLesson**       | Auto-extracted         | On `close_trade()` — `TradeLearner` extracts via Claude, async        |
+| **TradeLesson**       | Manual / API           | On-demand — `POST /knowledge/lessons`                                  |
+| **TradingPattern**    | Scheduled mining       | Configurable (`pattern_mining_interval_hours`, default 12h)            |
+| **TradingPattern**    | Manual / API           | On-demand — `POST /knowledge/patterns`                                 |
 
 ## Strategy Import
 
