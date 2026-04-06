@@ -129,11 +129,15 @@ async def agent_chat_websocket(
         cancel_pending_questions,
         clear_ws_event_emitter,
         resolve_user_answer,
+        set_active_connection_id,
+        set_active_session_id,
         set_active_user_id,
         set_ws_event_emitter,
     )
 
+    connection_id = uuid.uuid4().hex
     set_active_user_id(str(user.id))
+    set_active_connection_id(connection_id)
 
     agent = None
     session = None
@@ -145,6 +149,111 @@ async def agent_chat_websocket(
 
     # Allow the ask_user MCP tool to push questions through this WebSocket
     set_ws_event_emitter(send_event)
+
+    async def _load_session(client_session_id: str | None) -> AgentSession | None:
+        """Load an existing session owned by the current user."""
+        if not client_session_id:
+            return None
+
+        try:
+            session_object_id = PydanticObjectId(client_session_id)
+        except Exception:
+            return None
+
+        return await AgentSession.find_one(
+            AgentSession.id == session_object_id,
+            AgentSession.user_id == user.id,
+        )
+
+    async def _persist_user_message(
+        user_message: str,
+        *,
+        clear_pending_question: bool = True,
+    ) -> None:
+        """Persist a user message and clear stale pending-question state."""
+        if clear_pending_question and session.active_pending_question:
+            session.clear_pending_question()
+
+        session.add_message(role="user", content=user_message)
+        await session.save()
+
+    async def _prepare_agent_message(user_message: str) -> str:
+        """Inject session memory on the first turn of a new chat."""
+        agent_message = user_message
+        if session.total_messages == 1:
+            try:
+                from app.agent.tools.memory_tools import load_session_memories
+
+                memory_ctx = await load_session_memories(str(user.id))
+                if memory_ctx:
+                    agent_message = f"{memory_ctx}\n\n{user_message}"
+            except Exception:
+                logger.debug("Failed to load session memories", exc_info=True)
+        return agent_message
+
+    async def _start_chat_turn(
+        user_message: str,
+        *,
+        client_session_id: str | None = None,
+        persist_user_message: bool = True,
+        broadcast_user_message: bool = False,
+        create_session: bool = True,
+    ) -> None:
+        """Load the target session, persist the user message, and start the agent turn."""
+        nonlocal chat_task, session
+
+        target_session = session
+        if client_session_id and (
+            target_session is None or str(target_session.id) != client_session_id
+        ):
+            target_session = await _load_session(client_session_id)
+        if target_session is None and create_session:
+            target_session = AgentSession(user_id=user.id)
+            await target_session.insert()
+            await manager.send_personal(
+                websocket,
+                {
+                    "type": "session_created",
+                    "data": {"sessionId": str(target_session.id)},
+                },
+            )
+
+        if target_session is None:
+            await manager.send_personal(
+                websocket,
+                {
+                    "type": "error",
+                    "data": {"error": "Session not found for answer"},
+                },
+            )
+            return
+
+        session = target_session
+
+        if persist_user_message:
+            with sentry_sdk.start_span(
+                op="db.write",
+                description="save user message",
+            ):
+                await _persist_user_message(user_message)
+
+            if broadcast_user_message:
+                await manager.send_personal(
+                    websocket,
+                    {
+                        "type": "message",
+                        "data": {
+                            "id": str(uuid.uuid4()),
+                            "role": "user",
+                            "content": user_message,
+                            "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+                        },
+                    },
+                )
+
+        agent_message = await _prepare_agent_message(user_message)
+        set_active_session_id(str(session.id))
+        chat_task = asyncio.create_task(_process_chat(agent_message))
 
     async def _send_and_persist_assistant_message(
         content: str,
@@ -344,6 +453,10 @@ async def agent_chat_websocket(
             # Handle cancel requests
             if message.get("type") == "cancel":
                 if chat_task and not chat_task.done():
+                    await cancel_pending_questions(
+                        connection_id=connection_id,
+                        clear_persisted=True,
+                    )
                     agent.cancel()
                     chat_task.cancel()
                     try:
@@ -357,10 +470,49 @@ async def agent_chat_websocket(
             # Handle answers to agent questions (ask_user tool)
             if message.get("type") == "answer_question":
                 answer_data = message.get("data", {})
-                resolve_user_answer(
+                answer = answer_data.get("answer", "")
+                question_session_id = answer_data.get("sessionId")
+                if question_session_id:
+                    target_session = session
+                    if target_session is None or str(target_session.id) != question_session_id:
+                        target_session = await _load_session(question_session_id)
+                    if target_session:
+                        session = target_session
+                        with sentry_sdk.start_span(
+                            op="db.write",
+                            description="save user answer",
+                        ):
+                            await _persist_user_message(
+                                answer,
+                                clear_pending_question=False,
+                            )
+
+                        await manager.send_personal(
+                            websocket,
+                            {
+                                "type": "message",
+                                "data": {
+                                    "id": str(uuid.uuid4()),
+                                    "role": "user",
+                                    "content": answer,
+                                    "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+                                },
+                            },
+                        )
+
+                resolution = await resolve_user_answer(
                     answer_data.get("id", ""),
-                    answer_data.get("answer", ""),
+                    answer,
+                    user_id=str(user.id),
+                    session_id=question_session_id,
                 )
+                if resolution and resolution.get("status") == "resume_from_history":
+                    await _start_chat_turn(
+                        answer,
+                        client_session_id=resolution.get("session_id"),
+                        persist_user_message=False,
+                        create_session=False,
+                    )
                 continue
 
             user_message = _build_user_message(message)
@@ -374,65 +526,39 @@ async def agent_chat_websocket(
                 except asyncio.CancelledError:
                     pass
 
-            # Lazy session creation — only on first real message to
-            # avoid spamming empty sessions on reconnect attempts
-            if session is None:
-                with sentry_sdk.start_span(
-                    op="db.query",
-                    description="load or create agent session",
-                ):
-                    client_session_id = message.get("sessionId")
-                    if client_session_id:
-                        existing = await AgentSession.find_one(
-                            AgentSession.id == PydanticObjectId(client_session_id),
-                            AgentSession.user_id == user.id,
-                        )
-                        if existing:
-                            session = existing
+            await _start_chat_turn(
+                user_message,
+                client_session_id=message.get("sessionId"),
+            )
 
-                    if session is None:
-                        session = AgentSession(user_id=user.id)
-                        await session.insert()
-                        await manager.send_personal(
-                            websocket,
-                            {
-                                "type": "session_created",
-                                "data": {"sessionId": str(session.id)},
-                            },
-                        )
-
-            # Persist user message
-            with sentry_sdk.start_span(
-                op="db.write",
-                description="save user message",
-            ):
-                session.add_message(role="user", content=user_message)
-                await session.save()
-
-            # Inject memory context on the first message of a new session
-            agent_message = user_message
-            if session.total_messages == 1:
-                try:
-                    from app.agent.tools.memory_tools import load_session_memories
-
-                    memory_ctx = await load_session_memories(str(user.id))
-                    if memory_ctx:
-                        agent_message = f"{memory_ctx}\n\n{user_message}"
-                except Exception:
-                    logger.debug("Failed to load session memories", exc_info=True)
-
-            # Process with trading agent in a task so we can receive
-            # cancel messages while the agent is running.
-            chat_task = asyncio.create_task(_process_chat(agent_message))
-
-    except (WebSocketDisconnect, RuntimeError):
+    except WebSocketDisconnect as e:
+        logger.info(
+            "Agent WebSocket disconnected",
+            extra={
+                "disconnect_code": getattr(e, "code", None),
+                "disconnect_reason": getattr(e, "reason", None),
+                "connection_id": connection_id,
+                "session_id": str(session.id) if session else None,
+                "user_id": str(user.id),
+            },
+        )
+    except RuntimeError as e:
         # RuntimeError: "WebSocket is not connected" — raised by Starlette when
         # the client disconnects before/during receive_text() in some edge cases
-        pass
+        logger.warning(
+            "Agent WebSocket runtime disconnect: %s",
+            e,
+            extra={
+                "connection_id": connection_id,
+                "session_id": str(session.id) if session else None,
+                "user_id": str(user.id),
+            },
+            exc_info=True,
+        )
     except Exception as e:
         logger.error("WebSocket handler error: %s", e, exc_info=True)
     finally:
-        cancel_pending_questions()
+        await cancel_pending_questions(connection_id=connection_id)
         clear_ws_event_emitter()
         if chat_task and not chat_task.done():
             chat_task.cancel()
@@ -444,7 +570,15 @@ async def agent_chat_websocket(
             try:
                 await agent.disconnect()
             except Exception:
-                pass
+                logger.warning(
+                    "Failed to disconnect trading agent cleanly",
+                    extra={
+                        "connection_id": connection_id,
+                        "session_id": str(session.id) if session else None,
+                        "user_id": str(user.id),
+                    },
+                    exc_info=True,
+                )
         if session:
             try:
                 session.end_session()

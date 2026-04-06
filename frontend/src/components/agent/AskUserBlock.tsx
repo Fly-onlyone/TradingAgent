@@ -20,7 +20,7 @@ import {
 } from "@mui/material";
 import { motion } from "framer-motion";
 import { useCallback, useState } from "react";
-import type { PendingQuestion } from "@/api/websocket/useAgentSocket";
+import type { PendingQuestion } from "@/types/session";
 import { spring } from "@/utils/animations/variants";
 
 interface AskUserBlockProps {

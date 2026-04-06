@@ -9,6 +9,7 @@ import type {
 	GroupedSessionsResponse,
 	MessageCreate,
 	MessageListResponse,
+	PendingQuestion,
 	SessionCreate,
 	SessionListResponse,
 	SessionMessage,
@@ -31,6 +32,11 @@ function transformSession(data: Record<string, unknown>): AgentSession {
 		title: data.title as string | undefined,
 		description: data.description as string | undefined,
 		isActive: data.is_active as boolean,
+		pendingQuestion: data.pending_question
+			? transformPendingQuestion(
+					data.pending_question as Record<string, unknown>,
+				)
+			: undefined,
 		totalMessages: data.total_messages as number,
 		userMessages: data.user_messages as number,
 		assistantMessages: data.assistant_messages as number,
@@ -41,6 +47,19 @@ function transformSession(data: Record<string, unknown>): AgentSession {
 		startedAt: data.started_at as string,
 		endedAt: data.ended_at as string | undefined,
 		lastMessageAt: data.last_message_at as string | undefined,
+	};
+}
+
+function transformPendingQuestion(
+	data: Record<string, unknown>,
+): PendingQuestion {
+	return {
+		id: data.id as string,
+		sessionId: data.session_id as string,
+		question: data.question as string,
+		options: (data.options as string[]) || [],
+		multiSelect: data.multi_select as boolean | undefined,
+		createdAt: data.created_at as string | undefined,
 	};
 }
 

@@ -11,6 +11,7 @@ import time
 import uuid
 from collections.abc import Callable
 from contextvars import ContextVar
+from dataclasses import dataclass
 from typing import Any
 
 from claude_agent_sdk import create_sdk_mcp_server, tool
@@ -46,6 +47,29 @@ def get_active_user_id() -> str | None:
     return _active_user_id.get()
 
 
+_active_session_id: ContextVar[str | None] = ContextVar("active_session_id", default=None)
+_active_connection_id: ContextVar[str | None] = ContextVar(
+    "active_connection_id",
+    default=None,
+)
+
+
+def set_active_session_id(session_id: str | None) -> None:
+    _active_session_id.set(session_id)
+
+
+def get_active_session_id() -> str | None:
+    return _active_session_id.get()
+
+
+def set_active_connection_id(connection_id: str | None) -> None:
+    _active_connection_id.set(connection_id)
+
+
+def get_active_connection_id() -> str | None:
+    return _active_connection_id.get()
+
+
 # ============================================================
 # Tool Result Buffer & Logging
 # ============================================================
@@ -65,41 +89,163 @@ def pop_tool_result(tool_name: str) -> dict[str, Any] | None:
 # ============================================================
 # Allows the agent to ask the user a question with options and
 # wait for their response, forwarded through the WebSocket.
-_ws_event_emitter: Callable | None = None
-_pending_questions: dict[str, asyncio.Future[str]] = {}
+_ws_event_emitter: ContextVar[Callable | None] = ContextVar("ws_event_emitter", default=None)
+
+
+@dataclass
+class PendingQuestionRuntime:
+    future: asyncio.Future[str]
+    question: str
+    user_id: str | None
+    session_id: str | None
+    connection_id: str | None
+
+
+_pending_questions: dict[str, PendingQuestionRuntime] = {}
 
 _ask_user_logger = logging.getLogger("agent.ask_user")
 
 
 def set_ws_event_emitter(emitter: Callable) -> None:
     """Set the WebSocket event callback (called by the WS handler before chat)."""
-    global _ws_event_emitter  # noqa: PLW0603
-    _ws_event_emitter = emitter
+    _ws_event_emitter.set(emitter)
 
 
 def clear_ws_event_emitter() -> None:
     """Remove the WebSocket event callback (called on WS disconnect)."""
-    global _ws_event_emitter  # noqa: PLW0603
-    _ws_event_emitter = None
+    _ws_event_emitter.set(None)
 
 
-def resolve_user_answer(question_id: str, answer: str) -> bool:
-    """Resolve a pending question with the user's answer. Returns True if resolved."""
-    future = _pending_questions.get(question_id)
-    if future and not future.done():
-        future.set_result(answer)
+async def _load_session_for_pending_question(
+    session_id: str | None,
+    user_id: str | None = None,
+):
+    """Load the owning session for a persisted ask_user prompt."""
+    if not session_id:
+        return None
+
+    from beanie import PydanticObjectId
+
+    from app.db.models.agent_session import AgentSession
+
+    try:
+        session_object_id = PydanticObjectId(session_id)
+    except Exception:
+        _ask_user_logger.warning("Invalid session id for pending question: %s", session_id)
+        return None
+
+    query = AgentSession.find_one(AgentSession.id == session_object_id)
+    if user_id:
+        try:
+            user_object_id = PydanticObjectId(user_id)
+        except Exception:
+            _ask_user_logger.warning("Invalid user id for pending question: %s", user_id)
+            return None
+        query = query.find(AgentSession.user_id == user_object_id)
+
+    return await query
+
+
+async def _persist_pending_question(
+    question_id: str,
+    question: str,
+    options: list[str] | None,
+    multi_select: bool,
+    session_id: str | None,
+    user_id: str | None,
+) -> None:
+    """Persist the active pending question so the UI can restore it after reload."""
+    session = await _load_session_for_pending_question(session_id, user_id)
+    if not session:
+        return
+
+    session.set_pending_question(
+        question_id=question_id,
+        question=question,
+        options=options,
+        multi_select=multi_select,
+    )
+    await session.save()
+
+
+async def _clear_persisted_pending_question(
+    question_id: str,
+    session_id: str | None,
+    user_id: str | None,
+) -> dict[str, str] | None:
+    """Clear a persisted pending question and return its metadata if it matched."""
+    session = await _load_session_for_pending_question(session_id, user_id)
+    if not session or not session.active_pending_question:
+        return None
+    if session.active_pending_question.id != question_id:
+        return None
+
+    question_text = session.active_pending_question.question
+    session.clear_pending_question(question_id)
+    await session.save()
+    return {"session_id": str(session.id), "question": question_text}
+
+
+async def resolve_user_answer(
+    question_id: str,
+    answer: str,
+    *,
+    user_id: str | None = None,
+    session_id: str | None = None,
+) -> dict[str, str] | None:
+    """Resolve a live pending question or recover a restored one from session history."""
+    runtime = _pending_questions.get(question_id)
+    if runtime and not runtime.future.done():
+        if user_id and runtime.user_id and runtime.user_id != user_id:
+            _ask_user_logger.warning(
+                "Rejected answer for question %s due to user mismatch", question_id
+            )
+            return None
+        if session_id and runtime.session_id and runtime.session_id != session_id:
+            _ask_user_logger.warning(
+                "Rejected answer for question %s due to session mismatch",
+                question_id,
+            )
+            return None
+
+        runtime.future.set_result(answer)
         _ask_user_logger.info("User answered question %s", question_id)
-        return True
+        await _clear_persisted_pending_question(
+            question_id,
+            runtime.session_id,
+            runtime.user_id,
+        )
+        return {"status": "resolved_live", "session_id": runtime.session_id or ""}
+
+    restored = await _clear_persisted_pending_question(question_id, session_id, user_id)
+    if restored:
+        _ask_user_logger.info(
+            "Resolved restored question %s from persisted session state", question_id
+        )
+        return {"status": "resume_from_history", **restored}
+
     _ask_user_logger.warning("No pending question for id %s", question_id)
-    return False
+    return None
 
 
-def cancel_pending_questions() -> None:
-    """Cancel all pending user questions (called on disconnect or agent cancel)."""
-    for qid, future in list(_pending_questions.items()):
-        if not future.done():
-            future.cancel()
-    _pending_questions.clear()
+async def cancel_pending_questions(
+    *,
+    connection_id: str | None = None,
+    clear_persisted: bool = False,
+) -> None:
+    """Cancel pending questions for a connection and optionally clear their persisted state."""
+    for qid, runtime in list(_pending_questions.items()):
+        if connection_id and runtime.connection_id != connection_id:
+            continue
+        if not runtime.future.done():
+            runtime.future.cancel()
+        if clear_persisted:
+            await _clear_persisted_pending_question(
+                qid,
+                runtime.session_id,
+                runtime.user_id,
+            )
+        _pending_questions.pop(qid, None)
 
 
 def _summarize_result(tool_name: str, parsed: Any) -> str:
@@ -1759,20 +1905,35 @@ async def mcp_ask_user(args: dict[str, Any]) -> dict[str, Any]:
     question_id = str(uuid.uuid4())
     loop = asyncio.get_running_loop()
     future: asyncio.Future[str] = loop.create_future()
-    _pending_questions[question_id] = future
+    _pending_questions[question_id] = PendingQuestionRuntime(
+        future=future,
+        question=question,
+        user_id=get_active_user_id(),
+        session_id=get_active_session_id(),
+        connection_id=get_active_connection_id(),
+    )
 
-    emitter = _ws_event_emitter
+    emitter = _ws_event_emitter.get()
     if emitter:
         await emitter(
             {
                 "type": "ask_user",
                 "data": {
                     "id": question_id,
+                    "sessionId": get_active_session_id(),
                     "question": question,
                     "options": options or [],
                     "multiSelect": multi_select,
                 },
             }
+        )
+        await _persist_pending_question(
+            question_id=question_id,
+            question=question,
+            options=options,
+            multi_select=multi_select,
+            session_id=get_active_session_id(),
+            user_id=get_active_user_id(),
         )
         _ask_user_logger.info("Sent question %s to user: %s", question_id, question)
     else:
@@ -1793,6 +1954,11 @@ async def mcp_ask_user(args: dict[str, Any]) -> dict[str, Any]:
         _buffer_tool_result("ask_user", {"question": question}, response, start)
         return response
     except TimeoutError:
+        await _clear_persisted_pending_question(
+            question_id,
+            get_active_session_id(),
+            get_active_user_id(),
+        )
         result = {"error": "User did not respond within 5 minutes"}
         response = {"content": [{"type": "text", "text": json.dumps(result)}]}
         _buffer_tool_result("ask_user", {"question": question}, response, start)

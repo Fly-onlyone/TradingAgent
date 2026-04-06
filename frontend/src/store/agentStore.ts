@@ -7,7 +7,6 @@ import { persist } from "zustand/middleware";
 import type {
 	AgentDecision,
 	AgentMessage,
-	PendingQuestion,
 	ToolCall,
 } from "@/api/websocket/useAgentSocket";
 import type {
@@ -15,6 +14,7 @@ import type {
 	AgentStatus,
 	DecisionFilters,
 	DecisionStatus,
+	PendingQuestion,
 } from "@/types/session";
 
 interface SessionRuntimeState {
@@ -28,6 +28,7 @@ interface SessionRuntimeState {
 	isThinking: boolean;
 	isCancelling: boolean;
 	lastDecision: AgentDecision | null;
+	pendingQuestion: PendingQuestion | null;
 	hasLocalUpdates: boolean;
 }
 
@@ -44,7 +45,6 @@ interface AgentState {
 	pendingDecisionsCount: number;
 
 	status: AgentStatus;
-	pendingQuestion: PendingQuestion | null;
 
 	showThinkingContent: boolean;
 
@@ -79,8 +79,12 @@ interface AgentState {
 
 	updateStatus: (status: string) => void;
 	toggleThinkingContent: () => void;
-	setPendingQuestion: (question: PendingQuestion) => void;
-	clearPendingQuestion: () => void;
+	setSessionPendingQuestion: (
+		sessionId: string,
+		question: PendingQuestion | null,
+	) => void;
+	clearSessionPendingQuestion: (sessionId: string) => void;
+	finalizeInterruptedTurns: () => void;
 }
 
 const MAX_MESSAGES = 100;
@@ -99,6 +103,7 @@ function createEmptySessionState(): SessionRuntimeState {
 		isThinking: false,
 		isCancelling: false,
 		lastDecision: null,
+		pendingQuestion: null,
 		hasLocalUpdates: false,
 	};
 }
@@ -136,7 +141,6 @@ export const useAgentStore = create<AgentState>()(
 			pendingDecisionsCount: 0,
 
 			status: "disconnected",
-			pendingQuestion: null,
 
 			showThinkingContent: true,
 
@@ -225,6 +229,7 @@ export const useAgentStore = create<AgentState>()(
 							[sessionId]: {
 								...(existingState ?? createEmptySessionState()),
 								messages,
+								pendingQuestion: existingState?.pendingQuestion ?? null,
 								hasLocalUpdates: false,
 							},
 						},
@@ -267,6 +272,8 @@ export const useAgentStore = create<AgentState>()(
 				set((state) => {
 					const sessionState =
 						state.sessionStates[sessionId] ?? createEmptySessionState();
+					const preserveInFlightTurn =
+						message.role === "user" && sessionState.isThinking;
 
 					// Merge result data from currentTurnToolCalls into message toolCalls
 					if (
@@ -300,13 +307,20 @@ export const useAgentStore = create<AgentState>()(
 									-MAX_MESSAGES,
 								),
 								lastDecision: message.decision ?? sessionState.lastDecision,
-								isThinking: false,
-								isCancelling: false,
-								streamingText: "",
+								isThinking: preserveInFlightTurn
+									? sessionState.isThinking
+									: false,
+								isCancelling: preserveInFlightTurn
+									? sessionState.isCancelling
+									: false,
+								streamingText: preserveInFlightTurn
+									? sessionState.streamingText
+									: "",
 								hasLocalUpdates: true,
 							},
 						},
 						status:
+							!preserveInFlightTurn &&
 							state.activeRunSessionId === sessionId &&
 							state.status === "thinking"
 								? "connected"
@@ -496,8 +510,102 @@ export const useAgentStore = create<AgentState>()(
 				set((state) => ({
 					showThinkingContent: !state.showThinkingContent,
 				})),
-			setPendingQuestion: (question) => set({ pendingQuestion: question }),
-			clearPendingQuestion: () => set({ pendingQuestion: null }),
+			setSessionPendingQuestion: (sessionId, question) =>
+				set((state) => {
+					const sessionState =
+						state.sessionStates[sessionId] ?? createEmptySessionState();
+
+					return {
+						sessionStates: {
+							...state.sessionStates,
+							[sessionId]: {
+								...sessionState,
+								pendingQuestion: question,
+							},
+						},
+					};
+				}),
+			clearSessionPendingQuestion: (sessionId) =>
+				set((state) => {
+					const sessionState = state.sessionStates[sessionId];
+					if (!sessionState) {
+						return {};
+					}
+
+					return {
+						sessionStates: {
+							...state.sessionStates,
+							[sessionId]: {
+								...sessionState,
+								pendingQuestion: null,
+							},
+						},
+					};
+				}),
+			finalizeInterruptedTurns: () =>
+				set((state) => {
+					const sessionStates = Object.fromEntries(
+						Object.entries(state.sessionStates).map(
+							([sessionId, sessionState]) => {
+								if (
+									!sessionState.isThinking &&
+									!sessionState.isCancelling &&
+									!sessionState.streamingText &&
+									sessionState.currentTurnToolCalls.length === 0
+								) {
+									return [sessionId, sessionState];
+								}
+
+								const partialContent = sessionState.streamingText.trim();
+								const lastMessage = sessionState.messages.at(-1);
+								const shouldAppendPartialMessage =
+									Boolean(partialContent) &&
+									!(
+										lastMessage?.role === "assistant" &&
+										lastMessage.content === partialContent
+									);
+								const messages = shouldAppendPartialMessage
+									? [
+											...sessionState.messages,
+											{
+												id: crypto.randomUUID(),
+												role: "assistant" as const,
+												content: partialContent,
+												timestamp: Date.now(),
+												toolCalls:
+													sessionState.currentTurnToolCalls.length > 0
+														? sessionState.currentTurnToolCalls
+														: undefined,
+												thinkingContent:
+													sessionState.thinkingContent || undefined,
+												model: sessionState.sessionModel || undefined,
+											},
+										].slice(-MAX_MESSAGES)
+									: sessionState.messages;
+
+								return [
+									sessionId,
+									{
+										...sessionState,
+										messages,
+										currentTurnToolCalls: [],
+										thinkingContent: "",
+										streamingText: "",
+										isThinking: false,
+										isCancelling: false,
+										hasLocalUpdates: true,
+									},
+								];
+							},
+						),
+					) as Record<string, SessionRuntimeState>;
+
+					return {
+						sessionStates,
+						activeRunSessionId: null,
+						status: "disconnected" as AgentStatus,
+					};
+				}),
 		}),
 		{
 			name: "agent-store",

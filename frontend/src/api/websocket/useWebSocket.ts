@@ -9,12 +9,14 @@ export interface UseWebSocketOptions {
 	url: string;
 	enabled?: boolean;
 	onOpen?: () => void;
-	onClose?: () => void;
+	onClose?: (event: CloseEvent) => void;
 	onError?: (error: Event) => void;
 	onMessage?: (data: WebSocketMessage) => void;
 	reconnect?: boolean;
 	reconnectInterval?: number;
 	maxReconnectAttempts?: number;
+	heartbeatMessage?: string | null;
+	heartbeatIntervalMs?: number;
 }
 
 export interface UseWebSocketReturn {
@@ -34,10 +36,13 @@ export function useWebSocket({
 	reconnect = true,
 	reconnectInterval = 3000,
 	maxReconnectAttempts = 5,
+	heartbeatMessage = null,
+	heartbeatIntervalMs = 20000,
 }: UseWebSocketOptions): UseWebSocketReturn {
 	const wsRef = useRef<WebSocket | null>(null);
 	const reconnectAttemptsRef = useRef(0);
 	const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+	const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
 	const mountedRef = useRef(false);
 	const [isConnected, setIsConnected] = useState(false);
 	const [reconnectKey, setReconnectKey] = useState(0);
@@ -65,6 +70,13 @@ export function useWebSocket({
 			ws.readyState === WebSocket.CONNECTING
 		) {
 			ws.close();
+		}
+	}, []);
+
+	const clearHeartbeat = useCallback(() => {
+		if (heartbeatIntervalRef.current) {
+			clearInterval(heartbeatIntervalRef.current);
+			heartbeatIntervalRef.current = null;
 		}
 	}, []);
 
@@ -97,13 +109,22 @@ export function useWebSocket({
 				}
 				setIsConnected(true);
 				reconnectAttemptsRef.current = 0;
+				clearHeartbeat();
+				if (heartbeatMessage) {
+					heartbeatIntervalRef.current = setInterval(() => {
+						if (ws.readyState === WebSocket.OPEN) {
+							ws.send(heartbeatMessage);
+						}
+					}, heartbeatIntervalMs);
+				}
 				onOpenRef.current?.();
 			};
 
 			ws.onclose = (event: CloseEvent) => {
 				if (!mountedRef.current) return;
 				setIsConnected(false);
-				onCloseRef.current?.();
+				clearHeartbeat();
+				onCloseRef.current?.(event);
 
 				// Don't reconnect for application-level close codes (4xxx) —
 				// these indicate config errors that reconnecting won't fix
@@ -146,6 +167,7 @@ export function useWebSocket({
 				clearTimeout(reconnectTimeoutRef.current);
 				reconnectTimeoutRef.current = null;
 			}
+			clearHeartbeat();
 			cleanupWs(wsRef.current);
 			wsRef.current = null;
 			setIsConnected(false);
@@ -156,8 +178,11 @@ export function useWebSocket({
 		reconnect,
 		reconnectInterval,
 		maxReconnectAttempts,
+		heartbeatMessage,
+		heartbeatIntervalMs,
 		reconnectKey,
 		cleanupWs,
+		clearHeartbeat,
 	]);
 
 	const disconnect = useCallback(() => {
@@ -166,10 +191,11 @@ export function useWebSocket({
 			clearTimeout(reconnectTimeoutRef.current);
 			reconnectTimeoutRef.current = null;
 		}
+		clearHeartbeat();
 		cleanupWs(wsRef.current);
 		wsRef.current = null;
 		setIsConnected(false);
-	}, [cleanupWs]);
+	}, [cleanupWs, clearHeartbeat]);
 
 	const manualReconnect = useCallback(() => {
 		reconnectAttemptsRef.current = 0;

@@ -20,6 +20,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import type { ToolCall } from "@/api/websocket/useAgentSocket";
 import { spring } from "@/utils/animations/variants";
 import { humanizeToolName } from "./ToolCallBlock";
+import { ToolCallList } from "./ToolCallList";
 
 interface ThinkingIndicatorProps {
 	toolCalls: ToolCall[];
@@ -149,45 +150,55 @@ export function ThinkingIndicator({
 							</Box>
 						)}
 
-						{/* Tool call chips */}
+						{/* Live tool activity */}
 						{toolCalls.length > 0 && (
-							<Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
-								<AnimatePresence>
-									{toolCalls.map((tc) => {
-										const isDone = Boolean(tc.resultSummary);
-										const label =
-											isDone && tc.executionTimeMs != null
-												? `${humanizeToolName(tc.name)} (${tc.executionTimeMs}ms)`
-												: humanizeToolName(tc.name);
-										return (
-											<motion.div
-												key={tc.id}
-												initial={{ opacity: 0, scale: 0.5, x: -20 }}
-												animate={{ opacity: 1, scale: 1, x: 0 }}
-												transition={spring.bouncy}
-											>
-												<Chip
-													icon={
-														isDone ? (
-															<CheckCircleOutlineIcon
-																sx={{ fontSize: "0.85rem !important" }}
-															/>
-														) : (
-															<BuildIcon
-																sx={{ fontSize: "0.85rem !important" }}
-															/>
-														)
-													}
-													label={label}
-													size="small"
-													color={isDone ? "success" : "secondary"}
-													variant="outlined"
-													sx={{ fontSize: "0.7rem" }}
-												/>
-											</motion.div>
-										);
-									})}
-								</AnimatePresence>
+							<Box sx={{ mt: 0.5 }}>
+								<Box
+									sx={{
+										display: "flex",
+										gap: 0.5,
+										flexWrap: "wrap",
+										mb: 1,
+									}}
+								>
+									<AnimatePresence>
+										{toolCalls.map((tc) => {
+											const isDone = Boolean(tc.resultSummary);
+											const label =
+												isDone && tc.executionTimeMs != null
+													? `${humanizeToolName(tc.name)} (${tc.executionTimeMs}ms)`
+													: humanizeToolName(tc.name);
+											return (
+												<motion.div
+													key={tc.id}
+													initial={{ opacity: 0, scale: 0.5, x: -20 }}
+													animate={{ opacity: 1, scale: 1, x: 0 }}
+													transition={spring.bouncy}
+												>
+													<Chip
+														icon={
+															isDone ? (
+																<CheckCircleOutlineIcon
+																	sx={{ fontSize: "0.85rem !important" }}
+																/>
+															) : (
+																<BuildIcon
+																	sx={{ fontSize: "0.85rem !important" }}
+																/>
+															)
+														}
+														label={label}
+														size="small"
+														color={isDone ? "success" : "secondary"}
+														variant="outlined"
+														sx={{ fontSize: "0.7rem" }}
+													/>
+												</motion.div>
+											);
+										})}
+									</AnimatePresence>
+								</Box>
+								<ToolCallList toolCalls={toolCalls} defaultExpandAll />
 							</Box>
 						)}
 					</Paper>

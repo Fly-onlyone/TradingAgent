@@ -37,6 +37,15 @@ export type DecisionStatus =
 	| "expired";
 export type MessageRole = "user" | "assistant" | "system";
 
+export interface PendingQuestion {
+	id: string;
+	sessionId: string;
+	question: string;
+	options: string[];
+	multiSelect?: boolean;
+	createdAt?: string;
+}
+
 // Session message
 export interface SessionMessage {
 	role: MessageRole;
@@ -60,6 +69,7 @@ export interface AgentSession {
 	title?: string;
 	description?: string;
 	isActive: boolean;
+	pendingQuestion?: PendingQuestion;
 
 	// Statistics
 	totalMessages: number;

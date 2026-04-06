@@ -32,6 +32,16 @@ class SessionMessage(BaseModel):
     tokens_used: int | None = None
 
 
+class PendingQuestionState(BaseModel):
+    """Persist an unanswered ask_user prompt so it can be restored later."""
+
+    id: str
+    question: str
+    options: list[str] = Field(default_factory=list)
+    multi_select: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class AgentSession(Document):
     """Agent chat session document."""
 
@@ -43,6 +53,7 @@ class AgentSession(Document):
 
     # Conversation history
     messages: list[SessionMessage] = Field(default_factory=list)
+    active_pending_question: PendingQuestionState | None = None
 
     # Session statistics
     total_messages: int = 0
@@ -124,6 +135,32 @@ class AgentSession(Document):
             self.assistant_messages += 1
 
         return message
+
+    def set_pending_question(
+        self,
+        question_id: str,
+        question: str,
+        options: list[str] | None = None,
+        multi_select: bool = False,
+    ) -> PendingQuestionState:
+        """Persist the active unanswered agent question for this session."""
+        self.active_pending_question = PendingQuestionState(
+            id=question_id,
+            question=question,
+            options=options or [],
+            multi_select=multi_select,
+        )
+        return self.active_pending_question
+
+    def clear_pending_question(self, question_id: str | None = None) -> None:
+        """Clear the active pending question if it matches the provided ID."""
+        if (
+            question_id
+            and self.active_pending_question
+            and self.active_pending_question.id != question_id
+        ):
+            return
+        self.active_pending_question = None
 
     def add_decision(self) -> None:
         """Increment decision counter."""

@@ -11,10 +11,16 @@ import { ToolCallBlock } from "./ToolCallBlock";
 
 interface ToolCallListProps {
 	toolCalls: ToolCall[];
+	defaultExpandAll?: boolean;
 }
 
-export function ToolCallList({ toolCalls }: ToolCallListProps) {
-	const [expandAll, setExpandAll] = useState<boolean | null>(null);
+export function ToolCallList({
+	toolCalls,
+	defaultExpandAll = false,
+}: ToolCallListProps) {
+	const [expandAll, setExpandAll] = useState<boolean | null>(
+		defaultExpandAll ? true : null,
+	);
 
 	return (
 		<Box>

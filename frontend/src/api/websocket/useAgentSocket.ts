@@ -14,7 +14,7 @@ import {
 import { useAgentStore } from "@/store/agentStore";
 import { notify } from "@/store/uiStore";
 import type { WebSocketMessage } from "@/types";
-import type { GroupedSessionsResponse } from "@/types/session";
+import type { GroupedSessionsResponse, PendingQuestion } from "@/types/session";
 import {
 	AGENT_SESSIONS_GROUP_LIMIT,
 	createOptimisticSession,
@@ -73,13 +73,6 @@ export interface AgentDecision {
 	riskAssessment?: string;
 }
 
-export interface PendingQuestion {
-	id: string;
-	question: string;
-	options: string[];
-	multiSelect?: boolean;
-}
-
 interface UsageData {
 	inputTokens: number;
 	outputTokens: number;
@@ -134,9 +127,12 @@ export function useAgentSocket() {
 		appendStreamingText,
 		setSelectedSessionId,
 		setActiveRunSessionId,
+		clearSessionPendingQuestion,
 		createDraftSession,
+		finalizeInterruptedTurns,
 		replaceSessionId,
 		hydrateSessionMessages,
+		setSessionPendingQuestion,
 		setSessionTotalTokens,
 		setSessionModel,
 		selectedSessionId,
@@ -260,7 +256,9 @@ export function useAgentSocket() {
 					}
 
 					addMessage(targetSessionId, msg);
-					setThinking(targetSessionId, false);
+					if (msg.role === "assistant" || msg.role === "system") {
+						setThinking(targetSessionId, false);
+					}
 
 					if (msg.role === "assistant") {
 						void queryClient.invalidateQueries({
@@ -319,8 +317,15 @@ export function useAgentSocket() {
 					break;
 				}
 				case "ask_user": {
-					const { setPendingQuestion } = useAgentStore.getState();
-					setPendingQuestion(agentMessage.data as PendingQuestion);
+					const targetSessionId = getTargetSessionId();
+					const incomingQuestion = agentMessage.data as PendingQuestion;
+					const sessionId = incomingQuestion.sessionId || targetSessionId;
+					if (sessionId) {
+						setSessionPendingQuestion(sessionId, {
+							...incomingQuestion,
+							sessionId,
+						});
+					}
 					break;
 				}
 				case "decision": {
@@ -409,6 +414,7 @@ export function useAgentSocket() {
 			getTargetSessionId,
 			queryClient,
 			replaceSessionId,
+			setSessionPendingQuestion,
 			setActiveRunSessionId,
 			setCancelling,
 			setSelectedSessionId,
@@ -426,16 +432,31 @@ export function useAgentSocket() {
 		url: `${socketBaseUrl}?token=${token}`,
 		enabled: !!token,
 		onMessage: handleMessage,
+		heartbeatMessage: "ping",
+		heartbeatIntervalMs: 20000,
 		onOpen: () => {
 			console.log("Agent WebSocket connected");
 		},
-		onClose: () => {
-			console.log("Agent WebSocket disconnected");
-			const targetSessionId = useAgentStore.getState().activeRunSessionId;
-			updateStatus("disconnected");
-			if (targetSessionId) {
-				setThinking(targetSessionId, false);
-			}
+		onClose: (event) => {
+			console.warn("Agent WebSocket disconnected", {
+				code: event.code,
+				reason: event.reason || "none",
+				wasClean: event.wasClean,
+			});
+			Sentry.captureMessage("Agent WebSocket closed", {
+				level: "info",
+				tags: { component: "agent-websocket" },
+				extra: {
+					code: event.code,
+					reason: event.reason || "none",
+					wasClean: event.wasClean,
+					route:
+						typeof window === "undefined"
+							? undefined
+							: window.location.pathname,
+				},
+			});
+			finalizeInterruptedTurns();
 		},
 		onError: (error) => {
 			const websocket =
@@ -476,13 +497,16 @@ export function useAgentSocket() {
 				timestamp: Date.now(),
 			};
 			const sessionId = beginTurn({ addUserMessage: message });
+			if (!isDraftSessionId(sessionId)) {
+				clearSessionPendingQuestion(sessionId);
+			}
 			send({
 				type: "message",
 				content,
 				sessionId: isDraftSessionId(sessionId) ? undefined : sessionId,
 			});
 		},
-		[beginTurn, send],
+		[beginTurn, clearSessionPendingQuestion, send],
 	);
 
 	const requestAnalysis = useCallback(
@@ -493,6 +517,9 @@ export function useAgentSocket() {
 			const sessionId = beginTurn({
 				sessionId: selectedSessionId,
 			});
+			if (!isDraftSessionId(sessionId)) {
+				clearSessionPendingQuestion(sessionId);
+			}
 			send({
 				type: "analyze",
 				symbol: symbol || "BTC-USDT",
@@ -500,7 +527,7 @@ export function useAgentSocket() {
 				sessionId: isDraftSessionId(sessionId) ? undefined : sessionId,
 			});
 		},
-		[beginTurn, selectedSessionId, send],
+		[beginTurn, clearSessionPendingQuestion, selectedSessionId, send],
 	);
 
 	const requestRecommendation = useCallback(
@@ -508,26 +535,32 @@ export function useAgentSocket() {
 			const sessionId = beginTurn({
 				sessionId: selectedSessionId,
 			});
+			if (!isDraftSessionId(sessionId)) {
+				clearSessionPendingQuestion(sessionId);
+			}
 			send({
 				type: "recommend",
 				symbol,
 				sessionId: isDraftSessionId(sessionId) ? undefined : sessionId,
 			});
 		},
-		[beginTurn, selectedSessionId, send],
+		[beginTurn, clearSessionPendingQuestion, selectedSessionId, send],
 	);
 
 	const requestStrategyReview = useCallback(() => {
 		const sessionId = beginTurn({
 			sessionId: selectedSessionId,
 		});
+		if (!isDraftSessionId(sessionId)) {
+			clearSessionPendingQuestion(sessionId);
+		}
 		send({
 			type: "message",
 			content:
 				"Review my trading strategies. List all inactive strategies, evaluate each against current market conditions, and recommend which ones I should activate. Explain your reasoning for each recommendation.",
 			sessionId: isDraftSessionId(sessionId) ? undefined : sessionId,
 		});
-	}, [beginTurn, selectedSessionId, send]);
+	}, [beginTurn, clearSessionPendingQuestion, selectedSessionId, send]);
 
 	const executeDecision = useCallback(
 		(decision: AgentDecision) => {
@@ -551,9 +584,12 @@ export function useAgentSocket() {
 	}, [send, setCancelling]);
 
 	const sendAnswer = useCallback(
-		(questionId: string, answer: string) => {
-			send({ type: "answer_question", data: { id: questionId, answer } });
-			useAgentStore.getState().clearPendingQuestion();
+		(questionId: string, answer: string, sessionId: string) => {
+			send({
+				type: "answer_question",
+				data: { id: questionId, answer, sessionId },
+			});
+			useAgentStore.getState().clearSessionPendingQuestion(sessionId);
 		},
 		[send],
 	);

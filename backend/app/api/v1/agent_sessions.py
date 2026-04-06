@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.api.v1.auth import get_current_active_user
-from app.db.models.agent_session import AgentSession, SessionMessage
+from app.db.models.agent_session import AgentSession, PendingQuestionState, SessionMessage
 from app.db.models.user import User
 
 router = APIRouter()
@@ -42,11 +42,21 @@ class MessageResponse(BaseModel):
     thinking_content: str | None = None
 
 
+class PendingQuestionResponse(BaseModel):
+    id: str
+    session_id: str
+    question: str
+    options: list[str]
+    multi_select: bool = False
+    created_at: datetime
+
+
 class SessionResponse(BaseModel):
     id: str
     title: str | None
     description: str | None
     is_active: bool
+    pending_question: PendingQuestionResponse | None = None
 
     # Statistics
     total_messages: int
@@ -105,12 +115,47 @@ class GroupedSessionsResponse(BaseModel):
     total: int
 
 
+def pending_question_to_response(
+    question: PendingQuestionState | dict[str, Any] | None,
+    session_id: str,
+) -> PendingQuestionResponse | None:
+    if question is None:
+        return None
+
+    if isinstance(question, PendingQuestionState):
+        return PendingQuestionResponse(
+            id=question.id,
+            session_id=session_id,
+            question=question.question,
+            options=question.options,
+            multi_select=question.multi_select,
+            created_at=question.created_at,
+        )
+
+    created_at = question.get("created_at")
+    if not isinstance(created_at, datetime):
+        created_at = datetime.now(UTC)
+
+    return PendingQuestionResponse(
+        id=str(question.get("id", "")),
+        session_id=session_id,
+        question=str(question.get("question", "")),
+        options=list(question.get("options", [])),
+        multi_select=bool(question.get("multi_select", False)),
+        created_at=created_at,
+    )
+
+
 def session_to_response(session: AgentSession) -> SessionResponse:
     return SessionResponse(
         id=str(session.id),
         title=session.title or session.generate_title(),
         description=session.description,
         is_active=session.is_active,
+        pending_question=pending_question_to_response(
+            session.active_pending_question,
+            str(session.id),
+        ),
         total_messages=session.total_messages,
         user_messages=session.user_messages,
         assistant_messages=session.assistant_messages,
@@ -133,6 +178,10 @@ def session_summary_to_response(session: dict[str, Any]) -> SessionResponse:
         title=session.get("title") or generated_title,
         description=session.get("description"),
         is_active=session.get("is_active", True),
+        pending_question=pending_question_to_response(
+            session.get("active_pending_question"),
+            str(session["_id"]),
+        ),
         total_messages=session.get("total_messages", 0),
         user_messages=session.get("user_messages", 0),
         assistant_messages=session.get("assistant_messages", 0),
@@ -271,6 +320,7 @@ async def list_sessions_grouped(
                     "started_at": 1,
                     "ended_at": 1,
                     "last_message_at": 1,
+                    "active_pending_question": 1,
                 }
             },
         ]

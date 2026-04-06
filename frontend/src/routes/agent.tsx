@@ -132,11 +132,11 @@ function AgentPage() {
 		hasMoreDecisions,
 		pendingDecisionsCount,
 		showThinkingContent,
-		pendingQuestion,
 		toggleThinkingContent,
 		setSelectedSessionId,
 		removeSession,
 		hydrateSessionMessages,
+		setSessionPendingQuestion,
 		setSessionTotalTokens,
 		setDecisions,
 		appendDecisions,
@@ -173,6 +173,7 @@ function AgentPage() {
 	const messages = selectedSessionState?.messages ?? [];
 	const isThinking = selectedSessionState?.isThinking ?? false;
 	const currentTurnToolCalls = selectedSessionState?.currentTurnToolCalls ?? [];
+	const pendingQuestion = selectedSessionState?.pendingQuestion ?? null;
 	const thinkingContent = selectedSessionState?.thinkingContent ?? "";
 	const streamingText = selectedSessionState?.streamingText ?? "";
 	const activeRunIsCancelling = activeRunSessionId
@@ -305,11 +306,16 @@ function AgentPage() {
 		);
 
 		hydrateSessionMessages(selectedSessionId, agentMessages);
+		setSessionPendingQuestion(
+			selectedSessionId,
+			sessionData.pendingQuestion ?? null,
+		);
 		setSessionTotalTokens(selectedSessionId, sessionData.totalTokens);
 	}, [
 		hydrateSessionMessages,
 		selectedSessionId,
 		sessionData,
+		setSessionPendingQuestion,
 		setSessionTotalTokens,
 	]);
 
@@ -890,8 +896,15 @@ function AgentPage() {
 					{/* Agent question (interactive menu) */}
 					{pendingQuestion && (
 						<AskUserBlock
+							key={pendingQuestion.id}
 							question={pendingQuestion}
-							onAnswer={(answer) => sendAnswer(pendingQuestion.id, answer)}
+							onAnswer={(answer) =>
+								sendAnswer(
+									pendingQuestion.id,
+									answer,
+									pendingQuestion.sessionId,
+								)
+							}
 						/>
 					)}
 

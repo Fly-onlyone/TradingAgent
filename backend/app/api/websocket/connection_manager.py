@@ -2,10 +2,13 @@
 
 import asyncio
 import json
+import logging
 from collections import defaultdict
 from typing import Any
 
 from fastapi import WebSocket
+
+logger = logging.getLogger(__name__)
 
 
 class ConnectionManager:
@@ -92,7 +95,11 @@ class ConnectionManager:
         try:
             await websocket.send_json(message)
         except Exception:
-            pass
+            logger.warning(
+                "Failed to send WebSocket message",
+                extra={"message_type": message.get("type", "unknown")},
+                exc_info=True,
+            )
 
     def get_channel_count(self, channel: str) -> int:
         """Get number of connections in a channel."""
