@@ -26,7 +26,6 @@ from app.agent.mcp_tools import (
     pop_pending_chart_data,
     pop_tool_result,
 )
-from app.api.v1.settings import FAMILY_TO_API_MODEL
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -121,6 +120,7 @@ class TradingAgent:
         Reads auth configuration from AppSettings (DB) with env var fallback.
         """
         from app.agent.auth import resolve_anthropic_api_key
+        from app.api.v1.settings import FAMILY_TO_API_MODEL
         from app.db.models.app_settings import AppSettings
 
         server = create_trading_mcp_server()
