@@ -205,6 +205,13 @@ async def create_strategy_knowledge(
     current_user: User = Depends(get_current_active_user),
 ) -> StrategyKnowledgeResponse:
     """Create a new strategy in the knowledge base."""
+    existing = await StrategyKnowledge.find_one(StrategyKnowledge.name == data.name)
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A strategy named '{data.name}' already exists (id: {existing.id})",
+        )
+
     strategy = StrategyKnowledge(
         name=data.name,
         description=data.description,

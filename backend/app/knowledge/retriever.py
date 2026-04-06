@@ -1,10 +1,20 @@
 """Knowledge retriever for RAG-based strategy and lesson search using MongoDB."""
 
+import logging
+import re
+
 import sentry_sdk
 
 from app.db.models.knowledge import StrategyKnowledge, TradeLesson, TradingPattern
 from app.db.models.news import NewsArticle
 from app.knowledge.embeddings import EmbeddingService, get_embedding_service
+
+logger = logging.getLogger(__name__)
+
+
+def normalize_assets(assets: list[str]) -> list[str]:
+    """Normalize asset symbols by uppercasing and stripping -USDT suffix."""
+    return [a.upper().replace("-USDT", "") for a in assets]
 
 
 class KnowledgeRetriever:
@@ -22,33 +32,45 @@ class KnowledgeRetriever:
     ) -> list[StrategyKnowledge]:
         """Search for strategies similar to the query.
 
-        Args:
-            query: Natural language query
-            limit: Maximum number of results
-            min_similarity: Minimum cosine similarity threshold
-            query_embedding: Pre-computed query embedding (avoids redundant API calls)
+        Uses embedding similarity first, falls back to regex on name/description.
         """
         if query_embedding is None:
             query_embedding = await self.embedding_service.generate_query_embedding(query)
-        if query_embedding is None:
-            return []
 
-        strategies = await StrategyKnowledge.find(
-            {"embedding": {"$exists": True, "$ne": None}}
-        ).to_list()
+        if query_embedding is not None:
+            strategies = await StrategyKnowledge.find(
+                {"embedding": {"$exists": True, "$ne": None}}
+            ).to_list()
 
-        scored = []
-        for strategy in strategies:
-            if strategy.embedding:
-                similarity = self.embedding_service.cosine_similarity(
-                    query_embedding, strategy.embedding
-                )
-                if similarity >= min_similarity:
-                    scored.append((strategy, similarity))
+            scored = []
+            for strategy in strategies:
+                if strategy.embedding:
+                    similarity = self.embedding_service.cosine_similarity(
+                        query_embedding, strategy.embedding
+                    )
+                    if similarity >= min_similarity:
+                        scored.append((strategy, similarity))
 
-        scored.sort(key=lambda x: x[1], reverse=True)
+            scored.sort(key=lambda x: x[1], reverse=True)
+            results = [s[0] for s in scored[:limit]]
+            if results:
+                return results
 
-        return [s[0] for s in scored[:limit]]
+        # Fallback: regex on name/description
+        logger.debug("Strategy embedding search yielded no results, falling back to regex")
+        pattern = re.escape(query)
+        return (
+            await StrategyKnowledge.find(
+                {
+                    "$or": [
+                        {"name": {"$regex": pattern, "$options": "i"}},
+                        {"description": {"$regex": pattern, "$options": "i"}},
+                    ]
+                }
+            )
+            .limit(limit)
+            .to_list()
+        )
 
     async def search_lessons(
         self,
@@ -60,36 +82,43 @@ class KnowledgeRetriever:
     ) -> list[TradeLesson]:
         """Search for trade lessons similar to the query.
 
-        Args:
-            query: Natural language query
-            symbol: Optional symbol filter
-            limit: Maximum number of results
-            min_similarity: Minimum cosine similarity threshold
-            query_embedding: Pre-computed query embedding (avoids redundant API calls)
+        Uses embedding similarity first, falls back to recent lessons by symbol.
         """
         if query_embedding is None:
             query_embedding = await self.embedding_service.generate_query_embedding(query)
-        if query_embedding is None:
-            return []
 
-        filter_query: dict = {"embedding": {"$exists": True, "$ne": None}}
+        if query_embedding is not None:
+            filter_query: dict = {"embedding": {"$exists": True, "$ne": None}}
+            if symbol:
+                filter_query["symbol"] = symbol.upper()
+
+            lessons = await TradeLesson.find(filter_query).to_list()
+
+            scored = []
+            for lesson in lessons:
+                if lesson.embedding:
+                    similarity = self.embedding_service.cosine_similarity(
+                        query_embedding, lesson.embedding
+                    )
+                    if similarity >= min_similarity:
+                        scored.append((lesson, similarity))
+
+            scored.sort(key=lambda x: x[1], reverse=True)
+            results = [item[0] for item in scored[:limit]]
+            if results:
+                return results
+
+        # Fallback: recent lessons, optionally filtered by symbol
+        logger.debug("Lesson embedding search yielded no results, falling back to recent")
+        fallback_filter = {}
         if symbol:
-            filter_query["symbol"] = symbol.upper()
-
-        lessons = await TradeLesson.find(filter_query).to_list()
-
-        scored = []
-        for lesson in lessons:
-            if lesson.embedding:
-                similarity = self.embedding_service.cosine_similarity(
-                    query_embedding, lesson.embedding
-                )
-                if similarity >= min_similarity:
-                    scored.append((lesson, similarity))
-
-        scored.sort(key=lambda x: x[1], reverse=True)
-
-        return [item[0] for item in scored[:limit]]
+            fallback_filter["symbol"] = symbol.upper()
+        return (
+            await TradeLesson.find(fallback_filter)
+            .sort(-TradeLesson.created_at)
+            .limit(limit)
+            .to_list()
+        )
 
     async def search_patterns(
         self,
@@ -102,39 +131,47 @@ class KnowledgeRetriever:
     ) -> list[TradingPattern]:
         """Search for trading patterns similar to the query.
 
-        Args:
-            query: Natural language query
-            pattern_type: Filter by pattern type
-            min_success_rate: Minimum success rate threshold
-            limit: Maximum number of results
-            min_similarity: Minimum cosine similarity threshold
-            query_embedding: Pre-computed query embedding (avoids redundant API calls)
+        Uses embedding similarity first, falls back to filter-based query.
         """
         if query_embedding is None:
             query_embedding = await self.embedding_service.generate_query_embedding(query)
-        if query_embedding is None:
-            return []
 
-        filter_query: dict = {"embedding": {"$exists": True, "$ne": None}}
+        if query_embedding is not None:
+            filter_query: dict = {"embedding": {"$exists": True, "$ne": None}}
+            if pattern_type:
+                filter_query["pattern_type"] = pattern_type
+            if min_success_rate is not None:
+                filter_query["success_rate"] = {"$gte": min_success_rate}
+
+            patterns = await TradingPattern.find(filter_query).to_list()
+
+            scored = []
+            for pattern in patterns:
+                if pattern.embedding:
+                    similarity = self.embedding_service.cosine_similarity(
+                        query_embedding, pattern.embedding
+                    )
+                    if similarity >= min_similarity:
+                        scored.append((pattern, similarity))
+
+            scored.sort(key=lambda x: x[1], reverse=True)
+            results = [p[0] for p in scored[:limit]]
+            if results:
+                return results
+
+        # Fallback: filter-based query without embedding
+        logger.debug("Pattern embedding search yielded no results, falling back to filters")
+        fallback_filter: dict = {}
         if pattern_type:
-            filter_query["pattern_type"] = pattern_type
+            fallback_filter["pattern_type"] = pattern_type
         if min_success_rate is not None:
-            filter_query["success_rate"] = {"$gte": min_success_rate}
-
-        patterns = await TradingPattern.find(filter_query).to_list()
-
-        scored = []
-        for pattern in patterns:
-            if pattern.embedding:
-                similarity = self.embedding_service.cosine_similarity(
-                    query_embedding, pattern.embedding
-                )
-                if similarity >= min_similarity:
-                    scored.append((pattern, similarity))
-
-        scored.sort(key=lambda x: x[1], reverse=True)
-
-        return [p[0] for p in scored[:limit]]
+            fallback_filter["success_rate"] = {"$gte": min_success_rate}
+        return (
+            await TradingPattern.find(fallback_filter)
+            .sort(-TradingPattern.success_rate)
+            .limit(limit)
+            .to_list()
+        )
 
     async def search_news(
         self,
@@ -144,33 +181,52 @@ class KnowledgeRetriever:
         min_similarity: float = 0.6,
         query_embedding: list[float] | None = None,
     ) -> list[NewsArticle]:
-        """Semantic search over news articles using stored embeddings.
+        """Semantic search over news articles.
 
-        Falls back to regex if embedding search yields no results.
+        Uses embedding similarity first, falls back to regex on title/content/summary.
         """
         if query_embedding is None:
             query_embedding = await self.embedding_service.generate_query_embedding(query)
-        if query_embedding is None:
-            return []
 
-        filter_query: dict = {"embedding": {"$exists": True, "$ne": None}}
+        if query_embedding is not None:
+            filter_query: dict = {"embedding": {"$exists": True, "$ne": None}}
+            if assets:
+                filter_query["mentioned_assets"] = {"$in": normalize_assets(assets)}
+
+            articles = await NewsArticle.find(filter_query).to_list()
+
+            scored = []
+            for article in articles:
+                if article.embedding:
+                    similarity = self.embedding_service.cosine_similarity(
+                        query_embedding, article.embedding
+                    )
+                    if similarity >= min_similarity:
+                        scored.append((article, similarity))
+
+            scored.sort(key=lambda x: x[1], reverse=True)
+            results = [a[0] for a in scored[:limit]]
+            if results:
+                return results
+
+        # Fallback: regex on title/content/summary
+        logger.debug("News embedding search yielded no results, falling back to regex")
+        pattern = re.escape(query)
+        search_filter: dict = {
+            "$or": [
+                {"title": {"$regex": pattern, "$options": "i"}},
+                {"content": {"$regex": pattern, "$options": "i"}},
+                {"summary": {"$regex": pattern, "$options": "i"}},
+            ]
+        }
         if assets:
-            normalized = [a.upper().replace("-USDT", "") for a in assets]
-            filter_query["mentioned_assets"] = {"$in": normalized}
-
-        articles = await NewsArticle.find(filter_query).to_list()
-
-        scored = []
-        for article in articles:
-            if article.embedding:
-                similarity = self.embedding_service.cosine_similarity(
-                    query_embedding, article.embedding
-                )
-                if similarity >= min_similarity:
-                    scored.append((article, similarity))
-
-        scored.sort(key=lambda x: x[1], reverse=True)
-        return [a[0] for a in scored[:limit]]
+            search_filter["mentioned_assets"] = {"$in": normalize_assets(assets)}
+        return (
+            await NewsArticle.find(search_filter)
+            .sort(-NewsArticle.published_at)
+            .limit(limit)
+            .to_list()
+        )
 
     async def search_all(
         self,

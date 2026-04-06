@@ -119,6 +119,14 @@ async def confirm_import(
     current_user: User = Depends(get_current_active_user),
 ) -> StrategyImportResult:
     """Save confirmed strategy data as both Strategy and StrategyKnowledge."""
+    # Check for duplicate strategy name
+    existing = await StrategyKnowledge.find_one(StrategyKnowledge.name == data.name)
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A strategy named '{data.name}' already exists (id: {existing.id})",
+        )
+
     # 1. Create StrategyKnowledge for RAG (first, so we have the ID for linking)
     knowledge = StrategyKnowledge(
         name=data.name,

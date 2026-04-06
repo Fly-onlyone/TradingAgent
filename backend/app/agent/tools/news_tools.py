@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from app.db.models.news import NewsArticle, NewsSource
+from app.knowledge.retriever import normalize_assets
 
 
 async def get_latest_news(
@@ -23,9 +24,7 @@ async def get_latest_news(
     query = NewsArticle.find()
 
     if assets:
-        # Normalize asset names
-        normalized_assets = [a.upper().replace("-USDT", "") for a in assets]
-        query = query.find({"mentioned_assets": {"$in": normalized_assets}})
+        query = query.find({"mentioned_assets": {"$in": normalize_assets(assets)}})
 
     articles = await asyncio.wait_for(
         query.sort(-NewsArticle.published_at).limit(limit).to_list(), timeout=10.0
@@ -91,8 +90,7 @@ async def get_news_sentiment(
     query = NewsArticle.find(NewsArticle.published_at >= cutoff_time)
 
     if assets:
-        normalized_assets = [a.upper().replace("-USDT", "") for a in assets]
-        query = query.find({"mentioned_assets": {"$in": normalized_assets}})
+        query = query.find({"mentioned_assets": {"$in": normalize_assets(assets)}})
 
     articles = await asyncio.wait_for(query.to_list(), timeout=10.0)
 
@@ -198,38 +196,12 @@ async def search_news(
 ) -> dict[str, Any]:
     """Search news articles by semantic similarity, with regex fallback.
 
-    Uses stored embeddings for semantic search first. Falls back to regex
-    on title/content/summary if embedding search yields no results.
+    Retriever handles embedding search with automatic regex fallback.
     """
     from app.knowledge.retriever import get_retriever
 
     retriever = get_retriever()
-    search_type = "semantic"
-
-    try:
-        results = await retriever.search_news(query, assets=assets, limit=limit)
-    except Exception:
-        results = []
-
-    # Fallback to regex if semantic search returned nothing
-    if not results:
-        search_type = "text_fallback"
-        search_filter: dict = {
-            "$or": [
-                {"title": {"$regex": query, "$options": "i"}},
-                {"content": {"$regex": query, "$options": "i"}},
-                {"summary": {"$regex": query, "$options": "i"}},
-            ]
-        }
-
-        if assets:
-            normalized_assets = [a.upper().replace("-USDT", "") for a in assets]
-            search_filter["mentioned_assets"] = {"$in": normalized_assets}
-
-        results = await asyncio.wait_for(
-            NewsArticle.find(search_filter).sort(-NewsArticle.published_at).limit(limit).to_list(),
-            timeout=10.0,
-        )
+    results = await retriever.search_news(query, assets=assets, limit=limit)
 
     news_items = []
     for article in results:
@@ -255,5 +227,4 @@ async def search_news(
         "assets": assets,
         "articles": news_items,
         "count": len(news_items),
-        "search_type": search_type,
     }

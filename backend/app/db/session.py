@@ -149,55 +149,47 @@ async def init_db() -> None:
     ]
 
     # Initialize Beanie with all document models.
-    # In debug mode, skip index creation/validation for faster startup.
-    if settings.debug:
-        await init_beanie(
-            database=_db,
-            document_models=document_models,
-            skip_indexes=True,
-        )
+    # MongoDB time-series indexes can raise IndexOptionsConflict when existing
+    # index metadata ordering differs from what the current driver sends.
+    for _ in range(5):
+        try:
+            await init_beanie(
+                database=_db,
+                document_models=document_models,
+            )
+            break
+        except OperationFailure as exc:
+            error_text = str(exc)
+            is_equivalent_index_conflict = (
+                exc.code == 85
+                and "equivalent index already exists with the same name but different options"
+                in error_text
+            )
+            if not is_equivalent_index_conflict:
+                raise
+
+            index_name_match = re.search(r'name: "([^"]+)"', error_text)
+            if not index_name_match:
+                raise
+
+            index_name = index_name_match.group(1)
+            dropped = False
+            for collection_name in ("market_data", "trades"):
+                try:
+                    await _db[collection_name].drop_index(index_name)
+                    logger.warning(
+                        "Dropped conflicting time-series index %s on %s; retrying Beanie init",
+                        index_name,
+                        collection_name,
+                    )
+                    dropped = True
+                except OperationFailure:
+                    continue
+
+            if not dropped:
+                raise
     else:
-        # MongoDB time-series indexes can raise IndexOptionsConflict when existing
-        # index metadata ordering differs from what the current driver sends.
-        for _ in range(5):
-            try:
-                await init_beanie(
-                    database=_db,
-                    document_models=document_models,
-                )
-                break
-            except OperationFailure as exc:
-                error_text = str(exc)
-                is_equivalent_index_conflict = (
-                    exc.code == 85
-                    and "equivalent index already exists with the same name but different options"
-                    in error_text
-                )
-                if not is_equivalent_index_conflict:
-                    raise
-
-                index_name_match = re.search(r'name: "([^"]+)"', error_text)
-                if not index_name_match:
-                    raise
-
-                index_name = index_name_match.group(1)
-                dropped = False
-                for collection_name in ("market_data", "trades"):
-                    try:
-                        await _db[collection_name].drop_index(index_name)
-                        logger.warning(
-                            "Dropped conflicting time-series index %s on %s; retrying Beanie init",
-                            index_name,
-                            collection_name,
-                        )
-                        dropped = True
-                    except OperationFailure:
-                        continue
-
-                if not dropped:
-                    raise
-        else:
-            raise RuntimeError("Failed to initialize Beanie after resolving index conflicts")
+        raise RuntimeError("Failed to initialize Beanie after resolving index conflicts")
 
     if not settings.debug:
         await _validate_app_settings_secret_encryption()

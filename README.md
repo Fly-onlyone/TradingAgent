@@ -282,7 +282,7 @@ The agent augments its analysis with a local knowledge base using semantic searc
 - **Embedding model:** `nomic-ai/nomic-embed-text-v1.5` — 768 dimensions, runs locally on CPU via ONNX (~30-50ms per embedding, no API key needed)
 - **Storage:** Vectors are stored inline on each MongoDB document
 - **Search:** Query is embedded, then dot-product similarity is computed against stored vectors. Minimum threshold: 0.7 (0.6 for cross-type search)
-- **Fallback:** If embedding fails, falls back to MongoDB `$text` search, then regex matching
+- **Fallback:** If embedding search yields no results, falls back to regex matching on name/description/content fields
 
 ### Auto-Generated Knowledge
 

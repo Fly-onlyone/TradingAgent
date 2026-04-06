@@ -33,6 +33,7 @@ from app.db.session import close_db, init_db
 from app.knowledge.embeddings import preload_model as preload_embedding_model
 from app.logging_config import setup_logging, start_all_mongo_handlers, stop_all_mongo_handlers
 from app.middleware.request_logging import RequestLoggingMiddleware
+from app.news.scheduler import NewsScheduler
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -126,6 +127,12 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     else:
         await scheduler.start()
 
+    news_scheduler = NewsScheduler()
+    if settings.debug:
+        asyncio.create_task(news_scheduler.start())
+    else:
+        await news_scheduler.start()
+
     # Keep heavyweight embedding warmup opt-in so idle startup stays lighter on RAM.
     if settings.preload_embeddings_on_startup:
         asyncio.create_task(preload_embedding_model())
@@ -135,6 +142,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     yield
     # Shutdown
     logger.info("Application shutting down")
+    await news_scheduler.stop()
     await scheduler.stop()
     await stop_all_mongo_handlers()
     await close_db()
