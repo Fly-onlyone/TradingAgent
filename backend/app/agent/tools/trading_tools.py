@@ -80,6 +80,41 @@ async def get_open_orders(symbol: str | None = None) -> dict[str, Any]:
     }
 
 
+async def get_positions(inst_type: str = "SPOT") -> dict[str, Any]:
+    """Get current positions/holdings on the exchange.
+
+    OKX returns empty for SPOT in Simple trade mode — use get_account_balance
+    for per-currency balances in that case.
+    """
+    client = await OKXClient.create()
+    result = await client.get_positions(inst_type=inst_type)
+
+    if result.get("code") != "0":
+        return {"error": "Failed to get positions"}
+
+    positions = []
+    for pos_data in result.get("data", []):
+        positions.append(
+            {
+                "instrument_id": pos_data.get("instId"),
+                "instrument_type": pos_data.get("instType"),
+                "position_side": pos_data.get("posSide"),
+                "quantity": float(pos_data.get("pos", 0)),
+                "available_quantity": float(pos_data.get("availPos") or 0),
+                "average_price": (float(pos_data.get("avgPx")) if pos_data.get("avgPx") else None),
+                "unrealized_pnl": (float(pos_data.get("upl")) if pos_data.get("upl") else None),
+                "leverage": pos_data.get("lever"),
+                "created_at": pos_data.get("cTime"),
+                "updated_at": pos_data.get("uTime"),
+            }
+        )
+
+    return {
+        "positions": positions,
+        "count": len(positions),
+    }
+
+
 async def place_order(
     symbol: str,
     side: str,
