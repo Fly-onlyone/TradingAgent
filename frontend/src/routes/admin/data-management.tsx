@@ -5,11 +5,14 @@
 
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
 import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
+import FolderOpenIcon from "@mui/icons-material/FolderOpen";
+import LayersIcon from "@mui/icons-material/Layers";
 import LibraryBooksIcon from "@mui/icons-material/LibraryBooks";
 import NewspaperIcon from "@mui/icons-material/Newspaper";
 import PsychologyIcon from "@mui/icons-material/Psychology";
 import ScheduleIcon from "@mui/icons-material/Schedule";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
+import StorageIcon from "@mui/icons-material/Storage";
 import {
 	Box,
 	Button,
@@ -17,19 +20,25 @@ import {
 	CardContent,
 	Chip,
 	Grid2 as Grid,
+	Paper,
 	Typography,
+	useTheme,
 } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { motion } from "framer-motion";
-import { useCallback, useState } from "react";
+import { motion, type Variants } from "framer-motion";
+import { useCallback, useMemo, useState } from "react";
 import { adminApi } from "@/api/endpoints/admin";
 import { adminCollectionsQueryOptions } from "@/api/queryOptions/admin";
 import { DestructiveConfirmDialog } from "@/components/common/DestructiveConfirmDialog";
 import { PageTransition } from "@/components/common/PageTransition";
 import { SectionHeader } from "@/components/common/SectionHeader";
 import { ShimmerSkeleton } from "@/components/common/ShimmerSkeleton";
-import { staggerCascade } from "@/utils/animations/variants";
+import {
+	createCardHover,
+	fadeInUp,
+	staggerCascade,
+} from "@/utils/animations/variants";
 import { requireAdmin } from "../-guards";
 
 export const Route = createFileRoute("/admin/data-management")({
@@ -90,7 +99,19 @@ const COLLECTION_GROUPS: CollectionGroup[] = [
 	},
 ];
 
+const TOTAL_COLLECTIONS = COLLECTION_GROUPS.reduce(
+	(sum, g) => sum + g.collections.length,
+	0,
+);
+
 function DataManagementPage() {
+	const theme = useTheme();
+	const primaryRgb = theme.trading.primaryRgb;
+	const cardHover = useMemo(
+		() => createCardHover(primaryRgb) as unknown as Variants,
+		[primaryRgb],
+	);
+
 	const queryClient = useQueryClient();
 	const [confirmGroup, setConfirmGroup] = useState<CollectionGroup | null>(
 		null,
@@ -130,6 +151,14 @@ function DataManagementPage() {
 			0,
 		);
 
+	const totalDocuments = [...countsByCollection.values()].reduce(
+		(a, b) => a + b,
+		0,
+	);
+	const emptyGroups = COLLECTION_GROUPS.filter(
+		(g) => getGroupTotal(g) === 0,
+	).length;
+
 	return (
 		<PageTransition pageKey="admin-data-management">
 			<SectionHeader
@@ -137,12 +166,110 @@ function DataManagementPage() {
 				subtitle="Clear collection groups to reset data"
 			/>
 
+			{/* Summary stats bar */}
+			<motion.div variants={fadeInUp} initial="hidden" animate="visible">
+				<Box
+					sx={{
+						display: "flex",
+						flexWrap: "wrap",
+						gap: 2,
+						mt: 2,
+						mb: 3,
+					}}
+				>
+					<Paper
+						elevation={0}
+						sx={{
+							display: "flex",
+							alignItems: "center",
+							gap: 1,
+							px: 2,
+							py: 1,
+							bgcolor: (t) => `rgba(${t.trading.primaryRgb}, 0.08)`,
+							border: (t) => `1px solid rgba(${t.trading.primaryRgb}, 0.15)`,
+							borderRadius: 2,
+						}}
+					>
+						<StorageIcon sx={{ fontSize: 18, color: "primary.main" }} />
+						{collectionsQuery.isLoading ? (
+							<ShimmerSkeleton width={60} height={20} />
+						) : (
+							<Typography
+								variant="body2"
+								sx={{
+									fontWeight: 600,
+									fontFamily: "monospace",
+								}}
+							>
+								{totalDocuments.toLocaleString()} Documents
+							</Typography>
+						)}
+					</Paper>
+
+					<Paper
+						elevation={0}
+						sx={{
+							display: "flex",
+							alignItems: "center",
+							gap: 1,
+							px: 2,
+							py: 1,
+							bgcolor: (t) => `rgba(${t.trading.primaryRgb}, 0.05)`,
+							border: 1,
+							borderColor: "divider",
+							borderRadius: 2,
+						}}
+					>
+						<LayersIcon sx={{ fontSize: 18, color: "text.secondary" }} />
+						<Typography
+							variant="body2"
+							color="text.secondary"
+							sx={{ fontWeight: 500 }}
+						>
+							{TOTAL_COLLECTIONS} Collections
+						</Typography>
+					</Paper>
+
+					{!collectionsQuery.isLoading && emptyGroups > 0 && (
+						<Paper
+							elevation={0}
+							sx={{
+								display: "flex",
+								alignItems: "center",
+								gap: 1,
+								px: 2,
+								py: 1,
+								bgcolor: (t) => `rgba(${t.trading.primaryRgb}, 0.03)`,
+								border: 1,
+								borderColor: "divider",
+								borderRadius: 2,
+							}}
+						>
+							<FolderOpenIcon
+								sx={{
+									fontSize: 18,
+									color: "text.disabled",
+								}}
+							/>
+							<Typography
+								variant="body2"
+								color="text.disabled"
+								sx={{ fontWeight: 500 }}
+							>
+								{emptyGroups} Empty
+							</Typography>
+						</Paper>
+					)}
+				</Box>
+			</motion.div>
+
+			{/* Card grid */}
 			<motion.div
 				variants={staggerCascade.container}
 				initial="hidden"
 				animate="visible"
 			>
-				<Grid container spacing={3} sx={{ mt: 1 }}>
+				<Grid container spacing={3}>
 					{COLLECTION_GROUPS.map((group) => {
 						const GroupIcon = group.icon;
 						const total = getGroupTotal(group);
@@ -153,147 +280,191 @@ function DataManagementPage() {
 						return (
 							<Grid key={group.id} size={{ xs: 12, sm: 6, md: 4 }}>
 								<motion.div variants={staggerCascade.item}>
-									<Card
-										sx={{
-											height: "100%",
-											display: "flex",
-											flexDirection: "column",
-										}}
+									<motion.div
+										variants={cardHover}
+										initial="rest"
+										whileHover="hover"
+										whileTap="tap"
+										style={{ height: "100%" }}
 									>
-										<CardContent
+										<Card
 											sx={{
-												flex: 1,
+												height: "100%",
 												display: "flex",
 												flexDirection: "column",
-												gap: 1.5,
-												p: 3,
-												"&:last-child": { pb: 3 },
 											}}
 										>
-											{/* Header */}
-											<Box
-												sx={{
-													display: "flex",
-													alignItems: "center",
-													gap: 1.5,
-												}}
-											>
-												<Box
-													sx={{
-														width: 40,
-														height: 40,
-														borderRadius: "50%",
-														display: "flex",
-														alignItems: "center",
-														justifyContent: "center",
-														bgcolor: "primary.main",
-														opacity: 0.15,
-														position: "relative",
-													}}
-												>
-													<GroupIcon
-														sx={{
-															fontSize: 22,
-															color: "primary.main",
-															position: "absolute",
-															opacity: 1,
-														}}
-													/>
-												</Box>
-												<Typography
-													variant="h6"
-													sx={{ flex: 1, fontWeight: 600 }}
-												>
-													{group.name}
-												</Typography>
-												{collectionsQuery.isLoading ? (
-													<ShimmerSkeleton
-														width={60}
-														height={24}
-														variant="rounded"
-													/>
-												) : (
-													<Chip
-														label={`${total} docs`}
-														size="small"
-														color={isEmpty ? "default" : "error"}
-														variant="outlined"
-													/>
-												)}
-											</Box>
-
-											{/* Description */}
-											<Typography variant="body2" color="text.secondary">
-												{group.description}
-											</Typography>
-
-											{/* Collection breakdown */}
-											<Box
+											<CardContent
 												sx={{
 													flex: 1,
 													display: "flex",
 													flexDirection: "column",
-													gap: 0.5,
-													py: 1,
-													borderTop: 1,
-													borderColor: "divider",
+													gap: 1.5,
+													p: 3,
+													"&:last-child": { pb: 3 },
 												}}
 											>
-												{group.collections.map((collName) => (
+												{/* Header */}
+												<Box
+													sx={{
+														display: "flex",
+														alignItems: "center",
+														gap: 1.5,
+													}}
+												>
 													<Box
-														key={collName}
 														sx={{
+															width: 48,
+															height: 48,
+															borderRadius: "12px",
 															display: "flex",
-															justifyContent: "space-between",
 															alignItems: "center",
+															justifyContent: "center",
+															bgcolor: (t) =>
+																`rgba(${t.trading.primaryRgb}, 0.15)`,
+															border: (t) =>
+																`1px solid rgba(${t.trading.primaryRgb}, 0.2)`,
 														}}
 													>
-														<Typography
-															variant="caption"
-															color="text.secondary"
-															sx={{ fontFamily: "monospace" }}
+														<GroupIcon
+															sx={{
+																fontSize: 26,
+																color: "primary.main",
+															}}
+														/>
+													</Box>
+													<Typography
+														variant="h6"
+														sx={{
+															flex: 1,
+															fontWeight: 600,
+														}}
+													>
+														{group.name}
+													</Typography>
+													{collectionsQuery.isLoading ? (
+														<ShimmerSkeleton
+															width={60}
+															height={24}
+															variant="rounded"
+														/>
+													) : (
+														<Chip
+															label={`${total.toLocaleString()} docs`}
+															size="small"
+															variant="outlined"
+															sx={{
+																fontFamily: "monospace",
+																fontWeight: 600,
+																borderColor: isEmpty ? "divider" : "error.main",
+																color: isEmpty ? "text.disabled" : "error.main",
+															}}
+														/>
+													)}
+												</Box>
+
+												{/* Description */}
+												<Typography variant="body2" color="text.secondary">
+													{group.description}
+												</Typography>
+
+												{/* Collection breakdown */}
+												<Box
+													sx={{
+														flex: 1,
+														display: "flex",
+														flexDirection: "column",
+														py: 1,
+														px: 1.5,
+														borderRadius: 1.5,
+														bgcolor: (t) =>
+															`rgba(${t.trading.primaryRgb}, 0.03)`,
+														border: 1,
+														borderColor: "divider",
+													}}
+												>
+													{group.collections.map((collName, idx) => (
+														<Box
+															key={collName}
+															sx={{
+																display: "flex",
+																justifyContent: "space-between",
+																alignItems: "center",
+																py: 0.75,
+																px: 0.5,
+																borderBottom:
+																	idx < group.collections.length - 1 ? 1 : 0,
+																borderColor: "divider",
+															}}
 														>
-															{collName}
-														</Typography>
-														{collectionsQuery.isLoading ? (
-															<ShimmerSkeleton width={30} height={16} />
-														) : (
 															<Typography
 																variant="caption"
+																color="text.secondary"
 																sx={{
 																	fontFamily: "monospace",
-																	opacity: 0.7,
 																}}
 															>
-																{countsByCollection.get(collName) ?? 0}
+																{collName}
 															</Typography>
-														)}
-													</Box>
-												))}
-											</Box>
+															{collectionsQuery.isLoading ? (
+																<ShimmerSkeleton width={30} height={16} />
+															) : (
+																<Chip
+																	label={countsByCollection.get(collName) ?? 0}
+																	size="small"
+																	variant="outlined"
+																	sx={{
+																		height: 20,
+																		minWidth: 32,
+																		fontFamily: "monospace",
+																		fontSize: "0.7rem",
+																		"& .MuiChip-label": {
+																			px: 0.75,
+																		},
+																	}}
+																/>
+															)}
+														</Box>
+													))}
+												</Box>
 
-											{/* Clear button */}
-											<Button
-												variant="outlined"
-												color="error"
-												fullWidth
-												startIcon={<DeleteSweepIcon />}
-												disabled={
-													isEmpty ||
-													collectionsQuery.isLoading ||
-													clearMutation.isPending
-												}
-												onClick={() => setConfirmGroup(group)}
-												sx={{ mt: "auto", transition: "all 0.2s" }}
-											>
-												{isClearing
-													? "Clearing..."
-													: isEmpty
-														? "Empty"
-														: `Clear All ${group.name} Data`}
-											</Button>
-										</CardContent>
-									</Card>
+												{/* Clear button */}
+												<Box
+													sx={{
+														mt: "auto",
+														pt: 1.5,
+													}}
+												>
+													<Button
+														variant="outlined"
+														color="error"
+														fullWidth
+														startIcon={<DeleteSweepIcon />}
+														disabled={
+															isEmpty ||
+															collectionsQuery.isLoading ||
+															clearMutation.isPending
+														}
+														onClick={() => setConfirmGroup(group)}
+														sx={{
+															py: 1,
+															fontWeight: 600,
+															borderStyle: "dashed",
+															"&:hover": {
+																borderStyle: "solid",
+															},
+														}}
+													>
+														{isClearing
+															? "Clearing..."
+															: isEmpty
+																? "Empty"
+																: `Clear All ${group.name} Data`}
+													</Button>
+												</Box>
+											</CardContent>
+										</Card>
+									</motion.div>
 								</motion.div>
 							</Grid>
 						);
@@ -308,7 +479,11 @@ function DataManagementPage() {
 				message={
 					<Box
 						component="span"
-						sx={{ display: "flex", flexDirection: "column", gap: 1 }}
+						sx={{
+							display: "flex",
+							flexDirection: "column",
+							gap: 1,
+						}}
 					>
 						<Typography variant="body2" component="span">
 							This action cannot be undone. The following collections will be

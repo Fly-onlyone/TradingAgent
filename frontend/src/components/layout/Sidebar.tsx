@@ -95,7 +95,7 @@ const adminGroup: NavGroup = {
 		{ path: "/admin/database", label: "Database", icon: StorageIcon },
 		{
 			path: "/admin/data-management",
-			label: "Data Mgmt",
+			label: "Data Management",
 			icon: DeleteSweepIcon,
 		},
 		{ path: "/admin/backup", label: "Backup", icon: BackupIcon },
