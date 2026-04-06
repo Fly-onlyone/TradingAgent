@@ -1069,6 +1069,35 @@ async def mcp_get_open_orders(args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
+    "get_positions",
+    "Get current positions and coin holdings on the exchange",
+    {
+        "type": "object",
+        "properties": {
+            "inst_type": {
+                "type": "string",
+                "description": "Instrument type: SPOT, MARGIN, SWAP, FUTURES, OPTION (default: SPOT)",
+            },
+        },
+        "required": [],
+    },
+)
+async def mcp_get_positions(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
+    try:
+        from app.agent.tools.trading_tools import get_positions
+
+        result = await get_positions(inst_type=args.get("inst_type", "SPOT"))
+        response = {"content": [{"type": "text", "text": json.dumps(result)}]}
+        _buffer_tool_result("get_positions", args, response, start)
+        return response
+    except Exception as e:
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("get_positions", args, response, start)
+        return response
+
+
+@tool(
     "place_order",
     "Place a trading order on the exchange",
     {
@@ -2196,6 +2225,7 @@ ALL_TRADING_TOOLS = [
     mcp_search_patterns,
     # Trading
     mcp_get_account_balance,
+    mcp_get_positions,
     mcp_get_open_orders,
     mcp_place_order,
     mcp_cancel_order,
