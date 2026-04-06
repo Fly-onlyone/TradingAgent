@@ -28,6 +28,7 @@ import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AuthForgotPasswordRouteImport } from './routes/auth/forgot-password'
 import { Route as AdminLogsRouteImport } from './routes/admin/logs'
 import { Route as AdminDatabaseRouteImport } from './routes/admin/database'
+import { Route as AdminDataManagementRouteImport } from './routes/admin/data-management'
 import { Route as AdminBackupRouteImport } from './routes/admin/backup'
 
 const TradingRoute = TradingRouteImport.update({
@@ -125,6 +126,11 @@ const AdminDatabaseRoute = AdminDatabaseRouteImport.update({
   path: '/admin/database',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminDataManagementRoute = AdminDataManagementRouteImport.update({
+  id: '/admin/data-management',
+  path: '/admin/data-management',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminBackupRoute = AdminBackupRouteImport.update({
   id: '/admin/backup',
   path: '/admin/backup',
@@ -139,6 +145,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/trading': typeof TradingRoute
   '/admin/backup': typeof AdminBackupRoute
+  '/admin/data-management': typeof AdminDataManagementRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/logs': typeof AdminLogsRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
@@ -161,6 +168,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/trading': typeof TradingRoute
   '/admin/backup': typeof AdminBackupRoute
+  '/admin/data-management': typeof AdminDataManagementRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/logs': typeof AdminLogsRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
@@ -184,6 +192,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/trading': typeof TradingRoute
   '/admin/backup': typeof AdminBackupRoute
+  '/admin/data-management': typeof AdminDataManagementRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/logs': typeof AdminLogsRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
@@ -208,6 +217,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/trading'
     | '/admin/backup'
+    | '/admin/data-management'
     | '/admin/database'
     | '/admin/logs'
     | '/auth/forgot-password'
@@ -230,6 +240,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/trading'
     | '/admin/backup'
+    | '/admin/data-management'
     | '/admin/database'
     | '/admin/logs'
     | '/auth/forgot-password'
@@ -252,6 +263,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/trading'
     | '/admin/backup'
+    | '/admin/data-management'
     | '/admin/database'
     | '/admin/logs'
     | '/auth/forgot-password'
@@ -275,6 +287,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   TradingRoute: typeof TradingRoute
   AdminBackupRoute: typeof AdminBackupRoute
+  AdminDataManagementRoute: typeof AdminDataManagementRoute
   AdminDatabaseRoute: typeof AdminDatabaseRoute
   AdminLogsRoute: typeof AdminLogsRoute
   AuthForgotPasswordRoute: typeof AuthForgotPasswordRoute
@@ -425,6 +438,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminDatabaseRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/data-management': {
+      id: '/admin/data-management'
+      path: '/admin/data-management'
+      fullPath: '/admin/data-management'
+      preLoaderRoute: typeof AdminDataManagementRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/backup': {
       id: '/admin/backup'
       path: '/admin/backup'
@@ -443,6 +463,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   TradingRoute: TradingRoute,
   AdminBackupRoute: AdminBackupRoute,
+  AdminDataManagementRoute: AdminDataManagementRoute,
   AdminDatabaseRoute: AdminDatabaseRoute,
   AdminLogsRoute: AdminLogsRoute,
   AuthForgotPasswordRoute: AuthForgotPasswordRoute,

@@ -35,3 +35,8 @@ export interface AdminDocumentFilter {
 	pageSize?: number;
 	search?: string;
 }
+
+export interface BulkClearResult {
+	results: Record<string, number>;
+	totalDeleted: number;
+}

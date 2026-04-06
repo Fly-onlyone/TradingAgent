@@ -6,6 +6,7 @@ import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
 import ArticleIcon from "@mui/icons-material/Article";
 import BackupIcon from "@mui/icons-material/Backup";
 import DashboardIcon from "@mui/icons-material/Dashboard";
+import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
 import LibraryBooksIcon from "@mui/icons-material/LibraryBooks";
 import ListAltIcon from "@mui/icons-material/ListAlt";
 import MonitorIcon from "@mui/icons-material/Monitor";
@@ -92,6 +93,11 @@ const adminGroup: NavGroup = {
 	label: "Admin",
 	items: [
 		{ path: "/admin/database", label: "Database", icon: StorageIcon },
+		{
+			path: "/admin/data-management",
+			label: "Data Mgmt",
+			icon: DeleteSweepIcon,
+		},
 		{ path: "/admin/backup", label: "Backup", icon: BackupIcon },
 		{ path: "/admin/logs", label: "Logs", icon: ArticleIcon },
 	],
