@@ -1,27 +1,17 @@
 /**
- * Tool call list with individual expand/collapse + "Expand all" toggle.
+ * Tool call list — expand/collapse controlled by global header toggle.
  */
 
-import UnfoldLessIcon from "@mui/icons-material/UnfoldLess";
-import UnfoldMoreIcon from "@mui/icons-material/UnfoldMore";
-import { Box, IconButton, Tooltip, Typography } from "@mui/material";
-import { useState } from "react";
+import { Box, Typography } from "@mui/material";
 import type { ToolCall } from "@/api/websocket/useAgentSocket";
 import { ToolCallBlock } from "./ToolCallBlock";
 
 interface ToolCallListProps {
 	toolCalls: ToolCall[];
-	defaultExpandAll?: boolean;
+	expandAllTools?: boolean;
 }
 
-export function ToolCallList({
-	toolCalls,
-	defaultExpandAll = false,
-}: ToolCallListProps) {
-	const [expandAll, setExpandAll] = useState<boolean | null>(
-		defaultExpandAll ? true : null,
-	);
-
+export function ToolCallList({ toolCalls, expandAllTools }: ToolCallListProps) {
 	return (
 		<Box>
 			<Box
@@ -35,30 +25,13 @@ export function ToolCallList({
 				<Typography variant="caption" color="text.secondary">
 					Tools Used ({toolCalls.length})
 				</Typography>
-				<Tooltip
-					title={expandAll ? "Collapse all" : "Expand all"}
-					arrow
-					placement="top"
-				>
-					<IconButton
-						size="small"
-						onClick={() => setExpandAll((prev) => !prev)}
-						sx={{ p: 0.25 }}
-					>
-						{expandAll ? (
-							<UnfoldLessIcon sx={{ fontSize: 18 }} />
-						) : (
-							<UnfoldMoreIcon sx={{ fontSize: 18 }} />
-						)}
-					</IconButton>
-				</Tooltip>
 			</Box>
 			<Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
 				{toolCalls.map((tool) => (
 					<ToolCallBlock
 						key={tool.id}
 						toolCall={tool}
-						forceExpanded={expandAll ?? undefined}
+						forceExpanded={expandAllTools}
 					/>
 				))}
 			</Box>

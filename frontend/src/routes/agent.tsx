@@ -12,6 +12,8 @@ import PsychologyIcon from "@mui/icons-material/Psychology";
 import RocketLaunchIcon from "@mui/icons-material/RocketLaunch";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import TuneIcon from "@mui/icons-material/Tune";
+import UnfoldLessIcon from "@mui/icons-material/UnfoldLess";
+import UnfoldMoreIcon from "@mui/icons-material/UnfoldMore";
 import {
 	Badge,
 	Box,
@@ -132,7 +134,9 @@ function AgentPage() {
 		hasMoreDecisions,
 		pendingDecisionsCount,
 		showThinkingContent,
+		expandAllTools,
 		toggleThinkingContent,
+		toggleExpandAllTools,
 		setSelectedSessionId,
 		removeSession,
 		hydrateSessionMessages,
@@ -723,6 +727,27 @@ function AgentPage() {
 						>
 							<AgentStatusBadge status={status} />
 							<Tooltip
+								title={
+									expandAllTools
+										? "Collapse tool details"
+										: "Expand tool details"
+								}
+								arrow
+								placement="bottom"
+							>
+								<IconButton
+									onClick={toggleExpandAllTools}
+									size="small"
+									color={expandAllTools ? "primary" : "default"}
+								>
+									{expandAllTools ? (
+										<UnfoldLessIcon fontSize="small" />
+									) : (
+										<UnfoldMoreIcon fontSize="small" />
+									)}
+								</IconButton>
+							</Tooltip>
+							<Tooltip
 								title={showThinkingContent ? "Hide thinking" : "Show thinking"}
 								arrow
 								placement="bottom"
@@ -844,6 +869,7 @@ function AgentPage() {
 									key={message.id}
 									message={message}
 									showThinkingContent={showThinkingContent}
+									expandAllTools={expandAllTools}
 								/>
 							))
 						)}
@@ -866,6 +892,7 @@ function AgentPage() {
 									toolCalls={currentTurnToolCalls}
 									thinkingContent={thinkingContent}
 									showThinkingContent={showThinkingContent}
+									expandAllTools={expandAllTools}
 								/>
 							)}
 						</AnimatePresence>

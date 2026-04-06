@@ -216,12 +216,14 @@ const markdownComponents = {
 interface ChatMessageProps {
 	message: AgentMessage;
 	showThinkingContent?: boolean;
+	expandAllTools?: boolean;
 	isStreaming?: boolean;
 }
 
 export function ChatMessage({
 	message,
 	showThinkingContent = true,
+	expandAllTools,
 	isStreaming = false,
 }: ChatMessageProps) {
 	const isUser = message.role === "user";
@@ -405,7 +407,10 @@ export function ChatMessage({
 						{/* Tool Calls */}
 						{message.toolCalls && message.toolCalls.length > 0 && (
 							<Box sx={{ mt: 2 }}>
-								<ToolCallList toolCalls={message.toolCalls} />
+								<ToolCallList
+									toolCalls={message.toolCalls}
+									expandAllTools={expandAllTools}
+								/>
 							</Box>
 						)}
 					</Paper>

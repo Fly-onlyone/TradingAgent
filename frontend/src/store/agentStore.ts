@@ -47,6 +47,7 @@ interface AgentState {
 	status: AgentStatus;
 
 	showThinkingContent: boolean;
+	expandAllTools: boolean;
 
 	setSelectedSessionId: (sessionId: string | null) => void;
 	setActiveRunSessionId: (sessionId: string | null) => void;
@@ -79,6 +80,7 @@ interface AgentState {
 
 	updateStatus: (status: string) => void;
 	toggleThinkingContent: () => void;
+	toggleExpandAllTools: () => void;
 	setSessionPendingQuestion: (
 		sessionId: string,
 		question: PendingQuestion | null,
@@ -143,6 +145,7 @@ export const useAgentStore = create<AgentState>()(
 			status: "disconnected",
 
 			showThinkingContent: true,
+			expandAllTools: false,
 
 			setSelectedSessionId: (selectedSessionId) => set({ selectedSessionId }),
 
@@ -510,6 +513,10 @@ export const useAgentStore = create<AgentState>()(
 				set((state) => ({
 					showThinkingContent: !state.showThinkingContent,
 				})),
+			toggleExpandAllTools: () =>
+				set((state) => ({
+					expandAllTools: !state.expandAllTools,
+				})),
 			setSessionPendingQuestion: (sessionId, question) =>
 				set((state) => {
 					const sessionState =
@@ -611,6 +618,7 @@ export const useAgentStore = create<AgentState>()(
 			name: "agent-store",
 			partialize: (state) => ({
 				showThinkingContent: state.showThinkingContent,
+				expandAllTools: state.expandAllTools,
 			}),
 		},
 	),

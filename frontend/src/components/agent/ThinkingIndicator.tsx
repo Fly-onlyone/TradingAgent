@@ -26,12 +26,14 @@ interface ThinkingIndicatorProps {
 	toolCalls: ToolCall[];
 	thinkingContent: string;
 	showThinkingContent?: boolean;
+	expandAllTools?: boolean;
 }
 
 export function ThinkingIndicator({
 	toolCalls,
 	thinkingContent,
 	showThinkingContent = true,
+	expandAllTools,
 }: ThinkingIndicatorProps) {
 	return (
 		<motion.div
@@ -198,7 +200,10 @@ export function ThinkingIndicator({
 										})}
 									</AnimatePresence>
 								</Box>
-								<ToolCallList toolCalls={toolCalls} defaultExpandAll />
+								<ToolCallList
+									toolCalls={toolCalls}
+									expandAllTools={expandAllTools}
+								/>
 							</Box>
 						)}
 					</Paper>
