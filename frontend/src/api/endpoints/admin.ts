@@ -4,6 +4,7 @@
 
 import type {
 	AdminDocumentFilter,
+	BulkClearResult,
 	CollectionInfo,
 	DatabaseInfo,
 	DocumentListResponse,
@@ -107,6 +108,20 @@ export const adminApi = {
 			`/admin/collections/${collectionName}/${documentId}`,
 		);
 		return response.data;
+	},
+
+	/**
+	 * Clear all documents from multiple collections
+	 */
+	async bulkClearCollections(collections: string[]): Promise<BulkClearResult> {
+		const response = await apiClient.post<{
+			results: Record<string, number>;
+			total_deleted: number;
+		}>("/admin/bulk-clear", { collections });
+		return {
+			results: response.data.results,
+			totalDeleted: response.data.total_deleted,
+		};
 	},
 
 	/**

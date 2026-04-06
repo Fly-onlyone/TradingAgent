@@ -14,6 +14,9 @@ from app.db.session import get_client, get_db
 
 router = APIRouter()
 
+# Collections that cannot be bulk-cleared for safety
+PROTECTED_COLLECTIONS = {"users", "app_settings"}
+
 # Collection name to display name mapping
 COLLECTION_DISPLAY_NAMES = {
     "users": "Users",
@@ -79,6 +82,19 @@ class DocumentUpdateRequest(BaseModel):
     """Request body for updating a document."""
 
     document: dict[str, Any]
+
+
+class BulkClearRequest(BaseModel):
+    """Request to clear all documents from multiple collections."""
+
+    collections: list[str]
+
+
+class BulkClearResponse(BaseModel):
+    """Result of bulk clear operation."""
+
+    results: dict[str, int]
+    total_deleted: int
 
 
 class SentryTestResponse(BaseModel):
@@ -314,6 +330,38 @@ async def delete_document(
         raise HTTPException(status_code=404, detail="Document not found")
 
     return {"deleted": True}
+
+
+@router.post("/bulk-clear", response_model=BulkClearResponse)
+async def bulk_clear_collections(
+    body: BulkClearRequest,
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Clear all documents from multiple collections at once.
+
+    Refuses to clear protected collections (users, app_settings).
+    """
+    db = get_db()
+    collection_names = await db.list_collection_names()
+
+    # Validate all collections up front
+    for name in body.collections:
+        if name in PROTECTED_COLLECTIONS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Collection '{name}' is protected and cannot be cleared",
+            )
+        if name not in collection_names:
+            raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
+
+    results: dict[str, int] = {}
+    total = 0
+    for name in body.collections:
+        result = await db[name].delete_many({})
+        results[name] = result.deleted_count
+        total += result.deleted_count
+
+    return {"results": results, "total_deleted": total}
 
 
 @router.put("/collections/{collection_name}/{document_id}")
