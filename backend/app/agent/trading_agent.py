@@ -148,6 +148,7 @@ class TradingAgent:
             disallowed_tools=DISALLOWED_BUILTIN_TOOLS,
             permission_mode="bypassPermissions",
             max_turns=10,
+            extra_args={"setting-sources": "local"},
             model=FAMILY_TO_API_MODEL.get(app_settings.agent_model, app_settings.agent_model)
             or None,
             thinking=thinking,

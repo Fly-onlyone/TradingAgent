@@ -12,7 +12,6 @@ import {
 	agentSessionsGroupedQueryOptions,
 } from "@/api/queryOptions/agent";
 import { useAgentStore } from "@/store/agentStore";
-import { notify } from "@/store/uiStore";
 import type { WebSocketMessage } from "@/types";
 import type { GroupedSessionsResponse, PendingQuestion } from "@/types/session";
 import {
@@ -268,7 +267,7 @@ export function useAgentSocket() {
 							queryKey: agentSessionQueryOptions(targetSessionId).queryKey,
 						});
 
-						// Fire "analysis ready" notification
+						// Fire "analysis ready" native toast
 						const notifSettings =
 							queryClient.getQueryData<NotificationSettings>([
 								"notification-settings",
@@ -278,10 +277,7 @@ export function useAgentSocket() {
 								msg.content.length > 100
 									? `${msg.content.slice(0, 100)}...`
 									: msg.content;
-							notify.info("Agent response ready", preview);
-							if (document.hidden) {
-								void sendNativeNotification("Agent response ready", preview);
-							}
+							void sendNativeNotification("Agent response ready", preview);
 						}
 					}
 					break;
