@@ -118,6 +118,20 @@ class Settings(BaseSettings):
                     stacklevel=2,
                 )
 
+        if not self.secrets_encryption_keys:
+            if os.environ.get("TAURI_APP"):
+                from cryptography.fernet import Fernet
+
+                self.secrets_encryption_keys = Fernet.generate_key().decode()
+                self._persist_generated_encryption_key()
+            elif not self.debug:
+                warnings.warn(
+                    "SECRETS_ENCRYPTION_KEYS is not set. API key storage in the database "
+                    "will be unavailable until encryption keys are configured.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
         if not self.debug and "localhost" in self.mongodb_url and "@" not in self.mongodb_url:
             warnings.warn(
                 "MongoDB connection has no authentication credentials. "
@@ -158,6 +172,33 @@ class Settings(BaseSettings):
                 )
             else:
                 content += f"\nSECRET_KEY={self.secret_key}\n"
+
+            with open(env_path, "w", encoding="utf-8") as f:
+                f.write(content)
+        except OSError:
+            pass  # Non-fatal: key is still valid in memory for this session
+
+    def _persist_generated_encryption_key(self) -> None:
+        """Write the auto-generated SECRETS_ENCRYPTION_KEYS back to the desktop .env file."""
+        env_path = os.environ.get(APP_ENV_FILE_ENV_VAR)
+        if not env_path:
+            return
+        try:
+            content = ""
+            if os.path.exists(env_path):
+                with open(env_path, encoding="utf-8") as f:
+                    content = f.read()
+
+            import re
+
+            if re.search(r"(?m)^#?\s*SECRETS_ENCRYPTION_KEYS\s*=", content):
+                content = re.sub(
+                    r"(?m)^#?\s*SECRETS_ENCRYPTION_KEYS\s*=.*$",
+                    f"SECRETS_ENCRYPTION_KEYS={self.secrets_encryption_keys}",
+                    content,
+                )
+            else:
+                content += f"\nSECRETS_ENCRYPTION_KEYS={self.secrets_encryption_keys}\n"
 
             with open(env_path, "w", encoding="utf-8") as f:
                 f.write(content)
