@@ -166,6 +166,8 @@ class AgentTaskScheduler:
         )
         logger.info("Strategy auto-discovery scheduled every %d hours", hours)
 
+        await self._maybe_run_missed_discovery(app_settings, hours)
+
     @property
     def discovery_next_run_at(self) -> datetime | None:
         """Next scheduled fire time for auto-discovery, or None if not scheduled."""
@@ -246,6 +248,8 @@ class AgentTaskScheduler:
         )
         logger.info("Pattern mining scheduled every %d hours", hours)
 
+        await self._maybe_run_missed_pattern_mining(app_settings, hours)
+
     async def _run_pattern_mining(self) -> None:
         """Execute one pattern mining cycle."""
         from app.services.pattern_miner import PatternMiner
@@ -265,6 +269,27 @@ class AgentTaskScheduler:
                 await app_settings.save_with_timestamp()
             except Exception:
                 logger.exception("Pattern mining cycle failed")
+
+    async def _maybe_run_missed_pattern_mining(
+        self, app_settings: Any, interval_hours: int
+    ) -> None:
+        """Fire a catch-up pattern mining run if overdue (e.g. after sleep/shutdown)."""
+        last_run = app_settings.pattern_mining_last_run_at
+        if last_run is None:
+            logger.info("Pattern mining has never run — triggering initial run")
+            asyncio.create_task(self._run_pattern_mining())  # noqa: RUF006
+            return
+
+        if last_run.tzinfo is None:
+            last_run = last_run.replace(tzinfo=UTC)
+
+        elapsed = datetime.now(UTC) - last_run
+        if elapsed > timedelta(hours=interval_hours):
+            logger.info(
+                "Pattern mining overdue by %s — triggering catch-up run",
+                elapsed - timedelta(hours=interval_hours),
+            )
+            asyncio.create_task(self._run_pattern_mining())  # noqa: RUF006
 
     async def reschedule_pattern_mining(self) -> None:
         """Public method to reschedule after settings change."""
