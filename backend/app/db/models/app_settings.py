@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, ClassVar
@@ -321,15 +322,39 @@ class AppSettings(Document):
 
         return changed
 
-    def validate_decryptable_secrets(self) -> None:
-        """Validate that encrypted values can be decrypted with current key set."""
+    def get_undecryptable_secret_fields(self) -> list[str]:
+        """Return encrypted secret fields that cannot be decrypted with current keys."""
+        invalid_fields: list[str] = []
         for field_name in self.SECRET_FIELD_NAMES:
             value = getattr(self, field_name)
             if not value or not is_encrypted_secret(value):
                 continue
             try:
-                decrypt_secret_value(value)
-            except SecretDecryptionError as exc:
-                raise RuntimeError(
-                    f"Encrypted app settings secret cannot be decrypted: field={field_name}."
-                ) from exc
+                decrypt_secret_value(value, log_errors=False)
+            except SecretDecryptionError:
+                invalid_fields.append(field_name)
+        return invalid_fields
+
+    async def clear_secret_fields(self, field_names: Iterable[str]) -> list[str]:
+        """Clear the provided secret fields and persist only when something changed."""
+        cleared_fields: list[str] = []
+        for field_name in field_names:
+            if field_name not in self.SECRET_FIELD_NAMES:
+                continue
+            if not getattr(self, field_name):
+                continue
+            setattr(self, field_name, "")
+            cleared_fields.append(field_name)
+
+        if cleared_fields:
+            await self.save_with_timestamp()
+
+        return cleared_fields
+
+    def validate_decryptable_secrets(self) -> None:
+        """Validate that encrypted values can be decrypted with current key set."""
+        invalid_fields = self.get_undecryptable_secret_fields()
+        if invalid_fields:
+            raise RuntimeError(
+                f"Encrypted app settings secret cannot be decrypted: field={invalid_fields[0]}."
+            )

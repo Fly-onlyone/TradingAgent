@@ -14,6 +14,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret")
 os.environ.setdefault("SENTRY_DSN", "")
 
 from app import main as app_main
+from app.db import session as db_session
 from app.news import scheduler as scheduler_module
 
 
@@ -136,3 +137,62 @@ def test_asyncio_handler_delegates_non_matching_errors(
     handler(None, context)
 
     assert fallback_calls == [context]
+
+
+@pytest.mark.asyncio
+async def test_validate_app_settings_secret_encryption_recovers_for_desktop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cleared_fields: list[str] = []
+
+    class _FakeSettingsDocument:
+        def has_persisted_secret_values(self) -> bool:
+            return True
+
+        async def migrate_plaintext_secrets_if_needed(self) -> bool:
+            return False
+
+        def get_undecryptable_secret_fields(self) -> list[str]:
+            return ["okx_api_key", "okx_secret_key"]
+
+        async def clear_secret_fields(self, field_names: list[str]) -> list[str]:
+            cleared_fields.extend(field_names)
+            return field_names
+
+    class _FakeAppSettings:
+        @staticmethod
+        async def get_instance() -> _FakeSettingsDocument:
+            return _FakeSettingsDocument()
+
+    monkeypatch.setenv("TAURI_APP", "1")
+    monkeypatch.setattr("app.db.models.app_settings.AppSettings", _FakeAppSettings)
+
+    await db_session._validate_app_settings_secret_encryption()
+
+    assert cleared_fields == ["okx_api_key", "okx_secret_key"]
+
+
+@pytest.mark.asyncio
+async def test_validate_app_settings_secret_encryption_stays_strict_for_server(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeSettingsDocument:
+        def has_persisted_secret_values(self) -> bool:
+            return True
+
+        async def migrate_plaintext_secrets_if_needed(self) -> bool:
+            return False
+
+        def get_undecryptable_secret_fields(self) -> list[str]:
+            return ["okx_api_key"]
+
+    class _FakeAppSettings:
+        @staticmethod
+        async def get_instance() -> _FakeSettingsDocument:
+            return _FakeSettingsDocument()
+
+    monkeypatch.delenv("TAURI_APP", raising=False)
+    monkeypatch.setattr("app.db.models.app_settings.AppSettings", _FakeAppSettings)
+
+    with pytest.raises(RuntimeError, match="Stored application secrets could not be validated"):
+        await db_session._validate_app_settings_secret_encryption()

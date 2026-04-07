@@ -78,7 +78,7 @@ def encrypt_secret_value(value: str) -> str:
     return f"{SECRET_ENCRYPTION_PREFIX}{token}"
 
 
-def decrypt_secret_value(value: str) -> str:
+def decrypt_secret_value(value: str, *, log_errors: bool = True) -> str:
     """Decrypt marker-formatted secret; passthrough plaintext legacy values."""
     if not value:
         return ""
@@ -89,10 +89,12 @@ def decrypt_secret_value(value: str) -> str:
     try:
         decrypted_bytes = _get_multifernet().decrypt(token.encode("utf-8"))
     except SecretEncryptionError as exc:
-        logger.error("Decryption failed — key configuration error")
+        if log_errors:
+            logger.error("Decryption failed — key configuration error")
         raise SecretDecryptionError(str(exc)) from exc
     except InvalidToken as exc:
-        logger.error("Decryption failed — invalid token or wrong key")
+        if log_errors:
+            logger.error("Decryption failed — invalid token or wrong key")
         raise SecretDecryptionError(
             "Failed to decrypt stored secret. The configured encryption keys "
             "may be missing, rotated out, or invalid."

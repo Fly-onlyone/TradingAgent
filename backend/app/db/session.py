@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -95,7 +96,7 @@ async def _ensure_mongodb_running() -> None:
 async def _validate_app_settings_secret_encryption() -> None:
     """Validate and migrate app settings secrets before serving traffic."""
     from app.db.models.app_settings import AppSettings
-    from app.security.secrets_crypto import SecretDecryptionError, SecretEncryptionError
+    from app.security.secrets_crypto import SecretEncryptionError
 
     app_settings = await AppSettings.get_instance()
     if not app_settings.has_persisted_secret_values():
@@ -103,8 +104,25 @@ async def _validate_app_settings_secret_encryption() -> None:
 
     try:
         await app_settings.migrate_plaintext_secrets_if_needed()
-        app_settings.validate_decryptable_secrets()
-    except (SecretEncryptionError, SecretDecryptionError, RuntimeError) as exc:
+        undecryptable_fields = app_settings.get_undecryptable_secret_fields()
+        if not undecryptable_fields:
+            return
+
+        if os.environ.get("TAURI_APP"):
+            cleared_fields = await app_settings.clear_secret_fields(undecryptable_fields)
+            logger.warning(
+                "Recovered desktop app settings from undecryptable encrypted secrets by "
+                "clearing fields=%s",
+                ",".join(cleared_fields),
+            )
+            return
+
+        raise RuntimeError(
+            "Stored application secrets could not be validated. Configure "
+            "`SECRETS_ENCRYPTION_KEYS` (comma-separated Fernet keys) "
+            "before startup."
+        )
+    except (SecretEncryptionError, RuntimeError) as exc:
         raise RuntimeError(
             "Stored application secrets could not be validated. Configure "
             "`SECRETS_ENCRYPTION_KEYS` (comma-separated Fernet keys) "
