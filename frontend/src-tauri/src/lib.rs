@@ -53,7 +53,6 @@ const WINDOW_STATE_PERSIST_DEBOUNCE_MS: u64 = 500;
 
 const WINDOW_STATE_FILE_NAME: &str = "window-state.json";
 const APP_ENV_FILE_NAME: &str = ".env";
-const BACKEND_RUNTIME_DIR: &str = "trading-agent-backend";
 #[cfg(target_os = "windows")]
 const BACKEND_RUNTIME_EXE: &str = "trading-agent-backend.exe";
 #[cfg(not(target_os = "windows"))]
@@ -352,13 +351,13 @@ fn report_startup_failure_once(app: &AppHandle, payload: StartupFailurePayload) 
     let _ = app.emit("backend-startup-failure", payload);
 }
 
-fn bundled_backend_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    let resource_dir = app
+fn bundled_backend_exe(app: &AppHandle) -> Result<PathBuf, String> {
+    let resource_path = app
         .path()
-        .resolve(BACKEND_RUNTIME_DIR, BaseDirectory::Resource)
-        .map_err(|e| format!("Cannot resolve bundled backend runtime: {e}"))?;
-    if resource_dir.exists() {
-        return Ok(resource_dir);
+        .resolve(BACKEND_RUNTIME_EXE, BaseDirectory::Resource)
+        .map_err(|e| format!("Cannot resolve bundled backend executable: {e}"))?;
+    if resource_path.exists() {
+        return Ok(resource_path);
     }
 
     let executable_dir = env::current_exe()
@@ -366,28 +365,28 @@ fn bundled_backend_dir(app: &AppHandle) -> Result<PathBuf, String> {
         .parent()
         .map(PathBuf::from)
         .ok_or_else(|| "Desktop executable path has no parent directory".to_string())?;
-    let sibling_dir = executable_dir.join(BACKEND_RUNTIME_DIR);
-    if sibling_dir.exists() {
-        return Ok(sibling_dir);
+    let sibling_path = executable_dir.join(BACKEND_RUNTIME_EXE);
+    if sibling_path.exists() {
+        return Ok(sibling_path);
     }
 
     Err(format!(
-        "Bundled backend runtime not found at {} or {}",
-        resource_dir.display(),
-        sibling_dir.display()
+        "Bundled backend executable not found at {} or {}",
+        resource_path.display(),
+        sibling_path.display()
     ))
 }
 
-fn ensure_packaged_env_file(
-    app: &AppHandle,
-    bundled_backend_dir: &std::path::Path,
-) -> Result<PathBuf, String> {
+fn ensure_packaged_env_file(app: &AppHandle) -> Result<PathBuf, String> {
     let env_file = app_env_file_path(app)?;
     if env_file.exists() {
         return Ok(env_file);
     }
 
-    let template_path = bundled_backend_dir.join(BACKEND_ENV_TEMPLATE_NAME);
+    let template_path = app
+        .path()
+        .resolve(BACKEND_ENV_TEMPLATE_NAME, BaseDirectory::Resource)
+        .map_err(|e| format!("Cannot resolve bundled env template: {e}"))?;
     let template = fs::read_to_string(&template_path).map_err(|e| {
         format!(
             "Cannot read bundled backend config template {}: {e}",
@@ -440,6 +439,13 @@ fn run_packaged_backend_preflight(launch: &BackendCommand) -> Result<(), Startup
     let mut command = Command::new(&launch.path);
     command.arg("--preflight").current_dir(&launch.cwd);
 
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+
     for (key, value) in &launch.envs {
         command.env(key, value);
     }
@@ -488,15 +494,15 @@ fn backend_command(app: &AppHandle) -> Result<BackendCommand, StartupFailurePayl
     ];
 
     if !cfg!(debug_assertions) {
-        let bundled_dir = bundled_backend_dir(app).map_err(|error| {
+        let executable = bundled_backend_exe(app).map_err(|error| {
             StartupFailurePayload::new(
                 "missing_backend_runtime",
-                "Bundled backend resources are missing.",
+                "Bundled backend executable is missing.",
             )
             .with_detail(error)
             .non_recoverable()
         })?;
-        let env_file = ensure_packaged_env_file(app, &bundled_dir).map_err(|error| {
+        let env_file = ensure_packaged_env_file(app).map_err(|error| {
             StartupFailurePayload::new(
                 "invalid_packaged_env",
                 "The packaged desktop .env file could not be prepared.",
@@ -504,15 +510,6 @@ fn backend_command(app: &AppHandle) -> Result<BackendCommand, StartupFailurePayl
             .with_detail(error)
             .non_recoverable()
         })?;
-        let executable = bundled_dir.join(BACKEND_RUNTIME_EXE);
-        if !executable.exists() {
-            return Err(StartupFailurePayload::new(
-                "missing_backend_executable",
-                "The bundled backend executable was not found.",
-            )
-            .with_detail(executable.display().to_string())
-            .non_recoverable());
-        }
 
         envs.push(("APP_ENV_FILE".to_string(), env_file.display().to_string()));
 

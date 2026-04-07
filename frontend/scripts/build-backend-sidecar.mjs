@@ -10,14 +10,14 @@ const frontendRoot = resolve(__dirname, "..");
 const projectRoot = resolve(frontendRoot, "..");
 const backendRoot = resolve(projectRoot, "backend");
 const srcTauriRoot = resolve(frontendRoot, "src-tauri");
-const runtimeDir = resolve(srcTauriRoot, "trading-agent-backend");
 const buildRoot = resolve(srcTauriRoot, "backend-build");
 const specDir = resolve(buildRoot, "spec");
 const workDir = resolve(buildRoot, "work");
 const backendEntry = resolve(backendRoot, "desktop_entry.py");
 const envExample = resolve(projectRoot, "backend", ".env.example");
 const pyInstallerExe = resolve(projectRoot, ".venv", "Scripts", "pyinstaller.exe");
-const runtimeExe = resolve(runtimeDir, "trading-agent-backend.exe");
+const runtimeExe = resolve(srcTauriRoot, "trading-agent-backend.exe");
+const envExampleDest = resolve(srcTauriRoot, ".env.example");
 const pyInstallerDataSeparator = process.platform === "win32" ? ";" : ":";
 
 function isEnabled(name) {
@@ -83,8 +83,6 @@ function isRuntimeCurrent() {
 
 if (process.platform !== "win32") {
     console.log("Skipping backend sidecar build (Windows only).");
-    // Create an empty sidecar directory so Tauri resource bundling doesn't fail.
-    mkdirSync(runtimeDir, {recursive: true});
     process.exit(0);
 }
 
@@ -95,13 +93,14 @@ log(`clean=${shouldClean} force=${shouldForce} forceSync=${shouldSync}`);
 
 if (!shouldClean && !shouldForce && !shouldSync && isRuntimeCurrent()) {
     log("Sidecar is up-to-date — skipping rebuild");
-    copyFileSync(envExample, resolve(runtimeDir, ".env.example"));
+    copyFileSync(envExample, envExampleDest);
     process.exit(0);
 }
 
 if (shouldClean) {
     log("Cleaning previous build...");
-    rmSync(runtimeDir, {recursive: true, force: true});
+    rmSync(runtimeExe, {force: true});
+    rmSync(envExampleDest, {force: true});
     // Preserve log file during clean — only remove work/spec dirs
     rmSync(specDir, {recursive: true, force: true});
     rmSync(workDir, {recursive: true, force: true});
@@ -115,9 +114,9 @@ if (shouldSync) {
 
 const pyinstallerArgs = [
     "--noconfirm",
-    "--onedir",
-    "--contents-directory",
-    ".",
+    "--onefile",
+    "--noconsole",
+    "--noupx",
     "--name",
     "trading-agent-backend",
     "--distpath",
@@ -193,7 +192,7 @@ if (!existsSync(runtimeExe)) {
 }
 
 const elapsed = ((Date.now() - buildStart) / 1000).toFixed(1);
-log(`PyInstaller finished in ${elapsed}s — output: ${runtimeDir}`);
+log(`PyInstaller finished in ${elapsed}s — output: ${runtimeExe}`);
 
-copyFileSync(envExample, resolve(runtimeDir, ".env.example"));
+copyFileSync(envExample, envExampleDest);
 log(`Build log saved to ${buildLog}`);
