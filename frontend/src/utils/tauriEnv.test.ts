@@ -36,10 +36,10 @@ describe("tauriEnv", () => {
 			await import("./tauriEnv");
 
 		expect(isTauri()).toBe(true);
-		expect(getBackendBaseUrl()).toBe("http://localhost:7000");
-		expect(getApiBaseUrl()).toBe("http://localhost:7000/api/v1");
+		expect(getBackendBaseUrl()).toBe("http://localhost:7001");
+		expect(getApiBaseUrl()).toBe("http://localhost:7001/api/v1");
 		expect(getWsUrl("/ws/agent/chat")).toBe(
-			"ws://localhost:7000/ws/agent/chat",
+			"ws://localhost:7001/ws/agent/chat",
 		);
 	});
 

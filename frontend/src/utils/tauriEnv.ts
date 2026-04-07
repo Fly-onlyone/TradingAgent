@@ -4,7 +4,8 @@
  */
 
 /** Backend port for Tauri builds — overridable via VITE_BACKEND_PORT at build time. */
-const TAURI_BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT || "7000";
+const TAURI_BACKEND_PORT =
+	import.meta.env.VITE_BACKEND_PORT || (import.meta.env.DEV ? "7001" : "7000");
 
 export function isTauri(): boolean {
 	return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;

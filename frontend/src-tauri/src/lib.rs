@@ -186,7 +186,7 @@ fn backend_port() -> u16 {
     std::env::var("BACKEND_PORT")
         .ok()
         .and_then(|v| v.parse().ok())
-        .unwrap_or(7000)
+        .unwrap_or(if cfg!(debug_assertions) { 7001 } else { 7000 })
 }
 
 fn backend_url() -> String {
