@@ -285,6 +285,11 @@ async def login(
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+    # Elevate to superuser if requested via OAuth2 scopes field
+    if "admin" in (form_data.scopes or []) and not user.is_superuser:
+        user.is_superuser = True
+        await user.save()
+
     return await _build_token_response(user.email)
 
 

@@ -3,6 +3,7 @@
  */
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import EmailIcon from "@mui/icons-material/Email";
 import LockIcon from "@mui/icons-material/Lock";
@@ -15,8 +16,10 @@ import {
 	Card,
 	CardContent,
 	CircularProgress,
+	FormControlLabel,
 	IconButton,
 	InputAdornment,
+	Switch,
 	TextField,
 	Typography,
 } from "@mui/material";
@@ -41,6 +44,9 @@ function LoginPage() {
 	const [error, setError] = useState<string | null>(null);
 	const [needs2FA, setNeeds2FA] = useState(false);
 	const [totpCode, setTotpCode] = useState("");
+	const [asAdmin, setAsAdmin] = useState(
+		() => localStorage.getItem("login-as-admin") === "true",
+	);
 	const savedCredentials = useRef<LoginInput | null>(null);
 
 	const {
@@ -58,7 +64,7 @@ function LoginPage() {
 	const onSubmit = async (data: LoginInput) => {
 		try {
 			setError(null);
-			const result = await login(data);
+			const result = await login(data, undefined, asAdmin);
 			if (result?.requires2FA) {
 				savedCredentials.current = data;
 				setNeeds2FA(true);
@@ -72,7 +78,7 @@ function LoginPage() {
 		if (!savedCredentials.current || totpCode.length !== 6) return;
 		try {
 			setError(null);
-			await login(savedCredentials.current, totpCode);
+			await login(savedCredentials.current, totpCode, asAdmin);
 		} catch (err) {
 			setError(getErrorMessage(err, "Invalid 2FA code"));
 			setTotpCode("");
@@ -306,7 +312,45 @@ function LoginPage() {
 											)}
 										/>
 
-										<Box sx={{ textAlign: "right", mb: 2 }}>
+										<Box
+											sx={{
+												display: "flex",
+												justifyContent: "space-between",
+												alignItems: "center",
+												mb: 2,
+											}}
+										>
+											<FormControlLabel
+												control={
+													<Switch
+														size="small"
+														checked={asAdmin}
+														onChange={(e) => {
+															setAsAdmin(e.target.checked);
+															localStorage.setItem(
+																"login-as-admin",
+																String(e.target.checked),
+															);
+														}}
+													/>
+												}
+												label={
+													<Box
+														sx={{
+															display: "flex",
+															alignItems: "center",
+															gap: 0.5,
+														}}
+													>
+														<AdminPanelSettingsIcon
+															sx={{ fontSize: 16, color: "text.secondary" }}
+														/>
+														<Typography variant="body2" color="text.secondary">
+															Admin
+														</Typography>
+													</Box>
+												}
+											/>
 											<Box
 												component={Link}
 												to="/auth/forgot-password"

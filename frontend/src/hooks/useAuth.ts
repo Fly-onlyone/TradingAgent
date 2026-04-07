@@ -19,10 +19,11 @@ export function useAuth() {
 		async (
 			credentials: UserLogin,
 			totpCode?: string,
+			asAdmin?: boolean,
 		): Promise<{ requires2FA?: boolean }> => {
 			try {
 				setLoading(true);
-				const result = await authApi.login(credentials, totpCode);
+				const result = await authApi.login(credentials, totpCode, asAdmin);
 
 				if (result.requires_2fa) {
 					return { requires2FA: true };

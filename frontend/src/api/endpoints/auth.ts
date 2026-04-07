@@ -43,6 +43,7 @@ export const authApi = {
 	async login(
 		credentials: UserLogin,
 		totpCode?: string,
+		asAdmin?: boolean,
 	): Promise<AuthTokens & { requires_2fa?: boolean }> {
 		const normalizedEmail = credentials.email.trim().toLowerCase();
 		const formData = new URLSearchParams();
@@ -50,6 +51,9 @@ export const authApi = {
 		formData.append("password", credentials.password);
 		if (totpCode) {
 			formData.append("client_secret", totpCode);
+		}
+		if (asAdmin) {
+			formData.append("scope", "admin");
 		}
 
 		const response = await apiClient.post<
