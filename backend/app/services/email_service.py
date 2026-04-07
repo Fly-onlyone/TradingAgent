@@ -45,7 +45,10 @@ class NotifyService:
             u.strip() for u in raw_urls.split(",") if u.strip()
         ]
         self._env_email_url: str = os.getenv("EMAIL_URL", "").strip()
-        self.frontend_url: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        configured_frontend_url = os.getenv("FRONTEND_URL", "").strip()
+        self.frontend_url: str = configured_frontend_url or (
+            "" if os.getenv("TAURI_APP") else "http://localhost:3000"
+        )
 
         # Cached DB values (populated by resolve())
         self._db_resolved = False
@@ -89,28 +92,50 @@ class NotifyService:
         """Alias for broadcast — send to all configured notification channels."""
         return await self.broadcast(title, body, notify_type)
 
+    def _build_frontend_link(self, path: str, token: str, base_url: str = "") -> str | None:
+        """Build a frontend route URL when the desktop runtime has one configured."""
+        frontend_base_url = base_url.strip() or self.frontend_url
+        if not frontend_base_url:
+            return None
+        return f"{frontend_base_url}{path}?token={token}"
+
     async def send_password_reset(self, to: str, token: str, base_url: str = "") -> bool:
         """Send a password-reset notification to a specific email address."""
-        reset_link = f"{self.frontend_url}/auth/reset-password?token={token}"
-        title = "Password Reset Request"
-        body = (
-            "Password Reset\n\n"
-            "Click the link below to reset your password. "
-            "This link expires in 1 hour.\n\n"
-            f"{reset_link}\n\n"
-            "If you didn't request this, ignore this message."
+        reset_link = self._build_frontend_link(
+            "/auth/reset-password",
+            token,
+            base_url,
         )
+        title = "Password Reset Request"
+        body = "Password Reset\n\n"
+        if reset_link:
+            body += (
+                "Click the link below to reset your password. "
+                "This link expires in 1 hour.\n\n"
+                f"{reset_link}\n\n"
+            )
+        else:
+            body += (
+                "A reset link could not be generated because FRONTEND_URL is not configured "
+                "for this desktop deployment.\n\n"
+                "Set FRONTEND_URL to a reachable web URL for password reset links.\n\n"
+            )
+        body += "If you didn't request this, ignore this message."
         return await self._send_email(to, title, body)
 
     async def send_email_verification(self, to: str, token: str) -> bool:
         """Send an email-verification notification to a specific email address."""
-        verify_link = f"{self.frontend_url}/auth/verify-email?token={token}"
+        verify_link = self._build_frontend_link("/auth/verify-email", token)
         title = "Verify Your Email"
-        body = (
-            "Verify Your Email\n\n"
-            "Click the link below to verify your email address.\n\n"
-            f"{verify_link}"
-        )
+        body = "Verify Your Email\n\n"
+        if verify_link:
+            body += f"Click the link below to verify your email address.\n\n{verify_link}"
+        else:
+            body += (
+                "A verification link could not be generated because FRONTEND_URL is not "
+                "configured for this desktop deployment.\n\n"
+                "Set FRONTEND_URL to a reachable web URL for verification links."
+            )
         return await self._send_email(to, title, body)
 
     async def _send_email(self, to: str, title: str, body: str) -> bool:

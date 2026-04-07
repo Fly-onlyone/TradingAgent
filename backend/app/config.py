@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     # MongoDB
     mongodb_url: str = "mongodb://localhost:27017"
     mongodb_db_name: str = _default_db_name()
+    mongodb_mongod_path: str = ""
+    mongodb_data_dir: str = r"C:\data\db"
 
     # OKX API
     okx_api_key: str = ""
@@ -86,6 +88,9 @@ class Settings(BaseSettings):
     log_dir: str = "logs"
     log_max_bytes: int = 10 * 1024 * 1024  # 10 MB
     log_backup_count: int = 5
+
+    # Frontend links
+    frontend_url: str = ""
 
     # Trading Settings
     max_position_size_pct: float = 5.0  # Max % of portfolio per trade

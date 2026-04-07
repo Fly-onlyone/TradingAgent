@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import re
+import shutil
 import subprocess
 import sys
 
@@ -49,15 +50,30 @@ async def _ensure_mongodb_running() -> None:
             logger.warning("Could not start MongoDB service: %s", e)
 
         # Fallback: try starting mongod directly
-        mongod_paths = [
-            r"C:\Program Files\MongoDB\Server\8.2\bin\mongod.exe",
-            r"C:\Program Files\MongoDB\Server\8.0\bin\mongod.exe",
-            r"C:\Program Files\MongoDB\Server\7.0\bin\mongod.exe",
-        ]
+        mongod_paths = []
+        if settings.mongodb_mongod_path:
+            mongod_paths.append(settings.mongodb_mongod_path)
+
+        if mongod_in_path := shutil.which("mongod"):
+            mongod_paths.append(mongod_in_path)
+
+        mongod_paths.extend(
+            [
+                r"C:\Program Files\MongoDB\Server\8.2\bin\mongod.exe",
+                r"C:\Program Files\MongoDB\Server\8.0\bin\mongod.exe",
+                r"C:\Program Files\MongoDB\Server\7.0\bin\mongod.exe",
+            ]
+        )
+
+        seen_paths: set[str] = set()
         for mongod_path in mongod_paths:
+            normalized_path = mongod_path.casefold()
+            if normalized_path in seen_paths:
+                continue
+            seen_paths.add(normalized_path)
             try:
                 subprocess.Popen(
-                    [mongod_path, "--dbpath", r"C:\data\db"],
+                    [mongod_path, "--dbpath", settings.mongodb_data_dir],
                     creationflags=subprocess.CREATE_NO_WINDOW,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
@@ -72,7 +88,7 @@ async def _ensure_mongodb_running() -> None:
 
     raise RuntimeError(
         "MongoDB is not running and could not be started automatically. "
-        "Please start MongoDB manually."
+        "Please start MongoDB manually or configure MONGODB_MONGOD_PATH / MONGODB_DATA_DIR."
     )
 
 
