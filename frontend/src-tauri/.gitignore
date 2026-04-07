@@ -4,3 +4,5 @@
 /gen/schemas
 /backend-build/
 /trading-agent-backend/
+/trading-agent-backend.exe
+/.env.example
