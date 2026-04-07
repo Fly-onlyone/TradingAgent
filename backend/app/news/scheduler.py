@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -53,8 +53,8 @@ class NewsScheduler:
         self.scheduler.start()
         logger.info("News scheduler started")
 
-        # Run initial crawl
-        asyncio.create_task(self._crawl_all_sources())
+        # Catch up on missed crawls (or run initial crawl if never run)
+        await self._maybe_run_missed_crawl()
 
     async def stop(self) -> None:
         """Stop the scheduler."""
@@ -87,6 +87,45 @@ class NewsScheduler:
                 await source.save()
 
         logger.info("News crawl completed")
+
+        # Persist last-run timestamp for missed-run detection on restart
+        try:
+            from app.db.models.app_settings import AppSettings
+
+            app_settings = await AppSettings.get_instance()
+            app_settings.news_crawl_last_run_at = datetime.now(UTC)
+            await app_settings.save_with_timestamp()
+        except Exception:
+            logger.debug("Could not persist news crawl timestamp", exc_info=True)
+
+    async def _maybe_run_missed_crawl(self) -> None:
+        """Fire a catch-up news crawl if overdue (e.g. after sleep/shutdown)."""
+        try:
+            from app.db.models.app_settings import AppSettings
+
+            app_settings = await AppSettings.get_instance()
+        except Exception:
+            logger.debug("Could not load AppSettings for news crawl catch-up", exc_info=True)
+            asyncio.create_task(self._crawl_all_sources())  # noqa: RUF006
+            return
+
+        last_run = app_settings.news_crawl_last_run_at
+        if last_run is None:
+            logger.info("News crawl has never run — triggering initial crawl")
+            asyncio.create_task(self._crawl_all_sources())  # noqa: RUF006
+            return
+
+        if last_run.tzinfo is None:
+            last_run = last_run.replace(tzinfo=UTC)
+
+        elapsed = datetime.now(UTC) - last_run
+        interval = timedelta(minutes=15)
+        if elapsed > interval:
+            logger.info(
+                "News crawl overdue by %s — triggering catch-up crawl",
+                elapsed - interval,
+            )
+            asyncio.create_task(self._crawl_all_sources())  # noqa: RUF006
 
     async def _crawl_source(self, source: NewsSource) -> int:
         """Crawl a single source and store new articles."""

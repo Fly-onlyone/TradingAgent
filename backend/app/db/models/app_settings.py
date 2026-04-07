@@ -105,6 +105,9 @@ class AppSettings(Document):
     pattern_mining_symbols: list[str] = Field(default_factory=list)
     pattern_mining_last_run_at: datetime | None = None
 
+    # News crawling
+    news_crawl_last_run_at: datetime | None = None
+
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @model_validator(mode="before")
