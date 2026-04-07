@@ -166,7 +166,8 @@ function AgentStatusCard() {
 	const agentConnected =
 		agentStatus === "connected" ||
 		agentStatus === "thinking" ||
-		agentStatus === "analyzing";
+		agentStatus === "analyzing" ||
+		agentStatus === "initializing";
 
 	const taskQuery = useQuery({
 		queryKey: ["tasks", "dashboard-mode"],

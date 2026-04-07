@@ -150,6 +150,49 @@ async def agent_chat_websocket(
     # Allow the ask_user MCP tool to push questions through this WebSocket
     set_ws_event_emitter(send_event)
 
+    async def _ensure_agent() -> bool:
+        """Lazily create the agent on first use. Returns True if agent is ready."""
+        nonlocal agent
+
+        if agent is not None:
+            return True
+
+        try:
+            await manager.send_personal(
+                websocket,
+                {
+                    "type": "status",
+                    "data": {"status": "initializing"},
+                },
+            )
+            with sentry_sdk.start_span(
+                op="ws.agent.initialize",
+                description="create trading agent (lazy)",
+            ):
+                agent = await create_agent_with_tools()
+            await manager.send_personal(
+                websocket,
+                {
+                    "type": "status",
+                    "data": {"status": "connected"},
+                },
+            )
+            return True
+        except Exception as e:
+            logger.warning("Failed to create agent: %s", e, exc_info=True)
+            await manager.send_personal(
+                websocket,
+                {
+                    "type": "status",
+                    "data": {
+                        "status": "error",
+                        "message": f"Failed to initialize agent: {e}",
+                    },
+                },
+            )
+            await websocket.close(code=4002, reason="Agent creation failed")
+            return False
+
     async def _load_session(client_session_id: str | None) -> AgentSession | None:
         """Load an existing session owned by the current user."""
         if not client_session_id:
@@ -250,6 +293,10 @@ async def agent_chat_websocket(
                         },
                     },
                 )
+
+        # Lazily create the agent on the first turn
+        if not await _ensure_agent():
+            return
 
         agent_message = await _prepare_agent_message(user_message)
         set_active_session_id(str(session.id))
@@ -353,28 +400,8 @@ async def agent_chat_websocket(
             await websocket.close(code=4003, reason=auth_error)
             return
 
-        # Create agent — notify client on failure instead of dying silently
-        try:
-            with sentry_sdk.start_span(
-                op="ws.agent.initialize",
-                description="create trading agent",
-            ):
-                agent = await create_agent_with_tools()
-        except Exception as e:
-            logger.warning("Failed to create agent: %s", e, exc_info=True)
-            await manager.send_personal(
-                websocket,
-                {
-                    "type": "status",
-                    "data": {
-                        "status": "error",
-                        "message": f"Failed to initialize agent: {e}",
-                    },
-                },
-            )
-            await websocket.close(code=4002, reason="Agent creation failed")
-            return
-
+        # Agent creation is deferred to first message (_ensure_agent).
+        # Send "connected" immediately so the frontend enables the chat input.
         await manager.send_personal(
             websocket,
             {
@@ -457,7 +484,8 @@ async def agent_chat_websocket(
                         connection_id=connection_id,
                         clear_persisted=True,
                     )
-                    agent.cancel()
+                    if agent:
+                        agent.cancel()
                     chat_task.cancel()
                     try:
                         await chat_task

@@ -236,7 +236,9 @@ export function Header() {
 						>
 							<StatusDot
 								status={
-									agentStatus === "connected" || agentStatus === "analyzing"
+									agentStatus === "connected" ||
+									agentStatus === "analyzing" ||
+									agentStatus === "initializing"
 										? "online"
 										: agentStatus === "error"
 											? "busy"

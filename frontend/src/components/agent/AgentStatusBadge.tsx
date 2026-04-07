@@ -34,6 +34,12 @@ const statusConfig: Record<
 		color: "success",
 		icon: CheckCircleIcon,
 	},
+	initializing: {
+		label: "Starting...",
+		color: "info",
+		icon: SyncIcon,
+		animate: true,
+	},
 	thinking: {
 		label: "Thinking...",
 		color: "info",

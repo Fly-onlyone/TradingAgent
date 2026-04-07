@@ -6,6 +6,7 @@
 export type AgentStatus =
 	| "disconnected"
 	| "connected"
+	| "initializing"
 	| "thinking"
 	| "analyzing"
 	| "error"

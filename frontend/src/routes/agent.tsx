@@ -804,13 +804,17 @@ function AgentPage() {
 									color="text.secondary"
 									sx={{ mb: 4, textAlign: "center" }}
 								>
-									{status === "connected" || status === "thinking"
+									{status === "connected" ||
+									status === "thinking" ||
+									status === "initializing"
 										? "Your AI assistant for automated trading"
 										: status === "auth_required"
 											? "Configure authentication in Settings, then refresh."
 											: "Check agent configuration in the Settings page."}
 								</Typography>
-								{(status === "connected" || status === "thinking") && (
+								{(status === "connected" ||
+									status === "thinking" ||
+									status === "initializing") && (
 									<Grid
 										container
 										spacing={2}
