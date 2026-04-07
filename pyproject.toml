@@ -52,6 +52,8 @@ dependencies = [
     "apprise>=1.9.0",
     # Cross-encoder re-ranking for RAG
     "flashrank>=0.2.0",
+    # OS credential store (Windows Credential Manager / macOS Keychain / Linux Secret Service)
+    "keyring>=25.0.0",
 ]
 
 [dependency-groups]

@@ -123,12 +123,20 @@ def _ensure_encryption_available() -> None:
             "API key save blocked: SECRETS_ENCRYPTION_KEYS is not configured. "
             "The app cannot encrypt secrets without this setting."
         )
-        raise HTTPException(
-            status_code=409,
-            detail="Encryption is not configured — API keys cannot be saved. "
-            "Please restart the application. If this persists, set "
-            "SECRETS_ENCRYPTION_KEYS in your .env file.",
-        )
+        import os
+
+        if os.environ.get("TAURI_APP"):
+            detail = (
+                "Encryption is not configured — API keys cannot be saved. "
+                "Please restart the application to auto-generate an encryption key."
+            )
+        else:
+            detail = (
+                "Encryption is not configured — API keys cannot be saved. "
+                "Please restart the application. If this persists, set "
+                "SECRETS_ENCRYPTION_KEYS in your .env file."
+            )
+        raise HTTPException(status_code=409, detail=detail)
 
 
 def _collect_literal_model_aliases(annotation: Any) -> list[str]:

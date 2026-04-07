@@ -120,10 +120,20 @@ class Settings(BaseSettings):
 
         if not self.secrets_encryption_keys:
             if os.environ.get("TAURI_APP"):
-                from cryptography.fernet import Fernet
+                # Try loading from OS keyring first (may already exist)
+                from app.security.keyring_store import load_from_keyring, save_to_keyring
 
-                self.secrets_encryption_keys = Fernet.generate_key().decode()
-                self._persist_generated_encryption_key()
+                keyring_value = load_from_keyring()
+                if keyring_value:
+                    self.secrets_encryption_keys = keyring_value
+                else:
+                    # Generate new key and store in OS keyring
+                    from cryptography.fernet import Fernet
+
+                    self.secrets_encryption_keys = Fernet.generate_key().decode()
+                    if not save_to_keyring(self.secrets_encryption_keys):
+                        # Keyring unavailable — fall back to .env persistence
+                        self._persist_generated_encryption_key()
             elif not self.debug:
                 warnings.warn(
                     "SECRETS_ENCRYPTION_KEYS is not set. API key storage in the database "
