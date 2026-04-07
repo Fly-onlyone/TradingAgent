@@ -5,7 +5,7 @@ import logging
 import os
 import re
 import sys
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -37,6 +37,60 @@ from app.news.scheduler import NewsScheduler
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
+
+
+def _is_benign_windows_proactor_transport_reset(context: dict[str, Any]) -> bool:
+    """Return True for the known benign WinError 10054 Proactor shutdown noise."""
+    if sys.platform != "win32":
+        return False
+
+    error = context.get("exception")
+    if not isinstance(error, ConnectionResetError):
+        return False
+    if getattr(error, "winerror", None) != 10054:
+        return False
+
+    message = str(context.get("message", ""))
+    handle = context.get("handle")
+    callback_repr = f"{message} {handle!r}" if handle is not None else message
+
+    return "_ProactorBasePipeTransport._call_connection_lost" in callback_repr
+
+
+def _build_asyncio_exception_handler(
+    fallback_handler: Callable[[dict[str, Any]], None],
+) -> Callable[[asyncio.AbstractEventLoop, dict[str, Any]], None]:
+    """Build an asyncio exception handler that suppresses one known benign case."""
+
+    def handler(
+        loop: asyncio.AbstractEventLoop,
+        context: dict[str, Any],
+    ) -> None:
+        del loop
+        if _is_benign_windows_proactor_transport_reset(context):
+            logger.info("Ignored benign Windows proactor transport reset during shutdown")
+            return
+        fallback_handler(context)
+
+    return handler
+
+
+def _install_asyncio_exception_handler() -> None:
+    """Install a Windows-only asyncio exception handler for benign pipe resets."""
+    if sys.platform != "win32":
+        return
+
+    loop = asyncio.get_running_loop()
+    previous_handler = loop.get_exception_handler()
+
+    if previous_handler is None:
+        fallback_handler = loop.default_exception_handler
+    else:
+
+        def fallback_handler(context: dict[str, Any]) -> None:
+            previous_handler(loop, context)
+
+    loop.set_exception_handler(_build_asyncio_exception_handler(fallback_handler))
 
 
 def _traces_sampler(sampling_context: dict) -> float:
@@ -119,6 +173,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan manager."""
     # Startup
     setup_logging()
+    _install_asyncio_exception_handler()
     await init_db()
 
     scheduler = get_scheduler()

@@ -54,7 +54,7 @@ class NewsScheduler:
         logger.info("News scheduler started")
 
         # Run initial crawl
-        asyncio.create_task(self._crawl_all_sources())
+        asyncio.create_task(self._run_initial_crawl())
 
     async def stop(self) -> None:
         """Stop the scheduler."""
@@ -67,7 +67,7 @@ class NewsScheduler:
         """Crawl all enabled news sources."""
         logger.info("Starting news crawl...")
 
-        sources = await NewsSource.find(NewsSource.crawl_enabled).to_list()
+        sources = await NewsSource.find({"crawl_enabled": True}).to_list()
 
         for source in sources:
             if source.last_crawled:
@@ -87,6 +87,13 @@ class NewsScheduler:
                 await source.save()
 
         logger.info("News crawl completed")
+
+    async def _run_initial_crawl(self) -> None:
+        """Run the startup crawl without leaking task exceptions to asyncio."""
+        try:
+            await self._crawl_all_sources()
+        except Exception:
+            logger.exception("Initial news crawl failed")
 
     async def _crawl_source(self, source: NewsSource) -> int:
         """Crawl a single source and store new articles."""
