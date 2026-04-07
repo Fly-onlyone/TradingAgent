@@ -67,7 +67,7 @@ class NewsScheduler:
         """Crawl all enabled news sources."""
         logger.info("Starting news crawl...")
 
-        sources = await NewsSource.find(NewsSource.crawl_enabled).to_list()
+        sources = await NewsSource.find({"crawl_enabled": True}).to_list()
 
         for source in sources:
             if source.last_crawled:
@@ -98,6 +98,13 @@ class NewsScheduler:
         except Exception:
             logger.debug("Could not persist news crawl timestamp", exc_info=True)
 
+    async def _run_initial_crawl(self) -> None:
+        """Run the startup crawl without leaking task exceptions to asyncio."""
+        try:
+            await self._crawl_all_sources()
+        except Exception:
+            logger.exception("Initial news crawl failed")
+
     async def _maybe_run_missed_crawl(self) -> None:
         """Fire a catch-up news crawl if overdue (e.g. after sleep/shutdown)."""
         try:
@@ -106,13 +113,13 @@ class NewsScheduler:
             app_settings = await AppSettings.get_instance()
         except Exception:
             logger.debug("Could not load AppSettings for news crawl catch-up", exc_info=True)
-            asyncio.create_task(self._crawl_all_sources())  # noqa: RUF006
+            asyncio.create_task(self._run_initial_crawl())  # noqa: RUF006
             return
 
         last_run = app_settings.news_crawl_last_run_at
         if last_run is None:
             logger.info("News crawl has never run — triggering initial crawl")
-            asyncio.create_task(self._crawl_all_sources())  # noqa: RUF006
+            asyncio.create_task(self._run_initial_crawl())  # noqa: RUF006
             return
 
         if last_run.tzinfo is None:
@@ -125,7 +132,7 @@ class NewsScheduler:
                 "News crawl overdue by %s — triggering catch-up crawl",
                 elapsed - interval,
             )
-            asyncio.create_task(self._crawl_all_sources())  # noqa: RUF006
+            asyncio.create_task(self._run_initial_crawl())  # noqa: RUF006
 
     async def _crawl_source(self, source: NewsSource) -> int:
         """Crawl a single source and store new articles."""
