@@ -31,8 +31,9 @@ async def search_strategies(
                 "avg_return": strategy.avg_return,
                 "market_conditions": strategy.market_conditions,
                 "timeframes": strategy.timeframes,
+                "relevance_score": round(score, 3),
             }
-            for strategy in results
+            for strategy, score in results
         ],
         "count": len(results),
     }
@@ -63,8 +64,9 @@ async def search_lessons(
                 "successes": lesson.successes,
                 "recommendations": lesson.recommendations,
                 "market_context": lesson.market_context,
+                "relevance_score": round(score, 3),
             }
-            for lesson in results
+            for lesson, score in results
         ],
         "count": len(results),
     }
@@ -104,8 +106,9 @@ async def search_patterns(
                 "avg_return": pattern.avg_return,
                 "symbols": pattern.symbols,
                 "timeframes": pattern.timeframes,
+                "relevance_score": round(score, 3),
             }
-            for pattern in results
+            for pattern, score in results
         ],
         "count": len(results),
     }

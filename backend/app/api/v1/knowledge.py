@@ -486,8 +486,8 @@ async def search_knowledge(
     )
 
     return {
-        "strategies": [strategy_to_response(s) for s in results["strategies"]],
-        "lessons": [lesson_to_response(lesson) for lesson in results["lessons"]],
-        "patterns": [pattern_to_response(p) for p in results["patterns"]],
-        "news": [article_to_search_response(a) for a in results.get("news", [])],
+        "strategies": [strategy_to_response(s) for s, _ in results["strategies"]],
+        "lessons": [lesson_to_response(lesson) for lesson, _ in results["lessons"]],
+        "patterns": [pattern_to_response(p) for p, _ in results["patterns"]],
+        "news": [article_to_search_response(a) for a, _ in results.get("news", [])],
     }

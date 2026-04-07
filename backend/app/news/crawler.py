@@ -10,7 +10,7 @@ import trafilatura
 from bs4 import BeautifulSoup
 
 from app.db.models.news import NewsArticle, NewsSource
-from app.knowledge.embeddings import get_embedding_service
+from app.knowledge.embeddings import NewsEmbeddingGenerator
 from app.news.deduplicator import NewsDeduplicator
 
 logger = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ class NewsCrawler:
 
     def __init__(self) -> None:
         self.deduplicator = NewsDeduplicator()
-        self.embedding_service = get_embedding_service()
+        self.embedding_generator = NewsEmbeddingGenerator()
         self.client = httpx.AsyncClient(
             timeout=30.0,
             follow_redirects=True,
@@ -117,9 +117,10 @@ class NewsCrawler:
             keywords=self._extract_keywords(entry.get("title", ""), content),
         )
 
-        # Generate embedding
-        embedding_text = f"{article.title} {article.content}"
-        article.embedding = await self.embedding_service.generate_embedding(embedding_text[:8000])
+        # Generate embedding with structured labels for better retrieval
+        article.embedding = await self.embedding_generator.generate_article_embedding(
+            article.model_dump()
+        )
 
         await article.insert()
         return article

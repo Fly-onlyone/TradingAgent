@@ -45,7 +45,7 @@ monitoring.
 - **Risk Controls** — Configurable risk levels (conservative/moderate/aggressive), position limits, stop-loss enforcement
 - **Strategy Import** — Create strategies from URLs (articles, blog posts) or file uploads (TXT, JSON, YAML, PDF) with AI-powered extraction
 - **Strategy Auto-Discovery** — Scheduled crawling of news sources with AI extraction, automatically populating the knowledge base
-- **Knowledge Base (RAG)** — Semantic search over trading strategies, lessons from past trades, and discovered patterns
+- **Knowledge Base (RAG)** — Hybrid search (vector + BM25) over strategies, lessons, patterns, and news with cross-encoder re-ranking, time-decay scoring, and knowledge graph relationships
 - **News & Sentiment** — Aggregated market news with credibility-weighted sentiment scoring
 - **Price Monitoring** — Condition-based alerts (price thresholds, RSI, volume spikes) with cooldowns
 - **Multi-Channel Notifications** — Alerts via 80+ channels (Telegram, Discord, Slack, email, webhooks) powered by Apprise
@@ -61,7 +61,7 @@ monitoring.
 |--------------|---------------------------------------------------------------------------------|
 | Frontend     | React 19, TypeScript 5.7, MUI 6, TanStack Router/Query, Zustand, Framer Motion |
 | Backend      | Python 3.11+, FastAPI, Beanie (MongoDB ODM), APScheduler                        |
-| AI           | Claude SDK (Anthropic), nomic-embed-text-v1.5 (local, ONNX)                    |
+| AI           | Claude SDK (Anthropic), nomic-embed-text-v1.5 (local, ONNX), FlashRank (re-ranking) |
 | Exchange     | OKX REST API                                                                    |
 | Database     | MongoDB                                                                         |
 | Desktop      | Tauri v2 (Rust)                                                                 |
@@ -168,7 +168,7 @@ Trading agent (Claude SDK)
   ├── RiskManager         — position sizing, drawdown limits
   └── OrderExecutor       — OKX spot execution with idempotency
   ↕
-External: OKX Exchange │ News APIs │ Local Embeddings (nomic) │ MongoDB
+External: OKX Exchange │ News APIs │ Local Embeddings (nomic) │ FlashRank │ MongoDB
 ```
 
 ## Agent Chat
@@ -281,9 +281,19 @@ The agent augments its analysis with a local knowledge base using semantic searc
 ### How It Works
 
 - **Embedding model:** `nomic-ai/nomic-embed-text-v1.5` — 768 dimensions, runs locally on CPU via ONNX (~30-50ms per embedding, no API key needed)
-- **Storage:** Vectors are stored inline on each MongoDB document
-- **Search:** Query is embedded, then dot-product similarity is computed against stored vectors. Minimum threshold: 0.7 (0.6 for cross-type search)
-- **Fallback:** If embedding search yields no results, falls back to regex matching on name/description/content fields
+- **Storage:** Vectors stored inline on each MongoDB document; MongoDB text indexes on searchable fields
+- **Hybrid search:** Each query runs two retrieval paths in parallel:
+  1. **Vector search** — NumPy-vectorized dot product over projected embeddings (loads only `_id` + `embedding` from MongoDB, scores via matrix multiply, fetches full docs for top-k only)
+  2. **Text search** — MongoDB `$text` search on indexed fields (name, description, title, summary)
+- **Fusion:** Results merged via Reciprocal Rank Fusion (RRF) — documents appearing in both result sets get boosted
+- **Time-decay scoring:** Exponential decay weighting makes recent knowledge more relevant (news: 24h half-life, lessons: 7d, strategies/patterns: 30d)
+- **Re-ranking** (optional): FlashRank cross-encoder (~4MB, ~5ms for 20 candidates) re-scores top candidates. Enable via `AppSettings.reranking_enabled`
+- **Contextual embeddings:** Claude Haiku generates 1-2 sentence context prefixes before embedding (write-time), improving retrieval precision by 35-49%
+- **Fallback:** If hybrid search yields no results, falls back to regex matching on name/description/content fields
+- **Query caching:** Query embeddings cached for 300s (LRU, 64 entries) to avoid redundant encoding within a session
+- **Chunking:** Long documents (300+ words) can be split into 200-word chunks with 50-word overlap via `KnowledgeChunk` for fine-grained retrieval
+- **Knowledge graph:** `KnowledgeEdge` documents track relationships between entities (strategy→asset, pattern→asset, lesson→trade) for multi-hop reasoning
+- **Evaluation:** Built-in metrics (Precision@k, Recall@k, MRR, NDCG@k) for measuring retrieval quality
 
 ### Auto-Generated Knowledge
 
@@ -310,6 +320,26 @@ The agent uses knowledge at two levels:
 | **TradeLesson**       | Manual / API           | On-demand — `POST /knowledge/lessons`                                  |
 | **TradingPattern**    | Scheduled mining       | Configurable (`pattern_mining_interval_hours`, default 12h)            |
 | **TradingPattern**    | Manual / API           | On-demand — `POST /knowledge/patterns`                                 |
+
+### Embedding Generation
+
+Every document and query that participates in vector search requires a 768-dim embedding generated by the local `nomic-ai/nomic-embed-text-v1.5` model (ONNX, CPU). The table below shows when embeddings are computed:
+
+| Content Type | Trigger | Frequency |
+|---|---|---|
+| **News Articles** | RSS crawl via `NewsScheduler` | Every 15 min + on startup |
+| **Strategy** (manual) | `POST /api/v1/strategies` | On-demand |
+| **Strategy** (import) | `POST /api/v1/import/confirm` | On-demand |
+| **Strategy** (auto-discovery) | `AgentTaskScheduler` discovery cycle | Configurable interval (default 6h) |
+| **Agent Memory** (save/update) | `POST/PUT /api/v1/memories` | On-demand |
+| **Agent Memory** (search) | `POST /api/v1/memories/search` | On-demand (query embedding) |
+| **Knowledge search** | `POST /api/v1/knowledge/search` | On-demand (query embedding) |
+
+**Notes:**
+
+- **Model preloading** — When `preload_embeddings_on_startup` is enabled in settings, the model is warm-loaded during app startup to avoid first-request latency.
+- **Threading** — Embeddings run in a `ThreadPoolExecutor(max_workers=2)` with an encode lock to prevent rotary cache corruption.
+- **Game deferral** — When `defer_embedding_when_gaming` is enabled, embedding generation is deferred while a game process is detected, to avoid CPU contention.
 
 ## Strategy Import
 

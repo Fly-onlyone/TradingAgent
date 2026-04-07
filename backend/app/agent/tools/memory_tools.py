@@ -4,6 +4,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+import numpy as np
 from beanie import PydanticObjectId
 
 from app.db.models.agent_memory import (
@@ -117,11 +118,23 @@ async def _find_duplicate(
         .to_list()
     )
 
+    # Vectorized similarity check
+    rows = []
+    valid_candidates = []
     for mem in candidates:
         if mem.embedding:
-            sim = embedding_svc.cosine_similarity(embedding, mem.embedding)
-            if sim >= _DEDUP_THRESHOLD:
-                return mem
+            rows.append(mem.embedding)
+            valid_candidates.append(mem)
+
+    if not rows:
+        return None
+
+    matrix = np.array(rows, dtype=np.float32)
+    query_vec = np.array(embedding, dtype=np.float32)
+    scores = matrix @ query_vec
+    best_idx = int(np.argmax(scores))
+    if scores[best_idx] >= _DEDUP_THRESHOLD:
+        return valid_candidates[best_idx]
     return None
 
 
@@ -146,16 +159,22 @@ async def search_memories(
     memories = await AgentMemory.find(filters).sort(-AgentMemory.updated_at).limit(100).to_list()
 
     if query_embedding:
-        # Score by cosine similarity and sort
-        scored = []
-        for mem in memories:
-            if mem.embedding:
-                sim = embedding_svc.cosine_similarity(query_embedding, mem.embedding)
-                scored.append((sim, mem))
-            else:
-                scored.append((0.0, mem))
-        scored.sort(key=lambda x: x[0], reverse=True)
-        memories = [mem for _, mem in scored[:limit]]
+        # Vectorized cosine similarity scoring
+        query_vec = np.array(query_embedding, dtype=np.float32)
+        embedded = [(i, mem) for i, mem in enumerate(memories) if mem.embedding]
+        non_embedded = [mem for mem in memories if not mem.embedding]
+
+        if embedded:
+            matrix = np.array([mem.embedding for _, mem in embedded], dtype=np.float32)
+            scores = matrix @ query_vec
+            np.clip(scores, -1.0, 1.0, out=scores)
+            order = np.argsort(scores)[::-1]
+            ranked = [(float(scores[j]), embedded[j][1]) for j in order]
+        else:
+            ranked = []
+        # Append non-embedded at end with score 0
+        ranked.extend((0.0, mem) for mem in non_embedded)
+        memories = [mem for _, mem in ranked[:limit]]
     else:
         # Fallback: text match
         query_lower = query.lower()

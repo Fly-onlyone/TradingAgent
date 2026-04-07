@@ -9,6 +9,7 @@ import hashlib
 import logging
 import os
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -31,6 +32,11 @@ _model_name: str | None = None
 _model_lock = threading.Lock()
 _encode_lock = threading.Lock()
 _executor = ThreadPoolExecutor(max_workers=2)
+
+# Query embedding cache: key → (embedding, timestamp)
+_query_cache: dict[str, tuple[list[float], float]] = {}
+_QUERY_CACHE_TTL = 300  # seconds
+_QUERY_CACHE_MAX = 64
 
 # Keep module-level constants for backwards compatibility
 MODEL_NAME = DEFAULT_MODEL
@@ -146,13 +152,32 @@ class EmbeddingService:
         return await self._encode_single(prefixed)
 
     async def generate_query_embedding(self, text: str) -> list[float] | None:
-        """Generate embedding for a search query."""
+        """Generate embedding for a search query (LRU-cached, 300s TTL, 64 entries)."""
         if not text or not text.strip():
             return None
 
         config = self._get_config()
         prefixed = f"{config.prefix_query}{text[:30000]}"
-        return await self._encode_single(prefixed)
+
+        # Check cache
+        now = time.monotonic()
+        cached = _query_cache.get(prefixed)
+        if cached is not None:
+            embedding, ts = cached
+            if now - ts < _QUERY_CACHE_TTL:
+                return embedding
+            # Expired — remove stale entry
+            del _query_cache[prefixed]
+
+        result = await self._encode_single(prefixed)
+        if result is not None:
+            # Evict oldest entry if at capacity
+            if len(_query_cache) >= _QUERY_CACHE_MAX:
+                oldest_key = min(_query_cache, key=lambda k: _query_cache[k][1])
+                del _query_cache[oldest_key]
+            _query_cache[prefixed] = (result, now)
+
+        return result
 
     async def generate_document_embeddings(
         self,
@@ -264,6 +289,9 @@ class StrategyEmbeddingGenerator:
         """Format strategy data into text for embedding."""
         parts = []
 
+        if context_prefix := strategy.get("context_prefix"):
+            parts.append(f"Context: {context_prefix}")
+
         if name := strategy.get("name"):
             parts.append(f"Strategy: {name}")
 
@@ -315,6 +343,9 @@ class TradeLessonEmbeddingGenerator:
     def format_lesson_text(self, lesson: dict[str, Any]) -> str:
         """Format trade lesson data into text for embedding."""
         parts = []
+
+        if context_prefix := lesson.get("context_prefix"):
+            parts.append(f"Context: {context_prefix}")
 
         if outcome := lesson.get("outcome"):
             symbol = lesson.get("symbol", "")
@@ -373,6 +404,9 @@ class TradingPatternEmbeddingGenerator:
         """Format trading pattern data into text for embedding."""
         parts = []
 
+        if context_prefix := pattern.get("context_prefix"):
+            parts.append(f"Context: {context_prefix}")
+
         if name := pattern.get("pattern_name"):
             ptype = pattern.get("pattern_type", "")
             parts.append(f"Pattern: {name} ({ptype})")
@@ -403,4 +437,42 @@ class TradingPatternEmbeddingGenerator:
     async def generate_pattern_embedding(self, pattern: dict[str, Any]) -> list[float] | None:
         """Generate embedding for a trading pattern."""
         text = self.format_pattern_text(pattern)
+        return await get_embedding_service().generate_document_embedding(text)
+
+
+class NewsEmbeddingGenerator:
+    """Generate embeddings specifically for news articles."""
+
+    def format_article_text(self, article: dict[str, Any]) -> str:
+        """Format news article data into text for embedding."""
+        parts = []
+
+        if context_prefix := article.get("context_prefix"):
+            parts.append(f"Context: {context_prefix}")
+
+        if title := article.get("title"):
+            parts.append(f"Title: {title}")
+
+        if summary := article.get("summary"):
+            parts.append(f"Summary: {summary}")
+
+        if assets := article.get("mentioned_assets"):
+            parts.append(f"Assets: {', '.join(assets)}")
+
+        if keywords := article.get("keywords"):
+            parts.append(f"Keywords: {', '.join(keywords)}")
+
+        if (sentiment := article.get("sentiment_score")) is not None:
+            label = "positive" if sentiment > 0.1 else "negative" if sentiment < -0.1 else "neutral"
+            parts.append(f"Sentiment: {label} ({sentiment:+.2f})")
+
+        if content := article.get("content"):
+            # Truncate content to leave room for metadata
+            parts.append(f"Content: {content[:6000]}")
+
+        return "\n".join(parts)
+
+    async def generate_article_embedding(self, article: dict[str, Any]) -> list[float] | None:
+        """Generate embedding for a news article."""
+        text = self.format_article_text(article)
         return await get_embedding_service().generate_document_embedding(text)

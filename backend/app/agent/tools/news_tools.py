@@ -204,7 +204,7 @@ async def search_news(
     results = await retriever.search_news(query, assets=assets, limit=limit)
 
     news_items = []
-    for article in results:
+    for article, score in results:
         source = await asyncio.wait_for(NewsSource.get(article.source_id), timeout=10.0)
 
         news_items.append(
@@ -219,6 +219,7 @@ async def search_news(
                 "published_at": (
                     article.published_at.isoformat() if article.published_at else None
                 ),
+                "relevance_score": round(score, 3),
             }
         )
 

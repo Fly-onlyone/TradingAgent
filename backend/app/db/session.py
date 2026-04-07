@@ -111,7 +111,13 @@ async def init_db() -> None:
     from app.db.models.agent_session import AgentSession
     from app.db.models.agent_task import AgentTask
     from app.db.models.app_settings import AppSettings
-    from app.db.models.knowledge import StrategyKnowledge, TradeLesson, TradingPattern
+    from app.db.models.knowledge import (
+        KnowledgeChunk,
+        StrategyKnowledge,
+        TradeLesson,
+        TradingPattern,
+    )
+    from app.db.models.knowledge_graph import KnowledgeEdge
     from app.db.models.log import LogRecord
     from app.db.models.market import MarketData, Trade
     from app.db.models.news import CredibilityEvent, NewsArticle, NewsSource
@@ -129,6 +135,8 @@ async def init_db() -> None:
         StrategyRating,
         TradeLesson,
         TradingPattern,
+        KnowledgeChunk,
+        KnowledgeEdge,
         NewsSource,
         NewsArticle,
         CredibilityEvent,

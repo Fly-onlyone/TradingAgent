@@ -17,9 +17,22 @@
 ### Knowledge RAG Flow
 
 1. **Query** → Knowledge tool receives search request
-2. **Embedding** → Local nomic-embed-text-v1.5 (sentence-transformers/ONNX)
-3. **Vector Search** → MongoDB Atlas vector search
-4. **Context Assembly** → Retrieve relevant documents
-5. **Response** → Claude uses context for informed answers
+2. **Embedding** → Local nomic-embed-text-v1.5 (sentence-transformers/ONNX), cached for 300s
+3. **Hybrid Search** → Vectorized NumPy similarity (projection-optimized) + MongoDB text search in parallel
+4. **Fusion** → Reciprocal Rank Fusion (RRF) merges vector and text results
+5. **Time Decay** → Exponential decay weighting (news=24h, lessons=7d, strategies=30d half-life)
+6. **Re-Ranking** (optional) → FlashRank cross-encoder re-ranks top candidates
+7. **Context Assembly** → Retrieve full documents for top-k, format with relevance scores
+8. **Response** → Claude uses context for informed answers
 
+### Knowledge Graph
 
+Entity relationships tracked via `KnowledgeEdge` documents:
+- `APPLIES_TO` — Strategy → Asset
+- `DETECTED_IN` — Pattern → Asset
+- `MENTIONS` — News → Asset
+- `LEARNED_FROM` — Lesson → Trade
+- `USED_IN`, `SUPPORTS`, `CONTRADICTS`, `CORRELATED_WITH`
+
+Edges built incrementally during document creation. Enables multi-hop queries like
+"strategies that work for BTC in bearish markets with profitable lesson history."
