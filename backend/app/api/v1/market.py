@@ -161,7 +161,9 @@ async def get_ticker(
         result = await client.get_ticker(symbol_normalized)
     except Exception as exc:
         sentry_sdk.capture_exception(exc)
-        logger.warning("Failed to fetch ticker %s from OKX: %s", symbol_normalized, exc)
+        logger.warning(
+            "Failed to fetch ticker %s from OKX: %s", symbol_normalized, exc, exc_info=True
+        )
         result = {"code": "error", "data": []}
 
     if result.get("code") != "0" or not result.get("data"):
@@ -305,7 +307,7 @@ async def get_account_balance(
         return response
     except Exception as exc:
         sentry_sdk.capture_exception(exc)
-        logger.warning("Failed to fetch account balance from OKX: %s", exc)
+        logger.warning("Failed to fetch account balance from OKX: %s", exc, exc_info=True)
         response = AccountBalanceResponse(
             total_equity=0.0,
             available_balance=0.0,
@@ -367,7 +369,7 @@ async def get_market_overview(
             return response
     except Exception as exc:
         sentry_sdk.capture_exception(exc)
-        logger.warning("Failed to fetch market overview from OKX: %s", exc)
+        logger.warning("Failed to fetch market overview from OKX: %s", exc, exc_info=True)
 
     response = MarketOverviewResponse(
         total_volume_24h=0.0,

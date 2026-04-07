@@ -17,7 +17,7 @@ const backendEntry = resolve(backendRoot, "desktop_entry.py");
 const envExample = resolve(projectRoot, "backend", ".env.example");
 const pyInstallerExe = resolve(projectRoot, ".venv", "Scripts", "pyinstaller.exe");
 const runtimeExe = resolve(srcTauriRoot, "trading-agent-backend.exe");
-const envExampleDest = resolve(srcTauriRoot, ".env.example");
+const envBundleDest = resolve(srcTauriRoot, ".env");
 const pyInstallerDataSeparator = process.platform === "win32" ? ";" : ":";
 
 function isEnabled(name) {
@@ -93,14 +93,14 @@ log(`clean=${shouldClean} force=${shouldForce} forceSync=${shouldSync}`);
 
 if (!shouldClean && !shouldForce && !shouldSync && isRuntimeCurrent()) {
     log("Sidecar is up-to-date — skipping rebuild");
-    copyFileSync(envExample, envExampleDest);
+    copyFileSync(envExample, envBundleDest);
     process.exit(0);
 }
 
 if (shouldClean) {
     log("Cleaning previous build...");
     rmSync(runtimeExe, {force: true});
-    rmSync(envExampleDest, {force: true});
+    rmSync(envBundleDest, {force: true});
     // Preserve log file during clean — only remove work/spec dirs
     rmSync(specDir, {recursive: true, force: true});
     rmSync(workDir, {recursive: true, force: true});
@@ -194,5 +194,5 @@ if (!existsSync(runtimeExe)) {
 const elapsed = ((Date.now() - buildStart) / 1000).toFixed(1);
 log(`PyInstaller finished in ${elapsed}s — output: ${runtimeExe}`);
 
-copyFileSync(envExample, envExampleDest);
+copyFileSync(envExample, envBundleDest);
 log(`Build log saved to ${buildLog}`);

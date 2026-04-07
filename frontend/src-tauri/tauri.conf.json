@@ -30,8 +30,8 @@
         "default-src": "'self' customprotocol: asset: http://asset.localhost",
         "script-src": "'self' 'unsafe-eval'",
         "style-src": "'self' 'unsafe-inline'",
-        "connect-src": "http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:* ipc: http://ipc.localhost",
-        "img-src": "'self' asset: http://asset.localhost data: blob:",
+        "connect-src": "http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:* ipc: http://ipc.localhost https://*.ingest.sentry.io",
+        "img-src": "'self' asset: http://asset.localhost data: blob: https://assets.coincap.io",
         "font-src": "'self' data:"
       },
       "dangerousDisableAssetCspModification": ["style-src"]
@@ -50,7 +50,7 @@
     ],
     "resources": [
       "trading-agent-backend.exe",
-      ".env.example"
+      ".env"
     ],
     "windows": {
       "wix": {},

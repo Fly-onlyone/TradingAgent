@@ -470,7 +470,7 @@ async def list_okx_open_orders(
             error=f"OKX API error: {message}",
         )
     except Exception as exc:
-        logger.warning("Failed to fetch open orders from OKX: %s", exc)
+        logger.warning("Failed to fetch open orders from OKX: %s", exc, exc_info=True)
         return OKXOrderListResponse(
             orders=[],
             count=0,
@@ -507,7 +507,7 @@ async def list_okx_order_history(
             error=f"OKX API error: {message}",
         )
     except Exception as exc:
-        logger.warning("Failed to fetch order history from OKX: %s", exc)
+        logger.warning("Failed to fetch order history from OKX: %s", exc, exc_info=True)
         return OKXOrderListResponse(
             orders=[],
             count=0,

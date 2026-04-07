@@ -42,9 +42,18 @@ class OKXClient:
         self._public = PublicData.PublicAPI(flag="0")
 
     async def _traced(self, name: str, fn: Callable, *args: Any, **kwargs: Any) -> dict[str, Any]:
-        """Execute an OKX SDK call in a thread with a Sentry span."""
+        """Execute an OKX SDK call in a thread with a Sentry span.
+
+        Retries once after 1s on transient network errors (DNS failure, connection refused)
+        to handle wake-from-sleep scenarios transparently.
+        """
         with sentry_sdk.start_span(op="http.client", description=f"okx.{name}"):
-            return await asyncio.to_thread(fn, *args, **kwargs)
+            try:
+                return await asyncio.to_thread(fn, *args, **kwargs)
+            except OSError:
+                logger.debug("OKX %s hit transient network error, retrying in 1s", name)
+                await asyncio.sleep(1)
+                return await asyncio.to_thread(fn, *args, **kwargs)
 
     @classmethod
     async def create(cls) -> "OKXClient":

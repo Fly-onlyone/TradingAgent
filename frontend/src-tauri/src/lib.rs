@@ -57,7 +57,7 @@ const APP_ENV_FILE_NAME: &str = ".env";
 const BACKEND_RUNTIME_EXE: &str = "trading-agent-backend.exe";
 #[cfg(not(target_os = "windows"))]
 const BACKEND_RUNTIME_EXE: &str = "trading-agent-backend";
-const BACKEND_ENV_TEMPLATE_NAME: &str = ".env.example";
+const BACKEND_ENV_TEMPLATE_NAME: &str = ".env";
 
 // ---------------------------------------------------------------------------
 // Windows Job Object — auto-kill backend when this process dies
