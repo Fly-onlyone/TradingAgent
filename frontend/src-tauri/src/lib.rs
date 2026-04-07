@@ -1002,6 +1002,28 @@ fn schedule_debounced_window_persist(app: &AppHandle) {
 // Helper: show main window
 // ---------------------------------------------------------------------------
 
+fn start_with_window_open(app: &AppHandle) -> bool {
+    let state = read_window_state(app);
+    state
+        .get("start_with_window_open")
+        .and_then(Value::as_bool)
+        .unwrap_or(true)
+}
+
+#[tauri::command]
+fn get_start_with_window_open(app: AppHandle) -> bool {
+    start_with_window_open(&app)
+}
+
+#[tauri::command]
+fn set_start_with_window_open(app: AppHandle, enabled: bool) {
+    let mut state = read_window_state(&app);
+    if let Some(obj) = state.as_object_mut() {
+        obj.insert("start_with_window_open".to_string(), json!(enabled));
+    }
+    write_window_state(&app, &state);
+}
+
 fn show_main_window(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.unminimize();
@@ -1017,7 +1039,11 @@ fn show_main_window(app: &AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![frontend_log])
+        .invoke_handler(tauri::generate_handler![
+            frontend_log,
+            get_start_with_window_open,
+            set_start_with_window_open,
+        ])
         .plugin(
             tauri_plugin_log::Builder::default()
                 .level(log::LevelFilter::Info)
@@ -1043,6 +1069,11 @@ pub fn run() {
         .setup(|app| {
             // Restore window state before showing
             restore_window_state(&app.handle());
+
+            // Show window based on user preference (default: open)
+            if start_with_window_open(&app.handle()) {
+                show_main_window(&app.handle());
+            }
 
             // Spawn the Python backend process (with retry logic)
             spawn_backend(app);
