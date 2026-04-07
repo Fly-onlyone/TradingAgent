@@ -72,6 +72,10 @@ import {
 	type SettingsInput,
 	settingsSchema,
 } from "@/utils/validators";
+import {
+	getWindowStartupConfig,
+	setWindowStartupConfig,
+} from "@/utils/windowStartup";
 import { requireAuth } from "./-guards";
 
 export const Route = createFileRoute("/settings")({
@@ -1743,6 +1747,31 @@ function DesktopCard() {
 		staleTime: 60_000,
 	});
 
+	const windowStartupQuery = useQuery({
+		queryKey: ["window-startup-config"],
+		queryFn: () => getWindowStartupConfig(),
+		enabled: isSuperuser || import.meta.env.DEV,
+		staleTime: 60_000,
+	});
+
+	const windowStartupMutation = useMutation({
+		mutationFn: (enabled: boolean) => setWindowStartupConfig(enabled),
+		onSuccess: (data) => {
+			queryClient.invalidateQueries({
+				queryKey: ["window-startup-config"],
+			});
+			notify.success(
+				`Window on startup ${data.enabled ? "enabled" : "disabled"}`,
+			);
+		},
+		onError: (error) => {
+			notify.error(
+				"Failed to update window startup setting",
+				getErrorMessage(error),
+			);
+		},
+	});
+
 	const notifMutation = useMutation({
 		mutationFn: (enabled: boolean) =>
 			nativeNotificationApi.updateNativeNotificationConfig(enabled),
@@ -1765,8 +1794,12 @@ function DesktopCard() {
 
 	if (!isSuperuser && !import.meta.env.DEV) return null;
 
-	const isLoading = configQuery.isLoading || notifQuery.isLoading;
-	const hasError = configQuery.error || notifQuery.error;
+	const isLoading =
+		configQuery.isLoading ||
+		notifQuery.isLoading ||
+		windowStartupQuery.isLoading;
+	const hasError =
+		configQuery.error || notifQuery.error || windowStartupQuery.error;
 
 	return (
 		<Card sx={{ mb: 3 }}>
@@ -1781,7 +1814,7 @@ function DesktopCard() {
 					</Box>
 				) : hasError ? (
 					<Alert severity="error">Failed to load desktop configuration</Alert>
-				) : configQuery.data && notifQuery.data ? (
+				) : configQuery.data && notifQuery.data && windowStartupQuery.data ? (
 					<Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
 						<Box
 							sx={{
@@ -1800,6 +1833,25 @@ function DesktopCard() {
 								checked={configQuery.data.enabled}
 								onChange={(_, checked) => updateMutation.mutate(checked)}
 								disabled={updateMutation.isPending}
+							/>
+						</Box>
+						<Box
+							sx={{
+								display: "flex",
+								alignItems: "center",
+								justifyContent: "space-between",
+							}}
+						>
+							<Box>
+								<Typography variant="body2">Open window on startup</Typography>
+								<Typography variant="caption" color="text.secondary">
+									Show the main window when the app launches
+								</Typography>
+							</Box>
+							<Switch
+								checked={windowStartupQuery.data.enabled}
+								onChange={(_, checked) => windowStartupMutation.mutate(checked)}
+								disabled={windowStartupMutation.isPending}
 							/>
 						</Box>
 						<Box
