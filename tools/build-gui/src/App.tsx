@@ -71,7 +71,7 @@ export default function App() {
         wixInstaller: true,
         stripSymbols: true,
         forceSidecar: false,
-        autoRunInstaller: false,
+        autoRunInstaller: true,
     });
 
     // Build state
