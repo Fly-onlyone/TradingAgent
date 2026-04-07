@@ -1,7 +1,8 @@
 use std::{
-    env,
-    fs,
+    env, fs,
+    net::{SocketAddr, TcpStream},
     path::PathBuf,
+    process::Command,
     sync::Mutex,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -9,8 +10,8 @@ use std::{
 use reqwest::blocking::Client;
 use serde_json::{json, Value};
 use tauri::{
-    path::BaseDirectory,
     menu::{Menu, MenuItem},
+    path::BaseDirectory,
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, Position, RunEvent, Size,
     WindowEvent,
@@ -138,7 +139,9 @@ mod win_job {
 struct BackendState {
     child: Mutex<Option<CommandChild>>,
     terminated: Mutex<bool>,
+    healthy: Mutex<bool>,
     shutdown_in_progress: Mutex<bool>,
+    startup_failure_reported: Mutex<bool>,
     #[cfg(target_os = "windows")]
     job_guard: Mutex<Option<win_job::JobGuard>>,
 }
@@ -262,6 +265,46 @@ struct BackendCommand {
     envs: Vec<(String, String)>,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+struct StartupFailurePayload {
+    code: String,
+    message: String,
+    detail: Option<String>,
+    recoverable: bool,
+}
+
+impl StartupFailurePayload {
+    fn new(code: &str, message: impl Into<String>) -> Self {
+        Self {
+            code: code.to_string(),
+            message: message.into(),
+            detail: None,
+            recoverable: true,
+        }
+    }
+
+    fn with_detail(mut self, detail: impl Into<String>) -> Self {
+        let detail = detail.into();
+        if !detail.trim().is_empty() {
+            self.detail = Some(detail);
+        }
+        self
+    }
+
+    fn non_recoverable(mut self) -> Self {
+        self.recoverable = false;
+        self
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct BackendPreflightResult {
+    ok: bool,
+    code: Option<String>,
+    message: Option<String>,
+    detail: Option<String>,
+}
+
 fn project_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
@@ -277,6 +320,36 @@ fn app_config_dir(app: &AppHandle) -> Result<PathBuf, String> {
 
 fn app_env_file_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(app_config_dir(app)?.join(APP_ENV_FILE_NAME))
+}
+
+fn report_startup_failure_once(app: &AppHandle, payload: StartupFailurePayload) {
+    let should_emit = match app.state::<BackendState>().startup_failure_reported.lock() {
+        Ok(mut reported) => {
+            if *reported {
+                false
+            } else {
+                *reported = true;
+                true
+            }
+        }
+        Err(_) => true,
+    };
+
+    if !should_emit {
+        return;
+    }
+
+    log::error!(
+        "Desktop backend startup failure [{}]: {}",
+        payload.code,
+        payload.message
+    );
+
+    if let Some(detail) = &payload.detail {
+        log::error!("Startup failure detail: {detail}");
+    }
+
+    let _ = app.emit("backend-startup-failure", payload);
 }
 
 fn bundled_backend_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -331,32 +404,129 @@ fn ensure_packaged_env_file(
     Ok(env_file)
 }
 
-fn backend_command(app: &AppHandle) -> Result<BackendCommand, String> {
+fn backend_port_socket() -> SocketAddr {
+    SocketAddr::from(([127, 0, 0, 1], backend_port()))
+}
+
+fn is_backend_port_accepting_connections() -> bool {
+    TcpStream::connect_timeout(&backend_port_socket(), Duration::from_millis(200)).is_ok()
+}
+
+fn ensure_backend_port_available() -> Result<(), StartupFailurePayload> {
+    if !is_backend_port_accepting_connections() {
+        return Ok(());
+    }
+
+    let detail = if is_backend_healthy() {
+        format!(
+            "Another process is already responding on {}.",
+            backend_url()
+        )
+    } else {
+        format!(
+            "Port {} is already open but the backend health check did not respond successfully.",
+            backend_port()
+        )
+    };
+
+    Err(StartupFailurePayload::new(
+        "backend_port_in_use",
+        format!("Backend port {} is already in use.", backend_port()),
+    )
+    .with_detail(detail))
+}
+
+fn run_packaged_backend_preflight(launch: &BackendCommand) -> Result<(), StartupFailurePayload> {
+    let mut command = Command::new(&launch.path);
+    command.arg("--preflight").current_dir(&launch.cwd);
+
+    for (key, value) in &launch.envs {
+        command.env(key, value);
+    }
+
+    let output = command.output().map_err(|error| {
+        StartupFailurePayload::new(
+            "backend_preflight_spawn_failed",
+            "Failed to run the packaged backend preflight.",
+        )
+        .with_detail(error.to_string())
+        .non_recoverable()
+    })?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+
+    let result = serde_json::from_str::<BackendPreflightResult>(&stdout).map_err(|error| {
+        StartupFailurePayload::new(
+            "backend_preflight_invalid_output",
+            "The packaged backend preflight returned invalid output.",
+        )
+        .with_detail(format!(
+            "stdout={stdout}\nstderr={stderr}\nparse_error={error}"
+        ))
+        .non_recoverable()
+    })?;
+
+    if result.ok {
+        return Ok(());
+    }
+
+    Err(StartupFailurePayload::new(
+        result.code.as_deref().unwrap_or("backend_preflight_failed"),
+        result
+            .message
+            .unwrap_or_else(|| "The packaged backend preflight failed.".to_string()),
+    )
+    .with_detail(result.detail.unwrap_or(stderr))
+    .non_recoverable())
+}
+
+fn backend_command(app: &AppHandle) -> Result<BackendCommand, StartupFailurePayload> {
     let mut envs = vec![
         ("TAURI_APP".to_string(), "1".to_string()),
         ("BACKEND_PORT".to_string(), backend_port().to_string()),
     ];
 
     if !cfg!(debug_assertions) {
-        let bundled_dir = bundled_backend_dir(app)?;
-        let env_file = ensure_packaged_env_file(app, &bundled_dir)?;
+        let bundled_dir = bundled_backend_dir(app).map_err(|error| {
+            StartupFailurePayload::new(
+                "missing_backend_runtime",
+                "Bundled backend resources are missing.",
+            )
+            .with_detail(error)
+            .non_recoverable()
+        })?;
+        let env_file = ensure_packaged_env_file(app, &bundled_dir).map_err(|error| {
+            StartupFailurePayload::new(
+                "invalid_packaged_env",
+                "The packaged desktop .env file could not be prepared.",
+            )
+            .with_detail(error)
+            .non_recoverable()
+        })?;
         let executable = bundled_dir.join(BACKEND_RUNTIME_EXE);
         if !executable.exists() {
-            return Err(format!(
-                "Bundled backend executable not found at {}",
-                executable.display()
-            ));
+            return Err(StartupFailurePayload::new(
+                "missing_backend_executable",
+                "The bundled backend executable was not found.",
+            )
+            .with_detail(executable.display().to_string())
+            .non_recoverable());
         }
 
-        envs.push((
-            "APP_ENV_FILE".to_string(),
-            env_file.display().to_string(),
-        ));
+        envs.push(("APP_ENV_FILE".to_string(), env_file.display().to_string()));
 
         return Ok(BackendCommand {
             path: executable,
             args: vec![],
-            cwd: app_config_dir(app)?,
+            cwd: app_config_dir(app).map_err(|error| {
+                StartupFailurePayload::new(
+                    "invalid_app_config_dir",
+                    "The desktop app config directory could not be prepared.",
+                )
+                .with_detail(error)
+                .non_recoverable()
+            })?,
             envs,
         });
     }
@@ -401,8 +571,28 @@ fn backend_command(app: &AppHandle) -> Result<BackendCommand, String> {
     })
 }
 
-fn spawn_backend_once(app_handle: &AppHandle) -> Result<(), String> {
+fn spawn_backend_once(app_handle: &AppHandle) -> Result<(), StartupFailurePayload> {
+    if let Ok(mut guard) = app_handle.state::<BackendState>().terminated.lock() {
+        *guard = false;
+    }
+    if let Ok(mut guard) = app_handle.state::<BackendState>().healthy.lock() {
+        *guard = false;
+    }
+    if let Ok(mut guard) = app_handle
+        .state::<BackendState>()
+        .startup_failure_reported
+        .lock()
+    {
+        *guard = false;
+    }
+
     let launch = backend_command(app_handle)?;
+    ensure_backend_port_available()?;
+
+    if !cfg!(debug_assertions) {
+        run_packaged_backend_preflight(&launch)?;
+    }
+
     let mut command = app_handle
         .shell()
         .command(&launch.path)
@@ -413,14 +603,14 @@ fn spawn_backend_once(app_handle: &AppHandle) -> Result<(), String> {
         command = command.env(key, value);
     }
 
-    let (mut rx, child) = command
-        .spawn()
-        .map_err(|e| format!("Failed to spawn backend process: {e}"))?;
+    let (mut rx, child) = command.spawn().map_err(|error| {
+        StartupFailurePayload::new(
+            "backend_spawn_failed",
+            "Failed to spawn the bundled backend process.",
+        )
+        .with_detail(error.to_string())
+    })?;
     let pid = child.pid();
-
-    if let Ok(mut guard) = app_handle.state::<BackendState>().terminated.lock() {
-        *guard = false;
-    }
 
     let handle = app_handle.clone();
     tauri::async_runtime::spawn(async move {
@@ -444,6 +634,29 @@ fn spawn_backend_once(app_handle: &AppHandle) -> Result<(), String> {
                     if let Ok(mut guard) = handle.state::<BackendState>().terminated.lock() {
                         *guard = true;
                     }
+                    let shutdown_in_progress = handle
+                        .state::<BackendState>()
+                        .shutdown_in_progress
+                        .lock()
+                        .map(|guard| *guard)
+                        .unwrap_or(false);
+                    let became_healthy = handle
+                        .state::<BackendState>()
+                        .healthy
+                        .lock()
+                        .map(|guard| *guard)
+                        .unwrap_or(false);
+                    if !shutdown_in_progress && !became_healthy {
+                        let failure = StartupFailurePayload::new(
+                            "backend_exited_early",
+                            "The bundled backend exited before it became healthy.",
+                        )
+                        .with_detail(format!(
+                            "exit_code={:?}, signal={:?}. Check the desktop logs for backend startup errors.",
+                            payload.code, payload.signal
+                        ));
+                        report_startup_failure_once(&handle, failure);
+                    }
                 }
                 _ => {}
             }
@@ -465,12 +678,25 @@ fn spawn_backend_once(app_handle: &AppHandle) -> Result<(), String> {
     let health_handle = app_handle.clone();
     std::thread::spawn(move || {
         if wait_for_backend_ready() {
+            if let Ok(mut guard) = health_handle.state::<BackendState>().healthy.lock() {
+                *guard = true;
+            }
             log::info!("Backend is healthy and ready");
         } else {
             log::warn!(
                 "Backend did not become healthy within {}ms",
                 env_u64("BACKEND_STARTUP_TIMEOUT_MS", BACKEND_STARTUP_TIMEOUT_MS)
             );
+            let payload = StartupFailurePayload::new(
+                "backend_health_timeout",
+                "The bundled backend did not become healthy before the startup timeout elapsed.",
+            )
+            .with_detail(format!(
+                "health_url={}/health, timeout_ms={}",
+                backend_url(),
+                env_u64("BACKEND_STARTUP_TIMEOUT_MS", BACKEND_STARTUP_TIMEOUT_MS)
+            ));
+            report_startup_failure_once(&health_handle, payload);
             let _ = health_handle.emit("backend-health-timeout", ());
         }
     });
@@ -518,6 +744,10 @@ fn wait_for_backend_ready() -> bool {
 // Backend spawn with retry logic
 // ---------------------------------------------------------------------------
 
+fn should_retry_startup_failure(payload: &StartupFailurePayload) -> bool {
+    matches!(payload.code.as_str(), "backend_spawn_failed")
+}
+
 fn spawn_backend(app: &tauri::App) {
     let max_retries = BACKEND_SPAWN_MAX_RETRIES;
     let app_handle = app.handle().clone();
@@ -528,19 +758,22 @@ fn spawn_backend(app: &tauri::App) {
                 log::info!("Backend startup succeeded on attempt {attempt}");
                 return;
             }
-            Err(e) => {
+            Err(payload) => {
                 log::warn!(
-                    "Failed to spawn backend process (attempt {attempt}/{max_retries}): {e}"
+                    "Backend startup failed on attempt {attempt}/{max_retries}: [{}] {}",
+                    payload.code,
+                    payload.message
                 );
-                if attempt < max_retries {
+                if attempt < max_retries && should_retry_startup_failure(&payload) {
                     let delay = Duration::from_millis(1000 * u64::from(attempt));
                     log::info!("Retrying in {}ms...", delay.as_millis());
                     std::thread::sleep(delay);
                 } else {
                     log::error!(
-                        "All {max_retries} backend spawn attempts exhausted. \
-                         The application will start without a backend."
+                        "Backend startup failed; the desktop app will remain in startup error state."
                     );
+                    report_startup_failure_once(&app_handle, payload);
+                    return;
                 }
             }
         }
@@ -627,7 +860,10 @@ fn force_kill_backend_processes(tracked_pid: Option<u32>) {
         &["/F", "/T", "/FI", "WINDOWTITLE eq run.py*"],
         "run-py-filter",
     );
-    run_taskkill(&["/F", "/T", "/IM", BACKEND_RUNTIME_EXE], "sidecar-image-name");
+    run_taskkill(
+        &["/F", "/T", "/IM", BACKEND_RUNTIME_EXE],
+        "sidecar-image-name",
+    );
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -741,8 +977,13 @@ fn restart_backend(app: &AppHandle) {
     // don't have here, so we replicate the core spawn logic).
     let app_handle = app.clone();
     std::thread::spawn(move || {
-        if let Err(e) = spawn_backend_once(&app_handle) {
-            log::error!("Failed to restart backend: {e}");
+        if let Err(payload) = spawn_backend_once(&app_handle) {
+            log::error!(
+                "Failed to restart backend: [{}] {}",
+                payload.code,
+                payload.message
+            );
+            report_startup_failure_once(&app_handle, payload);
         }
     });
 }
@@ -1061,7 +1302,9 @@ pub fn run() {
         .manage(BackendState {
             child: Mutex::new(None),
             terminated: Mutex::new(false),
+            healthy: Mutex::new(false),
             shutdown_in_progress: Mutex::new(false),
+            startup_failure_reported: Mutex::new(false),
             #[cfg(target_os = "windows")]
             job_guard: Mutex::new(None),
         })
@@ -1087,8 +1330,7 @@ pub fn run() {
                 true,
                 None::<&str>,
             )?;
-            let run_task_item =
-                MenuItem::with_id(app, "run_task", "Run Task", true, None::<&str>)?;
+            let run_task_item = MenuItem::with_id(app, "run_task", "Run Task", true, None::<&str>)?;
             let separator = MenuItem::with_id(app, "sep", "---", false, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Exit", true, None::<&str>)?;
             let menu = Menu::with_items(

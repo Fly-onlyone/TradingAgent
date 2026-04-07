@@ -1,5 +1,7 @@
+import Box from "@mui/material/Box";
 import CssBaseline from "@mui/material/CssBaseline";
 import { ThemeProvider } from "@mui/material/styles";
+import Typography from "@mui/material/Typography";
 import {
 	onlineManager,
 	QueryClient,
@@ -7,8 +9,9 @@ import {
 } from "@tanstack/react-query";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { StrictMode, useEffect } from "react";
+import { StrictMode, useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
+import { ErrorState } from "./components/common/ErrorState";
 import { ZoomIndicator } from "./components/common/ZoomIndicator";
 import { useAppTheme } from "./hooks/useAppTheme";
 import { useUIScaleZoom } from "./hooks/useUIScaleZoom";
@@ -16,7 +19,7 @@ import { useUIScaleZoom } from "./hooks/useUIScaleZoom";
 import { routeTree } from "./routeTree.gen";
 import { useUIStore } from "./store/uiStore";
 import { bootstrapObservability, reportReactRenderError } from "./utils/sentry";
-import { getApiBaseUrl } from "./utils/tauriEnv";
+import { getApiBaseUrl, getBackendBaseUrl, isTauri } from "./utils/tauriEnv";
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -88,12 +91,21 @@ function AppLoadingScreen(): ReactNode {
 
 const HEALTH_POLL_FAST_MS = 3000;
 const HEALTH_POLL_SLOW_MS = 30000;
-const backendHealthUrl = `${getApiBaseUrl().replace(/\/api\/v1$/, "")}/health`;
+const backendHealthUrl = isTauri()
+	? `${getBackendBaseUrl()}/health`
+	: `${getApiBaseUrl().replace(/\/api\/v1$/, "")}/health`;
 let hasLoggedFrontendStartup = false;
 let backendHealthMonitorStarted = false;
 let backendHasConnected = false;
 let lastBackendStatus: "connecting" | "online" | "offline" | null = null;
 let lastBackendStatusMessage = "";
+
+type DesktopStartupFailure = {
+	code: string;
+	message: string;
+	detail?: string | null;
+	recoverable: boolean;
+};
 
 function reportBackendStatus(
 	setBackendStatus: (
@@ -224,10 +236,60 @@ function ensureBackendHealthMonitor(
 	schedulePolling(HEALTH_POLL_FAST_MS);
 }
 
+function DesktopStartupErrorScreen({
+	failure,
+	onRetry,
+}: {
+	failure: DesktopStartupFailure;
+	onRetry: () => void;
+}) {
+	const detail = [
+		`code=${failure.code}`,
+		failure.detail?.trim(),
+		`health_url=${backendHealthUrl}`,
+	]
+		.filter(Boolean)
+		.join("\n");
+
+	return (
+		<Box
+			sx={{
+				display: "flex",
+				minHeight: "100vh",
+				alignItems: "center",
+				justifyContent: "center",
+				px: 2,
+				background:
+					"radial-gradient(circle at top, rgba(249,115,22,0.12), transparent 45%), #1b1510",
+			}}
+		>
+			<Box sx={{ width: "100%", maxWidth: 640 }}>
+				<ErrorState
+					title="Desktop backend failed to start"
+					message={failure.message}
+					detail={detail}
+					onRetry={onRetry}
+				/>
+				<Typography
+					variant="body2"
+					color="text.secondary"
+					sx={{ mt: 2, textAlign: "center" }}
+				>
+					Check the packaged desktop logs if this keeps happening. The app needs
+					its local backend and MongoDB to start cleanly.
+				</Typography>
+			</Box>
+		</Box>
+	);
+}
+
 function App() {
 	const theme = useAppTheme();
 	const { uiScale, visible } = useUIScaleZoom();
 	const setBackendStatus = useUIStore((s) => s.setBackendStatus);
+	const backendStatus = useUIStore((s) => s.backendStatus);
+	const [startupFailure, setStartupFailure] =
+		useState<DesktopStartupFailure | null>(null);
 
 	useEffect(() => {
 		if (!hasLoggedFrontendStartup) {
@@ -237,6 +299,63 @@ function App() {
 
 		ensureBackendHealthMonitor(setBackendStatus);
 	}, [setBackendStatus]);
+
+	useEffect(() => {
+		if (!isTauri()) {
+			return;
+		}
+
+		let isDisposed = false;
+		let unlisten: (() => void) | undefined;
+
+		void import("@tauri-apps/api/event")
+			.then(({ listen }) =>
+				listen<DesktopStartupFailure>(
+					"backend-startup-failure",
+					({ payload }) => {
+						backendHasConnected = true;
+						setStartupFailure(payload);
+						reportBackendStatus(setBackendStatus, "offline", payload.message);
+					},
+				),
+			)
+			.then((dispose) => {
+				if (isDisposed) {
+					dispose();
+					return;
+				}
+				unlisten = dispose;
+			})
+			.catch((error: unknown) => {
+				console.error(
+					"[startup] Failed to subscribe to Tauri startup events",
+					error,
+				);
+			});
+
+		return () => {
+			isDisposed = true;
+			unlisten?.();
+		};
+	}, [setBackendStatus]);
+
+	useEffect(() => {
+		if (backendStatus === "online") {
+			setStartupFailure(null);
+		}
+	}, [backendStatus]);
+
+	if (isTauri() && startupFailure && backendStatus !== "online") {
+		return (
+			<ThemeProvider theme={theme}>
+				<CssBaseline />
+				<DesktopStartupErrorScreen
+					failure={startupFailure}
+					onRetry={() => window.location.reload()}
+				/>
+			</ThemeProvider>
+		);
+	}
 
 	return (
 		<ThemeProvider theme={theme}>

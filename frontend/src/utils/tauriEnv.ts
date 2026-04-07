@@ -10,11 +10,14 @@ export function isTauri(): boolean {
 	return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
+/** Returns the backend origin used by Tauri desktop builds. */
+export function getBackendBaseUrl(): string {
+	return `http://localhost:${TAURI_BACKEND_PORT}`;
+}
+
 /** Returns the base URL for API calls. */
 export function getApiBaseUrl(): string {
-	return isTauri()
-		? `http://localhost:${TAURI_BACKEND_PORT}/api/v1`
-		: "/api/v1";
+	return isTauri() ? `${getBackendBaseUrl()}/api/v1` : "/api/v1";
 }
 
 /** Returns a fully-qualified WebSocket URL. In browser mode derives from window.location. */
