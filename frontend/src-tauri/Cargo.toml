@@ -1,15 +1,15 @@
 [package]
-name = "app"
+name = "trading-agent"
 version = "0.1.0"
 description = "Trading agent Desktop"
-authors = ["you"]
+authors = ["Fly"]
 license = ""
 repository = ""
 edition = "2021"
 rust-version = "1.77.2"
 
 [lib]
-name = "app_lib"
+name = "trading_agent_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
