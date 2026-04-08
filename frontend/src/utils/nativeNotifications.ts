@@ -6,6 +6,26 @@
 import { isTauri } from "./tauriEnv";
 
 let notificationsEnabled = true;
+let notificationIconUrlPromise: Promise<string | undefined> | null = null;
+
+async function getNativeNotificationIconUrl(): Promise<string | undefined> {
+	if (typeof window === "undefined") return undefined;
+
+	notificationIconUrlPromise ??= fetch("/coin.png")
+		.then(async (response) => {
+			if (!response.ok) return undefined;
+			const blob = await response.blob();
+			return await new Promise<string>((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onloadend = () => resolve(reader.result as string);
+				reader.onerror = () => reject(reader.error);
+				reader.readAsDataURL(blob);
+			});
+		})
+		.catch(() => undefined);
+
+	return await notificationIconUrlPromise;
+}
 
 /** Fetch the native notification setting from the API and cache it locally. */
 export async function refreshNativeNotificationSetting(): Promise<void> {
@@ -37,7 +57,11 @@ export async function sendNativeNotification(
 		}
 
 		if (granted) {
-			sendNotification({ title, body });
+			sendNotification({
+				title,
+				body,
+				icon: await getNativeNotificationIconUrl(),
+			});
 		}
 	} catch (e) {
 		// Silently swallow — native notifications are best-effort
