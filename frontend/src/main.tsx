@@ -11,13 +11,16 @@ import { createRouter, RouterProvider } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { StrictMode, useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
+import { autostartApi } from "./api/endpoints/settings";
 import { ErrorState } from "./components/common/ErrorState";
 import { ZoomIndicator } from "./components/common/ZoomIndicator";
 import { useAppTheme } from "./hooks/useAppTheme";
 import { useUIScaleZoom } from "./hooks/useUIScaleZoom";
 // Import the generated route tree
 import { routeTree } from "./routeTree.gen";
+import { useAuthStore } from "./store/authStore";
 import { useUIStore } from "./store/uiStore";
+import { syncAutostartPreference } from "./utils/autostart";
 import { bootstrapObservability, reportReactRenderError } from "./utils/sentry";
 import { getApiBaseUrl, getBackendBaseUrl, isTauri } from "./utils/tauriEnv";
 
@@ -99,6 +102,7 @@ let backendHealthMonitorStarted = false;
 let backendHasConnected = false;
 let lastBackendStatus: "connecting" | "online" | "offline" | null = null;
 let lastBackendStatusMessage = "";
+let hasReconciledAutostart = false;
 
 type DesktopStartupFailure = {
 	code: string;
@@ -286,6 +290,7 @@ function DesktopStartupErrorScreen({
 function App() {
 	const theme = useAppTheme();
 	const { uiScale, visible } = useUIScaleZoom();
+	const { isAuthenticated, isLoading, user } = useAuthStore();
 	const setBackendStatus = useUIStore((s) => s.setBackendStatus);
 	const backendStatus = useUIStore((s) => s.backendStatus);
 	const [startupFailure, setStartupFailure] =
@@ -344,6 +349,35 @@ function App() {
 			setStartupFailure(null);
 		}
 	}, [backendStatus]);
+
+	useEffect(() => {
+		if (
+			!isTauri() ||
+			hasReconciledAutostart ||
+			isLoading ||
+			!isAuthenticated ||
+			!user?.isSuperuser
+		) {
+			return;
+		}
+
+		hasReconciledAutostart = true;
+
+		void autostartApi
+			.getAutostartConfig()
+			.then((config) => syncAutostartPreference(config.enabled))
+			.then((result) => {
+				if (result.changed) {
+					console.info(
+						`[startup] Repaired Windows startup registration (${result.enabled ? "enabled" : "disabled"})`,
+					);
+				}
+			})
+			.catch((error: unknown) => {
+				hasReconciledAutostart = false;
+				console.warn("[startup] Failed to reconcile autostart setting", error);
+			});
+	}, [isAuthenticated, isLoading, user?.isSuperuser]);
 
 	if (isTauri() && startupFailure && backendStatus !== "online") {
 		return (

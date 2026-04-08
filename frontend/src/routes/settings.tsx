@@ -64,6 +64,7 @@ import { useDebouncedSave } from "@/hooks/useDebouncedSave";
 import { useZoomAwareMenu } from "@/hooks/useZoomAwareMenu";
 import { useAuthStore } from "@/store/authStore";
 import { notify, useUIStore } from "@/store/uiStore";
+import { syncAutostartPreference } from "@/utils/autostart";
 import { getErrorMessage } from "@/utils/errors";
 import { refreshNativeNotificationSetting } from "@/utils/nativeNotifications";
 import {
@@ -1713,20 +1714,34 @@ function DesktopCard() {
 
 	const configQuery = useQuery({
 		queryKey: ["autostart-config"],
-		queryFn: () => autostartApi.getAutostartConfig(),
+		queryFn: async () => {
+			const config = await autostartApi.getAutostartConfig();
+			await syncAutostartPreference(config.enabled);
+			return config;
+		},
 		enabled: isSuperuser || import.meta.env.DEV,
 		staleTime: 60_000,
 	});
 
 	const updateMutation = useMutation({
 		mutationFn: async (enabled: boolean) => {
-			const [result] = await Promise.all([
-				autostartApi.updateAutostartConfig(enabled),
-				enabled
-					? import("@/utils/autostart").then((m) => m.enableAutostart())
-					: import("@/utils/autostart").then((m) => m.disableAutostart()),
-			]);
-			return result;
+			const previousEnabled =
+				configQuery.data?.enabled ??
+				(await autostartApi.getAutostartConfig()).enabled;
+
+			await syncAutostartPreference(enabled);
+
+			try {
+				return await autostartApi.updateAutostartConfig(enabled);
+			} catch (error) {
+				void syncAutostartPreference(previousEnabled).catch((rollbackError) => {
+					console.warn(
+						"Failed to roll back autostart after settings save failed",
+						rollbackError,
+					);
+				});
+				throw error;
+			}
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["autostart-config"] });
