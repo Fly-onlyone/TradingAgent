@@ -43,9 +43,7 @@ import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { EmptyState } from "@/components/common/EmptyState";
 import { PageTransition } from "@/components/common/PageTransition";
 import { ShimmerSkeleton } from "@/components/common/ShimmerSkeleton";
-import { StrategyDiscoveryCard } from "@/components/strategies/StrategyDiscoveryCard";
 import { useZoomAwareMenu } from "@/hooks/useZoomAwareMenu";
-import { useAuthStore } from "@/store/authStore";
 import { notify } from "@/store/uiStore";
 import type {
 	ExtractionMessage,
@@ -72,7 +70,6 @@ type SortOption = "name" | "performance" | "winRate" | "newest";
 function StrategiesPage() {
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
-	const isSuperuser = useAuthStore((s) => s.user?.isSuperuser);
 	const {
 		data: strategies,
 		isLoading,
@@ -167,10 +164,7 @@ function StrategiesPage() {
 		};
 	}, [strategies]);
 
-	// Use 2-column grid when sidebar visible, 3-column when not
-	const cardGridSize = isSuperuser
-		? { xs: 12, md: 6 }
-		: { xs: 12, md: 6, lg: 4 };
+	const cardGridSize = { xs: 12, md: 6, lg: 4 };
 
 	return (
 		<PageTransition pageKey="strategies">
@@ -255,79 +249,52 @@ function StrategiesPage() {
 				{/* ====== SCROLLABLE CONTENT AREA ====== */}
 				<Box
 					sx={{
-						display: "flex",
-						gap: 3,
-						flexDirection: { xs: "column", md: "row" },
 						flex: 1,
 						minHeight: 0,
+						overflowY: "auto",
 						pt: 2,
+						pb: 2,
 					}}
 				>
-					{/* Left sidebar: Auto-Discovery (scrolls independently) */}
-					{isSuperuser && (
-						<Box
-							sx={{
-								width: { xs: "100%", md: 300 },
-								flexShrink: 0,
-								overflowY: { md: "auto" },
-							}}
+					{isLoading ? (
+						<Grid container spacing={3}>
+							{STRATEGY_CARD_SKELETON_KEYS.map((key) => (
+								<Grid key={key} size={cardGridSize}>
+									<ShimmerSkeleton shimmerVariant="card" sx={{ height: 320 }} />
+								</Grid>
+							))}
+						</Grid>
+					) : filteredStrategies.length > 0 ? (
+						<motion.div
+							variants={staggerCascade.container}
+							initial="hidden"
+							animate="visible"
 						>
-							<StrategyDiscoveryCard />
-						</Box>
-					)}
-
-					{/* Right: scrollable strategy cards */}
-					<Box
-						sx={{
-							flex: 1,
-							minWidth: 0,
-							overflowY: "auto",
-							pb: 2,
-						}}
-					>
-						{isLoading ? (
 							<Grid container spacing={3}>
-								{STRATEGY_CARD_SKELETON_KEYS.map((key) => (
-									<Grid key={key} size={cardGridSize}>
-										<ShimmerSkeleton
-											shimmerVariant="card"
-											sx={{ height: 320 }}
-										/>
+								{filteredStrategies.map((strategy) => (
+									<Grid key={strategy.id} size={cardGridSize}>
+										<motion.div variants={staggerCascade.item}>
+											<StrategyCard
+												strategy={strategy}
+												onToggle={() => handleToggleActive(strategy)}
+												onDelete={() => setDeleteTarget(strategy.id)}
+												onViewDetails={() => setDetailsTarget(strategy)}
+											/>
+										</motion.div>
 									</Grid>
 								))}
 							</Grid>
-						) : filteredStrategies.length > 0 ? (
-							<motion.div
-								variants={staggerCascade.container}
-								initial="hidden"
-								animate="visible"
-							>
-								<Grid container spacing={3}>
-									{filteredStrategies.map((strategy) => (
-										<Grid key={strategy.id} size={cardGridSize}>
-											<motion.div variants={staggerCascade.item}>
-												<StrategyCard
-													strategy={strategy}
-													onToggle={() => handleToggleActive(strategy)}
-													onDelete={() => setDeleteTarget(strategy.id)}
-													onViewDetails={() => setDetailsTarget(strategy)}
-												/>
-											</motion.div>
-										</Grid>
-									))}
-								</Grid>
-							</motion.div>
-						) : (
-							<EmptyState
-								title="No strategies yet"
-								description="Create your first automated trading strategy to get started"
-								action={{
-									label: "Import Strategy",
-									onClick: () => navigate({ to: "/strategies/create" }),
-								}}
-							/>
-						)}
-					</Box>
+						</motion.div>
+					) : (
+						<EmptyState
+							title="No strategies yet"
+							description="Create your first automated trading strategy to get started"
+							action={{
+								label: "Import Strategy",
+								onClick: () => navigate({ to: "/strategies/create" }),
+							}}
+						/>
+					)}
 				</Box>
 
 				<ConfirmDialog

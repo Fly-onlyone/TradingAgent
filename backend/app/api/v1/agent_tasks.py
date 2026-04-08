@@ -13,6 +13,7 @@ from app.db.models.agent_decision import AgentDecision
 from app.db.models.agent_task import (
     AgentMode,
     AgentTask,
+    IntervalUnit,
     MonitoringCondition,
     MonitoringConditionType,
     RiskLevel,
@@ -44,6 +45,8 @@ class TaskScheduleSchema(BaseModel):
     scheduled_time: str | None = None  # HH:MM
     day_of_week: int | None = Field(None, ge=0, le=6)
     enabled: bool = True
+    interval_value: int | None = Field(None, ge=1)
+    interval_unit: IntervalUnit | None = None
 
 
 class TaskCreate(BaseModel):
@@ -209,6 +212,8 @@ def task_to_response(task: AgentTask) -> TaskResponse:
                 scheduled_time=s.scheduled_time,
                 day_of_week=s.day_of_week,
                 enabled=s.enabled,
+                interval_value=s.interval_value,
+                interval_unit=s.interval_unit,
             )
             for s in task.schedules
         ],
@@ -286,6 +291,8 @@ async def create_task(
                 scheduled_time=s.scheduled_time,
                 day_of_week=s.day_of_week,
                 enabled=s.enabled,
+                interval_value=s.interval_value,
+                interval_unit=s.interval_unit,
             )
             for s in task_data.schedules
         ],

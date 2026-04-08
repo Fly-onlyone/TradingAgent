@@ -457,10 +457,14 @@ class AgentTaskScheduler:
             run_at = datetime.now(UTC) + timedelta(seconds=5)
             return DateTrigger(run_date=run_at)
 
-        elif schedule.frequency == TaskFrequency.HOURLY:
-            return IntervalTrigger(hours=1)
+        elif schedule.frequency == TaskFrequency.INTERVAL:
+            return self._make_interval_trigger(schedule)
 
         elif schedule.frequency == TaskFrequency.DAILY:
+            if schedule.interval_value and schedule.interval_unit:
+                # Daily with repeat → interval trigger anchored at scheduled_time
+                return self._make_interval_trigger(schedule, timezone=timezone)
+
             if schedule.scheduled_time:
                 hour, minute = map(int, schedule.scheduled_time.split(":"))
             else:
@@ -469,6 +473,10 @@ class AgentTaskScheduler:
             return CronTrigger(hour=hour, minute=minute, timezone=timezone)
 
         elif schedule.frequency == TaskFrequency.WEEKLY:
+            if schedule.interval_value and schedule.interval_unit:
+                # Weekly with repeat → interval trigger anchored at scheduled day+time
+                return self._make_interval_trigger(schedule, timezone=timezone)
+
             if schedule.scheduled_time:
                 hour, minute = map(int, schedule.scheduled_time.split(":"))
             else:
@@ -490,6 +498,32 @@ class AgentTaskScheduler:
                 return None
 
         return None
+
+    @staticmethod
+    def _make_interval_trigger(
+        schedule: TaskSchedule,
+        timezone: str | None = None,
+    ) -> IntervalTrigger:
+        """Build an IntervalTrigger, optionally anchored to scheduled_time."""
+        from app.db.models.agent_task import IntervalUnit
+
+        kwargs: dict[str, Any] = {}
+        if schedule.interval_unit == IntervalUnit.MINUTES:
+            kwargs["minutes"] = schedule.interval_value
+        else:
+            kwargs["hours"] = schedule.interval_value
+
+        # Anchor to scheduled_time so intervals align (e.g. "every 2h starting 08:00")
+        if schedule.scheduled_time and timezone:
+            from zoneinfo import ZoneInfo
+
+            hour, minute = map(int, schedule.scheduled_time.split(":"))
+            tz = ZoneInfo(timezone)
+            today = datetime.now(tz).replace(hour=hour, minute=minute, second=0, microsecond=0)
+            kwargs["start_date"] = today
+            kwargs["timezone"] = tz
+
+        return IntervalTrigger(**kwargs)
 
     async def _execute_task(self, task_id: str) -> None:
         """Execute a scheduled task."""

@@ -13,10 +13,17 @@ class TaskFrequency(str, Enum):
     """Task execution frequency."""
 
     ONCE = "once"
-    HOURLY = "hourly"
+    INTERVAL = "interval"  # Every N minutes/hours (replaces HOURLY)
     DAILY = "daily"
     WEEKLY = "weekly"
     CUSTOM = "custom"  # Uses cron_expression
+
+
+class IntervalUnit(str, Enum):
+    """Unit for interval/repeat scheduling."""
+
+    MINUTES = "minutes"
+    HOURS = "hours"
 
 
 class TaskStatus(str, Enum):
@@ -97,13 +104,49 @@ class MonitoringCondition(BaseModel):
 
 
 class TaskSchedule(BaseModel):
-    """A single schedule entry for a task."""
+    """A single schedule entry for a task.
+
+    For ``interval`` frequency, ``interval_value`` + ``interval_unit`` define the
+    primary cadence (e.g. every 30 minutes).  For ``daily``/``weekly``, the same
+    fields are optional and add a repeat *within* the main cycle (must be shorter
+    than the cycle period).
+    """
 
     frequency: TaskFrequency
     cron_expression: str | None = None  # For custom frequency
     scheduled_time: str | None = None  # HH:MM format for daily/weekly
     day_of_week: int | None = None  # 0-6 for weekly (Monday=0)
     enabled: bool = True  # Toggle individual schedules on/off
+
+    # Interval / repeat fields
+    interval_value: int | None = None  # e.g. 2
+    interval_unit: IntervalUnit | None = None  # e.g. "hours"
+
+    @model_validator(mode="after")
+    def _validate_interval_fields(self) -> "TaskSchedule":
+        has_interval = self.interval_value is not None and self.interval_unit is not None
+
+        if self.frequency == TaskFrequency.INTERVAL:
+            if not has_interval:
+                raise ValueError("interval frequency requires interval_value and interval_unit")
+            if self.interval_value is not None and self.interval_value < 1:
+                raise ValueError("interval_value must be >= 1")
+
+        if has_interval and self.interval_value is not None and self.interval_unit is not None:
+            total_minutes = (
+                self.interval_value
+                if self.interval_unit == IntervalUnit.MINUTES
+                else self.interval_value * 60
+            )
+            if self.frequency == TaskFrequency.DAILY and total_minutes >= 24 * 60:
+                raise ValueError("repeat interval must be shorter than 24 hours for daily schedule")
+            if self.frequency == TaskFrequency.WEEKLY and total_minutes >= 7 * 24 * 60:
+                raise ValueError("repeat interval must be shorter than 7 days for weekly schedule")
+
+        if self.frequency in (TaskFrequency.ONCE, TaskFrequency.CUSTOM) and has_interval:
+            raise ValueError(f"interval fields not supported for {self.frequency.value} frequency")
+
+        return self
 
 
 def coerce_task_change_value(field_name: str, value: Any) -> Any:
@@ -250,6 +293,13 @@ class AgentTask(Document):
                 "day_of_week",
             ):
                 data.pop(key, None)
+
+        # Migrate "hourly" → "interval" with value=1, unit="hours"
+        for sched in data.get("schedules", []):
+            if isinstance(sched, dict) and sched.get("frequency") == "hourly":
+                sched["frequency"] = "interval"
+                sched.setdefault("interval_value", 1)
+                sched.setdefault("interval_unit", "hours")
 
         return data
 
