@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from app.api.deps import get_current_superuser
 from app.db.models.log import LogRecord
 from app.db.models.user import User
+from app.utils.timezones import to_local_datetime
 
 router = APIRouter()
 
@@ -50,7 +51,7 @@ class LogStatsResponse(BaseModel):
 def _log_to_response(log: LogRecord) -> LogEntryResponse:
     return LogEntryResponse(
         id=str(log.id),
-        timestamp=log.timestamp,
+        timestamp=to_local_datetime(log.timestamp),
         level=log.level,
         logger_name=log.logger_name,
         message=log.message,

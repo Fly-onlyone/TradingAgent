@@ -7,10 +7,10 @@ import os
 import sys
 import traceback
 from contextvars import ContextVar
-from datetime import UTC, datetime
 from logging.handlers import RotatingFileHandler
 
 from app.config import get_settings
+from app.utils.timezones import timestamp_to_local_datetime
 
 # Context variable for request-scoped data
 request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
@@ -26,8 +26,9 @@ class JSONFormatter(logging.Formatter):
     """Format log records as JSON lines for file output."""
 
     def format(self, record: logging.LogRecord) -> str:
+        timestamp = timestamp_to_local_datetime(record.created)
         entry = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
+            "timestamp": timestamp.isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -71,7 +72,7 @@ class ColoredFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         color = LEVEL_COLORS.get(record.levelname, "")
         level = f"{color}{record.levelname:<8}{RESET}"
-        ts = datetime.fromtimestamp(record.created, tz=UTC).strftime("%H:%M:%S")
+        ts = timestamp_to_local_datetime(record.created).strftime("%H:%M:%S")
         name = record.name.replace("app.", "")
 
         req_id = request_id_var.get(None)
@@ -127,8 +128,9 @@ class MongoDBHandler(logging.Handler):
     _EXTRA_ATTRS = ("tool_name", "arguments", "result_summary", "execution_time_ms", "has_error")
 
     def emit(self, record: logging.LogRecord) -> None:
+        timestamp = timestamp_to_local_datetime(record.created)
         entry = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=UTC),
+            "timestamp": timestamp,
             "level": record.levelname,
             "logger_name": record.name,
             "message": record.getMessage(),

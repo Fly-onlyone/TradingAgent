@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field, field_validator
 
 from app.db.models.log import LogRecord
+from app.utils.timezones import get_local_now
 
 router = APIRouter()
 
@@ -48,7 +49,7 @@ async def ingest_frontend_log(
     request: Request,
 ) -> FrontendLogIngestResponse:
     """Persist a frontend log record."""
-    now = datetime.now(UTC)
+    now = get_local_now()
 
     extra = dict(body.extra or {})
     if body.page_url:
