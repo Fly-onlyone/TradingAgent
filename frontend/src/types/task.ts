@@ -2,7 +2,8 @@
  * Task Types
  */
 
-export type TaskFrequency = "once" | "hourly" | "daily" | "weekly" | "custom";
+export type TaskFrequency = "once" | "interval" | "daily" | "weekly" | "custom";
+export type IntervalUnit = "minutes" | "hours";
 export type TaskStatus = "active" | "paused" | "completed" | "failed";
 export type RiskLevel = "conservative" | "moderate" | "aggressive";
 export type AgentMode = "auto" | "ask";
@@ -31,6 +32,8 @@ export interface TaskSchedule {
 	scheduledTime?: string; // HH:MM
 	dayOfWeek?: number; // 0-6
 	enabled?: boolean;
+	intervalValue?: number;
+	intervalUnit?: IntervalUnit;
 }
 
 export interface AgentTask {
@@ -272,17 +275,17 @@ export const FREQUENCY_CONFIG: Record<
 		label: "Once",
 		description: "Run one time only",
 	},
-	hourly: {
-		label: "Hourly",
-		description: "Run every hour",
+	interval: {
+		label: "Every",
+		description: "Run at a custom interval",
 	},
 	daily: {
 		label: "Daily",
-		description: "Run once a day",
+		description: "Run once a day (with optional repeat)",
 	},
 	weekly: {
 		label: "Weekly",
-		description: "Run once a week",
+		description: "Run once a week (with optional repeat)",
 	},
 	custom: {
 		label: "Custom",

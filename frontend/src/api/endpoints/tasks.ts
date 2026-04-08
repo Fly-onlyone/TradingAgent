@@ -38,6 +38,8 @@ function transformTaskSchedule(data: Record<string, unknown>): TaskSchedule {
 		scheduledTime: data.scheduled_time as string | undefined,
 		dayOfWeek: data.day_of_week as number | undefined,
 		enabled: data.enabled as boolean | undefined,
+		intervalValue: data.interval_value as number | undefined,
+		intervalUnit: data.interval_unit as TaskSchedule["intervalUnit"],
 	};
 }
 
@@ -138,6 +140,8 @@ function toSchedulePayload(schedule: TaskSchedule): Record<string, unknown> {
 		scheduled_time: schedule.scheduledTime,
 		day_of_week: schedule.dayOfWeek,
 		enabled: schedule.enabled ?? true,
+		interval_value: schedule.intervalValue,
+		interval_unit: schedule.intervalUnit,
 	};
 }
 

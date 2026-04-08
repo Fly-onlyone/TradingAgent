@@ -1507,8 +1507,10 @@ async def mcp_modify_task(args: dict[str, Any]) -> dict[str, Any]:
     "Create a new scheduled task for automated trading analysis, monitoring, or trade execution. "
     "Tasks run on a schedule and can analyze markets, monitor conditions, and optionally execute trades. "
     "The task's agent_mode defaults to 'ask' (requires user confirmation for trades). "
-    "Use frequency 'daily' with scheduled_time for daily analysis, 'hourly' for frequent checks, "
-    "'weekly' with day_of_week (0=Mon..6=Sun) for weekly reviews, or 'custom' with a cron_expression.",
+    "Use frequency 'daily' with scheduled_time for daily analysis, 'interval' with interval_value + "
+    "interval_unit for recurring checks (e.g. every 30 minutes), 'weekly' with day_of_week "
+    "(0=Mon..6=Sun), or 'custom' with a cron_expression. Daily/weekly schedules can also include "
+    "interval_value + interval_unit for repeat within the cycle (must be shorter than the main period).",
     {
         "type": "object",
         "properties": {
@@ -1536,7 +1538,7 @@ async def mcp_modify_task(args: dict[str, Any]) -> dict[str, Any]:
                     "properties": {
                         "frequency": {
                             "type": "string",
-                            "enum": ["once", "hourly", "daily", "weekly", "custom"],
+                            "enum": ["once", "interval", "daily", "weekly", "custom"],
                             "description": "Execution frequency",
                         },
                         "cron_expression": {
@@ -1550,6 +1552,18 @@ async def mcp_modify_task(args: dict[str, Any]) -> dict[str, Any]:
                         "day_of_week": {
                             "type": "integer",
                             "description": "Day of week 0-6 (Mon-Sun, for weekly schedules)",
+                        },
+                        "interval_value": {
+                            "type": "integer",
+                            "description": (
+                                "Interval number. For 'interval' frequency: primary cadence. "
+                                "For daily/weekly: optional repeat within cycle (must be < cycle period)"
+                            ),
+                        },
+                        "interval_unit": {
+                            "type": "string",
+                            "enum": ["minutes", "hours"],
+                            "description": "Unit for interval_value",
                         },
                         "enabled": {
                             "type": "boolean",
@@ -1654,6 +1668,7 @@ async def mcp_create_task(args: dict[str, Any]) -> dict[str, Any]:
         from app.db.models.agent_task import (
             AgentMode,
             AgentTask,
+            IntervalUnit,
             MonitoringCondition,
             MonitoringConditionType,
             RiskLevel,
@@ -1696,6 +1711,7 @@ async def mcp_create_task(args: dict[str, Any]) -> dict[str, Any]:
                 )
                 _buffer_tool_result("create_task", args, response, start)
                 return response
+            interval_unit_raw = s.get("interval_unit")
             schedules.append(
                 TaskSchedule(
                     frequency=TaskFrequency(freq),
@@ -1703,6 +1719,8 @@ async def mcp_create_task(args: dict[str, Any]) -> dict[str, Any]:
                     scheduled_time=s.get("scheduled_time"),
                     day_of_week=s.get("day_of_week"),
                     enabled=s.get("enabled", True),
+                    interval_value=s.get("interval_value"),
+                    interval_unit=IntervalUnit(interval_unit_raw) if interval_unit_raw else None,
                 )
             )
 

@@ -54,8 +54,10 @@ import { SectionHeader } from "@/components/common/SectionHeader";
 import { ZoomAwareAutocomplete } from "@/components/common/ZoomAwareAutocomplete";
 import { ZoomAwareSelect } from "@/components/common/ZoomAwareSelect";
 import { type Column, DataTable } from "@/components/data-display/DataTable";
+import { StrategyDiscoveryCard } from "@/components/strategies/StrategyDiscoveryCard";
 import { useDebouncedSave } from "@/hooks/useDebouncedSave";
 import { useSymbolOptions } from "@/hooks/useSymbolOptions";
+import { useAuthStore } from "@/store/authStore";
 import { notify, useUIStore } from "@/store/uiStore";
 import type {
 	AgentMode,
@@ -156,6 +158,7 @@ function serializeEditableTaskUpdate(update: TaskUpdate): string {
 function TaskConfigPage() {
 	const queryClient = useQueryClient();
 	const backendStatus = useUIStore((s) => s.backendStatus);
+	const isSuperuser = useAuthStore((s) => s.user?.isSuperuser);
 	const { symbolOptions, isLoading: symbolsLoading } = useSymbolOptions();
 	const createUiKey = useCallback(() => crypto.randomUUID(), []);
 
@@ -996,11 +999,13 @@ function TaskConfigPage() {
 														opacity: schedule.enabled === false ? 0.5 : 1,
 													}}
 												>
+													{/* Row 1: enable + frequency + main controls */}
 													<Box
 														sx={{
 															display: "flex",
 															gap: 1,
 															alignItems: "center",
+															flexWrap: "wrap",
 														}}
 													>
 														<Switch
@@ -1019,20 +1024,81 @@ function TaskConfigPage() {
 																value={schedule.frequency}
 																label="Frequency"
 																size="small"
-																onChange={(e) =>
-																	updateSchedule(idx, {
-																		frequency: e.target.value as TaskFrequency,
-																	})
-																}
+																onChange={(e) => {
+																	const freq = e.target.value as TaskFrequency;
+																	const patch: Partial<TaskSchedule> = {
+																		frequency: freq,
+																	};
+																	// Clear fields irrelevant to new frequency
+																	if (
+																		freq !== "interval" &&
+																		freq !== "daily" &&
+																		freq !== "weekly"
+																	) {
+																		patch.intervalValue = undefined;
+																		patch.intervalUnit = undefined;
+																	}
+																	if (freq !== "daily" && freq !== "weekly") {
+																		patch.scheduledTime = undefined;
+																	}
+																	if (freq !== "weekly") {
+																		patch.dayOfWeek = undefined;
+																	}
+																	if (freq !== "custom") {
+																		patch.cronExpression = undefined;
+																	}
+																	updateSchedule(idx, patch);
+																}}
 															>
 																<MenuItem value="once">Once</MenuItem>
-																<MenuItem value="hourly">Hourly</MenuItem>
+																<MenuItem value="interval">Every</MenuItem>
 																<MenuItem value="daily">Daily</MenuItem>
 																<MenuItem value="weekly">Weekly</MenuItem>
 																<MenuItem value="custom">Custom</MenuItem>
 															</ZoomAwareSelect>
 														</FormControl>
 
+														{/* Interval frequency: value + unit */}
+														{schedule.frequency === "interval" && (
+															<>
+																<TextField
+																	label="Value"
+																	type="number"
+																	size="small"
+																	value={schedule.intervalValue ?? ""}
+																	onChange={(e) =>
+																		updateSchedule(idx, {
+																			intervalValue: e.target.value
+																				? Number(e.target.value)
+																				: undefined,
+																		})
+																	}
+																	slotProps={{ htmlInput: { min: 1 } }}
+																	sx={{ width: 90 }}
+																/>
+																<FormControl
+																	size="small"
+																	sx={{ minWidth: 110 }}
+																>
+																	<InputLabel>Unit</InputLabel>
+																	<ZoomAwareSelect
+																		value={schedule.intervalUnit ?? "hours"}
+																		label="Unit"
+																		onChange={(e) =>
+																			updateSchedule(idx, {
+																				intervalUnit: e.target
+																					.value as TaskSchedule["intervalUnit"],
+																			})
+																		}
+																	>
+																		<MenuItem value="minutes">Minutes</MenuItem>
+																		<MenuItem value="hours">Hours</MenuItem>
+																	</ZoomAwareSelect>
+																</FormControl>
+															</>
+														)}
+
+														{/* Daily / Weekly: time picker */}
 														{(schedule.frequency === "daily" ||
 															schedule.frequency === "weekly") && (
 															<TimePicker
@@ -1063,6 +1129,7 @@ function TaskConfigPage() {
 															/>
 														)}
 
+														{/* Weekly: day selector */}
 														{schedule.frequency === "weekly" && (
 															<FormControl size="small" sx={{ minWidth: 120 }}>
 																<InputLabel>Day</InputLabel>
@@ -1084,6 +1151,7 @@ function TaskConfigPage() {
 															</FormControl>
 														)}
 
+														{/* Custom: cron expression */}
 														{schedule.frequency === "custom" && (
 															<TextField
 																label="Cron"
@@ -1111,6 +1179,88 @@ function TaskConfigPage() {
 															</Tooltip>
 														)}
 													</Box>
+
+													{/* Row 2: optional repeat for daily/weekly */}
+													{(schedule.frequency === "daily" ||
+														schedule.frequency === "weekly") && (
+														<Box
+															sx={{
+																display: "flex",
+																gap: 1,
+																alignItems: "center",
+																ml: 5.5,
+															}}
+														>
+															<FormControlLabel
+																control={
+																	<Switch
+																		checked={schedule.intervalValue != null}
+																		onChange={(e) => {
+																			if (e.target.checked) {
+																				updateSchedule(idx, {
+																					intervalValue: 1,
+																					intervalUnit: "hours",
+																				});
+																			} else {
+																				updateSchedule(idx, {
+																					intervalValue: undefined,
+																					intervalUnit: undefined,
+																				});
+																			}
+																		}}
+																		size="small"
+																	/>
+																}
+																label={
+																	<Typography
+																		variant="body2"
+																		color="text.secondary"
+																	>
+																		Repeat every
+																	</Typography>
+																}
+															/>
+															{schedule.intervalValue != null && (
+																<>
+																	<TextField
+																		type="number"
+																		size="small"
+																		value={schedule.intervalValue ?? ""}
+																		onChange={(e) =>
+																			updateSchedule(idx, {
+																				intervalValue: e.target.value
+																					? Number(e.target.value)
+																					: undefined,
+																			})
+																		}
+																		slotProps={{ htmlInput: { min: 1 } }}
+																		sx={{ width: 80 }}
+																	/>
+																	<FormControl
+																		size="small"
+																		sx={{ minWidth: 110 }}
+																	>
+																		<InputLabel>Unit</InputLabel>
+																		<ZoomAwareSelect
+																			value={schedule.intervalUnit ?? "hours"}
+																			label="Unit"
+																			onChange={(e) =>
+																				updateSchedule(idx, {
+																					intervalUnit: e.target
+																						.value as TaskSchedule["intervalUnit"],
+																				})
+																			}
+																		>
+																			<MenuItem value="minutes">
+																				Minutes
+																			</MenuItem>
+																			<MenuItem value="hours">Hours</MenuItem>
+																		</ZoomAwareSelect>
+																	</FormControl>
+																</>
+															)}
+														</Box>
+													)}
 												</Box>
 											))}
 
@@ -1591,6 +1741,18 @@ function TaskConfigPage() {
 								</motion.div>
 							)}
 						</motion.div>
+					)}
+
+					{/* ── System Tasks: Auto-Discovery ──────── */}
+					{isSuperuser && (
+						<Box sx={{ mt: 4 }}>
+							<Typography variant="h6" sx={{ mb: 2 }}>
+								System Tasks
+							</Typography>
+							<Box sx={{ maxWidth: 480 }}>
+								<StrategyDiscoveryCard />
+							</Box>
+						</Box>
 					)}
 				</Box>
 			</PageTransition>
