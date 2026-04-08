@@ -145,8 +145,6 @@ const pyinstallerArgs = [
     "safetensors",
     "--collect-submodules",
     "torch",
-    "--exclude-module",
-    "torch.distributed",
     "--collect-all",
     "fitz",
     "--collect-all",
