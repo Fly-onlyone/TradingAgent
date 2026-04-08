@@ -614,7 +614,10 @@ export const useAgentStore = create<AgentState>()(
 					return {
 						sessionStates,
 						activeRunSessionId: null,
-						status: "disconnected" as AgentStatus,
+						status: (state.status === "auth_required" ||
+						state.status === "error"
+							? state.status
+							: "disconnected") as AgentStatus,
 					};
 				}),
 		}),

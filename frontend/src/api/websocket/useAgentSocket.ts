@@ -5,13 +5,13 @@
 import * as Sentry from "@sentry/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
-import { getAccessToken } from "@/api/client";
 import type { NotificationSettings } from "@/api/endpoints/notifications";
 import {
 	agentSessionQueryOptions,
 	agentSessionsGroupedQueryOptions,
 } from "@/api/queryOptions/agent";
 import { useAgentStore } from "@/store/agentStore";
+import { useAuthStore } from "@/store/authStore";
 import type { WebSocketMessage } from "@/types";
 import type { GroupedSessionsResponse, PendingQuestion } from "@/types/session";
 import {
@@ -379,11 +379,11 @@ export function useAgentSocketConnection() {
 		],
 	);
 
-	const token = getAccessToken();
+	const authToken = useAuthStore((s) => s.token);
 
 	const { isConnected, send, disconnect, reconnect } = useWebSocket({
-		url: `${socketBaseUrl}?token=${token}`,
-		enabled: !!token,
+		url: `${socketBaseUrl}?token=${authToken}`,
+		enabled: !!authToken,
 		onMessage: handleMessage,
 		heartbeatMessage: "ping",
 		heartbeatIntervalMs: 20000,
@@ -437,7 +437,9 @@ export function useAgentSocketConnection() {
 					: undefined,
 			});
 			console.error("Agent WebSocket error:", error);
-			updateStatus("error");
+			if (useAgentStore.getState().status !== "auth_required") {
+				updateStatus("error");
+			}
 		},
 	});
 
