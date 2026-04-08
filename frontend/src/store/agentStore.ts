@@ -33,6 +33,7 @@ interface SessionRuntimeState {
 }
 
 interface AgentState {
+	isSocketConnected: boolean;
 	selectedSessionId: string | null;
 	activeRunSessionId: string | null;
 	sessionStates: Record<string, SessionRuntimeState>;
@@ -81,6 +82,7 @@ interface AgentState {
 	updateStatus: (status: string) => void;
 	toggleThinkingContent: () => void;
 	toggleExpandAllTools: () => void;
+	setSocketConnected: (isConnected: boolean) => void;
 	setSessionPendingQuestion: (
 		sessionId: string,
 		question: PendingQuestion | null,
@@ -131,6 +133,7 @@ function mergeSessionState(
 export const useAgentStore = create<AgentState>()(
 	persist(
 		(set) => ({
+			isSocketConnected: false,
 			selectedSessionId: null,
 			activeRunSessionId: null,
 			sessionStates: {},
@@ -517,6 +520,7 @@ export const useAgentStore = create<AgentState>()(
 				set((state) => ({
 					expandAllTools: !state.expandAllTools,
 				})),
+			setSocketConnected: (isSocketConnected) => set({ isSocketConnected }),
 			setSessionPendingQuestion: (sessionId, question) =>
 				set((state) => {
 					const sessionState =

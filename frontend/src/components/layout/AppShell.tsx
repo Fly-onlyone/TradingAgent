@@ -6,6 +6,7 @@ import { Box, Toolbar, useMediaQuery, useTheme } from "@mui/material";
 import { useRouterState } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { useAgentSocketConnection } from "@/api/websocket/useAgentSocket";
 import { useUIStore } from "@/store/uiStore";
 import { useMotionTier, useReducedMotion } from "@/utils/animations/hooks";
 
@@ -38,6 +39,7 @@ interface AppShellProps {
 }
 
 export function AppShell({ children }: AppShellProps) {
+	useAgentSocketConnection();
 	const theme = useTheme();
 	const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 	const { notifications, removeNotification, effectsEnabled } = useUIStore();

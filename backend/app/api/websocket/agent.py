@@ -25,6 +25,10 @@ router = APIRouter()
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
+_RESUME_HISTORY_MESSAGE_LIMIT = 12
+_RESUME_HISTORY_CHAR_LIMIT = 12_000
+_AGENT_TURN_TIMEOUT_SECONDS = 120.0
+
 
 async def get_user_from_token(token: str) -> User | None:
     """Get authenticated user from JWT token.
@@ -94,6 +98,44 @@ def _build_user_message(message: dict) -> str:
         return message.get("content", "") or message.get("message", "")
 
 
+def _build_resume_history(session: AgentSession) -> str | None:
+    """Format recent persisted messages so legacy sessions can resume cleanly."""
+    history = session.messages[:-1]
+    if not history:
+        return None
+
+    recent_history = history[-_RESUME_HISTORY_MESSAGE_LIMIT:]
+    rendered_messages = []
+    for message in recent_history:
+        content = " ".join(message.content.split())
+        if not content:
+            continue
+        rendered_messages.append(f"{message.role.value.title()}: {content}")
+
+    if not rendered_messages:
+        return None
+
+    transcript = "\n".join(rendered_messages)
+    excerpted = len(history) > len(recent_history)
+    if len(transcript) > _RESUME_HISTORY_CHAR_LIMIT:
+        excerpted = True
+        transcript = transcript[-_RESUME_HISTORY_CHAR_LIMIT:]
+        first_newline = transcript.find("\n")
+        if first_newline >= 0:
+            transcript = transcript[first_newline + 1 :]
+
+    header = "[SESSION CONTEXT - Persisted history loaded for this resumed chat]"
+    if excerpted:
+        header = f"{header} (recent excerpt)"
+
+    return (
+        f"{header}\n"
+        "Use this as the conversation history for the current chat and continue naturally.\n"
+        f"{transcript}\n"
+        "[END SESSION CONTEXT]"
+    )
+
+
 @router.websocket("/chat")
 async def agent_chat_websocket(
     websocket: WebSocket,
@@ -142,6 +184,7 @@ async def agent_chat_websocket(
     agent = None
     session = None
     chat_task: asyncio.Task | None = None
+    chat_cancel_reason: str | None = None
 
     async def send_event(event: dict) -> None:
         """Callback for intermediate agent events (thinking, tool_call)."""
@@ -150,7 +193,7 @@ async def agent_chat_websocket(
     # Allow the ask_user MCP tool to push questions through this WebSocket
     set_ws_event_emitter(send_event)
 
-    async def _ensure_agent() -> bool:
+    async def _ensure_agent(*, resume_existing_session: bool) -> bool:
         """Lazily create the agent on first use. Returns True if agent is ready."""
         nonlocal agent
 
@@ -169,7 +212,13 @@ async def agent_chat_websocket(
                 op="ws.agent.initialize",
                 description="create trading agent (lazy)",
             ):
-                agent = await create_agent_with_tools()
+                resume_session_id = (
+                    session.sdk_session_id if session and resume_existing_session else None
+                )
+                agent = await create_agent_with_tools(
+                    session_id=session.sdk_session_id if session else None,
+                    resume_session_id=resume_session_id,
+                )
             await manager.send_personal(
                 websocket,
                 {
@@ -217,13 +266,20 @@ async def agent_chat_websocket(
         if clear_pending_question and session.active_pending_question:
             session.clear_pending_question()
 
+        session.is_active = True
+        session.ended_at = None
         session.add_message(role="user", content=user_message)
         await session.save()
 
-    async def _prepare_agent_message(user_message: str) -> str:
-        """Inject session memory on the first turn of a new chat."""
+    async def _prepare_agent_message(
+        user_message: str,
+        *,
+        inject_session_memories: bool,
+        rehydrate_session_history: bool,
+    ) -> str:
+        """Inject startup context for new sessions and legacy resumed chats."""
         agent_message = user_message
-        if session.total_messages == 1:
+        if inject_session_memories:
             try:
                 from app.agent.tools.memory_tools import load_session_memories
 
@@ -232,7 +288,24 @@ async def agent_chat_websocket(
                     agent_message = f"{memory_ctx}\n\n{user_message}"
             except Exception:
                 logger.debug("Failed to load session memories", exc_info=True)
+        elif rehydrate_session_history:
+            history_ctx = _build_resume_history(session)
+            if history_ctx:
+                agent_message = f"{history_ctx}\n\n{user_message}"
         return agent_message
+
+    async def _reset_agent() -> None:
+        """Disconnect the current agent when switching persisted sessions."""
+        nonlocal agent
+        if not agent:
+            return
+
+        try:
+            await agent.disconnect()
+        except Exception:
+            logger.warning("Failed to disconnect trading agent cleanly", exc_info=True)
+        finally:
+            agent = None
 
     async def _start_chat_turn(
         user_message: str,
@@ -243,7 +316,7 @@ async def agent_chat_websocket(
         create_session: bool = True,
     ) -> None:
         """Load the target session, persist the user message, and start the agent turn."""
-        nonlocal chat_task, session
+        nonlocal chat_cancel_reason, chat_task, session
 
         target_session = session
         if client_session_id and (
@@ -251,7 +324,10 @@ async def agent_chat_websocket(
         ):
             target_session = await _load_session(client_session_id)
         if target_session is None and create_session:
-            target_session = AgentSession(user_id=user.id)
+            target_session = AgentSession(
+                user_id=user.id,
+                sdk_session_id=str(uuid.uuid4()),
+            )
             await target_session.insert()
             await manager.send_personal(
                 websocket,
@@ -270,6 +346,15 @@ async def agent_chat_websocket(
                 },
             )
             return
+
+        prior_message_count = target_session.total_messages
+        has_persisted_sdk_session = bool(target_session.sdk_session_id)
+        if not has_persisted_sdk_session:
+            target_session.sdk_session_id = str(uuid.uuid4())
+
+        previous_session_id = str(session.id) if session else None
+        if agent is not None and previous_session_id != str(target_session.id):
+            await _reset_agent()
 
         session = target_session
 
@@ -293,13 +378,24 @@ async def agent_chat_websocket(
                         },
                     },
                 )
+        else:
+            session.is_active = True
+            session.ended_at = None
+            await session.save()
 
         # Lazily create the agent on the first turn
-        if not await _ensure_agent():
+        if not await _ensure_agent(
+            resume_existing_session=prior_message_count > 0 and has_persisted_sdk_session
+        ):
             return
 
-        agent_message = await _prepare_agent_message(user_message)
+        agent_message = await _prepare_agent_message(
+            user_message,
+            inject_session_memories=prior_message_count == 0,
+            rehydrate_session_history=prior_message_count > 0 and not has_persisted_sdk_session,
+        )
         set_active_session_id(str(session.id))
+        chat_cancel_reason = None
         chat_task = asyncio.create_task(_process_chat(agent_message))
 
     async def _send_and_persist_assistant_message(
@@ -345,6 +441,8 @@ async def agent_chat_websocket(
             op="db.write",
             description="save assistant message",
         ):
+            if agent.session_id:
+                session.sdk_session_id = agent.session_id
             session.add_message(
                 role="assistant",
                 content=content,
@@ -412,14 +510,17 @@ async def agent_chat_websocket(
 
         async def _process_chat(user_message: str) -> None:
             """Run agent.chat() and send the result back over the WebSocket."""
-            nonlocal session
+            nonlocal chat_cancel_reason, session
             try:
                 with sentry_sdk.start_span(
                     op="ws.agent.turn",
                     description="process agent turn",
                 ) as turn_span:
                     turn_span.set_data("has_session", session is not None)
-                    response = await agent.chat(user_message, on_event=send_event)
+                    response = await asyncio.wait_for(
+                        agent.chat(user_message, on_event=send_event),
+                        timeout=_AGENT_TURN_TIMEOUT_SECONDS,
+                    )
 
                     # Get tool calls, thinking content, and token usage
                     tool_calls = agent.tool_calls or []
@@ -433,8 +534,47 @@ async def agent_chat_websocket(
                         turn_tokens=turn_tokens,
                     )
 
+            except TimeoutError:
+                partial_response = agent.partial_response or ""
+                logger.warning(
+                    "Agent turn timed out after %.1fs",
+                    _AGENT_TURN_TIMEOUT_SECONDS,
+                    extra={
+                        "connection_id": connection_id,
+                        "session_id": str(session.id) if session else None,
+                        "user_id": str(user.id),
+                        "partial_response_length": len(partial_response),
+                    },
+                )
+                if partial_response:
+                    await _send_and_persist_assistant_message(
+                        content=partial_response,
+                        tool_calls=agent.tool_calls or [],
+                        thinking_content=agent.thinking_content or None,
+                        turn_tokens=agent.input_tokens + agent.output_tokens,
+                    )
+                await manager.send_personal(
+                    websocket,
+                    {
+                        "type": "error",
+                        "data": {
+                            "error": "Agent response timed out before completion. "
+                            "A partial answer was saved.",
+                        },
+                    },
+                )
             except asyncio.CancelledError:
                 partial_response = agent.partial_response or ""
+                logger.info(
+                    "Agent turn cancelled",
+                    extra={
+                        "reason": chat_cancel_reason or "unknown",
+                        "connection_id": connection_id,
+                        "session_id": str(session.id) if session else None,
+                        "user_id": str(user.id),
+                        "partial_response_length": len(partial_response),
+                    },
+                )
                 if partial_response:
                     await _send_and_persist_assistant_message(
                         content=partial_response,
@@ -480,6 +620,7 @@ async def agent_chat_websocket(
             # Handle cancel requests
             if message.get("type") == "cancel":
                 if chat_task and not chat_task.done():
+                    chat_cancel_reason = "user_cancel"
                     await cancel_pending_questions(
                         connection_id=connection_id,
                         clear_persisted=True,
@@ -560,6 +701,7 @@ async def agent_chat_websocket(
             )
 
     except WebSocketDisconnect as e:
+        chat_cancel_reason = "websocket_disconnect"
         logger.info(
             "Agent WebSocket disconnected",
             extra={
@@ -571,6 +713,7 @@ async def agent_chat_websocket(
             },
         )
     except RuntimeError as e:
+        chat_cancel_reason = "websocket_runtime_disconnect"
         # RuntimeError: "WebSocket is not connected" — raised by Starlette when
         # the client disconnects before/during receive_text() in some edge cases
         logger.warning(
@@ -589,6 +732,8 @@ async def agent_chat_websocket(
         await cancel_pending_questions(connection_id=connection_id)
         clear_ws_event_emitter()
         if chat_task and not chat_task.done():
+            if chat_cancel_reason is None:
+                chat_cancel_reason = "handler_shutdown"
             chat_task.cancel()
             try:
                 await chat_task

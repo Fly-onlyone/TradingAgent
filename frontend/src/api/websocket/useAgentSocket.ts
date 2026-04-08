@@ -4,7 +4,7 @@
 
 import * as Sentry from "@sentry/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { getAccessToken } from "@/api/client";
 import type { NotificationSettings } from "@/api/endpoints/notifications";
 import {
@@ -113,29 +113,35 @@ interface BeginTurnOptions {
 	addUserMessage?: AgentMessage;
 }
 
-export function useAgentSocket() {
+interface SharedSocketControls {
+	send: (data: unknown) => void;
+	disconnect: () => void;
+	reconnect: () => void;
+}
+
+const sharedSocketControls: SharedSocketControls = {
+	send: () => {},
+	disconnect: () => {},
+	reconnect: () => {},
+};
+
+export function useAgentSocketConnection() {
 	const queryClient = useQueryClient();
 	const socketBaseUrl = getWsUrl("/ws/agent/chat");
 	const {
 		addMessage,
 		updateStatus,
+		setSocketConnected,
 		setThinking,
 		setCancelling,
 		addToolCall,
 		appendThinkingContent,
 		appendStreamingText,
-		setSelectedSessionId,
-		setActiveRunSessionId,
-		clearSessionPendingQuestion,
-		createDraftSession,
 		finalizeInterruptedTurns,
 		replaceSessionId,
-		hydrateSessionMessages,
 		setSessionPendingQuestion,
 		setSessionTotalTokens,
 		setSessionModel,
-		selectedSessionId,
-		activeRunSessionId,
 	} = useAgentStore();
 	const recentIncomingMessageKeysRef = useRef<Map<string, number>>(new Map());
 	const pendingChartDataRef = useRef<ChartData | null>(null);
@@ -157,57 +163,6 @@ export function useAgentSocket() {
 			);
 		},
 		[queryClient],
-	);
-
-	const beginTurn = useCallback(
-		(options: BeginTurnOptions = {}) => {
-			const state = useAgentStore.getState();
-			let sessionId = options.sessionId ?? state.selectedSessionId;
-
-			if (!sessionId) {
-				const draftSessionId = createDraftSession();
-				sessionId = draftSessionId;
-				updateGroupedSessions((current) =>
-					upsertSessionInGroups(
-						current,
-						createOptimisticSession(
-							draftSessionId,
-							Boolean(options.addUserMessage),
-						),
-					),
-				);
-			} else {
-				const existingSessionId = sessionId;
-				setSelectedSessionId(sessionId);
-				setActiveRunSessionId(sessionId);
-				hydrateSessionMessages(
-					existingSessionId,
-					state.sessionStates[existingSessionId]?.messages ?? [],
-				);
-
-				updateGroupedSessions((current) =>
-					touchSessionInGroups(current, existingSessionId, {
-						includeUserMessage: Boolean(options.addUserMessage),
-					}),
-				);
-			}
-
-			if (options.addUserMessage) {
-				addMessage(sessionId, options.addUserMessage);
-			}
-
-			setThinking(sessionId, true);
-			return sessionId;
-		},
-		[
-			addMessage,
-			createDraftSession,
-			hydrateSessionMessages,
-			setActiveRunSessionId,
-			setSelectedSessionId,
-			setThinking,
-			updateGroupedSessions,
-		],
 	);
 
 	const handleMessage = useCallback(
@@ -411,9 +366,7 @@ export function useAgentSocket() {
 			queryClient,
 			replaceSessionId,
 			setSessionPendingQuestion,
-			setActiveRunSessionId,
 			setCancelling,
-			setSelectedSessionId,
 			setSessionModel,
 			setSessionTotalTokens,
 			setThinking,
@@ -483,6 +436,118 @@ export function useAgentSocket() {
 			updateStatus("error");
 		},
 	});
+
+	useEffect(() => {
+		sharedSocketControls.send = send;
+		sharedSocketControls.disconnect = disconnect;
+		sharedSocketControls.reconnect = reconnect;
+
+		return () => {
+			sharedSocketControls.send = () => {};
+			sharedSocketControls.disconnect = () => {};
+			sharedSocketControls.reconnect = () => {};
+		};
+	}, [disconnect, reconnect, send]);
+
+	useEffect(() => {
+		setSocketConnected(isConnected);
+	}, [isConnected, setSocketConnected]);
+
+	return { isConnected };
+}
+
+export function useAgentSocket() {
+	const queryClient = useQueryClient();
+	const {
+		addMessage,
+		clearSessionPendingQuestion,
+		createDraftSession,
+		hydrateSessionMessages,
+		isSocketConnected,
+		selectedSessionId,
+		activeRunSessionId,
+		setActiveRunSessionId,
+		setCancelling,
+		setSelectedSessionId,
+		setThinking,
+	} = useAgentStore();
+
+	const updateGroupedSessions = useCallback(
+		(
+			updater: (
+				current: GroupedSessionsResponse | undefined,
+			) => GroupedSessionsResponse | undefined,
+		) => {
+			queryClient.setQueryData<GroupedSessionsResponse | undefined>(
+				agentSessionsGroupedQueryOptions(AGENT_SESSIONS_GROUP_LIMIT).queryKey,
+				updater,
+			);
+		},
+		[queryClient],
+	);
+
+	const beginTurn = useCallback(
+		(options: BeginTurnOptions = {}) => {
+			const state = useAgentStore.getState();
+			let sessionId = options.sessionId ?? state.selectedSessionId;
+
+			if (!sessionId) {
+				const draftSessionId = createDraftSession();
+				sessionId = draftSessionId;
+				updateGroupedSessions((current) =>
+					upsertSessionInGroups(
+						current,
+						createOptimisticSession(
+							draftSessionId,
+							Boolean(options.addUserMessage),
+						),
+					),
+				);
+			} else {
+				const existingSessionId = sessionId;
+				setSelectedSessionId(sessionId);
+				setActiveRunSessionId(sessionId);
+				hydrateSessionMessages(
+					existingSessionId,
+					state.sessionStates[existingSessionId]?.messages ?? [],
+				);
+
+				updateGroupedSessions((current) =>
+					touchSessionInGroups(current, existingSessionId, {
+						includeUserMessage: Boolean(options.addUserMessage),
+					}),
+				);
+			}
+
+			if (options.addUserMessage) {
+				addMessage(sessionId, options.addUserMessage);
+			}
+
+			setThinking(sessionId, true);
+			return sessionId;
+		},
+		[
+			addMessage,
+			createDraftSession,
+			hydrateSessionMessages,
+			setActiveRunSessionId,
+			setSelectedSessionId,
+			setThinking,
+			updateGroupedSessions,
+		],
+	);
+
+	const send = useCallback((data: unknown) => {
+		sharedSocketControls.send(data);
+	}, []);
+
+	const disconnect = useCallback(() => {
+		sharedSocketControls.disconnect();
+	}, []);
+
+	const reconnect = useCallback(() => {
+		sharedSocketControls.reconnect();
+	}, []);
 
 	const sendMessage = useCallback(
 		(content: string) => {
@@ -591,7 +656,7 @@ export function useAgentSocket() {
 	);
 
 	return {
-		isConnected,
+		isConnected: isSocketConnected,
 		sendMessage,
 		requestAnalysis,
 		requestRecommendation,

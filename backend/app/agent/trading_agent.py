@@ -136,13 +136,20 @@ class TradingAgent:
     enabling use with a Claude Pro/Max subscription.
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        *,
+        session_id: str | None = None,
+        resume_session_id: str | None = None,
+    ):
         self._client: ClaudeSDKClient | None = None
         self._tool_calls_this_turn: list[dict] = []
         self._thinking_content_this_turn: str = ""
         self._partial_response_this_turn: str = ""
         self._model_this_turn: str | None = None
         self._cancel_event = asyncio.Event()
+        self._session_id = resume_session_id or session_id
+        self._resume_session_id = resume_session_id
 
     async def connect(self) -> None:
         """Initialize the SDK client and start a session.
@@ -184,6 +191,8 @@ class TradingAgent:
             thinking=thinking,
             effort=app_settings.agent_effort or None,
             include_partial_messages=True,
+            resume=self._resume_session_id,
+            session_id=None if self._resume_session_id else self._session_id,
         )
 
         if api_key:
@@ -244,7 +253,7 @@ class TradingAgent:
         self._model_this_turn = None
 
         with sentry_sdk.start_span(op="ai.agent.chat", description="claude.chat") as span:
-            await self._client.query(user_message)
+            await self._client.query(user_message, session_id=self._session_id or "default")
 
             final_text_parts: list[str] = []
 
@@ -254,6 +263,8 @@ class TradingAgent:
                     break
 
                 if isinstance(message, AssistantMessage):
+                    if message.session_id:
+                        self._session_id = message.session_id
                     if message.model:
                         self._model_this_turn = message.model
                     for block in message.content:
@@ -334,6 +345,8 @@ class TradingAgent:
                         self._output_tokens += usage.get("output_tokens", 0)
 
                 elif isinstance(message, ResultMessage):
+                    if message.session_id:
+                        self._session_id = message.session_id
                     if message.is_error:
                         raise RuntimeError(message.result or "Agent SDK returned an error")
 
@@ -383,6 +396,11 @@ class TradingAgent:
     def model(self) -> str | None:
         """Model ID that responded in the most recent turn."""
         return self._model_this_turn
+
+    @property
+    def session_id(self) -> str | None:
+        """Get the Claude SDK session ID for the current conversation."""
+        return self._session_id
 
     def _extract_confidence(self, response: str) -> float:
         """Extract confidence percentage from free-form model text."""
@@ -593,8 +611,15 @@ class TradingAgent:
         }
 
 
-async def create_agent_with_tools() -> TradingAgent:
+async def create_agent_with_tools(
+    *,
+    session_id: str | None = None,
+    resume_session_id: str | None = None,
+) -> TradingAgent:
     """Create and connect a TradingAgent with all MCP tools."""
-    agent = TradingAgent()
+    agent = TradingAgent(
+        session_id=session_id,
+        resume_session_id=resume_session_id,
+    )
     await agent.connect()
     return agent

@@ -46,6 +46,7 @@ class AgentSession(Document):
     """Agent chat session document."""
 
     user_id: Indexed(PydanticObjectId)  # type: ignore[valid-type]
+    sdk_session_id: str | None = None
 
     # Session identification
     title: str | None = None  # Auto-generated or user-provided
