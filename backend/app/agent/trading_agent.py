@@ -3,9 +3,38 @@
 import asyncio
 import logging
 import re
+import sys
 import uuid
 from collections.abc import Callable
 from typing import Any
+
+# Monkey-patch anyio.open_process on Windows so the Claude CLI subprocess
+# doesn't pop up a visible console window.
+if sys.platform == "win32":
+    import subprocess
+
+    import anyio
+    import anyio._core._subprocesses as _anyio_sp
+
+    _original_open_process = _anyio_sp.open_process
+
+    def _with_hidden_startupinfo(kwargs: dict[str, Any]) -> dict[str, Any]:
+        """Hide the spawned console window without changing process semantics."""
+        startupinfo = kwargs.get("startupinfo") or subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = subprocess.SW_HIDE
+        kwargs["startupinfo"] = startupinfo
+        return kwargs
+
+    async def _hidden_open_process(command, **kwargs):
+        """Hide Claude CLI console windows while preserving stdio pipes."""
+        kwargs = _with_hidden_startupinfo(kwargs)
+        return await _original_open_process(command, **kwargs)
+
+    # Patch both references — the SDK calls anyio.open_process() which is a
+    # separate binding from anyio._core._subprocesses.open_process.
+    _anyio_sp.open_process = _hidden_open_process
+    anyio.open_process = _hidden_open_process
 
 import sentry_sdk
 from claude_agent_sdk import (
