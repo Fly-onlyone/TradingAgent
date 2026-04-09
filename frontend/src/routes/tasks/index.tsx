@@ -13,6 +13,7 @@ import NotificationsIcon from "@mui/icons-material/Notifications";
 import PauseIcon from "@mui/icons-material/Pause";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
+import RepeatIcon from "@mui/icons-material/Repeat";
 import ScheduleIcon from "@mui/icons-material/Schedule";
 import {
 	Accordion,
@@ -25,7 +26,6 @@ import {
 	CardContent,
 	Chip,
 	CircularProgress,
-	Divider,
 	FormControl,
 	FormControlLabel,
 	IconButton,
@@ -262,7 +262,15 @@ function TaskConfigPage() {
 	const { triggerSave, saveStatus } = useDebouncedSave<TaskUpdate>({
 		mutationFn: async (update) => {
 			if (!taskId) return;
+			console.debug("[task-save] saving to backend…", {
+				taskId,
+				schedules: update.schedules,
+			});
 			await tasksApi.updateTask(taskId, update);
+			// Mark the payload we just saved so the hydration effect
+			// recognises the refetched data as "ours" and skips overwriting form state.
+			lastSyncedPayloadRef.current = serializeEditableTaskUpdate(update);
+			console.debug("[task-save] saved, invalidating query cache");
 			void queryClient.invalidateQueries({ queryKey: ["tasks"] });
 		},
 		delay: 1500,
@@ -289,20 +297,34 @@ function TaskConfigPage() {
 			buildEditableTaskUpdate(backendFormData),
 		);
 		const previousSyncedPayload = lastSyncedPayloadRef.current;
+		const localPayload = currentPayloadRef.current;
+
+		const notInitialised = !initRef.current;
+		const taskChanged = task.id !== taskId;
+		const noLocalEdits = localPayload === previousSyncedPayload;
+		const backendChanged = backendPayload !== previousSyncedPayload;
+
 		const shouldHydrateForm =
-			!initRef.current ||
-			task.id !== taskId ||
-			currentPayloadRef.current === previousSyncedPayload ||
-			backendPayload !== previousSyncedPayload;
+			notInitialised || taskChanged || (backendChanged && noLocalEdits);
+
+		console.debug("[task-hydrate] check", {
+			shouldHydrateForm,
+			notInitialised,
+			taskChanged,
+			noLocalEdits,
+			backendChanged,
+		});
 
 		if (task.id !== taskId) {
 			setTaskId(task.id);
 		}
 
 		if (!shouldHydrateForm) {
+			console.debug("[task-hydrate] skipped — local edits pending");
 			return;
 		}
 
+		console.debug("[task-hydrate] applying backend data to form");
 		lastSyncedPayloadRef.current = backendPayload;
 		initRef.current = false;
 		setScheduleKeys(backendFormData.schedules.map(() => createUiKey()));
@@ -1066,7 +1088,14 @@ function TaskConfigPage() {
 																			: undefined,
 																	})
 																}
-																slotProps={{ htmlInput: { min: 1 } }}
+																slotProps={{
+																	htmlInput: {
+																		min: 1,
+																		onFocus: (
+																			e: React.FocusEvent<HTMLInputElement>,
+																		) => e.target.select(),
+																	},
+																}}
 																sx={{ width: 90 }}
 															/>
 															<FormControl size="small" sx={{ minWidth: 110 }}>
@@ -1157,104 +1186,117 @@ function TaskConfigPage() {
 														/>
 													)}
 
-													{/* Inline repeat for daily/weekly */}
+													{/* Repeat toggle for daily/weekly */}
 													{(schedule.frequency === "daily" ||
 														schedule.frequency === "weekly") && (
-														<>
-															<Divider
-																orientation="vertical"
-																flexItem
-																sx={{
-																	mx: 0.5,
-																	alignSelf: "center",
-																	height: 24,
-																}}
-															/>
-															<Box
-																sx={{
-																	display: "flex",
-																	gap: 1,
-																	alignItems: "center",
-																	pl: 1,
-																	borderLeft: 2,
-																	borderColor: "primary.main",
-																}}
+														<Box
+															sx={{
+																display: "flex",
+																gap: 1,
+																alignItems: "center",
+																bgcolor:
+																	schedule.intervalValue != null
+																		? "rgba(255, 255, 255, 0.04)"
+																		: "transparent",
+																borderRadius: 2,
+																px: 1,
+																py: 0.5,
+																transition: "background-color 0.2s",
+															}}
+														>
+															<Tooltip
+																title={
+																	schedule.intervalValue != null
+																		? "Disable repeat"
+																		: "Enable repeat"
+																}
 															>
-																<FormControlLabel
-																	control={
-																		<Switch
-																			checked={schedule.intervalValue != null}
-																			onChange={(e) => {
-																				if (e.target.checked) {
-																					updateSchedule(idx, {
-																						intervalValue: 1,
-																						intervalUnit: "hours",
-																					});
-																				} else {
-																					updateSchedule(idx, {
-																						intervalValue: undefined,
-																						intervalUnit: undefined,
-																					});
+																<IconButton
+																	size="small"
+																	onClick={() => {
+																		const enabling =
+																			schedule.intervalValue == null;
+																		const patch = enabling
+																			? {
+																					intervalValue: 1,
+																					intervalUnit: "hours" as const,
 																				}
-																			}}
-																			size="small"
-																		/>
-																	}
-																	label={
-																		<Typography
-																			variant="body2"
-																			color="text.secondary"
-																		>
-																			Repeat
-																		</Typography>
-																	}
-																	sx={{ mr: 0 }}
-																/>
-																{schedule.intervalValue != null && (
-																	<>
-																		<Typography
-																			variant="body2"
-																			color="text.secondary"
-																		>
-																			every
-																		</Typography>
-																		<TextField
-																			type="number"
-																			size="small"
-																			value={schedule.intervalValue ?? ""}
+																			: {
+																					intervalValue: undefined,
+																					intervalUnit: undefined,
+																				};
+																		console.debug("[repeat-toggle] clicked", {
+																			action: enabling ? "enable" : "disable",
+																			scheduleIdx: idx,
+																			before: {
+																				intervalValue: schedule.intervalValue,
+																				intervalUnit: schedule.intervalUnit,
+																			},
+																			patch,
+																		});
+																		updateSchedule(idx, patch);
+																	}}
+																	sx={{
+																		color:
+																			schedule.intervalValue != null
+																				? "primary.main"
+																				: "text.disabled",
+																	}}
+																>
+																	<RepeatIcon fontSize="small" />
+																</IconButton>
+															</Tooltip>
+															{schedule.intervalValue != null && (
+																<>
+																	<Typography
+																		variant="body2"
+																		color="text.secondary"
+																	>
+																		every
+																	</Typography>
+																	<TextField
+																		type="number"
+																		size="small"
+																		value={schedule.intervalValue ?? ""}
+																		onChange={(e) =>
+																			updateSchedule(idx, {
+																				intervalValue: e.target.value
+																					? Number(e.target.value)
+																					: undefined,
+																			})
+																		}
+																		slotProps={{
+																			htmlInput: {
+																				min: 1,
+																				onFocus: (
+																					e: React.FocusEvent<HTMLInputElement>,
+																				) => e.target.select(),
+																			},
+																		}}
+																		sx={{ width: 70 }}
+																	/>
+																	<FormControl
+																		size="small"
+																		sx={{ minWidth: 100 }}
+																	>
+																		<InputLabel>Unit</InputLabel>
+																		<ZoomAwareSelect
+																			value={schedule.intervalUnit ?? "hours"}
+																			label="Unit"
 																			onChange={(e) =>
 																				updateSchedule(idx, {
-																					intervalValue: e.target.value
-																						? Number(e.target.value)
-																						: undefined,
+																					intervalUnit: e.target
+																						.value as TaskSchedule["intervalUnit"],
 																				})
 																			}
-																			slotProps={{ htmlInput: { min: 1 } }}
-																			sx={{ width: 70 }}
-																		/>
-																		<FormControl
-																			size="small"
-																			sx={{ minWidth: 100 }}
 																		>
-																			<InputLabel>Unit</InputLabel>
-																			<ZoomAwareSelect
-																				value={schedule.intervalUnit ?? "hours"}
-																				label="Unit"
-																				onChange={(e) =>
-																					updateSchedule(idx, {
-																						intervalUnit: e.target
-																							.value as TaskSchedule["intervalUnit"],
-																					})
-																				}
-																			>
-																				<MenuItem value="minutes">Min</MenuItem>
-																				<MenuItem value="hours">Hrs</MenuItem>
-																			</ZoomAwareSelect>
-																		</FormControl>
-																	</>
-																)}
-															</Box>
-														</>
+																			<MenuItem value="minutes">Min</MenuItem>
+																			<MenuItem value="hours">Hrs</MenuItem>
+																		</ZoomAwareSelect>
+																	</FormControl>
+																</>
+															)}
+														</Box>
 													)}
 
 													{formData.schedules.length > 1 && (
