@@ -306,6 +306,9 @@ export function useAgentSocketConnection() {
 						status: string;
 						message?: string;
 					};
+					console.log(
+						`Agent status: ${statusData.status}${statusData.message ? ` — ${statusData.message}` : ""}`,
+					);
 					updateStatus(statusData.status);
 					break;
 				}
@@ -387,6 +390,9 @@ export function useAgentSocketConnection() {
 		onMessage: handleMessage,
 		heartbeatMessage: "ping",
 		heartbeatIntervalMs: 20000,
+		// Backend may take ~30s to start in desktop builds; keep retrying
+		maxReconnectAttempts: 20,
+		reconnectInterval: 3000,
 		onOpen: () => {
 			console.log("Agent WebSocket connected");
 		},

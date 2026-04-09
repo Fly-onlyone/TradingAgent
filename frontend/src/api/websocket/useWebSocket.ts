@@ -136,10 +136,22 @@ export function useWebSocket({
 					mountedRef.current &&
 					reconnectAttemptsRef.current < maxReconnectAttempts
 				) {
+					const attempt = reconnectAttemptsRef.current + 1;
+					console.log(
+						`WebSocket reconnecting (attempt ${attempt}/${maxReconnectAttempts}) in ${reconnectInterval}ms`,
+					);
 					reconnectTimeoutRef.current = setTimeout(() => {
-						reconnectAttemptsRef.current += 1;
+						reconnectAttemptsRef.current = attempt;
 						doConnect();
 					}, reconnectInterval);
+				} else if (
+					reconnect &&
+					!isAppClose &&
+					reconnectAttemptsRef.current >= maxReconnectAttempts
+				) {
+					console.warn(
+						`WebSocket gave up after ${maxReconnectAttempts} reconnect attempts`,
+					);
 				}
 			};
 
