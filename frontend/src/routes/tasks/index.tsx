@@ -1713,7 +1713,14 @@ function TaskConfigPage() {
 								</Card>
 							</motion.div>
 
-							{/* ── Card 5: History ─────────────────────── */}
+							{/* ── Card 5: Auto-Discovery ────────────── */}
+							{isSuperuser && (
+								<motion.div variants={staggerCascade.item}>
+									<StrategyDiscoveryCard />
+								</motion.div>
+							)}
+
+							{/* ── Card 6: History ─────────────────────── */}
 							{taskId && (
 								<motion.div variants={staggerCascade.item}>
 									<Card>
@@ -1741,18 +1748,6 @@ function TaskConfigPage() {
 								</motion.div>
 							)}
 						</motion.div>
-					)}
-
-					{/* ── System Tasks: Auto-Discovery ──────── */}
-					{isSuperuser && (
-						<Box sx={{ mt: 4 }}>
-							<Typography variant="h6" sx={{ mb: 2 }}>
-								System Tasks
-							</Typography>
-							<Box sx={{ maxWidth: 480 }}>
-								<StrategyDiscoveryCard />
-							</Box>
-						</Box>
 					)}
 				</Box>
 			</PageTransition>

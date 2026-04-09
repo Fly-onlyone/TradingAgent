@@ -1,21 +1,18 @@
 /**
- * Strategy Auto-Discovery sidebar panel for the Strategies page.
+ * Strategy Auto-Discovery card for the Tasks page.
  * Superuser-only — returns null for non-superusers.
  */
 
 import HistoryIcon from "@mui/icons-material/History";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import ScheduleIcon from "@mui/icons-material/Schedule";
-import SearchIcon from "@mui/icons-material/Search";
 import {
-	Alert,
 	Box,
 	Button,
 	Card,
 	CardContent,
 	Chip,
 	CircularProgress,
-	Divider,
 	FormControl,
 	InputAdornment,
 	InputLabel,
@@ -137,78 +134,114 @@ export function StrategyDiscoveryCard() {
 	if (!isSuperuser) return null;
 
 	return (
-		<Card
-			sx={{
-				height: "100%",
-				display: "flex",
-				flexDirection: "column",
-			}}
-		>
-			<CardContent
-				sx={{
-					p: 2.5,
-					"&:last-child": { pb: 2.5 },
-					display: "flex",
-					flexDirection: "column",
-					flex: 1,
-					overflow: "auto",
-				}}
-			>
-				{/* Header */}
+		<Card>
+			<CardContent>
+				{/* Header row */}
 				<Box
 					sx={{
 						display: "flex",
 						alignItems: "center",
-						gap: 1,
-						mb: 0.5,
+						justifyContent: "space-between",
+						mb: 1,
 					}}
 				>
-					<SearchIcon color="primary" fontSize="small" />
-					<Typography variant="subtitle1" fontWeight={600}>
-						Auto-Discovery
-					</Typography>
-					<Box sx={{ ml: "auto" }}>
+					<Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+						<Typography variant="h6">Auto-Discovery</Typography>
 						<SaveIndicator status={saveStatus} />
+					</Box>
+					<Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+						{/* Next Run / Last Run badges in header */}
+						{config?.enabled && (
+							<>
+								<Box
+									sx={{
+										display: "flex",
+										alignItems: "center",
+										gap: 1.5,
+										px: 2,
+										py: 1,
+										borderRadius: 3,
+										background: "rgba(16, 185, 129, 0.08)",
+										border: "1.5px solid rgba(16, 185, 129, 0.5)",
+									}}
+								>
+									<ScheduleIcon sx={{ color: "#10B981", fontSize: 20 }} />
+									<Box>
+										<Typography
+											variant="caption"
+											sx={{
+												display: "block",
+												lineHeight: 1.2,
+												letterSpacing: 0.5,
+												color: "#34D399",
+											}}
+										>
+											Next Run
+										</Typography>
+										<Typography variant="body2" fontWeight={500}>
+											{config.nextRunAt
+												? formatDateTime(config.nextRunAt)
+												: "Not scheduled"}
+										</Typography>
+									</Box>
+								</Box>
+								<Box
+									sx={{
+										display: "flex",
+										alignItems: "center",
+										gap: 1.5,
+										px: 2,
+										py: 1,
+										borderRadius: 3,
+										background: "rgba(167, 139, 250, 0.1)",
+										border: "1.5px solid rgba(167, 139, 250, 0.55)",
+									}}
+								>
+									<HistoryIcon sx={{ color: "#A78BFA", fontSize: 20 }} />
+									<Box>
+										<Typography
+											variant="caption"
+											sx={{
+												display: "block",
+												lineHeight: 1.2,
+												letterSpacing: 0.5,
+												color: "#A78BFA",
+											}}
+										>
+											Last Run
+										</Typography>
+										<Typography variant="body2" fontWeight={500}>
+											{config.lastRunAt
+												? formatDateTime(config.lastRunAt)
+												: "Never"}
+										</Typography>
+									</Box>
+								</Box>
+							</>
+						)}
+						{config && (
+							<Switch
+								checked={config.enabled}
+								onChange={(_, checked) =>
+									updateMutation.mutate({ enabled: checked })
+								}
+							/>
+						)}
 					</Box>
 				</Box>
 
-				{/* Enable toggle */}
-				{config && (
+				{configQuery.isLoading && <CircularProgress size={24} />}
+
+				{/* Content — only when enabled */}
+				{config?.enabled && (
 					<Box
 						sx={{
 							display: "flex",
-							alignItems: "center",
-							gap: 1,
-							mb: 1,
+							flexDirection: "column",
+							gap: 2,
+							mt: 1,
 						}}
 					>
-						<Switch
-							checked={config.enabled}
-							onChange={(_, checked) =>
-								updateMutation.mutate({ enabled: checked })
-							}
-							size="small"
-						/>
-						<Typography
-							variant="body2"
-							color={config.enabled ? "primary" : "text.secondary"}
-							fontWeight={500}
-						>
-							{config.enabled ? "Enabled" : "Disabled"}
-						</Typography>
-					</Box>
-				)}
-
-				<Typography variant="caption" color="text.secondary" sx={{ mb: 1.5 }}>
-					Crawl news sources and extract strategies using AI.
-				</Typography>
-
-				<Divider sx={{ mb: 2 }} />
-
-				{configQuery.isLoading && <CircularProgress size={24} />}
-
-				{config && (
-					<Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
 						{/* Check Interval */}
 						<FormControl size="small" fullWidth>
 							<InputLabel>Check Interval</InputLabel>
@@ -220,7 +253,6 @@ export function StrategyDiscoveryCard() {
 										intervalHours: e.target.value as number,
 									})
 								}
-								disabled={!config.enabled}
 							>
 								{INTERVAL_OPTIONS.map((opt) => (
 									<MenuItem key={opt.value} value={opt.value}>
@@ -240,9 +272,7 @@ export function StrategyDiscoveryCard() {
 									mb: 0.5,
 								}}
 							>
-								<Typography variant="caption" color="text.secondary">
-									Min. Confidence
-								</Typography>
+								<Typography variant="body2">Min. Confidence</Typography>
 								<TextField
 									size="small"
 									type="number"
@@ -253,7 +283,6 @@ export function StrategyDiscoveryCard() {
 										if (e.key === "Enter") handleConfidenceInputCommit();
 									}}
 									onFocus={(e) => e.target.select()}
-									disabled={!config.enabled}
 									slotProps={{
 										htmlInput: {
 											min: 10,
@@ -268,11 +297,11 @@ export function StrategyDiscoveryCard() {
 										},
 									}}
 									sx={{
-										width: 72,
+										width: 80,
 										"& .MuiInputBase-input": {
 											py: 0.5,
 											px: 1,
-											fontSize: "0.75rem",
+											fontSize: "0.875rem",
 											MozAppearance: "textfield",
 											"&::-webkit-outer-spin-button, &::-webkit-inner-spin-button":
 												{
@@ -302,7 +331,6 @@ export function StrategyDiscoveryCard() {
 								max={1.0}
 								step={0.05}
 								size="small"
-								disabled={!config.enabled}
 								valueLabelDisplay="auto"
 								valueLabelFormat={(v) => `${(v * 100).toFixed(0)}%`}
 							/>
@@ -318,9 +346,7 @@ export function StrategyDiscoveryCard() {
 									mb: 0.5,
 								}}
 							>
-								<Typography variant="caption" color="text.secondary">
-									Max Sources
-								</Typography>
+								<Typography variant="body2">Max Sources</Typography>
 								<TextField
 									size="small"
 									type="number"
@@ -331,7 +357,6 @@ export function StrategyDiscoveryCard() {
 										if (e.key === "Enter") handleSourcesInputCommit();
 									}}
 									onFocus={(e) => e.target.select()}
-									disabled={!config.enabled}
 									slotProps={{
 										htmlInput: {
 											min: 5,
@@ -341,11 +366,11 @@ export function StrategyDiscoveryCard() {
 										},
 									}}
 									sx={{
-										width: 56,
+										width: 64,
 										"& .MuiInputBase-input": {
 											py: 0.5,
 											px: 1,
-											fontSize: "0.75rem",
+											fontSize: "0.875rem",
 											MozAppearance: "textfield",
 											"&::-webkit-outer-spin-button, &::-webkit-inner-spin-button":
 												{
@@ -375,19 +400,15 @@ export function StrategyDiscoveryCard() {
 								max={100}
 								step={5}
 								size="small"
-								disabled={!config.enabled}
 								valueLabelDisplay="auto"
 							/>
 						</Box>
 
-						<Divider />
-
 						{/* Run Now */}
-						<Box>
+						<Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
 							<Button
 								variant="outlined"
 								size="small"
-								fullWidth
 								startIcon={
 									isRunning ? <CircularProgress size={14} /> : <PlayArrowIcon />
 								}
@@ -397,97 +418,31 @@ export function StrategyDiscoveryCard() {
 								{isRunning ? "Running..." : "Run Now"}
 							</Button>
 							{runResult && !isRunning && (
-								<Alert severity="info" sx={{ py: 0, mt: 1 }}>
+								<Typography variant="caption" color="text.secondary">
 									{runResult}
-								</Alert>
+								</Typography>
 							)}
 						</Box>
 
-						{/* Next Run / Last Run badges */}
-						{config.enabled && (
-							<Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-								<Box
-									sx={{
-										display: "flex",
-										alignItems: "center",
-										justifyContent: "space-between",
-										px: 1.5,
-										py: 0.75,
-										borderRadius: 2,
-										background: "rgba(16, 185, 129, 0.08)",
-										border: "1.5px solid rgba(16, 185, 129, 0.5)",
-									}}
-								>
-									<Box
-										sx={{ display: "flex", alignItems: "center", gap: 0.75 }}
-									>
-										<ScheduleIcon sx={{ color: "#10B981", fontSize: 16 }} />
-										<Typography
-											variant="caption"
-											sx={{ letterSpacing: 0.5, color: "#34D399" }}
-										>
-											Next Run
-										</Typography>
-									</Box>
-									<Typography variant="caption" fontWeight={500}>
-										{config.nextRunAt
-											? formatDateTime(config.nextRunAt)
-											: "Not scheduled"}
-									</Typography>
-								</Box>
-								<Box
-									sx={{
-										display: "flex",
-										alignItems: "center",
-										justifyContent: "space-between",
-										px: 1.5,
-										py: 0.75,
-										borderRadius: 2,
-										background: "rgba(167, 139, 250, 0.1)",
-										border: "1.5px solid rgba(167, 139, 250, 0.55)",
-									}}
-								>
-									<Box
-										sx={{ display: "flex", alignItems: "center", gap: 0.75 }}
-									>
-										<HistoryIcon sx={{ color: "#A78BFA", fontSize: 16 }} />
-										<Typography
-											variant="caption"
-											sx={{ letterSpacing: 0.5, color: "#A78BFA" }}
-										>
-											Last Run
-										</Typography>
-									</Box>
-									<Typography variant="caption" fontWeight={500}>
-										{config.lastRunAt
-											? formatDateTime(config.lastRunAt)
-											: "Never"}
-									</Typography>
-								</Box>
-							</Box>
-						)}
-
-						<Divider />
-
-						{/* Discovered Sources */}
+						{/* Sources — always visible */}
 						<Box>
-							<Typography
-								variant="caption"
-								color="text.secondary"
-								fontWeight={700}
-								sx={{ letterSpacing: "0.06em", mb: 1, display: "block" }}
-							>
-								SOURCES ({config.sources.length})
+							<Typography variant="body2" sx={{ mb: 1 }}>
+								Sources ({config.sources.length})
 							</Typography>
 							{config.sources.length > 0 ? (
-								<Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+								<Box
+									sx={{
+										display: "flex",
+										flexWrap: "wrap",
+										gap: 0.5,
+									}}
+								>
 									{config.sources.map((source) => (
 										<Chip
 											key={source.id}
 											label={source.name}
 											variant="outlined"
 											size="small"
-											color="primary"
 										/>
 									))}
 								</Box>
