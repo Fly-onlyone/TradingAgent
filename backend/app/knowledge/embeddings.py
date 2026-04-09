@@ -33,6 +33,12 @@ _model_lock = threading.Lock()
 _encode_lock = threading.Lock()
 _executor = ThreadPoolExecutor(max_workers=2)
 
+# Set when sentence_transformers/torch can't be imported (e.g. PyInstaller bundle
+# missing torch.distributed).  Once set, all embedding calls return None instead
+# of re-attempting the doomed import on every request.
+_embeddings_disabled = False
+_embeddings_disable_reason: str | None = None
+
 # Query embedding cache: key → (embedding, timestamp)
 _query_cache: dict[str, tuple[list[float], float]] = {}
 _QUERY_CACHE_TTL = 300  # seconds
@@ -57,9 +63,21 @@ def _get_active_model_name() -> str:
     return DEFAULT_MODEL
 
 
+class EmbeddingsUnavailableError(RuntimeError):
+    """Raised when the embedding backend cannot be loaded."""
+
+
 def _get_model() -> Any:
     """Lazy-load the sentence-transformers model (singleton, reloads on model change)."""
-    global _model, _model_name, SentenceTransformer
+    global \
+        _model, \
+        _model_name, \
+        SentenceTransformer, \
+        _embeddings_disabled, \
+        _embeddings_disable_reason
+
+    if _embeddings_disabled:
+        raise EmbeddingsUnavailableError(_embeddings_disable_reason)
 
     active_name = _get_active_model_name()
 
@@ -67,13 +85,25 @@ def _get_model() -> Any:
         return _model
 
     with _model_lock:
+        if _embeddings_disabled:
+            raise EmbeddingsUnavailableError(_embeddings_disable_reason)
+
         # Re-check after acquiring lock
         active_name = _get_active_model_name()
         if _model is None or _model_name != active_name:
             if SentenceTransformer is None:
-                from sentence_transformers import (
-                    SentenceTransformer as ImportedSentenceTransformer,
-                )
+                try:
+                    from sentence_transformers import (
+                        SentenceTransformer as ImportedSentenceTransformer,
+                    )
+                except (ImportError, ModuleNotFoundError) as exc:
+                    _embeddings_disabled = True
+                    _embeddings_disable_reason = f"sentence-transformers unavailable: {exc}"
+                    logger.warning(
+                        "Embeddings permanently disabled: %s",
+                        _embeddings_disable_reason,
+                    )
+                    raise EmbeddingsUnavailableError(_embeddings_disable_reason) from exc
 
                 SentenceTransformer = ImportedSentenceTransformer
 
@@ -207,6 +237,9 @@ class EmbeddingService:
             for idx, emb in zip(indices, embeddings):
                 results[idx] = emb.tolist()
             return results
+        except EmbeddingsUnavailableError:
+            logger.debug("Embeddings unavailable, skipping batch")
+            return [None] * len(texts)
         except Exception:
             logger.exception("Batch embedding generation failed")
             return [None] * len(texts)
@@ -218,6 +251,9 @@ class EmbeddingService:
                 loop = asyncio.get_running_loop()
                 embeddings = await loop.run_in_executor(_executor, _encode_sync, [prefixed_text])
                 return embeddings[0].tolist()
+        except EmbeddingsUnavailableError:
+            logger.debug("Embeddings unavailable, skipping")
+            return None
         except Exception:
             logger.exception("Embedding generation failed")
             return None

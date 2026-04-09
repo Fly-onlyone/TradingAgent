@@ -8,6 +8,11 @@ from datetime import UTC, datetime
 
 import sentry_sdk
 from beanie import PydanticObjectId
+from claude_agent_sdk._errors import (
+    CLIConnectionError,
+    CLINotFoundError,
+    ProcessError,
+)
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from jose import JWTError, jwt
 
@@ -27,7 +32,39 @@ logger = logging.getLogger(__name__)
 
 _RESUME_HISTORY_MESSAGE_LIMIT = 12
 _RESUME_HISTORY_CHAR_LIMIT = 12_000
-_AGENT_TURN_TIMEOUT_SECONDS = 120.0
+_AGENT_TURN_TIMEOUT_SECONDS = 1200.0
+
+# Windows STATUS_CONTROL_C_EXIT — subprocess was terminated externally
+_WIN_STATUS_CONTROL_C_EXIT = 3221225786
+
+
+def _format_agent_error(e: Exception) -> str:
+    """Return a user-friendly error message for agent subprocess failures."""
+    if isinstance(e, CLINotFoundError):
+        return (
+            "Claude CLI not found. "
+            "Please install it (npm install -g @anthropic-ai/claude-code) "
+            "and restart the application."
+        )
+    if isinstance(e, ProcessError):
+        if getattr(e, "exit_code", None) == _WIN_STATUS_CONTROL_C_EXIT:
+            return (
+                "The Claude agent process was terminated unexpectedly. "
+                "This may happen if antivirus software blocks the process "
+                "or system resources are low. "
+                "The agent will be re-created on your next message."
+            )
+        return (
+            f"The Claude agent process exited unexpectedly "
+            f"(code {getattr(e, 'exit_code', '?')}). "
+            f"The agent will be re-created on your next message."
+        )
+    if isinstance(e, CLIConnectionError):
+        return (
+            f"Failed to communicate with the Claude agent process: {e}. "
+            f"The agent will be re-created on your next message."
+        )
+    return f"Agent error: {e}"
 
 
 async def get_user_from_token(token: str) -> User | None:
@@ -150,12 +187,14 @@ async def agent_chat_websocket(
     - Get explanations for agent decisions
     """
     if not token:
+        logger.warning("Agent WS rejected: no token")
         await websocket.close(code=4001, reason="Authentication required")
         return
 
     with sentry_sdk.start_span(op="ws.auth", description="authenticate user"):
         user = await get_user_from_token(token)
     if not user:
+        logger.warning("Agent WS rejected: invalid/expired token")
         await websocket.close(code=4001, reason="Invalid or expired token")
         return
 
@@ -165,6 +204,7 @@ async def agent_chat_websocket(
     channel = f"agent:chat:{user_id_int}"
     with sentry_sdk.start_span(op="ws.connect", description="connect websocket"):
         await manager.connect(websocket, channel, user_id=user_id_int)
+    logger.info("Agent WS connected (user=%s)", user.email)
 
     # Set user context for MCP tools (strategy listing, etc.)
     from app.agent.mcp_tools import (
@@ -200,6 +240,7 @@ async def agent_chat_websocket(
         if agent is not None:
             return True
 
+        logger.info("Creating agent (user=%s)", user.email)
         try:
             await manager.send_personal(
                 websocket,
@@ -235,7 +276,7 @@ async def agent_chat_websocket(
                     "type": "status",
                     "data": {
                         "status": "error",
-                        "message": f"Failed to initialize agent: {e}",
+                        "message": _format_agent_error(e),
                     },
                 },
             )
@@ -487,6 +528,7 @@ async def agent_chat_websocket(
                     auth_error = "No API key configured. Use the gear icon to add one."
 
         if auth_error:
+            logger.warning("Agent WS auth config failed: %s", auth_error)
             await manager.send_personal(
                 websocket,
                 {
@@ -563,6 +605,8 @@ async def agent_chat_websocket(
                         },
                     },
                 )
+                # Timeout may leave the subprocess in a broken state
+                await _reset_agent()
             except asyncio.CancelledError:
                 partial_response = agent.partial_response or ""
                 logger.info(
@@ -592,9 +636,11 @@ async def agent_chat_websocket(
                     websocket,
                     {
                         "type": "error",
-                        "data": {"error": f"Agent error: {e}"},
+                        "data": {"error": _format_agent_error(e)},
                     },
                 )
+                # Reset the broken agent so _ensure_agent() recreates it
+                await _reset_agent()
 
         while True:
             data = await websocket.receive_text()
