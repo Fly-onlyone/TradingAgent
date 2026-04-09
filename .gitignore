@@ -1,8 +1,12 @@
 # Internal docs (contain Notion IDs / project-specific references)
 docs/NOTION.md
+docs/MONITORING.md
 
 # Claude Code worktrees
 .claude/worktrees/
+
+# Monitoring reports (local-only, not committed)
+.claude/report/
 
 # MCP config (may contain local tool paths / tokens)
 .mcp.json

@@ -143,6 +143,11 @@ Separate Sentry projects per layer (org: `fly-theonlyone`):
   green. Remaining warnings are non-blocking (for example Pydantic v2 deprecation warnings in tests and Vite chunk-size
   warnings in frontend builds).
 
+## Production Monitoring (Auto-Setup)
+
+On every new session, **automatically create** the local monitoring cron jobs defined in
+[`docs/MONITORING.md`](docs/MONITORING.md) — daily health check and weekly deep analysis. No need to ask.
+
 ## Context7 IDs
 
 FastAPI=/tiangolo/fastapi, Beanie=/BeanieODM/beanie, Anthropic=/anthropics/anthropic-sdk-python, React=/facebook/react,
