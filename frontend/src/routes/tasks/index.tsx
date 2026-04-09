@@ -25,6 +25,7 @@ import {
 	CardContent,
 	Chip,
 	CircularProgress,
+	Divider,
 	FormControl,
 	FormControlLabel,
 	IconButton,
@@ -990,8 +991,9 @@ function TaskConfigPage() {
 													key={scheduleKeys[idx] as string}
 													sx={{
 														display: "flex",
-														flexDirection: "column",
 														gap: 1,
+														alignItems: "center",
+														flexWrap: "wrap",
 														p: 1.5,
 														border: 1,
 														borderColor: "divider",
@@ -999,267 +1001,273 @@ function TaskConfigPage() {
 														opacity: schedule.enabled === false ? 0.5 : 1,
 													}}
 												>
-													{/* Row 1: enable + frequency + main controls */}
-													<Box
-														sx={{
-															display: "flex",
-															gap: 1,
-															alignItems: "center",
-															flexWrap: "wrap",
-														}}
-													>
-														<Switch
-															checked={schedule.enabled !== false}
-															onChange={(e) =>
-																updateSchedule(idx, {
-																	enabled: e.target.checked,
-																})
-															}
+													<Switch
+														checked={schedule.enabled !== false}
+														onChange={(e) =>
+															updateSchedule(idx, {
+																enabled: e.target.checked,
+															})
+														}
+														size="small"
+													/>
+
+													<FormControl sx={{ minWidth: 130 }}>
+														<InputLabel>Frequency</InputLabel>
+														<ZoomAwareSelect
+															value={schedule.frequency}
+															label="Frequency"
 															size="small"
-														/>
-
-														<FormControl sx={{ minWidth: 130 }}>
-															<InputLabel>Frequency</InputLabel>
-															<ZoomAwareSelect
-																value={schedule.frequency}
-																label="Frequency"
-																size="small"
-																onChange={(e) => {
-																	const freq = e.target.value as TaskFrequency;
-																	const patch: Partial<TaskSchedule> = {
-																		frequency: freq,
-																	};
-																	// Clear fields irrelevant to new frequency
-																	if (
-																		freq !== "interval" &&
-																		freq !== "daily" &&
-																		freq !== "weekly"
-																	) {
-																		patch.intervalValue = undefined;
-																		patch.intervalUnit = undefined;
-																	}
-																	if (freq !== "daily" && freq !== "weekly") {
-																		patch.scheduledTime = undefined;
-																	}
-																	if (freq !== "weekly") {
-																		patch.dayOfWeek = undefined;
-																	}
-																	if (freq !== "custom") {
-																		patch.cronExpression = undefined;
-																	}
-																	updateSchedule(idx, patch);
-																}}
-															>
-																<MenuItem value="once">Once</MenuItem>
-																<MenuItem value="interval">Every</MenuItem>
-																<MenuItem value="daily">Daily</MenuItem>
-																<MenuItem value="weekly">Weekly</MenuItem>
-																<MenuItem value="custom">Custom</MenuItem>
-															</ZoomAwareSelect>
-														</FormControl>
-
-														{/* Interval frequency: value + unit */}
-														{schedule.frequency === "interval" && (
-															<>
-																<TextField
-																	label="Value"
-																	type="number"
-																	size="small"
-																	value={schedule.intervalValue ?? ""}
-																	onChange={(e) =>
-																		updateSchedule(idx, {
-																			intervalValue: e.target.value
-																				? Number(e.target.value)
-																				: undefined,
-																		})
-																	}
-																	slotProps={{ htmlInput: { min: 1 } }}
-																	sx={{ width: 90 }}
-																/>
-																<FormControl
-																	size="small"
-																	sx={{ minWidth: 110 }}
-																>
-																	<InputLabel>Unit</InputLabel>
-																	<ZoomAwareSelect
-																		value={schedule.intervalUnit ?? "hours"}
-																		label="Unit"
-																		onChange={(e) =>
-																			updateSchedule(idx, {
-																				intervalUnit: e.target
-																					.value as TaskSchedule["intervalUnit"],
-																			})
-																		}
-																	>
-																		<MenuItem value="minutes">Minutes</MenuItem>
-																		<MenuItem value="hours">Hours</MenuItem>
-																	</ZoomAwareSelect>
-																</FormControl>
-															</>
-														)}
-
-														{/* Daily / Weekly: time picker */}
-														{(schedule.frequency === "daily" ||
-															schedule.frequency === "weekly") && (
-															<TimePicker
-																label="Time"
-																value={parse(
-																	schedule.scheduledTime || "09:00",
-																	"HH:mm",
-																	new Date(),
-																)}
-																onChange={(val) => {
-																	if (val) {
-																		updateSchedule(idx, {
-																			scheduledTime: format(val, "HH:mm"),
-																		});
-																	}
-																}}
-																slotProps={{
-																	textField: { size: "small" },
-																}}
-																slots={{
-																	openPickerButton: (props) => (
-																		<Tooltip title="Pick time">
-																			<IconButton {...props} />
-																		</Tooltip>
-																	),
-																}}
-																sx={{ width: 170 }}
-															/>
-														)}
-
-														{/* Weekly: day selector */}
-														{schedule.frequency === "weekly" && (
-															<FormControl size="small" sx={{ minWidth: 120 }}>
-																<InputLabel>Day</InputLabel>
-																<ZoomAwareSelect
-																	value={schedule.dayOfWeek ?? 0}
-																	label="Day"
-																	onChange={(e) =>
-																		updateSchedule(idx, {
-																			dayOfWeek: e.target.value as number,
-																		})
-																	}
-																>
-																	{DAYS_OF_WEEK.map((day) => (
-																		<MenuItem key={day.value} value={day.value}>
-																			{day.label}
-																		</MenuItem>
-																	))}
-																</ZoomAwareSelect>
-															</FormControl>
-														)}
-
-														{/* Custom: cron expression */}
-														{schedule.frequency === "custom" && (
-															<TextField
-																label="Cron"
-																size="small"
-																value={schedule.cronExpression || ""}
-																onChange={(e) =>
-																	updateSchedule(idx, {
-																		cronExpression: e.target.value,
-																	})
+															onChange={(e) => {
+																const freq = e.target.value as TaskFrequency;
+																const patch: Partial<TaskSchedule> = {
+																	frequency: freq,
+																};
+																// Clear fields irrelevant to new frequency
+																if (
+																	freq !== "interval" &&
+																	freq !== "daily" &&
+																	freq !== "weekly"
+																) {
+																	patch.intervalValue = undefined;
+																	patch.intervalUnit = undefined;
 																}
-																placeholder="0 9 * * *"
-																sx={{ flex: 1 }}
-															/>
-														)}
-
-														{formData.schedules.length > 1 && (
-															<Tooltip title="Remove schedule">
-																<IconButton
-																	size="small"
-																	color="error"
-																	onClick={() => removeSchedule(idx)}
-																>
-																	<RemoveCircleOutlineIcon />
-																</IconButton>
-															</Tooltip>
-														)}
-													</Box>
-
-													{/* Row 2: optional repeat for daily/weekly */}
-													{(schedule.frequency === "daily" ||
-														schedule.frequency === "weekly") && (
-														<Box
-															sx={{
-																display: "flex",
-																gap: 1,
-																alignItems: "center",
-																ml: 5.5,
+																if (freq !== "daily" && freq !== "weekly") {
+																	patch.scheduledTime = undefined;
+																}
+																if (freq !== "weekly") {
+																	patch.dayOfWeek = undefined;
+																}
+																if (freq !== "custom") {
+																	patch.cronExpression = undefined;
+																}
+																updateSchedule(idx, patch);
 															}}
 														>
-															<FormControlLabel
-																control={
-																	<Switch
-																		checked={schedule.intervalValue != null}
-																		onChange={(e) => {
-																			if (e.target.checked) {
-																				updateSchedule(idx, {
-																					intervalValue: 1,
-																					intervalUnit: "hours",
-																				});
-																			} else {
-																				updateSchedule(idx, {
-																					intervalValue: undefined,
-																					intervalUnit: undefined,
-																				});
-																			}
-																		}}
-																		size="small"
-																	/>
+															<MenuItem value="once">Once</MenuItem>
+															<MenuItem value="interval">Every</MenuItem>
+															<MenuItem value="daily">Daily</MenuItem>
+															<MenuItem value="weekly">Weekly</MenuItem>
+															<MenuItem value="custom">Custom</MenuItem>
+														</ZoomAwareSelect>
+													</FormControl>
+
+													{/* Interval frequency: value + unit */}
+													{schedule.frequency === "interval" && (
+														<>
+															<TextField
+																label="Value"
+																type="number"
+																size="small"
+																value={schedule.intervalValue ?? ""}
+																onChange={(e) =>
+																	updateSchedule(idx, {
+																		intervalValue: e.target.value
+																			? Number(e.target.value)
+																			: undefined,
+																	})
 																}
-																label={
-																	<Typography
-																		variant="body2"
-																		color="text.secondary"
-																	>
-																		Repeat every
-																	</Typography>
-																}
+																slotProps={{ htmlInput: { min: 1 } }}
+																sx={{ width: 90 }}
 															/>
-															{schedule.intervalValue != null && (
-																<>
-																	<TextField
-																		type="number"
-																		size="small"
-																		value={schedule.intervalValue ?? ""}
-																		onChange={(e) =>
-																			updateSchedule(idx, {
-																				intervalValue: e.target.value
-																					? Number(e.target.value)
-																					: undefined,
-																			})
-																		}
-																		slotProps={{ htmlInput: { min: 1 } }}
-																		sx={{ width: 80 }}
-																	/>
-																	<FormControl
-																		size="small"
-																		sx={{ minWidth: 110 }}
-																	>
-																		<InputLabel>Unit</InputLabel>
-																		<ZoomAwareSelect
-																			value={schedule.intervalUnit ?? "hours"}
-																			label="Unit"
+															<FormControl size="small" sx={{ minWidth: 110 }}>
+																<InputLabel>Unit</InputLabel>
+																<ZoomAwareSelect
+																	value={schedule.intervalUnit ?? "hours"}
+																	label="Unit"
+																	onChange={(e) =>
+																		updateSchedule(idx, {
+																			intervalUnit: e.target
+																				.value as TaskSchedule["intervalUnit"],
+																		})
+																	}
+																>
+																	<MenuItem value="minutes">Minutes</MenuItem>
+																	<MenuItem value="hours">Hours</MenuItem>
+																</ZoomAwareSelect>
+															</FormControl>
+														</>
+													)}
+
+													{/* Daily / Weekly: time picker */}
+													{(schedule.frequency === "daily" ||
+														schedule.frequency === "weekly") && (
+														<TimePicker
+															label="Time"
+															value={parse(
+																schedule.scheduledTime || "09:00",
+																"HH:mm",
+																new Date(),
+															)}
+															onChange={(val) => {
+																if (val) {
+																	updateSchedule(idx, {
+																		scheduledTime: format(val, "HH:mm"),
+																	});
+																}
+															}}
+															slotProps={{
+																textField: { size: "small" },
+															}}
+															slots={{
+																openPickerButton: (props) => (
+																	<Tooltip title="Pick time">
+																		<IconButton {...props} />
+																	</Tooltip>
+																),
+															}}
+															sx={{ width: 170 }}
+														/>
+													)}
+
+													{/* Weekly: day selector */}
+													{schedule.frequency === "weekly" && (
+														<FormControl size="small" sx={{ minWidth: 120 }}>
+															<InputLabel>Day</InputLabel>
+															<ZoomAwareSelect
+																value={schedule.dayOfWeek ?? 0}
+																label="Day"
+																onChange={(e) =>
+																	updateSchedule(idx, {
+																		dayOfWeek: e.target.value as number,
+																	})
+																}
+															>
+																{DAYS_OF_WEEK.map((day) => (
+																	<MenuItem key={day.value} value={day.value}>
+																		{day.label}
+																	</MenuItem>
+																))}
+															</ZoomAwareSelect>
+														</FormControl>
+													)}
+
+													{/* Custom: cron expression */}
+													{schedule.frequency === "custom" && (
+														<TextField
+															label="Cron"
+															size="small"
+															value={schedule.cronExpression || ""}
+															onChange={(e) =>
+																updateSchedule(idx, {
+																	cronExpression: e.target.value,
+																})
+															}
+															placeholder="0 9 * * *"
+															sx={{ flex: 1 }}
+														/>
+													)}
+
+													{/* Inline repeat for daily/weekly */}
+													{(schedule.frequency === "daily" ||
+														schedule.frequency === "weekly") && (
+														<>
+															<Divider
+																orientation="vertical"
+																flexItem
+																sx={{
+																	mx: 0.5,
+																	alignSelf: "center",
+																	height: 24,
+																}}
+															/>
+															<Box
+																sx={{
+																	display: "flex",
+																	gap: 1,
+																	alignItems: "center",
+																	pl: 1,
+																	borderLeft: 2,
+																	borderColor: "primary.main",
+																}}
+															>
+																<FormControlLabel
+																	control={
+																		<Switch
+																			checked={schedule.intervalValue != null}
+																			onChange={(e) => {
+																				if (e.target.checked) {
+																					updateSchedule(idx, {
+																						intervalValue: 1,
+																						intervalUnit: "hours",
+																					});
+																				} else {
+																					updateSchedule(idx, {
+																						intervalValue: undefined,
+																						intervalUnit: undefined,
+																					});
+																				}
+																			}}
+																			size="small"
+																		/>
+																	}
+																	label={
+																		<Typography
+																			variant="body2"
+																			color="text.secondary"
+																		>
+																			Repeat
+																		</Typography>
+																	}
+																	sx={{ mr: 0 }}
+																/>
+																{schedule.intervalValue != null && (
+																	<>
+																		<Typography
+																			variant="body2"
+																			color="text.secondary"
+																		>
+																			every
+																		</Typography>
+																		<TextField
+																			type="number"
+																			size="small"
+																			value={schedule.intervalValue ?? ""}
 																			onChange={(e) =>
 																				updateSchedule(idx, {
-																					intervalUnit: e.target
-																						.value as TaskSchedule["intervalUnit"],
+																					intervalValue: e.target.value
+																						? Number(e.target.value)
+																						: undefined,
 																				})
 																			}
+																			slotProps={{ htmlInput: { min: 1 } }}
+																			sx={{ width: 70 }}
+																		/>
+																		<FormControl
+																			size="small"
+																			sx={{ minWidth: 100 }}
 																		>
-																			<MenuItem value="minutes">
-																				Minutes
-																			</MenuItem>
-																			<MenuItem value="hours">Hours</MenuItem>
-																		</ZoomAwareSelect>
-																	</FormControl>
-																</>
-															)}
-														</Box>
+																			<InputLabel>Unit</InputLabel>
+																			<ZoomAwareSelect
+																				value={schedule.intervalUnit ?? "hours"}
+																				label="Unit"
+																				onChange={(e) =>
+																					updateSchedule(idx, {
+																						intervalUnit: e.target
+																							.value as TaskSchedule["intervalUnit"],
+																					})
+																				}
+																			>
+																				<MenuItem value="minutes">Min</MenuItem>
+																				<MenuItem value="hours">Hrs</MenuItem>
+																			</ZoomAwareSelect>
+																		</FormControl>
+																	</>
+																)}
+															</Box>
+														</>
+													)}
+
+													{formData.schedules.length > 1 && (
+														<Tooltip title="Remove schedule">
+															<IconButton
+																size="small"
+																color="error"
+																onClick={() => removeSchedule(idx)}
+																sx={{ ml: "auto" }}
+															>
+																<RemoveCircleOutlineIcon />
+															</IconButton>
+														</Tooltip>
 													)}
 												</Box>
 											))}
