@@ -128,12 +128,16 @@ class NewsCrawler:
     async def fetch_full_content(self, url: str) -> str | None:
         """Fetch full article content from URL using trafilatura."""
         try:
+            from trafilatura.settings import use_config
+
             response = await self.client.get(url)
             response.raise_for_status()
+            config = use_config()
             return trafilatura.extract(
                 response.text,
                 include_comments=False,
                 include_tables=False,
+                config=config,
             )
         except Exception as e:
             logger.error(f"Error fetching content from {url}: {e}")

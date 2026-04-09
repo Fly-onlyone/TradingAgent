@@ -82,3 +82,41 @@ import {staggerCascade} from "@/utils/animations/variants";
     ))}
 </motion.div>
 ```
+
+### Pattern: AI Service Auth (Subscription vs API Key)
+
+**When to Apply**: Any service that calls Claude/Anthropic APIs.
+
+**Key rule**: NEVER use `Anthropic(api_key=...)` or `AsyncAnthropic(api_key=...)` directly without
+a subscription fallback. The app supports two auth modes:
+- `api_key`: Direct Anthropic API key (stored encrypted in DB or env var)
+- `subscription`: Claude Code CLI credentials (no API key needed)
+
+**Required pattern** — use a `create()` async factory with dual mode:
+
+```python
+class MyService:
+    def __init__(self, api_key: str = "", use_sdk: bool = False):
+        self._use_sdk = use_sdk
+        if api_key and not use_sdk:
+            from anthropic import Anthropic
+            self._client = Anthropic(api_key=api_key)
+        else:
+            self._client = None
+
+    @classmethod
+    async def create(cls) -> "MyService":
+        from app.agent.auth import resolve_anthropic_api_key
+        api_key = await resolve_anthropic_api_key()
+        if api_key:
+            return cls(api_key=api_key)
+        return cls(use_sdk=True)  # Subscription mode via ClaudeSDKClient
+```
+
+| Service | Auth pattern | Notes |
+|---------|-------------|-------|
+| `StrategyExtractor` | Dual-mode factory | `_extract_via_api` / `_extract_via_sdk` |
+| `TradeLearner` | Dual-mode factory | Same pattern |
+| `NewsSummarizer` | Dual-mode factory | `_call_claude` / `_call_via_sdk` |
+| `context_generator` | Graceful skip | Returns `None` when no key |
+| `TradingAgent`, subagents | `ClaudeSDKClient` only | Always works with subscription |

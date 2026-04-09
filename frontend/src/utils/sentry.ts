@@ -80,6 +80,11 @@ export function bootstrapObservability(): void {
 	}
 
 	observabilityBootstrapped = true;
+
+	// Sentry MUST init immediately to catch early errors
+	void ensureSentry();
+
+	// Defer non-critical observability
 	scheduleIdle(() => {
 		void import("./frontendLogger")
 			.then(({ initializeFrontendLogging }) => {
@@ -106,8 +111,6 @@ export function bootstrapObservability(): void {
 					);
 				}
 			});
-
-		void ensureSentry();
 	});
 }
 

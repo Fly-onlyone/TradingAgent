@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WebSocketMessage } from "@/types";
+import { captureSentryException } from "@/utils/sentry";
 
 export interface UseWebSocketOptions {
 	url: string;
@@ -163,8 +164,14 @@ export function useWebSocket({
 				try {
 					const data = JSON.parse(event.data) as WebSocketMessage;
 					onMessageRef.current?.(data);
-				} catch {
-					console.error("Failed to parse WebSocket message:", event.data);
+				} catch (err) {
+					console.error("Failed to parse WebSocket message:", err);
+					captureSentryException(err, {
+						extra: {
+							rawLength: event.data?.length,
+							preview: String(event.data).slice(0, 200),
+						},
+					});
 				}
 			};
 

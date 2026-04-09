@@ -1,19 +1,82 @@
-"""News summarizer using Claude for article summarization and sentiment analysis."""
+"""News summarizer using Claude for article summarization and sentiment analysis.
 
+Supports two auth modes:
+- api_key: Uses the raw Anthropic client (fast, direct)
+- subscription: Uses ClaudeSDKClient with CLI credentials
+"""
+
+import logging
 from typing import Any
 
-from anthropic import Anthropic
-
-from app.config import get_settings
-
-settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 class NewsSummarizer:
     """Summarizes news articles and analyzes sentiment using Claude."""
 
-    def __init__(self) -> None:
-        self.client = Anthropic(api_key=settings.anthropic_api_key)
+    def __init__(self, api_key: str = "", use_sdk: bool = False) -> None:
+        self._use_sdk = use_sdk
+        self._client: Any | None = None
+        if api_key and not use_sdk:
+            from anthropic import Anthropic
+
+            self._client = Anthropic(api_key=api_key)
+
+    @classmethod
+    async def create(cls) -> "NewsSummarizer":
+        """Create a summarizer with the correct auth mode."""
+        from app.agent.auth import resolve_anthropic_api_key
+
+        api_key = await resolve_anthropic_api_key()
+        if api_key:
+            return cls(api_key=api_key)
+        logger.info("NewsSummarizer using Agent SDK (subscription mode)")
+        return cls(use_sdk=True)
+
+    async def _call_claude(self, prompt: str, max_tokens: int = 500) -> str:
+        """Unified Claude call — uses raw API or SDK depending on mode."""
+        if self._client:
+            response = self._client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=max_tokens,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return response.content[0].text.strip()
+        return await self._call_via_sdk(prompt, max_tokens)
+
+    async def _call_via_sdk(self, prompt: str, max_tokens: int) -> str:
+        """Call Claude via the Agent SDK (subscription mode)."""
+        from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, TextBlock
+
+        from app.agent.auth import resolve_anthropic_api_key
+        from app.agent.trading_agent import DISALLOWED_BUILTIN_TOOLS
+        from app.db.models.app_settings import AppSettings
+
+        app_settings = await AppSettings.get_instance()
+        api_key = await resolve_anthropic_api_key()
+
+        options = ClaudeAgentOptions(
+            system_prompt="You are a concise financial news analyst. Respond only with what is asked.",
+            model=app_settings.agent_model or "claude-sonnet-4-6",
+            max_turns=1,
+            permission_mode="bypassPermissions",
+            disallowed_tools=DISALLOWED_BUILTIN_TOOLS,
+        )
+        if api_key:
+            options.env["ANTHROPIC_API_KEY"] = api_key
+
+        client = ClaudeSDKClient(options=options)
+        await client.connect()
+        try:
+            text_parts: list[str] = []
+            await client.query(prompt)
+            async for message in client.receive_response():
+                for block in getattr(message, "content", []):
+                    if isinstance(block, TextBlock):
+                        text_parts.append(block.text)
+            return "".join(text_parts).strip()
+        finally:
+            await client.disconnect()
 
     async def summarize_article(
         self,
@@ -34,13 +97,7 @@ Content:
 
 Summary:"""
 
-        response = self.client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=500,
-            messages=[{"role": "user", "content": prompt}],
-        )
-
-        summary = response.content[0].text.strip()
+        summary = await self._call_claude(prompt, max_tokens=500)
         return summary[: max_length - 3] + "..." if len(summary) > max_length else summary
 
     async def analyze_sentiment(
@@ -67,17 +124,12 @@ Provide your analysis in the following format:
 
 Response:"""
 
-        response = self.client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=500,
-            messages=[{"role": "user", "content": prompt}],
-        )
-
-        return self._parse_sentiment_response(response.content[0].text.strip())
+        response_text = await self._call_claude(prompt, max_tokens=500)
+        return self._parse_sentiment_response(response_text)
 
     def _parse_sentiment_response(self, response: str) -> dict[str, Any]:
         """Parse sentiment analysis response."""
-        result = {
+        result: dict[str, Any] = {
             "sentiment_score": 0.0,
             "predicted_impact": "neutral",
             "confidence": 0.5,
@@ -145,14 +197,9 @@ Content:
 
 Respond with ONLY a number between 0.0 and 1.0:"""
 
-        response = self.client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=50,
-            messages=[{"role": "user", "content": prompt}],
-        )
-
+        response_text = await self._call_claude(prompt, max_tokens=50)
         try:
-            score = float(response.content[0].text.strip())
+            score = float(response_text)
             return max(0.0, min(1.0, score))
         except ValueError:
             return 0.5

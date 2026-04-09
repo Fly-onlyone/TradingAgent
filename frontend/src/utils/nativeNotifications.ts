@@ -6,25 +6,34 @@
 import { isTauri } from "./tauriEnv";
 
 let notificationsEnabled = true;
-let notificationIconUrlPromise: Promise<string | undefined> | null = null;
+let notificationIconPathPromise: Promise<string | undefined> | null = null;
 
-async function getNativeNotificationIconUrl(): Promise<string | undefined> {
+async function getNativeNotificationIconPath(): Promise<string | undefined> {
 	if (typeof window === "undefined") return undefined;
 
-	notificationIconUrlPromise ??= fetch("/coin.png")
-		.then(async (response) => {
-			if (!response.ok) return undefined;
-			const blob = await response.blob();
-			return await new Promise<string>((resolve, reject) => {
-				const reader = new FileReader();
-				reader.onloadend = () => resolve(reader.result as string);
-				reader.onerror = () => reject(reader.error);
-				reader.readAsDataURL(blob);
-			});
-		})
-		.catch(() => undefined);
+	notificationIconPathPromise ??= (async () => {
+		try {
+			const { resolveResource } = await import("@tauri-apps/api/path");
+			return await resolveResource("icons/32x32.png");
+		} catch {
+			// Fallback: try data URL approach for non-Tauri or older versions
+			try {
+				const response = await fetch("/coin.png");
+				if (!response.ok) return undefined;
+				const blob = await response.blob();
+				return await new Promise<string>((resolve, reject) => {
+					const reader = new FileReader();
+					reader.onloadend = () => resolve(reader.result as string);
+					reader.onerror = () => reject(reader.error);
+					reader.readAsDataURL(blob);
+				});
+			} catch {
+				return undefined;
+			}
+		}
+	})();
 
-	return await notificationIconUrlPromise;
+	return await notificationIconPathPromise;
 }
 
 /** Fetch the native notification setting from the API and cache it locally. */
@@ -60,7 +69,7 @@ export async function sendNativeNotification(
 			sendNotification({
 				title,
 				body,
-				icon: await getNativeNotificationIconUrl(),
+				icon: await getNativeNotificationIconPath(),
 			});
 		}
 	} catch (e) {

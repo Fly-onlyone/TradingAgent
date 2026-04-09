@@ -167,8 +167,10 @@ async def get_memory_stats(
         by_category[cat_val] = by_category.get(cat_val, 0) + 1
         if m.expires_at is None:
             permanent_count += 1
-        elif m.expires_at <= soon:
-            expiring_soon_count += 1
+        else:
+            exp = m.expires_at if m.expires_at.tzinfo else m.expires_at.replace(tzinfo=UTC)
+            if exp <= soon:
+                expiring_soon_count += 1
 
     return {
         "total": len(memories),

@@ -25,10 +25,14 @@ async def fetch_url_content(url: str) -> str:
         response = await client.get(url)
         response.raise_for_status()
 
+    from trafilatura.settings import use_config
+
+    config = use_config()
     extracted = trafilatura.extract(
         response.text,
         include_comments=False,
         include_tables=True,
+        config=config,
     )
     if not extracted:
         raise ValueError(f"Could not extract text content from {url}")

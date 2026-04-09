@@ -1328,12 +1328,17 @@ def _text_result(data: dict[str, Any]) -> dict[str, Any]:
 
 @tool(
     "modify_task",
-    "Propose or apply modifications to the current task's configuration. "
+    "Modify an existing task's configuration. "
+    "In chat context, provide task_id. During scheduled execution, task_id is optional. "
     "Use when market conditions warrant changes to risk level, symbols, "
     "position sizing, schedule, or monitoring conditions.",
     {
         "type": "object",
         "properties": {
+            "task_id": {
+                "type": "string",
+                "description": "ID of the task to modify (required in chat context, optional during task execution)",
+            },
             "changes": {
                 "type": "object",
                 "description": (
@@ -1368,8 +1373,12 @@ async def mcp_modify_task(args: dict[str, Any]) -> dict[str, Any]:
         reason: str = args.get("reason", "")
 
         ctx = _get_task_context()
-        if not ctx:
-            return _text_result({"status": "error", "message": "No active task context."})
+        explicit_task_id = args.get("task_id")
+        task_id = explicit_task_id or (ctx["task_id"] if ctx else None)
+        if not task_id:
+            return _text_result(
+                {"status": "error", "message": "Provide task_id or run within a task."}
+            )
 
         invalid_fields = set(changes.keys()) - AGENT_MODIFIABLE_FIELDS
         if invalid_fields:
@@ -1403,9 +1412,15 @@ async def mcp_modify_task(args: dict[str, Any]) -> dict[str, Any]:
 
         from beanie import PydanticObjectId
 
-        task = await AgentTask.get(PydanticObjectId(ctx["task_id"]))
+        task = await AgentTask.get(PydanticObjectId(task_id))
         if not task:
             return _text_result({"status": "error", "message": "Task not found."})
+
+        # Verify ownership in chat context
+        if explicit_task_id:
+            user_id = get_active_user_id()
+            if not user_id or str(task.user_id) != user_id:
+                return _text_result({"status": "error", "message": "Not authorized."})
 
         # Build before/after diff
         before: dict[str, Any] = {}
@@ -1415,7 +1430,10 @@ async def mcp_modify_task(args: dict[str, Any]) -> dict[str, Any]:
             before[field_name] = _serialize_task_value(current_value)
             after[field_name] = _serialize_task_value(coerced_changes[field_name])
 
-        mode = ctx["mode"]
+        # In chat context (user is present), apply directly
+        mode = ctx["mode"] if ctx else task.task_modification_mode.value
+        if mode == "disabled" and not ctx:
+            mode = "auto"
 
         if mode == "auto":
             for field_name, new_value in coerced_changes.items():
@@ -1818,6 +1836,156 @@ async def mcp_create_task(args: dict[str, Any]) -> dict[str, Any]:
     except Exception as e:
         response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
         _buffer_tool_result("create_task", args, response, start)
+        return response
+
+
+# ============================================================
+# Task Lifecycle Tools (delete / pause)
+# ============================================================
+
+
+@tool(
+    "delete_task",
+    "Permanently delete a scheduled task. Use when the task is no longer needed. "
+    "Removes it from the scheduler and database.",
+    {
+        "type": "object",
+        "properties": {
+            "task_id": {
+                "type": "string",
+                "description": "ID of the task to delete",
+            },
+        },
+        "required": ["task_id"],
+    },
+)
+async def mcp_delete_task(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
+    try:
+        from beanie import PydanticObjectId
+
+        from app.db.models.agent_task import AgentTask
+
+        user_id = get_active_user_id()
+        if not user_id:
+            response = _text_result({"status": "error", "message": "No active user session."})
+            _buffer_tool_result("delete_task", args, response, start)
+            return response
+
+        task_id = args.get("task_id", "")
+        task = await AgentTask.get(PydanticObjectId(task_id))
+        if not task:
+            response = _text_result({"status": "error", "message": "Task not found."})
+            _buffer_tool_result("delete_task", args, response, start)
+            return response
+
+        if str(task.user_id) != user_id:
+            response = _text_result({"status": "error", "message": "Not authorized."})
+            _buffer_tool_result("delete_task", args, response, start)
+            return response
+
+        task_name = task.name
+
+        # Unschedule from APScheduler
+        try:
+            from app.agent.task_scheduler import get_scheduler
+
+            scheduler = get_scheduler()
+            await scheduler.unschedule_task(str(task.id))
+        except Exception:
+            pass  # Task may not be scheduled
+
+        await task.delete()
+
+        response = _text_result(
+            {
+                "status": "ok",
+                "message": f"Task '{task_name}' deleted successfully.",
+                "task_id": task_id,
+            }
+        )
+        _buffer_tool_result("delete_task", args, response, start)
+        return response
+
+    except Exception as e:
+        response = _text_result({"status": "error", "message": str(e)})
+        _buffer_tool_result("delete_task", args, response, start)
+        return response
+
+
+@tool(
+    "pause_task",
+    "Pause a scheduled task. The task remains in the database but stops executing. "
+    "Can be resumed later by modifying its status back to active.",
+    {
+        "type": "object",
+        "properties": {
+            "task_id": {
+                "type": "string",
+                "description": "ID of the task to pause",
+            },
+        },
+        "required": ["task_id"],
+    },
+)
+async def mcp_pause_task(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
+    try:
+        from beanie import PydanticObjectId
+
+        from app.db.models.agent_task import AgentTask, TaskStatus
+
+        user_id = get_active_user_id()
+        if not user_id:
+            response = _text_result({"status": "error", "message": "No active user session."})
+            _buffer_tool_result("pause_task", args, response, start)
+            return response
+
+        task_id = args.get("task_id", "")
+        task = await AgentTask.get(PydanticObjectId(task_id))
+        if not task:
+            response = _text_result({"status": "error", "message": "Task not found."})
+            _buffer_tool_result("pause_task", args, response, start)
+            return response
+
+        if str(task.user_id) != user_id:
+            response = _text_result({"status": "error", "message": "Not authorized."})
+            _buffer_tool_result("pause_task", args, response, start)
+            return response
+
+        if task.status == TaskStatus.PAUSED:
+            response = _text_result(
+                {"status": "ok", "message": f"Task '{task.name}' is already paused."}
+            )
+            _buffer_tool_result("pause_task", args, response, start)
+            return response
+
+        task.status = TaskStatus.PAUSED
+        task.update_timestamp()
+        await task.save()
+
+        # Unschedule from APScheduler
+        try:
+            from app.agent.task_scheduler import get_scheduler
+
+            scheduler = get_scheduler()
+            await scheduler.unschedule_task(str(task.id))
+        except Exception:
+            pass
+
+        response = _text_result(
+            {
+                "status": "ok",
+                "message": f"Task '{task.name}' paused successfully.",
+                "task_id": task_id,
+            }
+        )
+        _buffer_tool_result("pause_task", args, response, start)
+        return response
+
+    except Exception as e:
+        response = _text_result({"status": "error", "message": str(e)})
+        _buffer_tool_result("pause_task", args, response, start)
         return response
 
 
@@ -2428,6 +2596,8 @@ ALL_TRADING_TOOLS = [
     # Task management
     mcp_modify_task,
     mcp_create_task,
+    mcp_delete_task,
+    mcp_pause_task,
     # Settings
     mcp_get_auto_discovery_config,
     mcp_modify_auto_discovery,

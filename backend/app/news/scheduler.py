@@ -23,9 +23,14 @@ class NewsScheduler:
     def __init__(self) -> None:
         self.scheduler = AsyncIOScheduler()
         self.crawler = NewsCrawler()
-        self.summarizer = NewsSummarizer()
+        self._summarizer: NewsSummarizer | None = None
         self.credibility = CredibilityScorer()
         self._running = False
+
+    async def _get_summarizer(self) -> NewsSummarizer:
+        if self._summarizer is None:
+            self._summarizer = await NewsSummarizer.create()
+        return self._summarizer
 
     async def start(self) -> None:
         """Start the scheduler."""
@@ -148,17 +153,16 @@ class NewsScheduler:
             # Generate summary and sentiment
             if article.content and len(article.content) > 100:
                 try:
-                    article.summary = await self.summarizer.summarize_article(
+                    summarizer = await self._get_summarizer()
+                    article.summary = await summarizer.summarize_article(
                         article.title, article.content
                     )
 
-                    sentiment = await self.summarizer.analyze_sentiment(
-                        article.title, article.content
-                    )
+                    sentiment = await summarizer.analyze_sentiment(article.title, article.content)
                     article.sentiment_score = sentiment["sentiment_score"]
                     article.predicted_impact = sentiment["predicted_impact"]
 
-                    article.relevance_score = await self.summarizer.analyze_relevance(
+                    article.relevance_score = await summarizer.analyze_relevance(
                         article.title, article.content
                     )
 

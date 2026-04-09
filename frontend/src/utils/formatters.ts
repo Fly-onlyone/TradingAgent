@@ -84,31 +84,38 @@ export function formatVolume(value: number | null | undefined): string {
 }
 
 // Date formatting
+
+function safeParseDate(date: string | Date): Date | null {
+	const d = typeof date === "string" ? parseISO(date) : date;
+	return Number.isNaN(d.getTime()) ? null : d;
+}
+
 export function formatDate(
 	date: string | Date,
 	formatStr = "MMM d, yyyy",
 ): string {
-	const d = typeof date === "string" ? parseISO(date) : date;
-	return format(d, formatStr);
+	const d = safeParseDate(date);
+	return d ? format(d, formatStr) : "-";
 }
 
 export function formatDateTime(date: string | Date): string {
-	const d = typeof date === "string" ? parseISO(date) : date;
-	return format(d, "MMM d, yyyy HH:mm");
+	const d = safeParseDate(date);
+	return d ? format(d, "MMM d, yyyy HH:mm") : "-";
 }
 
 export function formatTime(date: string | Date): string {
-	const d = typeof date === "string" ? parseISO(date) : date;
-	return format(d, "HH:mm:ss");
+	const d = safeParseDate(date);
+	return d ? format(d, "HH:mm:ss") : "-";
 }
 
 export function formatRelativeTime(date: string | Date): string {
-	const d = typeof date === "string" ? parseISO(date) : date;
-	return formatDistanceToNow(d, { addSuffix: true });
+	const d = safeParseDate(date);
+	return d ? formatDistanceToNow(d, { addSuffix: true }) : "-";
 }
 
 export function formatTimestamp(timestamp: number): string {
-	return format(new Date(timestamp), "HH:mm:ss");
+	const d = new Date(timestamp);
+	return Number.isNaN(d.getTime()) ? "-" : format(d, "HH:mm:ss");
 }
 
 // PnL formatting with color
