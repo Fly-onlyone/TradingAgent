@@ -2217,6 +2217,184 @@ async def mcp_delete_memory(args: dict[str, Any]) -> dict[str, Any]:
 
 
 # ============================================================
+# Settings Tools
+# ============================================================
+
+
+@tool(
+    "get_auto_discovery_config",
+    "Get the current strategy auto-discovery configuration including enabled state, "
+    "interval, confidence threshold, max sources, last run time, and next scheduled run.",
+    {
+        "type": "object",
+        "properties": {},
+        "required": [],
+    },
+)
+async def mcp_get_auto_discovery_config(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
+    try:
+        from app.db.models.app_settings import AppSettings
+
+        app_settings = await AppSettings.get_instance()
+
+        try:
+            from app.agent.task_scheduler import get_scheduler
+
+            next_run = get_scheduler().discovery_next_run_at
+        except Exception:
+            next_run = None
+
+        data = {
+            "enabled": app_settings.auto_discover_enabled,
+            "interval_hours": app_settings.auto_discover_interval_hours,
+            "min_confidence": app_settings.auto_discover_min_confidence,
+            "max_sources": app_settings.auto_discover_max_sources,
+            "last_run_at": (
+                app_settings.auto_discover_last_run_at.isoformat()
+                if app_settings.auto_discover_last_run_at
+                else None
+            ),
+            "next_run_at": next_run.isoformat() if next_run else None,
+        }
+        response = _text_result(data)
+        _buffer_tool_result("get_auto_discovery_config", args, response, start)
+        return response
+    except Exception as e:
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("get_auto_discovery_config", args, response, start)
+        return response
+
+
+@tool(
+    "modify_auto_discovery",
+    "Modify strategy auto-discovery settings. Can update enabled state, scan interval, "
+    "minimum confidence threshold, and maximum number of sources. All fields are optional — "
+    "only provided fields are updated. Returns the full updated configuration.",
+    {
+        "type": "object",
+        "properties": {
+            "enabled": {
+                "type": "boolean",
+                "description": "Enable or disable automatic strategy discovery",
+            },
+            "interval_hours": {
+                "type": "integer",
+                "description": "Hours between discovery runs (minimum 1)",
+            },
+            "min_confidence": {
+                "type": "number",
+                "description": "Minimum confidence score for discovered strategies (0.0 to 1.0)",
+            },
+            "max_sources": {
+                "type": "integer",
+                "description": "Maximum number of news sources to scan (1 to 100)",
+            },
+            "reason": {
+                "type": "string",
+                "description": "Optional explanation for why these changes are being made",
+            },
+        },
+        "required": [],
+    },
+)
+async def mcp_modify_auto_discovery(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
+    try:
+        from app.db.models.app_settings import AppSettings
+
+        app_settings = await AppSettings.get_instance()
+        reschedule_required = False
+        changes_applied: list[str] = []
+
+        if "enabled" in args:
+            new_enabled = bool(args["enabled"])
+            if app_settings.auto_discover_enabled != new_enabled:
+                app_settings.auto_discover_enabled = new_enabled
+                reschedule_required = True
+                changes_applied.append("enabled")
+
+        if "interval_hours" in args:
+            next_interval = max(1, int(args["interval_hours"]))
+            if app_settings.auto_discover_interval_hours != next_interval:
+                app_settings.auto_discover_interval_hours = next_interval
+                reschedule_required = True
+                changes_applied.append("interval_hours")
+
+        if "min_confidence" in args:
+            clamped = max(0.0, min(1.0, float(args["min_confidence"])))
+            if app_settings.auto_discover_min_confidence != clamped:
+                app_settings.auto_discover_min_confidence = clamped
+                changes_applied.append("min_confidence")
+
+        if "max_sources" in args:
+            clamped = max(1, min(100, int(args["max_sources"])))
+            if app_settings.auto_discover_max_sources != clamped:
+                app_settings.auto_discover_max_sources = clamped
+                changes_applied.append("max_sources")
+
+        if not changes_applied:
+            response = _text_result(
+                {
+                    "status": "ok",
+                    "message": "No changes applied — values already match requested settings.",
+                    "config": {
+                        "enabled": app_settings.auto_discover_enabled,
+                        "interval_hours": app_settings.auto_discover_interval_hours,
+                        "min_confidence": app_settings.auto_discover_min_confidence,
+                        "max_sources": app_settings.auto_discover_max_sources,
+                    },
+                }
+            )
+            _buffer_tool_result("modify_auto_discovery", args, response, start)
+            return response
+
+        await app_settings.save_with_timestamp()
+
+        if reschedule_required:
+            try:
+                from app.agent.task_scheduler import get_scheduler
+
+                scheduler = get_scheduler()
+                await scheduler.reschedule_auto_discovery()
+            except Exception:
+                logging.getLogger(__name__).warning(
+                    "Could not reschedule auto-discovery after settings change",
+                    exc_info=True,
+                )
+
+        try:
+            from app.agent.task_scheduler import get_scheduler
+
+            next_run = get_scheduler().discovery_next_run_at
+        except Exception:
+            next_run = None
+
+        reason = args.get("reason", "")
+        response = _text_result(
+            {
+                "status": "ok",
+                "message": f"Auto-discovery settings updated: {', '.join(changes_applied)}."
+                + (f" Reason: {reason}" if reason else ""),
+                "changes_applied": changes_applied,
+                "config": {
+                    "enabled": app_settings.auto_discover_enabled,
+                    "interval_hours": app_settings.auto_discover_interval_hours,
+                    "min_confidence": app_settings.auto_discover_min_confidence,
+                    "max_sources": app_settings.auto_discover_max_sources,
+                    "next_run_at": next_run.isoformat() if next_run else None,
+                },
+            }
+        )
+        _buffer_tool_result("modify_auto_discovery", args, response, start)
+        return response
+    except Exception as e:
+        response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
+        _buffer_tool_result("modify_auto_discovery", args, response, start)
+        return response
+
+
+# ============================================================
 # MCP Server Factory
 # ============================================================
 
@@ -2250,6 +2428,9 @@ ALL_TRADING_TOOLS = [
     # Task management
     mcp_modify_task,
     mcp_create_task,
+    # Settings
+    mcp_get_auto_discovery_config,
+    mcp_modify_auto_discovery,
     # Structured output
     mcp_submit_recommendation,
     # Interactive
