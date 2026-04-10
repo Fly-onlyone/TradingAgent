@@ -85,9 +85,11 @@ export function formatVolume(value: number | null | undefined): string {
 
 // Date formatting
 
-function safeParseDate(date: string | Date): Date | null {
+function safeParseDate(date: string | Date | null | undefined): Date | null {
+	if (date == null) return null;
 	const d = typeof date === "string" ? parseISO(date) : date;
-	return Number.isNaN(d.getTime()) ? null : d;
+	if (!(d instanceof Date) || Number.isNaN(d.getTime())) return null;
+	return d;
 }
 
 export function formatDate(

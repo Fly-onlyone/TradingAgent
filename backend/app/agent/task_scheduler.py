@@ -540,7 +540,8 @@ class AgentTaskScheduler:
                 try:
                     task = await AgentTask.get(PydanticObjectId(task_id))
                     if not task:
-                        logger.error(f"Task {task_id} not found")
+                        logger.warning("Task %s not found — removing orphaned job", task_id)
+                        self._remove_task_jobs(task_id)
                         return
 
                     if task.status != TaskStatus.ACTIVE:
@@ -593,8 +594,8 @@ class AgentTaskScheduler:
                     task = await AgentTask.get(PydanticObjectId(task_id))
                     if task:
                         task.record_execution(success=False, error=str(e))
-                    await self._check_auto_pause(task)
-                    await task.save()
+                        await self._check_auto_pause(task)
+                        await task.save()
         finally:
             self._running_tasks.pop(task_id, None)
 

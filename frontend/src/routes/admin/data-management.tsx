@@ -34,6 +34,7 @@ import { DestructiveConfirmDialog } from "@/components/common/DestructiveConfirm
 import { PageTransition } from "@/components/common/PageTransition";
 import { SectionHeader } from "@/components/common/SectionHeader";
 import { ShimmerSkeleton } from "@/components/common/ShimmerSkeleton";
+import { notify } from "@/store/uiStore";
 import {
 	createCardHover,
 	fadeInUp,
@@ -126,15 +127,22 @@ function DataManagementPage() {
 	const clearMutation = useMutation({
 		mutationFn: (collections: string[]) =>
 			adminApi.bulkClearCollections(collections),
-		onSuccess: () => {
+		onSuccess: async (_data, collections) => {
 			setConfirmGroup(null);
-			void queryClient.invalidateQueries({
-				queryKey: ["admin-collections"],
-			});
-			void queryClient.invalidateQueries({ queryKey: ["admin-db-info"] });
+			notify.success(
+				`Cleared ${collections.length} collection${collections.length > 1 ? "s" : ""}`,
+			);
+			// Remove ALL cached queries so other pages fetch fresh data.
+			// (invalidateQueries alone won't work because queries use
+			// refetchOnMount: false, so stale cache would be shown as-is.)
+			queryClient.removeQueries();
+			// Re-fetch the queries this page needs right now
+			void queryClient.refetchQueries({ queryKey: ["admin-collections"] });
+			void queryClient.refetchQueries({ queryKey: ["admin-db-info"] });
 		},
 		onError: () => {
 			setConfirmGroup(null);
+			notify.error("Failed to clear collections");
 		},
 	});
 

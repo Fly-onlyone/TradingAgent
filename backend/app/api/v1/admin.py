@@ -1,5 +1,6 @@
 """Admin endpoints for database management (superuser only)."""
 
+import logging
 import re
 from typing import Any
 
@@ -11,6 +12,8 @@ from app.api.deps import get_current_superuser
 from app.config import get_settings
 from app.db.models.user import User
 from app.db.session import get_client, get_db
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -357,6 +360,18 @@ async def bulk_clear_collections(
     results: dict[str, int] = {}
     total = 0
     for name in body.collections:
+        # Unschedule all tasks before clearing the collection
+        if name == "agent_tasks":
+            try:
+                from app.agent.task_scheduler import get_scheduler
+
+                scheduler = get_scheduler()
+                for job in scheduler.scheduler.get_jobs():
+                    if job.id.startswith("task_"):
+                        job.remove()
+            except Exception:
+                logger.warning("Failed to unschedule tasks during bulk clear", exc_info=True)
+
         result = await db[name].delete_many({})
         results[name] = result.deleted_count
         total += result.deleted_count

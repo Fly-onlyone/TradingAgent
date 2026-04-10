@@ -108,6 +108,9 @@ class NotificationService:
         # Try to send Web Push
         await self._send_web_push(user_id, notification)
 
+        # Fire a desktop toast (Windows only, best-effort)
+        await self._send_desktop_toast(user_id, notification)
+
         return notification
 
     async def _send_web_push(
@@ -171,6 +174,31 @@ class NotificationService:
             notification.mark_failed(str(e))
             await notification.save()
             return False
+
+    async def _send_desktop_toast(
+        self,
+        user_id: PydanticObjectId,
+        notification: Notification,
+    ) -> None:
+        """Fire a Windows desktop toast with the app icon (best-effort)."""
+        try:
+            from app.db.models.app_settings import AppSettings
+
+            app_settings = await AppSettings.get_instance()
+            if not app_settings.native_notifications_enabled:
+                return
+
+            import asyncio
+
+            from app.services.desktop_notify import send_desktop_notification
+
+            await asyncio.to_thread(
+                send_desktop_notification,
+                title=notification.title,
+                body=notification.body,
+            )
+        except Exception as e:
+            logger.debug("Desktop toast failed: %s", e)
 
     async def get_user_notifications(
         self,
