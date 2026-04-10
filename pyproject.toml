@@ -54,6 +54,8 @@ dependencies = [
     "flashrank>=0.2.0",
     # OS credential store (Windows Credential Manager / macOS Keychain / Linux Secret Service)
     "keyring>=25.0.0",
+    # Windows desktop toast notifications
+    "winotify>=1.1.0; sys_platform == 'win32'",
 ]
 
 [dependency-groups]

@@ -120,3 +120,32 @@ class MyService:
 | `NewsSummarizer` | Dual-mode factory | `_call_claude` / `_call_via_sdk` |
 | `context_generator` | Graceful skip | Returns `None` when no key |
 | `TradingAgent`, subagents | `ClaudeSDKClient` only | Always works with subscription |
+
+### Pattern: Windows Desktop Toast Notifications
+
+**When to Apply**: Any feature that sends desktop toast notifications on Windows.
+
+**Key rule**: Use `winotify` from the Python backend (same as ZZZ Bot). Do NOT use
+Tauri's notification plugin or `notify_rust` — their `icon` property is Android/Linux
+only and does nothing on Windows.
+
+**How Windows toast icons work:**
+
+| Icon position | Source | How to set |
+|---------------|--------|------------|
+| Content icon (left of title/body) | `winotify` `icon=` parameter | Absolute path to `.ico` or `.png` |
+| Title icon (tiny, next to app name) | Windows AUMID lookup | Start Menu shortcut with matching `System.AppUserModel.ID` |
+
+**AUMID rules:**
+- The `app_id` in `winotify.Notification()` must match the shortcut's AUMID exactly
+- NSIS installer sets AUMID from `tauri.conf.json` `identifier` — but if Windows caches
+  a broken state for that ID, you need a different one
+- Current working AUMID: `TradingAgent` (set in `desktop_notify.py`)
+- `ensure_notification_shortcut()` patches the AUMID on first run via `pywin32`
+- NEVER clear Windows icon cache (`ie4uinit.exe -ClearIconCache` + explorer restart)
+  unless absolutely necessary — it breaks ALL app toast title icons until cache rebuilds
+
+**Implementation**: `backend/app/services/desktop_notify.py`
+- Hooked into `NotificationService.create_notification()` via `_send_desktop_toast()`
+- Runs in `asyncio.to_thread()` to avoid blocking the event loop
+- Icon resolved from `frontend/src-tauri/icons/` (dev) or `icons/` next to exe (production)

@@ -1,55 +1,29 @@
-"""Desktop toast notifications with app icon in the header.
+"""Desktop toast notifications using winotify (Windows) with app icon.
 
-Uses WinRT toast XML directly via PowerShell with the ToastGeneric template
-and appLogoOverride so the icon appears next to the app name in the header.
+Same approach as ZZZ bot's NotificationHelper — sends persistent Windows toast
+notifications that appear in the Action Center with the app icon.
 """
 
 import logging
 import platform
-import re
-import subprocess
 import sys
 from pathlib import Path
-from xml.sax.saxutils import escape as xml_escape
 
 logger = logging.getLogger(__name__)
 
 IS_WINDOWS = platform.system() == "Windows"
 
+_winotify_available = False
+if IS_WINDOWS:
+    try:
+        from winotify import Notification as WinNotification
+        from winotify import audio
+
+        _winotify_available = True
+    except ImportError:
+        logger.debug("winotify not installed — desktop toasts disabled")
+
 APP_ID = "TradingAgent"
-
-# ToastGeneric template with appLogoOverride — puts icon in the header
-_PS_TEMPLATE = r"""
-[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
-[Windows.UI.Notifications.ToastNotification, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
-[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
-$Template = @"
-<toast duration="{duration}">
-    <visual>
-        <binding template="ToastGeneric">
-            {icon_xml}
-            <text><![CDATA[{title}]]></text>
-            <text><![CDATA[{body}]]></text>
-        </binding>
-    </visual>
-    <audio silent="true" />
-</toast>
-"@
-
-$SerializedXml = New-Object Windows.Data.Xml.Dom.XmlDocument
-$SerializedXml.LoadXml($Template)
-
-$Toast = [Windows.UI.Notifications.ToastNotification]::new($SerializedXml)
-$Notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("{app_id}")
-$Notifier.Show($Toast)
-"""
-
-
-def _sanitize_for_toast(text: str) -> str:
-    """Sanitize text for embedding in PowerShell here-string XML CDATA."""
-    text = text.replace("]]>", "]]&gt;")  # CDATA breakout
-    text = re.sub(r'^"@', ' "@', text, flags=re.MULTILINE)  # here-string breakout
-    return text
 
 
 def _resolve_icon_path() -> str:
@@ -130,39 +104,24 @@ def send_desktop_notification(
     body: str,
     duration: str = "short",
 ) -> None:
-    """Send a desktop toast notification with the app icon in the header."""
-    if not IS_WINDOWS:
+    """Send a desktop toast notification with the app icon."""
+    if not IS_WINDOWS or not _winotify_available:
         return
 
     try:
         ensure_notification_shortcut()
         icon = _get_icon_path()
-        icon_xml = ""
-        if icon:
-            icon_uri = "file:///" + icon.replace("\\", "/")
-            icon_xml = (
-                f'<image placement="appLogoOverride" src="{xml_escape(icon_uri)}"'
-                ' hint-crop="circle" />'
-            )
-
-        duration = "long" if duration == "long" else "short"
-
-        script = _PS_TEMPLATE.format(
-            duration=duration,
-            title=_sanitize_for_toast(title),
-            body=_sanitize_for_toast(body[:256]),
-            icon_xml=icon_xml,
+        toast = WinNotification(
             app_id=APP_ID,
+            title=title,
+            msg=body[:256],
+            duration="long" if duration == "long" else "short",
+            icon=icon or "",
         )
-
-        si = subprocess.STARTUPINFO()
-        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        subprocess.Popen(
-            ["powershell.exe", "-ExecutionPolicy", "Bypass", "-Command", script],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            startupinfo=si,
-        )
+        try:
+            toast.set_audio(audio.Default, loop=False)
+        except Exception:
+            pass
+        toast.show()
     except Exception as e:
         logger.debug("Desktop notification failed: %s", e)

@@ -58,3 +58,4 @@ Thumbs.db
 
 .codex
 screenshot
+.claude/scheduled_tasks.lock
