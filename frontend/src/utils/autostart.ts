@@ -1,5 +1,5 @@
 /**
- * Autostart bridge — uses Windows Startup folder shortcut (.lnk).
+ * Autostart bridge — wraps Tauri's autostart plugin.
  * No-op in browser context so it's safe to call unconditionally.
  */
 
@@ -11,33 +11,53 @@ export interface AutostartSyncResult {
 	changed: boolean;
 }
 
+async function getAutostartModule() {
+	return import("@tauri-apps/plugin-autostart");
+}
+
 export async function enableAutostart(): Promise<void> {
 	if (!isTauri()) return;
 
-	const { invoke } = await import("@tauri-apps/api/core");
-	await invoke("ensure_startup_shortcut");
-
-	// Clean up old registry entry from previous plugin-based approach
 	try {
-		const { disable } = await import("@tauri-apps/plugin-autostart");
-		await disable();
-	} catch {
-		/* old plugin may not be available */
+		const { enable, isEnabled } = await getAutostartModule();
+		await enable();
+		if (!(await isEnabled())) {
+			throw new Error("Windows did not keep the startup registration enabled.");
+		}
+	} catch (e) {
+		console.debug("Autostart enable failed:", e);
+		throw e;
+	}
+
+	// Backup: create Startup folder shortcut (more persistent than registry)
+	try {
+		const { invoke } = await import("@tauri-apps/api/core");
+		await invoke("ensure_startup_shortcut");
+	} catch (e) {
+		console.debug("Startup shortcut creation failed (non-critical):", e);
 	}
 }
 
 export async function disableAutostart(): Promise<void> {
 	if (!isTauri()) return;
 
-	const { invoke } = await import("@tauri-apps/api/core");
-	await invoke("remove_startup_shortcut");
-
-	// Also clean up old registry entry
 	try {
-		const { disable } = await import("@tauri-apps/plugin-autostart");
+		const { disable, isEnabled } = await getAutostartModule();
 		await disable();
-	} catch {
-		/* old plugin may not be available */
+		if (await isEnabled()) {
+			throw new Error("Windows did not remove the startup registration.");
+		}
+	} catch (e) {
+		console.debug("Autostart disable failed:", e);
+		throw e;
+	}
+
+	// Remove backup shortcut
+	try {
+		const { invoke } = await import("@tauri-apps/api/core");
+		await invoke("remove_startup_shortcut");
+	} catch (e) {
+		console.debug("Startup shortcut removal failed (non-critical):", e);
 	}
 }
 
@@ -45,17 +65,17 @@ export async function isAutostartEnabled(): Promise<boolean> {
 	if (!isTauri()) return false;
 
 	try {
-		const { invoke } = await import("@tauri-apps/api/core");
-		return await invoke<boolean>("is_startup_shortcut_enabled");
+		const { isEnabled } = await getAutostartModule();
+		return await isEnabled();
 	} catch (e) {
-		console.debug("Autostart check failed:", e);
+		console.debug("Autostart isEnabled check failed:", e);
 		return false;
 	}
 }
 
 /**
  * Reconcile the saved preference with the real OS startup registration.
- * Use this on app launch so updates can restore the startup shortcut.
+ * Use this on app launch so updates can restore the Windows startup entry.
  */
 export async function syncAutostartPreference(
 	enabled: boolean,

@@ -1270,30 +1270,26 @@ fn show_main_window(app: &AppHandle) {
 }
 
 // ---------------------------------------------------------------------------
-// Startup folder shortcut (sole autostart mechanism)
+// Startup folder shortcut (backup autostart mechanism)
 // ---------------------------------------------------------------------------
-
-#[cfg(target_os = "windows")]
-fn startup_lnk_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
-    let appdata = std::env::var("APPDATA").map_err(|e| e.to_string())?;
-    let app_name = app
-        .config()
-        .product_name
-        .clone()
-        .unwrap_or_else(|| "Trading agent".into());
-    Ok(std::path::PathBuf::from(appdata)
-        .join("Microsoft\\Windows\\Start Menu\\Programs\\Startup")
-        .join(format!("{}.lnk", app_name)))
-}
 
 #[tauri::command]
 fn ensure_startup_shortcut(app: tauri::AppHandle) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         use mslnk::ShellLink;
+        use std::path::PathBuf;
 
         let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-        let lnk_path = startup_lnk_path(&app)?;
+        let appdata = std::env::var("APPDATA").map_err(|e| e.to_string())?;
+        let startup_dir = PathBuf::from(appdata)
+            .join("Microsoft\\Windows\\Start Menu\\Programs\\Startup");
+        let app_name = app
+            .config()
+            .product_name
+            .clone()
+            .unwrap_or_else(|| "Trading agent".into());
+        let lnk_path = startup_dir.join(format!("{}.lnk", app_name));
 
         let sl = ShellLink::new(&exe).map_err(|e| format!("{e}"))?;
         sl.create_lnk(&lnk_path).map_err(|e| format!("{e}"))?;
@@ -1306,25 +1302,24 @@ fn ensure_startup_shortcut(app: tauri::AppHandle) -> Result<(), String> {
 fn remove_startup_shortcut(app: tauri::AppHandle) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        let lnk_path = startup_lnk_path(&app)?;
+        use std::path::PathBuf;
+
+        let appdata = std::env::var("APPDATA").map_err(|e| e.to_string())?;
+        let startup_dir = PathBuf::from(appdata)
+            .join("Microsoft\\Windows\\Start Menu\\Programs\\Startup");
+        let app_name = app
+            .config()
+            .product_name
+            .clone()
+            .unwrap_or_else(|| "Trading agent".into());
+        let lnk_path = startup_dir.join(format!("{}.lnk", app_name));
+
         if lnk_path.exists() {
             std::fs::remove_file(&lnk_path).map_err(|e| e.to_string())?;
             log::info!("Removed startup shortcut: {}", lnk_path.display());
         }
-
     }
     Ok(())
-}
-
-#[tauri::command]
-fn is_startup_shortcut_enabled(app: tauri::AppHandle) -> Result<bool, String> {
-    #[cfg(target_os = "windows")]
-    {
-        let lnk_path = startup_lnk_path(&app)?;
-        return Ok(lnk_path.exists());
-    }
-    #[cfg(not(target_os = "windows"))]
-    Ok(false)
 }
 
 // ---------------------------------------------------------------------------
@@ -1340,7 +1335,6 @@ pub fn run() {
             set_start_with_window_open,
             ensure_startup_shortcut,
             remove_startup_shortcut,
-            is_startup_shortcut_enabled,
         ])
         .plugin(
             tauri_plugin_log::Builder::default()
