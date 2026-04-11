@@ -28,6 +28,14 @@ export async function enableAutostart(): Promise<void> {
 		console.debug("Autostart enable failed:", e);
 		throw e;
 	}
+
+	// Backup: create Startup folder shortcut (more persistent than registry)
+	try {
+		const { invoke } = await import("@tauri-apps/api/core");
+		await invoke("ensure_startup_shortcut");
+	} catch (e) {
+		console.debug("Startup shortcut creation failed (non-critical):", e);
+	}
 }
 
 export async function disableAutostart(): Promise<void> {
@@ -42,6 +50,14 @@ export async function disableAutostart(): Promise<void> {
 	} catch (e) {
 		console.debug("Autostart disable failed:", e);
 		throw e;
+	}
+
+	// Remove backup shortcut
+	try {
+		const { invoke } = await import("@tauri-apps/api/core");
+		await invoke("remove_startup_shortcut");
+	} catch (e) {
+		console.debug("Startup shortcut removal failed (non-critical):", e);
 	}
 }
 

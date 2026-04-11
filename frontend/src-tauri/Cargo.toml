@@ -1,6 +1,6 @@
 [package]
 name = "trading-agent"
-version = "0.1.0"
+version = "0.1.1"
 description = "Trading agent Desktop"
 authors = ["Fly"]
 license = ""
@@ -32,6 +32,7 @@ windows-sys = { version = "0.59", features = [
     "Win32_System_JobObjects",
     "Win32_System_Threading",
 ] }
+mslnk = "0.1"
 
 [profile.release]
 lto = "thin"

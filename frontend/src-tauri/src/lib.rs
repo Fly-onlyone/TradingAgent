@@ -1270,6 +1270,59 @@ fn show_main_window(app: &AppHandle) {
 }
 
 // ---------------------------------------------------------------------------
+// Startup folder shortcut (backup autostart mechanism)
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+fn ensure_startup_shortcut(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use mslnk::ShellLink;
+        use std::path::PathBuf;
+
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let appdata = std::env::var("APPDATA").map_err(|e| e.to_string())?;
+        let startup_dir = PathBuf::from(appdata)
+            .join("Microsoft\\Windows\\Start Menu\\Programs\\Startup");
+        let app_name = app
+            .config()
+            .product_name
+            .clone()
+            .unwrap_or_else(|| "Trading agent".into());
+        let lnk_path = startup_dir.join(format!("{}.lnk", app_name));
+
+        let sl = ShellLink::new(&exe).map_err(|e| format!("{e}"))?;
+        sl.create_lnk(&lnk_path).map_err(|e| format!("{e}"))?;
+        log::info!("Created startup shortcut: {}", lnk_path.display());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn remove_startup_shortcut(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::path::PathBuf;
+
+        let appdata = std::env::var("APPDATA").map_err(|e| e.to_string())?;
+        let startup_dir = PathBuf::from(appdata)
+            .join("Microsoft\\Windows\\Start Menu\\Programs\\Startup");
+        let app_name = app
+            .config()
+            .product_name
+            .clone()
+            .unwrap_or_else(|| "Trading agent".into());
+        let lnk_path = startup_dir.join(format!("{}.lnk", app_name));
+
+        if lnk_path.exists() {
+            std::fs::remove_file(&lnk_path).map_err(|e| e.to_string())?;
+            log::info!("Removed startup shortcut: {}", lnk_path.display());
+        }
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
 
@@ -1280,6 +1333,8 @@ pub fn run() {
             frontend_log,
             get_start_with_window_open,
             set_start_with_window_open,
+            ensure_startup_shortcut,
+            remove_startup_shortcut,
         ])
         .plugin(
             tauri_plugin_log::Builder::default()
