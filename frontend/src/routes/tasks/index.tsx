@@ -5,9 +5,7 @@
 
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import AutoModeIcon from "@mui/icons-material/AutoMode";
-import ChatIcon from "@mui/icons-material/Chat";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
 import HistoryIcon from "@mui/icons-material/History";
 import NotificationsIcon from "@mui/icons-material/Notifications";
@@ -16,11 +14,7 @@ import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
 import RepeatIcon from "@mui/icons-material/Repeat";
 import ScheduleIcon from "@mui/icons-material/Schedule";
-import VisibilityIcon from "@mui/icons-material/Visibility";
 import {
-	Accordion,
-	AccordionDetails,
-	AccordionSummary,
 	Alert,
 	Box,
 	Button,
@@ -28,9 +22,6 @@ import {
 	CardContent,
 	Chip,
 	CircularProgress,
-	Dialog,
-	DialogContent,
-	DialogTitle,
 	FormControl,
 	FormControlLabel,
 	IconButton,
@@ -59,7 +50,6 @@ import { SaveIndicator } from "@/components/common/SaveIndicator";
 import { SectionHeader } from "@/components/common/SectionHeader";
 import { ZoomAwareAutocomplete } from "@/components/common/ZoomAwareAutocomplete";
 import { ZoomAwareSelect } from "@/components/common/ZoomAwareSelect";
-import { type Column, DataTable } from "@/components/data-display/DataTable";
 import { StrategyDiscoveryCard } from "@/components/strategies/StrategyDiscoveryCard";
 import { useDebouncedSave } from "@/hooks/useDebouncedSave";
 import { useSymbolOptions } from "@/hooks/useSymbolOptions";
@@ -73,7 +63,6 @@ import type {
 	MonitoringConditionType,
 	RiskLevel,
 	TaskCreate,
-	TaskExecution,
 	TaskFrequency,
 	TaskSchedule,
 	TaskUpdate,
@@ -165,7 +154,6 @@ function serializeEditableTaskUpdate(update: TaskUpdate): string {
 function TaskConfigPage() {
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
-	const setSelectedSessionId = useAgentStore((s) => s.setSelectedSessionId);
 	const backendStatus = useUIStore((s) => s.backendStatus);
 	const isSuperuser = useAuthStore((s) => s.user?.isSuperuser);
 	const { symbolOptions, isLoading: symbolsLoading } = useSymbolOptions();
@@ -181,9 +169,6 @@ function TaskConfigPage() {
 	>([]);
 	const [formData, setFormData] = useState<TaskCreate>({ ...DEFAULT_FORM });
 	const [manualRunning, setManualRunning] = useState(false);
-	const [historyExpanded, setHistoryExpanded] = useState(false);
-	const [selectedExecution, setSelectedExecution] =
-		useState<TaskExecution | null>(null);
 
 	/** Tracks whether the form was populated from the backend at least once. */
 	const initRef = useRef(false);
@@ -194,7 +179,6 @@ function TaskConfigPage() {
 		serializeEditableTaskUpdate(buildEditableTaskUpdate(DEFAULT_FORM)),
 	);
 	const prevIsRunningRef = useRef(false);
-	const prevHistoryCountRef = useRef(0);
 
 	// ── Queries ──────────────────────────────────────────────────────────
 
@@ -207,17 +191,6 @@ function TaskConfigPage() {
 
 	const task = tasksQuery.data?.tasks?.[0] ?? null;
 	const isTaskRunning = task?.isRunning || manualRunning;
-
-	const historyQuery = useQuery({
-		queryKey: ["tasks", "history", taskId],
-		queryFn: () => tasksApi.getTaskHistory(taskId as string),
-		enabled: !!taskId,
-		refetchInterval: isTaskRunning ? 3_000 : false,
-		retry: (failureCount, error) => {
-			if (error instanceof Error && error.message.includes("404")) return false;
-			return failureCount < 3;
-		},
-	});
 
 	// ── Mutations ────────────────────────────────────────────────────────
 
@@ -428,22 +401,6 @@ function TaskConfigPage() {
 		});
 	}, [formData.symbols, symbolOptions]);
 
-	const taskHistory = historyQuery.data?.executions ?? [];
-	const historyLoading = historyQuery.isLoading;
-
-	// ── Auto-expand history when new entries arrive ─────────────────────
-
-	useEffect(() => {
-		const currentCount = taskHistory.length;
-		if (
-			currentCount > prevHistoryCountRef.current &&
-			prevHistoryCountRef.current >= 0
-		) {
-			setHistoryExpanded(true);
-		}
-		prevHistoryCountRef.current = currentCount;
-	}, [taskHistory.length]);
-
 	const isWaitingForBackend =
 		backendStatus === "connecting" && tasksQuery.isError && !tasksQuery.data;
 	const isLoadingTasks = tasksQuery.isLoading || isWaitingForBackend;
@@ -524,85 +481,11 @@ function TaskConfigPage() {
 		return <Chip label={c.label} size="small" color={c.color} />;
 	};
 
-	const handleOpenSession = useCallback(
-		(sessionId: string) => {
-			setSelectedSessionId(sessionId);
-			void navigate({ to: "/agent" });
-		},
-		[navigate, setSelectedSessionId],
-	);
-
-	const historyColumns: Column<TaskExecution>[] = [
-		{
-			id: "createdAt",
-			label: "Time",
-			render: (row) => formatDateTime(row.createdAt),
-		},
-		{ id: "symbol", label: "Symbol" },
-		{
-			id: "action",
-			label: "Action",
-			render: (row) =>
-				row.action ? (
-					<Chip
-						label={row.action.toUpperCase()}
-						size="small"
-						color={
-							row.action === "buy"
-								? "success"
-								: row.action === "sell"
-									? "error"
-									: "default"
-						}
-					/>
-				) : (
-					"-"
-				),
-		},
-		{
-			id: "confidence",
-			label: "Confidence",
-			render: (row) => (row.confidence ? `${row.confidence}%` : "-"),
-		},
-		{ id: "summary", label: "Summary", minWidth: 200 },
-		{
-			id: "status",
-			label: "Status",
-			render: (row) => getStatusChip(row.status),
-		},
-		{
-			id: "actions" as keyof TaskExecution,
-			label: "",
-			render: (row) => (
-				<Box sx={{ display: "flex", gap: 0.5 }}>
-					<Tooltip title="View details">
-						<IconButton
-							size="small"
-							onClick={(e) => {
-								e.stopPropagation();
-								setSelectedExecution(row);
-							}}
-						>
-							<VisibilityIcon fontSize="small" />
-						</IconButton>
-					</Tooltip>
-					{row.sessionId && (
-						<Tooltip title="Open chat session">
-							<IconButton
-								size="small"
-								onClick={(e) => {
-									e.stopPropagation();
-									handleOpenSession(row.sessionId as string);
-								}}
-							>
-								<ChatIcon fontSize="small" />
-							</IconButton>
-						</Tooltip>
-					)}
-				</Box>
-			),
-		},
-	];
+	const handleViewExecutionHistory = useCallback(() => {
+		if (!taskId) return;
+		useAgentStore.getState().setDecisionTaskFilter(taskId);
+		void navigate({ to: "/agent" });
+	}, [taskId, navigate]);
 
 	// ── Render ────────────────────────────────────────────────────────────
 
@@ -1824,156 +1707,36 @@ function TaskConfigPage() {
 								</motion.div>
 							)}
 
-							{/* ── Card 6: History ─────────────────────── */}
+							{/* ── Card 6: View Execution History ──────── */}
 							{taskId && (
 								<motion.div variants={staggerCascade.item}>
 									<Card>
-										<Accordion
-											expanded={historyExpanded}
-											onChange={(_, expanded) => setHistoryExpanded(expanded)}
-											disableGutters
+										<CardContent
+											sx={{
+												display: "flex",
+												alignItems: "center",
+												justifyContent: "space-between",
+											}}
 										>
-											<AccordionSummary expandIcon={<ExpandMoreIcon />}>
+											<Box>
 												<Typography variant="h6">Execution History</Typography>
-											</AccordionSummary>
-											<AccordionDetails>
-												<DataTable
-													columns={historyColumns}
-													rows={taskHistory}
-													rowKey="id"
-													loading={historyLoading}
-													emptyMessage="No executions yet"
-													maxHeight={400}
-													pagination
-													onRowClick={setSelectedExecution}
-												/>
-											</AccordionDetails>
-										</Accordion>
+												<Typography variant="body2" color="text.secondary">
+													View decisions and analysis from task runs
+												</Typography>
+											</Box>
+											<Button
+												variant="outlined"
+												startIcon={<HistoryIcon />}
+												onClick={handleViewExecutionHistory}
+											>
+												View History
+											</Button>
+										</CardContent>
 									</Card>
 								</motion.div>
 							)}
 						</motion.div>
 					)}
-
-					{/* Execution Detail Dialog */}
-					<Dialog
-						open={!!selectedExecution}
-						onClose={() => setSelectedExecution(null)}
-						maxWidth="md"
-						fullWidth
-					>
-						{selectedExecution && (
-							<>
-								<DialogTitle
-									sx={{
-										display: "flex",
-										justifyContent: "space-between",
-										alignItems: "center",
-									}}
-								>
-									<Box
-										sx={{
-											display: "flex",
-											alignItems: "center",
-											gap: 1,
-										}}
-									>
-										<Typography variant="h6">Execution Detail</Typography>
-										{selectedExecution.symbol && (
-											<Chip label={selectedExecution.symbol} size="small" />
-										)}
-										{selectedExecution.action && (
-											<Chip
-												label={selectedExecution.action.toUpperCase()}
-												size="small"
-												color={
-													selectedExecution.action === "buy"
-														? "success"
-														: selectedExecution.action === "sell"
-															? "error"
-															: "default"
-												}
-											/>
-										)}
-										{selectedExecution.confidence != null && (
-											<Chip
-												label={`${selectedExecution.confidence}%`}
-												size="small"
-												variant="outlined"
-											/>
-										)}
-									</Box>
-									{selectedExecution.sessionId && (
-										<Button
-											startIcon={<ChatIcon />}
-											variant="outlined"
-											size="small"
-											onClick={() =>
-												handleOpenSession(selectedExecution.sessionId as string)
-											}
-										>
-											Open Chat
-										</Button>
-									)}
-								</DialogTitle>
-								<DialogContent dividers>
-									<Typography variant="subtitle2" gutterBottom>
-										Summary
-									</Typography>
-									<Typography variant="body2" sx={{ mb: 2 }}>
-										{selectedExecution.summary}
-									</Typography>
-
-									{selectedExecution.reasoning && (
-										<>
-											<Typography variant="subtitle2" gutterBottom>
-												Full Analysis
-											</Typography>
-											<Typography
-												variant="body2"
-												sx={{
-													whiteSpace: "pre-wrap",
-													mb: 2,
-												}}
-											>
-												{selectedExecution.reasoning}
-											</Typography>
-										</>
-									)}
-
-									{(selectedExecution.keyFactors?.length ?? 0) > 0 && (
-										<>
-											<Typography variant="subtitle2" gutterBottom>
-												Key Factors
-											</Typography>
-											<Box
-												sx={{
-													display: "flex",
-													flexWrap: "wrap",
-													gap: 0.5,
-													mb: 2,
-												}}
-											>
-												{selectedExecution.keyFactors?.map((factor) => (
-													<Chip
-														key={factor}
-														label={factor}
-														size="small"
-														variant="outlined"
-													/>
-												))}
-											</Box>
-										</>
-									)}
-
-									<Typography variant="caption" color="text.secondary">
-										{formatDateTime(selectedExecution.createdAt)} &middot;{" "}
-										{getStatusChip(selectedExecution.status)}
-									</Typography>
-								</DialogContent>
-							</>
-						)}
-					</Dialog>
 				</Box>
 			</PageTransition>
 		</LocalizationProvider>

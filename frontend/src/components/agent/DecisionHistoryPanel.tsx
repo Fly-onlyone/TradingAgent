@@ -5,6 +5,7 @@
 
 import AnalyticsIcon from "@mui/icons-material/Analytics";
 import ArticleIcon from "@mui/icons-material/Article";
+import ChatIcon from "@mui/icons-material/Chat";
 import CloseIcon from "@mui/icons-material/Close";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -83,6 +84,7 @@ interface DecisionHistoryPanelProps {
 		decisionId: string,
 		feedback: "thumbs_up" | "thumbs_down",
 	) => void;
+	onViewChat?: (sessionId: string) => void;
 	filters: DecisionFilters;
 	onFiltersChange: (filters: DecisionFilters) => void;
 }
@@ -93,6 +95,7 @@ interface DecisionCardProps {
 	onConfirm?: () => void;
 	onReject?: () => void;
 	onFeedback?: (feedback: "thumbs_up" | "thumbs_down") => void;
+	onViewChat?: () => void;
 }
 
 function DecisionHistoryCard({
@@ -101,6 +104,7 @@ function DecisionHistoryCard({
 	onConfirm,
 	onReject,
 	onFeedback,
+	onViewChat,
 }: DecisionCardProps) {
 	const [isExpanded, setIsExpanded] = useState(false);
 
@@ -151,7 +155,8 @@ function DecisionHistoryCard({
 			initial={{ opacity: 0, y: 10 }}
 			animate={{ opacity: 1, y: 0 }}
 			sx={{
-				mb: 1.5,
+				display: "flex",
+				flexDirection: "column",
 				border: isPending ? 2 : 1,
 				borderColor: isPending ? "warning.main" : "divider",
 				bgcolor: isPending
@@ -159,7 +164,15 @@ function DecisionHistoryCard({
 					: "background.paper",
 			}}
 		>
-			<CardContent sx={{ py: 1.5, "&:last-child": { pb: 1.5 } }}>
+			<CardContent
+				sx={{
+					py: 1.5,
+					"&:last-child": { pb: 1.5 },
+					flex: 1,
+					display: "flex",
+					flexDirection: "column",
+				}}
+			>
 				{/* Header Row */}
 				<Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
 					<TypeIcon fontSize="small" color="action" />
@@ -297,17 +310,28 @@ function DecisionHistoryCard({
 							</IconButton>
 						</Box>
 					)}
+				</Collapse>
 
-					{/* View full details link */}
+				{/* Action links — always visible, pinned to bottom */}
+				<Divider sx={{ mt: "auto", mb: 1 }} />
+				<Stack direction="row" spacing={1}>
 					<Button
 						size="small"
 						endIcon={<OpenInNewIcon fontSize="small" />}
 						onClick={onExpand}
-						sx={{ mt: 0.5 }}
 					>
-						View Full Details
+						View Details
 					</Button>
-				</Collapse>
+					{decision.sessionId && onViewChat && (
+						<Button
+							size="small"
+							startIcon={<ChatIcon fontSize="small" />}
+							onClick={onViewChat}
+						>
+							View Chat
+						</Button>
+					)}
+				</Stack>
 			</CardContent>
 		</Card>
 	);
@@ -315,9 +339,19 @@ function DecisionHistoryCard({
 
 function DecisionHistorySkeleton() {
 	return (
-		<>
-			{[1, 2, 3].map((i) => (
-				<Card key={i} sx={{ mb: 1.5 }}>
+		<Box
+			sx={{
+				display: "grid",
+				gridTemplateColumns: {
+					xs: "1fr",
+					md: "repeat(2, 1fr)",
+					lg: "repeat(3, 1fr)",
+				},
+				gap: 1.5,
+			}}
+		>
+			{[1, 2, 3, 4, 5, 6].map((i) => (
+				<Card key={`skeleton-${i}`}>
 					<CardContent sx={{ py: 1.5 }}>
 						<Box sx={{ display: "flex", gap: 1, mb: 1 }}>
 							<Skeleton variant="circular" width={24} height={24} />
@@ -336,7 +370,7 @@ function DecisionHistorySkeleton() {
 					</CardContent>
 				</Card>
 			))}
-		</>
+		</Box>
 	);
 }
 
@@ -350,12 +384,14 @@ export function DecisionHistoryPanel({
 	onConfirmDecision,
 	onRejectDecision,
 	onFeedback,
+	onViewChat,
 	filters,
 	onFiltersChange,
 }: DecisionHistoryPanelProps) {
 	const [showFilters, setShowFilters] = useState(false);
 
-	const activeFilterCount = Object.values(filters).filter(Boolean).length;
+	const { taskId: _taskId, ...userFilters } = filters;
+	const activeFilterCount = Object.values(userFilters).filter(Boolean).length;
 
 	const handleFilterChange = (
 		key: keyof DecisionFilters,
@@ -368,11 +404,48 @@ export function DecisionHistoryPanel({
 	};
 
 	const clearFilters = () => {
-		onFiltersChange({});
+		onFiltersChange(filters.taskId ? { taskId: filters.taskId } : {});
+	};
+
+	const clearTaskFilter = () => {
+		const { taskId: _, ...rest } = filters;
+		onFiltersChange(rest);
 	};
 
 	return (
 		<Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+			{/* Task filter banner */}
+			{filters.taskId && (
+				<Box
+					sx={{
+						px: 2,
+						py: 1,
+						display: "flex",
+						alignItems: "center",
+						gap: 1,
+						bgcolor: "primary.main",
+						color: "primary.contrastText",
+					}}
+				>
+					<FilterListIcon fontSize="small" />
+					<Typography variant="body2" sx={{ flex: 1 }}>
+						Filtered by task
+					</Typography>
+					<Chip
+						label="Clear"
+						size="small"
+						onDelete={clearTaskFilter}
+						onClick={clearTaskFilter}
+						sx={{
+							color: "inherit",
+							borderColor: "rgba(255,255,255,0.5)",
+							"& .MuiChip-deleteIcon": { color: "inherit" },
+						}}
+						variant="outlined"
+					/>
+				</Box>
+			)}
+
 			{/* Header */}
 			<Box
 				sx={{
@@ -512,18 +585,35 @@ export function DecisionHistoryPanel({
 						)}
 					</Box>
 				) : (
-					<AnimatePresence>
-						{decisions.map((decision) => (
-							<DecisionHistoryCard
-								key={decision.id}
-								decision={decision}
-								onExpand={() => onDecisionClick?.(decision.id)}
-								onConfirm={() => onConfirmDecision?.(decision.id)}
-								onReject={() => onRejectDecision?.(decision.id)}
-								onFeedback={(feedback) => onFeedback?.(decision.id, feedback)}
-							/>
-						))}
-					</AnimatePresence>
+					<Box
+						sx={{
+							display: "grid",
+							gridTemplateColumns: {
+								xs: "1fr",
+								md: "repeat(2, 1fr)",
+								lg: "repeat(3, 1fr)",
+							},
+							gap: 1.5,
+						}}
+					>
+						<AnimatePresence>
+							{decisions.map((decision) => (
+								<DecisionHistoryCard
+									key={decision.id}
+									decision={decision}
+									onExpand={() => onDecisionClick?.(decision.id)}
+									onConfirm={() => onConfirmDecision?.(decision.id)}
+									onReject={() => onRejectDecision?.(decision.id)}
+									onFeedback={(feedback) => onFeedback?.(decision.id, feedback)}
+									onViewChat={
+										decision.sessionId && onViewChat
+											? () => onViewChat(decision.sessionId as string)
+											: undefined
+									}
+								/>
+							))}
+						</AnimatePresence>
+					</Box>
 				)}
 
 				{/* Load More */}

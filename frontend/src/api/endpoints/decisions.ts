@@ -20,6 +20,7 @@ export interface DecisionsFilter extends PaginationParams {
 	action?: DecisionAction;
 	status?: DecisionStatus;
 	sessionId?: string;
+	taskId?: string;
 	startDate?: string;
 	endDate?: string;
 }

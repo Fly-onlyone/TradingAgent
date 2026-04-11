@@ -5,7 +5,7 @@
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import AnalyticsIcon from "@mui/icons-material/Analytics";
 import BarChartIcon from "@mui/icons-material/BarChart";
-import HistoryIcon from "@mui/icons-material/History";
+import ChatIcon from "@mui/icons-material/Chat";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import MenuIcon from "@mui/icons-material/Menu";
 import PsychologyIcon from "@mui/icons-material/Psychology";
@@ -77,9 +77,6 @@ export const Route = createFileRoute("/agent")({
 	component: AgentPage,
 });
 
-// Sidebar tab type
-type SidebarTab = "sessions" | "decisions";
-
 // Quick action cards for empty state
 const quickActions = [
 	{
@@ -133,6 +130,7 @@ function AgentPage() {
 		isLoadingDecisions,
 		hasMoreDecisions,
 		pendingDecisionsCount,
+		mainTab,
 		showThinkingContent,
 		expandAllTools,
 		toggleThinkingContent,
@@ -146,6 +144,7 @@ function AgentPage() {
 		appendDecisions,
 		setDecisionSymbols,
 		setDecisionFilters,
+		setMainTab,
 		setIsLoadingDecisions,
 		setHasMoreDecisions,
 		setPendingDecisionsCount,
@@ -153,11 +152,10 @@ function AgentPage() {
 	} = useAgentStore();
 
 	// Local state
-	const [sidebarTab, setSidebarTab] = useState<SidebarTab>("sessions");
 	const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 	const [decisionPage, setDecisionPage] = useState(1);
 	const [showScrollBottom, setShowScrollBottom] = useState(false);
-	const isDecisionsTabActive = sidebarTab === "decisions";
+	const isDecisionsTabActive = mainTab === "decisions";
 
 	// WebSocket connection
 	const {
@@ -501,6 +499,15 @@ function AgentPage() {
 		setDecisionPage((prev) => prev + 1);
 	}, []);
 
+	const handleViewChat = useCallback(
+		(sessionId: string) => {
+			prepareForAutoScroll();
+			setSelectedSessionId(sessionId);
+			setMainTab("chat");
+		},
+		[prepareForAutoScroll, setSelectedSessionId, setMainTab],
+	);
+
 	// Always start with a blank chat when navigating to the agent page
 	useEffect(() => {
 		prepareForAutoScroll();
@@ -551,61 +558,16 @@ function AgentPage() {
 				flexDirection: "column",
 			}}
 		>
-			<Tabs
-				value={sidebarTab}
-				onChange={(_, value) => setSidebarTab(value)}
-				variant="fullWidth"
-				sx={{ borderBottom: 1, borderColor: "divider" }}
-			>
-				<Tab
-					value="sessions"
-					icon={<HistoryIcon fontSize="small" />}
-					label="History"
-					iconPosition="start"
-					sx={{ minHeight: 48 }}
-				/>
-				<Tab
-					value="decisions"
-					icon={
-						<Badge badgeContent={pendingDecisionsCount} color="warning">
-							<AnalyticsIcon fontSize="small" />
-						</Badge>
-					}
-					label="Pending Decisions"
-					iconPosition="start"
-					sx={{ minHeight: 48 }}
-				/>
-			</Tabs>
-
-			<Box sx={{ flex: 1, overflow: "hidden" }}>
-				{sidebarTab === "sessions" ? (
-					<SessionList
-						groups={displayGroups}
-						currentSessionId={selectedSessionId || undefined}
-						activeSessionId={activeRunSessionId || undefined}
-						isLoading={sessionsLoading}
-						onSessionSelect={handleSessionSelect}
-						onNewSession={handleNewSession}
-						onDeleteSession={handleDeleteSession}
-						onRenameSession={handleRenameSession}
-					/>
-				) : (
-					<DecisionHistoryPanel
-						decisions={decisions}
-						symbols={decisionSymbols}
-						isLoading={isLoadingDecisions}
-						hasMore={hasMoreDecisions}
-						onLoadMore={handleLoadMoreDecisions}
-						onConfirmDecision={(id) => confirmDecisionMutation.mutate(id)}
-						onRejectDecision={(id) => rejectDecisionMutation.mutate(id)}
-						onFeedback={(id, feedback) =>
-							feedbackMutation.mutate({ decisionId: id, feedback })
-						}
-						filters={decisionFilters}
-						onFiltersChange={handleFiltersChange}
-					/>
-				)}
-			</Box>
+			<SessionList
+				groups={displayGroups}
+				currentSessionId={selectedSessionId || undefined}
+				activeSessionId={activeRunSessionId || undefined}
+				isLoading={sessionsLoading}
+				onSessionSelect={handleSessionSelect}
+				onNewSession={handleNewSession}
+				onDeleteSession={handleDeleteSession}
+				onRenameSession={handleRenameSession}
+			/>
 		</Box>
 	);
 
@@ -656,14 +618,14 @@ function AgentPage() {
 					</Card>
 				)}
 
-				{/* Main Chat Area */}
+				{/* Main Area */}
 				<Card
 					sx={{
 						flex: 1,
 						minWidth: 0,
 						minHeight: 0,
-						display: "grid",
-						gridTemplateRows: "auto minmax(0, 1fr) auto",
+						display: "flex",
+						flexDirection: "column",
 						overflow: "hidden",
 					}}
 				>
@@ -702,7 +664,7 @@ function AgentPage() {
 								<Typography variant="h6" noWrap>
 									Trading agent
 								</Typography>
-								{selectedSessionId && (
+								{mainTab === "chat" && selectedSessionId && (
 									<Typography
 										variant="caption"
 										color="text.secondary"
@@ -726,234 +688,292 @@ function AgentPage() {
 							}}
 						>
 							<AgentStatusBadge status={status} />
-							<Tooltip
-								title={
-									expandAllTools
-										? "Collapse tool details"
-										: "Expand tool details"
-								}
-								arrow
-								placement="bottom"
-							>
-								<IconButton
-									onClick={toggleExpandAllTools}
-									size="small"
-									color={expandAllTools ? "primary" : "default"}
-								>
-									{expandAllTools ? (
-										<UnfoldLessIcon fontSize="small" />
-									) : (
-										<UnfoldMoreIcon fontSize="small" />
-									)}
-								</IconButton>
-							</Tooltip>
-							<Tooltip
-								title={showThinkingContent ? "Hide thinking" : "Show thinking"}
-								arrow
-								placement="bottom"
-							>
-								<IconButton
-									onClick={toggleThinkingContent}
-									size="small"
-									color={showThinkingContent ? "primary" : "default"}
-								>
-									<PsychologyIcon fontSize="small" />
-								</IconButton>
-							</Tooltip>
+							{mainTab === "chat" && (
+								<>
+									<Tooltip
+										title={
+											expandAllTools
+												? "Collapse tool details"
+												: "Expand tool details"
+										}
+										arrow
+										placement="bottom"
+									>
+										<IconButton
+											onClick={toggleExpandAllTools}
+											size="small"
+											color={expandAllTools ? "primary" : "default"}
+										>
+											{expandAllTools ? (
+												<UnfoldLessIcon fontSize="small" />
+											) : (
+												<UnfoldMoreIcon fontSize="small" />
+											)}
+										</IconButton>
+									</Tooltip>
+									<Tooltip
+										title={
+											showThinkingContent ? "Hide thinking" : "Show thinking"
+										}
+										arrow
+										placement="bottom"
+									>
+										<IconButton
+											onClick={toggleThinkingContent}
+											size="small"
+											color={showThinkingContent ? "primary" : "default"}
+										>
+											<PsychologyIcon fontSize="small" />
+										</IconButton>
+									</Tooltip>
+								</>
+							)}
 						</Box>
 					</Box>
 
-					{/* Messages */}
-					<CardContent
-						ref={messagesContainerRef}
-						onScroll={handleScroll}
-						sx={{
-							flex: 1,
-							minHeight: 0,
-							overflow: "auto",
-							display: "flex",
-							flexDirection: "column",
-							position: "relative",
-						}}
+					{/* Main Tab Bar */}
+					<Tabs
+						value={mainTab}
+						onChange={(_, value) => setMainTab(value)}
+						sx={{ borderBottom: 1, borderColor: "divider", px: 2 }}
 					>
-						{messages.length === 0 && !isThinking ? (
-							<Box
+						<Tab
+							value="chat"
+							icon={<ChatIcon fontSize="small" />}
+							label="Chat"
+							iconPosition="start"
+							sx={{ minHeight: 44 }}
+						/>
+						<Tab
+							value="decisions"
+							icon={
+								<Badge badgeContent={pendingDecisionsCount} color="warning">
+									<AnalyticsIcon fontSize="small" />
+								</Badge>
+							}
+							label="Decisions"
+							iconPosition="start"
+							sx={{ minHeight: 44 }}
+						/>
+					</Tabs>
+
+					{/* Tab Content */}
+					{mainTab === "chat" ? (
+						<>
+							{/* Messages */}
+							<CardContent
+								ref={messagesContainerRef}
+								onScroll={handleScroll}
 								sx={{
-									display: "flex",
-									flexDirection: "column",
-									alignItems: "center",
-									justifyContent: "center",
 									flex: 1,
 									minHeight: 0,
-									p: { xs: 2.5, sm: 4 },
+									overflow: "auto",
+									display: "flex",
+									flexDirection: "column",
+									position: "relative",
 								}}
 							>
-								<SmartToyIcon
-									sx={{
-										fontSize: 48,
-										color: "primary.main",
-										mb: 2,
-										opacity: 0.6,
-									}}
-								/>
-								<Typography variant="h6" sx={{ mb: 1 }}>
-									Trading agent
-								</Typography>
-								<Typography
-									variant="body2"
-									color="text.secondary"
-									sx={{ mb: 4, textAlign: "center" }}
-								>
-									{status === "connected" ||
-									status === "thinking" ||
-									status === "initializing"
-										? "Your AI assistant for automated trading"
-										: status === "auth_required"
-											? "Configure authentication in Settings, then refresh."
-											: "Check agent configuration in the Settings page."}
-								</Typography>
-								{(status === "connected" ||
-									status === "thinking" ||
-									status === "initializing") && (
-									<Grid
-										container
-										spacing={2}
-										sx={{ width: "100%", maxWidth: 500 }}
+								{messages.length === 0 && !isThinking ? (
+									<Box
+										sx={{
+											display: "flex",
+											flexDirection: "column",
+											alignItems: "center",
+											justifyContent: "center",
+											flex: 1,
+											minHeight: 0,
+											p: { xs: 2.5, sm: 4 },
+										}}
 									>
-										{quickActions.map((action) => {
-											const Icon = action.icon;
-											return (
-												<Grid size={{ xs: 12, sm: 6 }} key={action.label}>
-													<Card
-														sx={{
-															cursor: hasActiveRun ? "default" : "pointer",
-															textAlign: "center",
-															p: 2,
-															opacity: hasActiveRun ? 0.6 : 1,
-															transition: "transform 0.2s, box-shadow 0.2s",
-															"&:hover": {
-																transform: hasActiveRun
-																	? "none"
-																	: "translateY(-2px)",
-																boxShadow: hasActiveRun
-																	? "none"
-																	: (t) => t.trading.glow.primary,
-															},
-														}}
-														onClick={() => {
-															if (!hasActiveRun) {
-																handleQuickAction(action.label);
-															}
-														}}
-													>
-														<Box sx={{ mb: 0.5 }}>
-															<Icon
-																sx={{ fontSize: 32, color: "primary.main" }}
-															/>
-														</Box>
-														<Typography variant="body2" fontWeight={600}>
-															{action.label}
-														</Typography>
-														<Typography
-															variant="caption"
-															color="text.secondary"
-														>
-															{action.desc}
-														</Typography>
-													</Card>
-												</Grid>
-											);
-										})}
-									</Grid>
+										<SmartToyIcon
+											sx={{
+												fontSize: 48,
+												color: "primary.main",
+												mb: 2,
+												opacity: 0.6,
+											}}
+										/>
+										<Typography variant="h6" sx={{ mb: 1 }}>
+											Trading agent
+										</Typography>
+										<Typography
+											variant="body2"
+											color="text.secondary"
+											sx={{ mb: 4, textAlign: "center" }}
+										>
+											{status === "connected" ||
+											status === "thinking" ||
+											status === "initializing"
+												? "Your AI assistant for automated trading"
+												: status === "auth_required"
+													? "Configure authentication in Settings, then refresh."
+													: "Check agent configuration in the Settings page."}
+										</Typography>
+										{(status === "connected" ||
+											status === "thinking" ||
+											status === "initializing") && (
+											<Grid
+												container
+												spacing={2}
+												sx={{ width: "100%", maxWidth: 500 }}
+											>
+												{quickActions.map((action) => {
+													const Icon = action.icon;
+													return (
+														<Grid size={{ xs: 12, sm: 6 }} key={action.label}>
+															<Card
+																sx={{
+																	cursor: hasActiveRun ? "default" : "pointer",
+																	textAlign: "center",
+																	p: 2,
+																	opacity: hasActiveRun ? 0.6 : 1,
+																	transition: "transform 0.2s, box-shadow 0.2s",
+																	"&:hover": {
+																		transform: hasActiveRun
+																			? "none"
+																			: "translateY(-2px)",
+																		boxShadow: hasActiveRun
+																			? "none"
+																			: (t) => t.trading.glow.primary,
+																	},
+																}}
+																onClick={() => {
+																	if (!hasActiveRun) {
+																		handleQuickAction(action.label);
+																	}
+																}}
+															>
+																<Box sx={{ mb: 0.5 }}>
+																	<Icon
+																		sx={{
+																			fontSize: 32,
+																			color: "primary.main",
+																		}}
+																	/>
+																</Box>
+																<Typography variant="body2" fontWeight={600}>
+																	{action.label}
+																</Typography>
+																<Typography
+																	variant="caption"
+																	color="text.secondary"
+																>
+																	{action.desc}
+																</Typography>
+															</Card>
+														</Grid>
+													);
+												})}
+											</Grid>
+										)}
+									</Box>
+								) : (
+									messages.map((message) => (
+										<ChatMessage
+											key={message.id}
+											message={message}
+											showThinkingContent={showThinkingContent}
+											expandAllTools={expandAllTools}
+										/>
+									))
 								)}
-							</Box>
-						) : (
-							messages.map((message) => (
-								<ChatMessage
-									key={message.id}
-									message={message}
-									showThinkingContent={showThinkingContent}
-									expandAllTools={expandAllTools}
-								/>
-							))
-						)}
-						{streamingText && (
-							<ChatMessage
-								key="streaming"
-								message={{
-									id: "streaming",
-									role: "assistant",
-									content: streamingText,
-									timestamp: Date.now(),
-								}}
-								showThinkingContent={false}
-								isStreaming
-							/>
-						)}
-						<AnimatePresence>
-							{isThinking && (
-								<ThinkingIndicator
-									toolCalls={currentTurnToolCalls}
-									thinkingContent={thinkingContent}
-									showThinkingContent={showThinkingContent}
-									expandAllTools={expandAllTools}
+								{streamingText && (
+									<ChatMessage
+										key="streaming"
+										message={{
+											id: "streaming",
+											role: "assistant",
+											content: streamingText,
+											timestamp: Date.now(),
+										}}
+										showThinkingContent={false}
+										isStreaming
+									/>
+								)}
+								<AnimatePresence>
+									{isThinking && (
+										<ThinkingIndicator
+											toolCalls={currentTurnToolCalls}
+											thinkingContent={thinkingContent}
+											showThinkingContent={showThinkingContent}
+											expandAllTools={expandAllTools}
+										/>
+									)}
+								</AnimatePresence>
+								{/* Scroll to bottom FAB */}
+								{showScrollBottom && (
+									<Fab
+										size="small"
+										color="primary"
+										onClick={() => {
+											prepareForAutoScroll();
+											scrollToBottom("smooth");
+										}}
+										sx={{
+											position: "sticky",
+											bottom: 16,
+											alignSelf: "center",
+											zIndex: 10,
+										}}
+										aria-label="Scroll to bottom"
+									>
+										<KeyboardArrowDownIcon />
+									</Fab>
+								)}
+							</CardContent>
+
+							<Divider />
+
+							{/* Agent question (interactive menu) */}
+							{pendingQuestion && (
+								<AskUserBlock
+									key={pendingQuestion.id}
+									question={pendingQuestion}
+									onAnswer={(answer) =>
+										sendAnswer(
+											pendingQuestion.id,
+											answer,
+											pendingQuestion.sessionId,
+										)
+									}
 								/>
 							)}
-						</AnimatePresence>
-						{/* Scroll to bottom FAB */}
-						{showScrollBottom && (
-							<Fab
-								size="small"
-								color="primary"
-								onClick={() => {
-									prepareForAutoScroll();
-									scrollToBottom("smooth");
-								}}
-								sx={{
-									position: "sticky",
-									bottom: 16,
-									alignSelf: "center",
-									zIndex: 10,
-								}}
-								aria-label="Scroll to bottom"
-							>
-								<KeyboardArrowDownIcon />
-							</Fab>
-						)}
-					</CardContent>
 
-					<Divider />
-
-					{/* Agent question (interactive menu) */}
-					{pendingQuestion && (
-						<AskUserBlock
-							key={pendingQuestion.id}
-							question={pendingQuestion}
-							onAnswer={(answer) =>
-								sendAnswer(
-									pendingQuestion.id,
-									answer,
-									pendingQuestion.sessionId,
-								)
-							}
-						/>
+							{/* Input */}
+							<Box sx={{ p: 2, flexShrink: 0 }}>
+								<ChatInput
+									onSendMessage={handleSendMessage}
+									onRequestAnalysis={handleRequestAnalysis}
+									onRequestRecommendation={handleRequestRecommendation}
+									onRequestStrategyReview={handleRequestStrategyReview}
+									onCancel={sendCancel}
+									isThinking={hasActiveRun}
+									isCancelling={activeRunIsCancelling}
+									disabled={!isConnected}
+									totalTokens={selectedSessionTokens}
+									sessionModel={selectedSessionModel}
+								/>
+							</Box>
+						</>
+					) : (
+						<Box sx={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+							<DecisionHistoryPanel
+								decisions={decisions}
+								symbols={decisionSymbols}
+								isLoading={isLoadingDecisions}
+								hasMore={hasMoreDecisions}
+								onLoadMore={handleLoadMoreDecisions}
+								onConfirmDecision={(id) => confirmDecisionMutation.mutate(id)}
+								onRejectDecision={(id) => rejectDecisionMutation.mutate(id)}
+								onFeedback={(id, feedback) =>
+									feedbackMutation.mutate({ decisionId: id, feedback })
+								}
+								onViewChat={handleViewChat}
+								filters={decisionFilters}
+								onFiltersChange={handleFiltersChange}
+							/>
+						</Box>
 					)}
-
-					{/* Input */}
-					<Box sx={{ p: 2, flexShrink: 0 }}>
-						<ChatInput
-							onSendMessage={handleSendMessage}
-							onRequestAnalysis={handleRequestAnalysis}
-							onRequestRecommendation={handleRequestRecommendation}
-							onRequestStrategyReview={handleRequestStrategyReview}
-							onCancel={sendCancel}
-							isThinking={hasActiveRun}
-							isCancelling={activeRunIsCancelling}
-							disabled={!isConnected}
-							totalTokens={selectedSessionTokens}
-							sessionModel={selectedSessionModel}
-						/>
-					</Box>
 				</Card>
 			</Box>
 		</PageTransition>

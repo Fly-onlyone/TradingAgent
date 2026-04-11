@@ -45,6 +45,8 @@ interface AgentState {
 	hasMoreDecisions: boolean;
 	pendingDecisionsCount: number;
 
+	mainTab: "chat" | "decisions";
+
 	status: AgentStatus;
 
 	showThinkingContent: boolean;
@@ -74,6 +76,8 @@ interface AgentState {
 	appendDecisions: (decisions: AgentDecisionSummary[]) => void;
 	setDecisionSymbols: (symbols: string[]) => void;
 	setDecisionFilters: (filters: DecisionFilters) => void;
+	setDecisionTaskFilter: (taskId: string) => void;
+	setMainTab: (tab: "chat" | "decisions") => void;
 	setIsLoadingDecisions: (loading: boolean) => void;
 	setHasMoreDecisions: (hasMore: boolean) => void;
 	setPendingDecisionsCount: (count: number) => void;
@@ -144,6 +148,8 @@ export const useAgentStore = create<AgentState>()(
 			isLoadingDecisions: false,
 			hasMoreDecisions: false,
 			pendingDecisionsCount: 0,
+
+			mainTab: "chat",
 
 			status: "disconnected",
 
@@ -482,6 +488,11 @@ export const useAgentStore = create<AgentState>()(
 			setDecisionSymbols: (decisionSymbols) => set({ decisionSymbols }),
 
 			setDecisionFilters: (decisionFilters) => set({ decisionFilters }),
+
+			setDecisionTaskFilter: (taskId) =>
+				set({ decisionFilters: { taskId }, mainTab: "decisions" }),
+
+			setMainTab: (mainTab) => set({ mainTab }),
 
 			setIsLoadingDecisions: (isLoadingDecisions) =>
 				set({ isLoadingDecisions }),

@@ -7,8 +7,6 @@ import type {
 	AgentTask,
 	MonitoringCondition,
 	TaskCreate,
-	TaskExecution,
-	TaskExecutionListResponse,
 	TaskListResponse,
 	TaskSchedule,
 	TaskStatus,
@@ -100,36 +98,6 @@ function transformTaskListResponse(
 		tasks: (
 			(data.tasks as Array<Record<string, unknown>> | undefined) ?? []
 		).map(transformTask),
-		total: data.total as number,
-		page: data.page as number,
-		pageSize: data.page_size as number,
-	};
-}
-
-function transformTaskExecution(data: Record<string, unknown>): TaskExecution {
-	return {
-		id: data.id as string,
-		taskId: data.task_id as string,
-		sessionId: data.session_id as string | undefined,
-		decisionType: data.decision_type as string,
-		symbol: data.symbol as string | undefined,
-		action: data.action as string | undefined,
-		confidence: data.confidence as number | undefined,
-		summary: data.summary as string,
-		reasoning: data.reasoning as string | undefined,
-		keyFactors: data.key_factors as string[] | undefined,
-		status: data.status as string,
-		createdAt: data.created_at as string,
-	};
-}
-
-function transformTaskExecutionListResponse(
-	data: Record<string, unknown>,
-): TaskExecutionListResponse {
-	return {
-		executions: (
-			(data.executions as Array<Record<string, unknown>> | undefined) ?? []
-		).map(transformTaskExecution),
 		total: data.total as number,
 		page: data.page as number,
 		pageSize: data.page_size as number,
@@ -288,20 +256,6 @@ export const tasksApi = {
 			"/agent/tasks/emergency-stop",
 		);
 		return { pausedCount: response.data.paused_count as number };
-	},
-
-	/**
-	 * Get task execution history
-	 */
-	async getTaskHistory(
-		taskId: string,
-		params?: PaginationParams,
-	): Promise<TaskExecutionListResponse> {
-		const response = await apiClient.get<Record<string, unknown>>(
-			`/agent/tasks/${taskId}/history`,
-			{ params },
-		);
-		return transformTaskExecutionListResponse(response.data);
 	},
 };
 

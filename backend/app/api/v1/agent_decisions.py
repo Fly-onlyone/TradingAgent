@@ -212,6 +212,7 @@ async def list_decisions(
     action: DecisionAction | None = None,
     status: DecisionStatus | None = None,
     session_id: str | None = None,
+    task_id: str | None = None,
     start_date: datetime | None = None,
     end_date: datetime | None = None,
     page: int = Query(1, ge=1),
@@ -231,6 +232,8 @@ async def list_decisions(
         query = query.find(AgentDecision.status == status)
     if session_id:
         query = query.find(AgentDecision.session_id == PydanticObjectId(session_id))
+    if task_id:
+        query = query.find(AgentDecision.task_id == PydanticObjectId(task_id))
     if start_date:
         query = query.find(AgentDecision.created_at >= start_date)
     if end_date:

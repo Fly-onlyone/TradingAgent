@@ -128,30 +128,8 @@ export interface TaskUpdate {
 	customInstructions?: string;
 }
 
-export interface TaskExecution {
-	id: string;
-	taskId: string;
-	sessionId?: string;
-	decisionType: string;
-	symbol?: string;
-	action?: string;
-	confidence?: number;
-	summary: string;
-	reasoning?: string;
-	keyFactors?: string[];
-	status: string;
-	createdAt: string;
-}
-
 export interface TaskListResponse {
 	tasks: AgentTask[];
-	total: number;
-	page: number;
-	pageSize: number;
-}
-
-export interface TaskExecutionListResponse {
-	executions: TaskExecution[];
 	total: number;
 	page: number;
 	pageSize: number;

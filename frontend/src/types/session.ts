@@ -18,6 +18,7 @@ export interface DecisionFilters {
 	symbol?: string;
 	action?: DecisionAction;
 	status?: DecisionStatus;
+	taskId?: string;
 }
 
 // Decision types
