@@ -20,6 +20,7 @@ from app.db.models.agent_decision import (
     DecisionType,
     ExecutionStatus,
 )
+from app.db.models.agent_session import AgentSession, MessageRole, SessionMessage
 from app.db.models.agent_task import (
     AgentMode,
     AgentTask,
@@ -437,7 +438,7 @@ class AgentTaskScheduler:
                     earliest_next_run = next_fire
 
         if earliest_next_run:
-            task.next_run_at = earliest_next_run
+            task.next_run_at = earliest_next_run.astimezone(UTC)
             await task.save()
 
         logger.info(
@@ -458,7 +459,7 @@ class AgentTaskScheduler:
             return DateTrigger(run_date=run_at)
 
         elif schedule.frequency == TaskFrequency.INTERVAL:
-            return self._make_interval_trigger(schedule)
+            return self._make_interval_trigger(schedule, timezone=timezone)
 
         elif schedule.frequency == TaskFrequency.DAILY:
             if schedule.interval_value and schedule.interval_unit:
@@ -522,6 +523,10 @@ class AgentTaskScheduler:
             today = datetime.now(tz).replace(hour=hour, minute=minute, second=0, microsecond=0)
             kwargs["start_date"] = today
             kwargs["timezone"] = tz
+        elif timezone:
+            from zoneinfo import ZoneInfo
+
+            kwargs["timezone"] = ZoneInfo(timezone)
 
         return IntervalTrigger(**kwargs)
 
@@ -575,16 +580,18 @@ class AgentTaskScheduler:
                         await task.save()
                         self._remove_task_jobs(str(task.id))
 
-                    # Create completion notification
+                    # Create completion notification (with desktop toast)
                     try:
-                        notification = Notification(
+                        from app.services.notification_service import NotificationService
+
+                        svc = NotificationService()
+                        await svc.create_notification(
                             user_id=task.user_id,
                             title=f"Task Completed: {task.name}",
                             body=f"Analyzed {len(task.symbols)} symbol(s) successfully.",
                             notification_type=NotificationType.TASK_COMPLETED,
                             task_id=task.id,
                         )
-                        await notification.insert()
                     except Exception:
                         logger.debug("Failed to create completion notification", exc_info=True)
 
@@ -643,9 +650,34 @@ class AgentTaskScheduler:
                 finally:
                     self._clear_modification_context(request_id)
 
+                # Create session to store the analysis conversation
+                now = datetime.now(UTC)
+                session = AgentSession(
+                    user_id=task.user_id,
+                    title=f"{task.name} — {symbol}",
+                    messages=[
+                        SessionMessage(role=MessageRole.USER, content=prompt, timestamp=now),
+                        SessionMessage(
+                            role=MessageRole.ASSISTANT,
+                            content=result.get("reasoning") or result.get("summary", "Analysis completed"),
+                            timestamp=now,
+                        ),
+                    ],
+                    total_messages=2,
+                    user_messages=1,
+                    assistant_messages=1,
+                    symbols_discussed=[symbol],
+                    is_active=False,
+                    started_at=now,
+                    ended_at=now,
+                    last_message_at=now,
+                )
+                await session.insert()
+
                 # Store decision
                 decision = AgentDecision(
                     user_id=task.user_id,
+                    session_id=session.id,
                     task_id=task.id,
                     decision_type=DecisionType.ANALYSIS,
                     symbol=symbol,
@@ -739,9 +771,34 @@ class AgentTaskScheduler:
                 action = self._parse_action(result.get("action"))
                 confidence = float(result.get("confidence") or 0)
 
+                # Create session for the trading analysis
+                now = datetime.now(UTC)
+                session = AgentSession(
+                    user_id=task.user_id,
+                    title=f"{task.name} — {symbol}",
+                    messages=[
+                        SessionMessage(role=MessageRole.USER, content=prompt, timestamp=now),
+                        SessionMessage(
+                            role=MessageRole.ASSISTANT,
+                            content=result.get("reasoning") or result.get("summary", "Analysis completed"),
+                            timestamp=now,
+                        ),
+                    ],
+                    total_messages=2,
+                    user_messages=1,
+                    assistant_messages=1,
+                    symbols_discussed=[symbol],
+                    is_active=False,
+                    started_at=now,
+                    ended_at=now,
+                    last_message_at=now,
+                )
+                await session.insert()
+
                 # Create decision record
                 decision = AgentDecision(
                     user_id=task.user_id,
+                    session_id=session.id,
                     task_id=task.id,
                     decision_type=DecisionType.RECOMMENDATION,
                     symbol=symbol,

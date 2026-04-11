@@ -116,6 +116,21 @@ def clear_ws_event_emitter() -> None:
     _ws_event_emitter.set(None)
 
 
+async def _emit_data_event(category: str, event: str, entity_id: str | None = None) -> None:
+    """Notify frontend of data changes via WebSocket (tasks, memories, knowledge)."""
+    emitter = _ws_event_emitter.get()
+    if emitter:
+        try:
+            await emitter(
+                {
+                    "type": "data_event",
+                    "data": {"category": category, "event": event, "entityId": entity_id},
+                }
+            )
+        except Exception:
+            logging.getLogger(__name__).debug("Failed to emit data event", exc_info=True)
+
+
 async def _load_session_for_pending_question(
     session_id: str | None,
     user_id: str | None = None,
@@ -987,6 +1002,7 @@ async def mcp_toggle_strategy(args: dict[str, Any]) -> dict[str, Any]:
         strategy.is_active = args["activate"]
         strategy.update_timestamp()
         await strategy.save()
+        await _emit_data_event("knowledge", "updated")
 
         action = "activated" if args["activate"] else "deactivated"
         response = {
@@ -1357,10 +1373,11 @@ def _text_result(data: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def mcp_modify_task(args: dict[str, Any]) -> dict[str, Any]:
+    import logging
+
+    _logger = logging.getLogger(__name__)
     start = time.monotonic()
     try:
-        import logging
-
         from app.db.models.agent_task import (
             AGENT_MODIFIABLE_FIELDS,
             AgentTask,
@@ -1368,7 +1385,6 @@ async def mcp_modify_task(args: dict[str, Any]) -> dict[str, Any]:
             coerce_task_changes,
         )
 
-        _logger = logging.getLogger(__name__)
         changes: dict[str, Any] = args.get("changes", {})
         reason: str = args.get("reason", "")
 
@@ -1450,14 +1466,17 @@ async def mcp_modify_task(args: dict[str, Any]) -> dict[str, Any]:
                 except Exception:
                     _logger.warning("Failed to reschedule after modification", exc_info=True)
 
-            _logger.info("Task %s auto-modified: %s", ctx["task_id"], list(changes.keys()))
-            return _text_result(
+            _logger.info("Task %s auto-modified: %s", task_id, list(changes.keys()))
+            await _emit_data_event("tasks", "updated", str(task_id))
+            response = _text_result(
                 {
                     "status": "ok",
                     "message": f"Task modified (auto). Changed: {', '.join(changes.keys())}.",
                     "applied": True,
                 }
             )
+            _buffer_tool_result("modify_task", args, response, start)
+            return response
 
         if mode == "ask":
             from datetime import UTC, datetime, timedelta
@@ -1494,10 +1513,10 @@ async def mcp_modify_task(args: dict[str, Any]) -> dict[str, Any]:
 
             _logger.info(
                 "Task %s modification proposed: %s",
-                ctx["task_id"],
+                task_id,
                 list(changes.keys()),
             )
-            return _text_result(
+            response = _text_result(
                 {
                     "status": "ok",
                     "message": f"Awaiting user approval. Fields: {', '.join(changes.keys())}.",
@@ -1505,11 +1524,14 @@ async def mcp_modify_task(args: dict[str, Any]) -> dict[str, Any]:
                     "decision_id": str(decision.id),
                 }
             )
+            _buffer_tool_result("modify_task", args, response, start)
+            return response
 
         response = _text_result({"status": "error", "message": f"Unknown mode: {mode}"})
         _buffer_tool_result("modify_task", args, response, start)
         return response
     except Exception as e:
+        _logger.error("modify_task failed for task %s: %s", args.get("task_id"), e, exc_info=True)
         response = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
         _buffer_tool_result("modify_task", args, response, start)
         return response
@@ -1817,6 +1839,7 @@ async def mcp_create_task(args: dict[str, Any]) -> dict[str, Any]:
 
         scheduler = get_scheduler()
         await scheduler.schedule_task(task)
+        await _emit_data_event("tasks", "created", str(task.id))
 
         response = _text_result(
             {
@@ -1896,6 +1919,7 @@ async def mcp_delete_task(args: dict[str, Any]) -> dict[str, Any]:
             pass  # Task may not be scheduled
 
         await task.delete()
+        await _emit_data_event("tasks", "deleted", task_id)
 
         response = _text_result(
             {
@@ -1963,6 +1987,7 @@ async def mcp_pause_task(args: dict[str, Any]) -> dict[str, Any]:
         task.status = TaskStatus.PAUSED
         task.update_timestamp()
         await task.save()
+        await _emit_data_event("tasks", "updated", str(task.id))
 
         # Unschedule from APScheduler
         try:
@@ -2242,6 +2267,7 @@ async def mcp_save_memory(args: dict[str, Any]) -> dict[str, Any]:
             category=args["category"],
             tags=args.get("tags"),
         )
+        await _emit_data_event("memories", "created")
         return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
     except Exception as e:
         return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
@@ -2351,6 +2377,7 @@ async def mcp_update_memory(args: dict[str, Any]) -> dict[str, Any]:
             category=args.get("category"),
             tags=args.get("tags"),
         )
+        await _emit_data_event("memories", "updated")
         return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
     except Exception as e:
         return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}
@@ -2379,6 +2406,7 @@ async def mcp_delete_memory(args: dict[str, Any]) -> dict[str, Any]:
             return {"content": [{"type": "text", "text": json.dumps({"error": "No active user"})}]}
 
         result = await delete_memory(user_id=user_id, memory_id=args["memory_id"])
+        await _emit_data_event("memories", "deleted")
         return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
     except Exception as e:
         return {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}]}

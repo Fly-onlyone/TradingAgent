@@ -24,7 +24,7 @@ _db: AsyncIOMotorDatabase | None = None
 
 async def _ensure_mongodb_running() -> None:
     """Try to start MongoDB if it's not reachable (Windows service)."""
-    test_client = AsyncIOMotorClient(settings.mongodb_url, serverSelectionTimeoutMS=2000)
+    test_client = AsyncIOMotorClient(settings.mongodb_url, serverSelectionTimeoutMS=2000, tz_aware=True)
     try:
         await test_client.admin.command("ping")
         return  # Already running
@@ -136,7 +136,7 @@ async def init_db() -> None:
 
     await _ensure_mongodb_running()
 
-    _client = AsyncIOMotorClient(settings.mongodb_url, maxPoolSize=20, minPoolSize=1)
+    _client = AsyncIOMotorClient(settings.mongodb_url, maxPoolSize=20, minPoolSize=1, tz_aware=True)
     _db = _client[settings.mongodb_db_name]
 
     # Import all document models for Beanie initialization

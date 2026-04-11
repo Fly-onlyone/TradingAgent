@@ -175,11 +175,14 @@ class TaskExecutionResponse(BaseModel):
 
     id: str
     task_id: str
+    session_id: str | None = None
     decision_type: str
     symbol: str | None
     action: str | None
     confidence: float | None
     summary: str
+    reasoning: str | None = None
+    key_factors: list[str] = []
     status: str
     created_at: datetime
 
@@ -601,11 +604,14 @@ async def get_task_history(
         TaskExecutionResponse(
             id=str(d.id),
             task_id=str(d.task_id),
+            session_id=str(d.session_id) if d.session_id else None,
             decision_type=d.decision_type.value,
             symbol=d.symbol,
             action=d.action.value if d.action else None,
             confidence=d.confidence,
             summary=d.summary,
+            reasoning=d.reasoning,
+            key_factors=d.key_factors,
             status=d.status.value,
             created_at=d.created_at,
         )

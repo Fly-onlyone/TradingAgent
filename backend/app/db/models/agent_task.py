@@ -9,6 +9,16 @@ from pydantic import BaseModel, Field, model_validator
 from pymongo import ASCENDING, DESCENDING, IndexModel
 
 
+def _default_timezone() -> str:
+    """Detect system timezone for task scheduling (falls back to UTC)."""
+    try:
+        from tzlocal import get_localzone
+
+        return str(get_localzone())
+    except Exception:
+        return "UTC"
+
+
 class TaskFrequency(str, Enum):
     """Task execution frequency."""
 
@@ -213,7 +223,7 @@ class AgentTask(Document):
 
     # Schedule configuration — multiple schedules per task
     schedules: list[TaskSchedule] = Field(default_factory=list)
-    timezone: str = "UTC"
+    timezone: str = Field(default_factory=_default_timezone)
 
     # Next/last execution tracking
     next_run_at: Indexed(datetime) | None = None  # type: ignore[valid-type]

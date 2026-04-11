@@ -113,14 +113,16 @@ Separate Sentry projects per layer (org: `fly-theonlyone`):
 - **Route pages**: TanStack Router file-based routing. `@tanstack/router-plugin` in `frontend/vite.config.ts`
   auto-generates the route tree during dev/build, so manual `router-cli generate` is usually unnecessary.
 - **Sidebar nav**: Items defined as arrays in `Sidebar.tsx` — `adminMenuItems` for admin section
-- **RAG retrieval pipeline**: `_vectorized_search()` in `retriever.py` — Motor projection loads only `_id` + `embedding`,
+- **RAG retrieval pipeline**: `_vectorized_search()` in `retriever.py` — Motor projection loads only `_id` +
+  `embedding`,
   NumPy matrix dot product scores all docs at once, time-decay weighting applied per-collection, then top-k full docs
   fetched. Each search method runs hybrid (vector + text via `_text_search()`), merges via `fusion.py` RRF, then
   optionally re-ranks via `reranker.py` (FlashRank, controlled by `AppSettings.reranking_enabled`)
 - **RAG scoring**: Search methods return `list[tuple[Document, float]]` — all consumers (knowledge_tools, news_tools,
   API endpoints) unpack `(doc, score)` tuples. Scores include `relevance_score` in agent tool responses
 - **Contextual embeddings**: `context_generator.py` uses Claude Haiku to prepend 1-2 sentence context prefix before
-  embedding (write-time). `context_prefix` field on all 4 knowledge models. Embedding generators prepend it automatically
+  embedding (write-time). `context_prefix` field on all 4 knowledge models. Embedding generators prepend it
+  automatically
 - **Knowledge graph**: `KnowledgeEdge` model in `knowledge_graph.py`, `graph.py` builds edges during document creation.
   Registered in `session.py`
 - **Document chunking**: `chunker.py` splits long text into 200-word chunks with 50-word overlap. `KnowledgeChunk` model
@@ -142,11 +144,6 @@ Separate Sentry projects per layer (org: `fly-theonlyone`):
   `cd frontend && bun run check`, `cd frontend && bun run test`, and `cd frontend && bun run build` are currently
   green. Remaining warnings are non-blocking (for example Pydantic v2 deprecation warnings in tests and Vite chunk-size
   warnings in frontend builds).
-
-## Production Monitoring (Auto-Setup)
-
-On every new session, **automatically create** the local monitoring cron jobs defined in
-[`docs/MONITORING.md`](docs/MONITORING.md) — daily health check and weekly deep analysis. No need to ask.
 
 ## Context7 IDs
 
