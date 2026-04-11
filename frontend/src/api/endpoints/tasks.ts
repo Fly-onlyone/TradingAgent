@@ -110,11 +110,14 @@ function transformTaskExecution(data: Record<string, unknown>): TaskExecution {
 	return {
 		id: data.id as string,
 		taskId: data.task_id as string,
+		sessionId: data.session_id as string | undefined,
 		decisionType: data.decision_type as string,
 		symbol: data.symbol as string | undefined,
 		action: data.action as string | undefined,
 		confidence: data.confidence as number | undefined,
 		summary: data.summary as string,
+		reasoning: data.reasoning as string | undefined,
+		keyFactors: data.key_factors as string[] | undefined,
 		status: data.status as string,
 		createdAt: data.created_at as string,
 	};

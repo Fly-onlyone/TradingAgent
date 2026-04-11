@@ -131,11 +131,14 @@ export interface TaskUpdate {
 export interface TaskExecution {
 	id: string;
 	taskId: string;
+	sessionId?: string;
 	decisionType: string;
 	symbol?: string;
 	action?: string;
 	confidence?: number;
 	summary: string;
+	reasoning?: string;
+	keyFactors?: string[];
 	status: string;
 	createdAt: string;
 }

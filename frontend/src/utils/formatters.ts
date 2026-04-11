@@ -87,7 +87,14 @@ export function formatVolume(value: number | null | undefined): string {
 
 function safeParseDate(date: string | Date | null | undefined): Date | null {
 	if (date == null) return null;
-	const d = typeof date === "string" ? parseISO(date) : date;
+	let input = date;
+	// MongoDB stores UTC but pymongo returns naive datetimes (no timezone).
+	// Pydantic serializes them without "Z", so parseISO treats them as local time.
+	// Fix: append "Z" to bare ISO strings so they're correctly parsed as UTC.
+	if (typeof input === "string" && !/[Z+-]\d{0,4}$/.test(input)) {
+		input = `${input}Z`;
+	}
+	const d = typeof input === "string" ? parseISO(input) : input;
 	if (!(d instanceof Date) || Number.isNaN(d.getTime())) return null;
 	return d;
 }

@@ -61,9 +61,9 @@ export function DecisionCard({
 	const Icon = config.icon;
 
 	const confidenceColor =
-		decision.confidence >= 0.7
+		(decision.confidence ?? 0) >= 70
 			? "success"
-			: decision.confidence >= 0.4
+			: (decision.confidence ?? 0) >= 40
 				? "warning"
 				: "error";
 
@@ -105,28 +105,34 @@ export function DecisionCard({
 				</Box>
 
 				{/* Confidence */}
-				<Box sx={{ mb: 2 }}>
-					<Box
-						sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}
-					>
-						<Typography variant="body2" color="text.secondary">
-							Confidence
-						</Typography>
-						<Typography
-							variant="body2"
-							fontWeight={600}
-							color={`${confidenceColor}.main`}
+				{decision.confidence != null && (
+					<Box sx={{ mb: 2 }}>
+						<Box
+							sx={{
+								display: "flex",
+								justifyContent: "space-between",
+								mb: 0.5,
+							}}
 						>
-							{(decision.confidence * 100).toFixed(0)}%
-						</Typography>
+							<Typography variant="body2" color="text.secondary">
+								Confidence
+							</Typography>
+							<Typography
+								variant="body2"
+								fontWeight={600}
+								color={`${confidenceColor}.main`}
+							>
+								{decision.confidence.toFixed(0)}%
+							</Typography>
+						</Box>
+						<LinearProgress
+							variant="determinate"
+							value={decision.confidence}
+							color={confidenceColor}
+							sx={{ height: 8, borderRadius: 4 }}
+						/>
 					</Box>
-					<LinearProgress
-						variant="determinate"
-						value={decision.confidence * 100}
-						color={confidenceColor}
-						sx={{ height: 8, borderRadius: 4 }}
-					/>
-				</Box>
+				)}
 
 				<Divider sx={{ my: 2 }} />
 

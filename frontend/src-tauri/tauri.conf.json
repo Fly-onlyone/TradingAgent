@@ -1,46 +1,43 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Trading agent",
-  "version": "0.1.0",
-  "identifier": "com.fly.tradingagent",
-  "build": {
-    "frontendDist": "../dist",
-    "devUrl": "http://localhost:3000",
-    "beforeDevCommand": "bun run dev",
-    "beforeBuildCommand": "bun run build:all"
-  },
   "app": {
-    "windows": [
-      {
-        "title": "Trading agent",
-        "width": 1400,
-        "height": 900,
-        "minWidth": 1024,
-        "minHeight": 700,
-        "center": true,
-        "decorations": true,
-        "resizable": true,
-        "fullscreen": false,
-        "label": "main",
-        "visible": false
-      }
-    ],
     "security": {
       "csp": {
-        "default-src": "'self' customprotocol: asset: http://asset.localhost",
-        "script-src": "'self' 'unsafe-eval'",
-        "style-src": "'self' 'unsafe-inline'",
         "connect-src": "http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:* ipc: http://ipc.localhost https://*.ingest.sentry.io https://*.ingest.us.sentry.io",
+        "default-src": "'self' customprotocol: asset: http://asset.localhost",
+        "font-src": "'self' data:",
         "img-src": "'self' asset: http://asset.localhost data: blob: https://assets.coincap.io",
-        "font-src": "'self' data:"
+        "script-src": "'self' 'unsafe-eval'",
+        "style-src": "'self' 'unsafe-inline'"
       },
-      "dangerousDisableAssetCspModification": ["style-src"]
-    }
+      "dangerousDisableAssetCspModification": [
+        "style-src"
+      ]
+    },
+    "windows": [
+      {
+        "center": true,
+        "decorations": true,
+        "fullscreen": false,
+        "height": 900,
+        "label": "main",
+        "minHeight": 700,
+        "minWidth": 1024,
+        "resizable": true,
+        "title": "Trading agent",
+        "visible": false,
+        "width": 1400
+      }
+    ]
+  },
+  "build": {
+    "beforeBuildCommand": "bun run build:all",
+    "beforeDevCommand": "bun run dev",
+    "devUrl": "http://localhost:3000",
+    "frontendDist": "../dist"
   },
   "bundle": {
     "active": true,
-    "publisher": "Fly",
-    "targets": "all",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -48,6 +45,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "publisher": "Fly",
     "resources": [
       "trading-agent-backend.exe",
       ".env",
@@ -55,14 +53,18 @@
       "icons/32x32.png",
       "icons/128x128.png"
     ],
+    "targets": "all",
     "windows": {
-      "wix": {},
-      "nsis": {}
+      "nsis": {},
+      "wix": {}
     }
   },
+  "identifier": "com.fly.tradingagent",
   "plugins": {
     "shell": {
       "open": true
     }
-  }
+  },
+  "productName": "Trading agent",
+  "version": "0.1.1"
 }

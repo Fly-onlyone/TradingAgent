@@ -197,7 +197,7 @@ function DecisionHistoryCard({
 				</Typography>
 
 				{/* Confidence Bar */}
-				{decision.confidence !== undefined && (
+				{decision.confidence != null && (
 					<Box sx={{ mb: 1 }}>
 						<Box
 							sx={{

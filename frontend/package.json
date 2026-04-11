@@ -1,26 +1,4 @@
 {
-  "name": "frontend",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "dev": "vite --port 3000",
-    "dev:tauri-managed": "node scripts/tauri-dev.mjs",
-    "dev:backend": "cd .. && uv run python run.py --serve",
-    "dev:all": "concurrently --kill-others -n front,back -c blue,green \"bun run dev\" \"bun run dev:backend\"",
-    "build": "vite build && tsc",
-    "build:all": "concurrently -n vite,sidecar -c blue,green \"bun run build\" \"bun run build:backend-sidecar\"",
-    "build:backend-sidecar": "node scripts/build-backend-sidecar.mjs",
-    "build:backend-sidecar-force": "node scripts/build-backend-sidecar.mjs --force",
-    "preview": "vite preview",
-    "test": "vitest run",
-    "format": "biome format",
-    "lint": "biome lint",
-    "check": "biome check",
-    "tauri": "tauri",
-    "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
-  },
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
@@ -45,8 +23,8 @@
     "react-hook-form": "^7.54.0",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
-    "zod": "^3.24.0",
     "web-vitals": "^5.1.0",
+    "zod": "^3.24.0",
     "zustand": "^5.0.0"
   },
   "devDependencies": {
@@ -62,5 +40,27 @@
     "vite": "^7.1.7",
     "vite-plugin-pwa": "^1.2.0",
     "vitest": "^3.0.5"
-  }
+  },
+  "name": "frontend",
+  "private": true,
+  "scripts": {
+    "build": "vite build && tsc",
+    "build:all": "concurrently -n vite,sidecar -c blue,green \"bun run build\" \"bun run build:backend-sidecar\"",
+    "build:backend-sidecar": "node scripts/build-backend-sidecar.mjs",
+    "build:backend-sidecar-force": "node scripts/build-backend-sidecar.mjs --force",
+    "check": "biome check",
+    "dev": "vite --port 3000",
+    "dev:all": "concurrently --kill-others -n front,back -c blue,green \"bun run dev\" \"bun run dev:backend\"",
+    "dev:backend": "cd .. && uv run python run.py --serve",
+    "dev:tauri-managed": "node scripts/tauri-dev.mjs",
+    "format": "biome format",
+    "lint": "biome lint",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "tauri:build": "tauri build",
+    "tauri:dev": "tauri dev",
+    "test": "vitest run"
+  },
+  "type": "module",
+  "version": "0.1.1"
 }

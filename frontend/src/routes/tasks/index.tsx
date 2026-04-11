@@ -5,6 +5,7 @@
 
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import AutoModeIcon from "@mui/icons-material/AutoMode";
+import ChatIcon from "@mui/icons-material/Chat";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
@@ -15,6 +16,7 @@ import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
 import RepeatIcon from "@mui/icons-material/Repeat";
 import ScheduleIcon from "@mui/icons-material/Schedule";
+import VisibilityIcon from "@mui/icons-material/Visibility";
 import {
 	Accordion,
 	AccordionDetails,
@@ -26,6 +28,9 @@ import {
 	CardContent,
 	Chip,
 	CircularProgress,
+	Dialog,
+	DialogContent,
+	DialogTitle,
 	FormControl,
 	FormControlLabel,
 	IconButton,
@@ -42,7 +47,7 @@ import {
 import { LocalizationProvider, TimePicker } from "@mui/x-date-pickers";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { format, parse } from "date-fns";
 import { motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -58,6 +63,7 @@ import { type Column, DataTable } from "@/components/data-display/DataTable";
 import { StrategyDiscoveryCard } from "@/components/strategies/StrategyDiscoveryCard";
 import { useDebouncedSave } from "@/hooks/useDebouncedSave";
 import { useSymbolOptions } from "@/hooks/useSymbolOptions";
+import { useAgentStore } from "@/store/agentStore";
 import { useAuthStore } from "@/store/authStore";
 import { notify, useUIStore } from "@/store/uiStore";
 import type {
@@ -158,6 +164,8 @@ function serializeEditableTaskUpdate(update: TaskUpdate): string {
 
 function TaskConfigPage() {
 	const queryClient = useQueryClient();
+	const navigate = useNavigate();
+	const setSelectedSessionId = useAgentStore((s) => s.setSelectedSessionId);
 	const backendStatus = useUIStore((s) => s.backendStatus);
 	const isSuperuser = useAuthStore((s) => s.user?.isSuperuser);
 	const { symbolOptions, isLoading: symbolsLoading } = useSymbolOptions();
@@ -174,6 +182,8 @@ function TaskConfigPage() {
 	const [formData, setFormData] = useState<TaskCreate>({ ...DEFAULT_FORM });
 	const [manualRunning, setManualRunning] = useState(false);
 	const [historyExpanded, setHistoryExpanded] = useState(false);
+	const [selectedExecution, setSelectedExecution] =
+		useState<TaskExecution | null>(null);
 
 	/** Tracks whether the form was populated from the backend at least once. */
 	const initRef = useRef(false);
@@ -203,6 +213,10 @@ function TaskConfigPage() {
 		queryFn: () => tasksApi.getTaskHistory(taskId as string),
 		enabled: !!taskId,
 		refetchInterval: isTaskRunning ? 3_000 : false,
+		retry: (failureCount, error) => {
+			if (error instanceof Error && error.message.includes("404")) return false;
+			return failureCount < 3;
+		},
 	});
 
 	// ── Mutations ────────────────────────────────────────────────────────
@@ -510,6 +524,14 @@ function TaskConfigPage() {
 		return <Chip label={c.label} size="small" color={c.color} />;
 	};
 
+	const handleOpenSession = useCallback(
+		(sessionId: string) => {
+			setSelectedSessionId(sessionId);
+			void navigate({ to: "/agent" });
+		},
+		[navigate, setSelectedSessionId],
+	);
+
 	const historyColumns: Column<TaskExecution>[] = [
 		{
 			id: "createdAt",
@@ -547,6 +569,38 @@ function TaskConfigPage() {
 			id: "status",
 			label: "Status",
 			render: (row) => getStatusChip(row.status),
+		},
+		{
+			id: "actions" as keyof TaskExecution,
+			label: "",
+			render: (row) => (
+				<Box sx={{ display: "flex", gap: 0.5 }}>
+					<Tooltip title="View details">
+						<IconButton
+							size="small"
+							onClick={(e) => {
+								e.stopPropagation();
+								setSelectedExecution(row);
+							}}
+						>
+							<VisibilityIcon fontSize="small" />
+						</IconButton>
+					</Tooltip>
+					{row.sessionId && (
+						<Tooltip title="Open chat session">
+							<IconButton
+								size="small"
+								onClick={(e) => {
+									e.stopPropagation();
+									handleOpenSession(row.sessionId as string);
+								}}
+							>
+								<ChatIcon fontSize="small" />
+							</IconButton>
+						</Tooltip>
+					)}
+				</Box>
+			),
 		},
 	];
 
@@ -1791,6 +1845,7 @@ function TaskConfigPage() {
 													emptyMessage="No executions yet"
 													maxHeight={400}
 													pagination
+													onRowClick={setSelectedExecution}
 												/>
 											</AccordionDetails>
 										</Accordion>
@@ -1799,6 +1854,126 @@ function TaskConfigPage() {
 							)}
 						</motion.div>
 					)}
+
+					{/* Execution Detail Dialog */}
+					<Dialog
+						open={!!selectedExecution}
+						onClose={() => setSelectedExecution(null)}
+						maxWidth="md"
+						fullWidth
+					>
+						{selectedExecution && (
+							<>
+								<DialogTitle
+									sx={{
+										display: "flex",
+										justifyContent: "space-between",
+										alignItems: "center",
+									}}
+								>
+									<Box
+										sx={{
+											display: "flex",
+											alignItems: "center",
+											gap: 1,
+										}}
+									>
+										<Typography variant="h6">Execution Detail</Typography>
+										{selectedExecution.symbol && (
+											<Chip label={selectedExecution.symbol} size="small" />
+										)}
+										{selectedExecution.action && (
+											<Chip
+												label={selectedExecution.action.toUpperCase()}
+												size="small"
+												color={
+													selectedExecution.action === "buy"
+														? "success"
+														: selectedExecution.action === "sell"
+															? "error"
+															: "default"
+												}
+											/>
+										)}
+										{selectedExecution.confidence != null && (
+											<Chip
+												label={`${selectedExecution.confidence}%`}
+												size="small"
+												variant="outlined"
+											/>
+										)}
+									</Box>
+									{selectedExecution.sessionId && (
+										<Button
+											startIcon={<ChatIcon />}
+											variant="outlined"
+											size="small"
+											onClick={() =>
+												handleOpenSession(selectedExecution.sessionId as string)
+											}
+										>
+											Open Chat
+										</Button>
+									)}
+								</DialogTitle>
+								<DialogContent dividers>
+									<Typography variant="subtitle2" gutterBottom>
+										Summary
+									</Typography>
+									<Typography variant="body2" sx={{ mb: 2 }}>
+										{selectedExecution.summary}
+									</Typography>
+
+									{selectedExecution.reasoning && (
+										<>
+											<Typography variant="subtitle2" gutterBottom>
+												Full Analysis
+											</Typography>
+											<Typography
+												variant="body2"
+												sx={{
+													whiteSpace: "pre-wrap",
+													mb: 2,
+												}}
+											>
+												{selectedExecution.reasoning}
+											</Typography>
+										</>
+									)}
+
+									{(selectedExecution.keyFactors?.length ?? 0) > 0 && (
+										<>
+											<Typography variant="subtitle2" gutterBottom>
+												Key Factors
+											</Typography>
+											<Box
+												sx={{
+													display: "flex",
+													flexWrap: "wrap",
+													gap: 0.5,
+													mb: 2,
+												}}
+											>
+												{selectedExecution.keyFactors?.map((factor) => (
+													<Chip
+														key={factor}
+														label={factor}
+														size="small"
+														variant="outlined"
+													/>
+												))}
+											</Box>
+										</>
+									)}
+
+									<Typography variant="caption" color="text.secondary">
+										{formatDateTime(selectedExecution.createdAt)} &middot;{" "}
+										{getStatusChip(selectedExecution.status)}
+									</Typography>
+								</DialogContent>
+							</>
+						)}
+					</Dialog>
 				</Box>
 			</PageTransition>
 		</LocalizationProvider>

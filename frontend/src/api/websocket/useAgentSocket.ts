@@ -92,7 +92,8 @@ interface AgentSocketMessage extends WebSocketMessage {
 		| "status"
 		| "session_created"
 		| "cancel_ack"
-		| "usage";
+		| "usage"
+		| "data_event";
 	data:
 		| AgentMessage
 		| ToolCall
@@ -103,6 +104,7 @@ interface AgentSocketMessage extends WebSocketMessage {
 		| { status: string }
 		| { error: string }
 		| { content?: string }
+		| { category: string; event: string; entityId?: string }
 		| {
 				sessionId: string;
 		  };
@@ -357,6 +359,42 @@ export function useAgentSocketConnection() {
 							timestamp: Date.now(),
 						});
 						setThinking(targetSessionId, false);
+					}
+					break;
+				}
+				case "data_event": {
+					const { category } = agentMessage.data as {
+						category: string;
+						event: string;
+						entityId?: string;
+					};
+					if (category === "tasks") {
+						void queryClient.invalidateQueries({
+							queryKey: ["tasks"],
+						});
+					} else if (category === "memories") {
+						void queryClient.invalidateQueries({
+							queryKey: ["agent-memories"],
+						});
+						void queryClient.invalidateQueries({
+							queryKey: ["agent-memory-stats"],
+						});
+						void queryClient.invalidateQueries({
+							queryKey: ["agent-memories-search"],
+						});
+					} else if (category === "knowledge") {
+						void queryClient.invalidateQueries({
+							queryKey: ["knowledge-strategies"],
+						});
+						void queryClient.invalidateQueries({
+							queryKey: ["knowledge-lessons"],
+						});
+						void queryClient.invalidateQueries({
+							queryKey: ["knowledge-patterns"],
+						});
+						void queryClient.invalidateQueries({
+							queryKey: ["knowledge-search"],
+						});
 					}
 					break;
 				}
