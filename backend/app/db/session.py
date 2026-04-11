@@ -24,7 +24,9 @@ _db: AsyncIOMotorDatabase | None = None
 
 async def _ensure_mongodb_running() -> None:
     """Try to start MongoDB if it's not reachable (Windows service)."""
-    test_client = AsyncIOMotorClient(settings.mongodb_url, serverSelectionTimeoutMS=2000, tz_aware=True)
+    test_client = AsyncIOMotorClient(
+        settings.mongodb_url, serverSelectionTimeoutMS=2000, tz_aware=True
+    )
     try:
         await test_client.admin.command("ping")
         return  # Already running

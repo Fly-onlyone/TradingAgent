@@ -2106,6 +2106,81 @@ async def mcp_search_news(args: dict[str, Any]) -> dict[str, Any]:
 
 
 # ============================================================
+# Browser Tools
+# ============================================================
+
+
+@tool(
+    "browse_url",
+    "Fetch and read the full text content of a web page. "
+    "Use this to read articles, blog posts, or any URL found from search results. "
+    "Proactively browse pages when search results look relevant to the user's question.",
+    {
+        "type": "object",
+        "properties": {
+            "url": {
+                "type": "string",
+                "description": "The URL to fetch and read",
+            },
+            "max_length": {
+                "type": "integer",
+                "description": "Maximum content length in characters (default 10000)",
+                "default": 10000,
+            },
+        },
+        "required": ["url"],
+    },
+)
+async def mcp_browse_url(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
+    try:
+        from app.agent.tools.browser_tools import browse_url
+
+        result = await browse_url(
+            url=args["url"],
+            max_length=args.get("max_length", 10000),
+        )
+        response = _text_result(result)
+        _buffer_tool_result("browse_url", args, response, start)
+        return response
+    except Exception as e:
+        response = _text_result({"error": str(e)})
+        _buffer_tool_result("browse_url", args, response, start)
+        return response
+
+
+@tool(
+    "extract_strategy_from_url",
+    "Fetch a web page, extract a structured trading strategy using AI, and save it to the knowledge base. "
+    "Use proactively when you browse a page that contains a trading strategy — the user doesn't need to ask. "
+    "Returns the extracted strategy details and knowledge base ID.",
+    {
+        "type": "object",
+        "properties": {
+            "url": {
+                "type": "string",
+                "description": "URL of the page containing a trading strategy",
+            },
+        },
+        "required": ["url"],
+    },
+)
+async def mcp_extract_strategy_from_url(args: dict[str, Any]) -> dict[str, Any]:
+    start = time.monotonic()
+    try:
+        from app.agent.tools.browser_tools import extract_strategy_from_url
+
+        result = await extract_strategy_from_url(url=args["url"])
+        response = _text_result(result)
+        _buffer_tool_result("extract_strategy_from_url", args, response, start)
+        return response
+    except Exception as e:
+        response = _text_result({"error": str(e)})
+        _buffer_tool_result("extract_strategy_from_url", args, response, start)
+        return response
+
+
+# ============================================================
 # Ask User Tool
 # ============================================================
 
@@ -2611,6 +2686,9 @@ ALL_TRADING_TOOLS = [
     # Web search
     mcp_search_web,
     mcp_search_news,
+    # Browser
+    mcp_browse_url,
+    mcp_extract_strategy_from_url,
     # Knowledge
     mcp_search_strategies,
     mcp_search_lessons,

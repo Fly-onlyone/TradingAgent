@@ -659,7 +659,8 @@ class AgentTaskScheduler:
                         SessionMessage(role=MessageRole.USER, content=prompt, timestamp=now),
                         SessionMessage(
                             role=MessageRole.ASSISTANT,
-                            content=result.get("reasoning") or result.get("summary", "Analysis completed"),
+                            content=result.get("reasoning")
+                            or result.get("summary", "Analysis completed"),
                             timestamp=now,
                         ),
                     ],
@@ -780,7 +781,8 @@ class AgentTaskScheduler:
                         SessionMessage(role=MessageRole.USER, content=prompt, timestamp=now),
                         SessionMessage(
                             role=MessageRole.ASSISTANT,
-                            content=result.get("reasoning") or result.get("summary", "Analysis completed"),
+                            content=result.get("reasoning")
+                            or result.get("summary", "Analysis completed"),
                             timestamp=now,
                         ),
                     ],

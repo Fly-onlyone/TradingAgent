@@ -178,7 +178,7 @@ The primary interface is a real-time chat with Claude AI over WebSocket (`/agent
 **How it works:**
 
 1. Frontend opens a WebSocket connection to the backend
-2. Backend creates a `TradingAgent` instance with 22 MCP tools attached
+2. Backend creates a `TradingAgent` instance with 24 MCP tools attached
 3. User sends a message (e.g., "Analyze BTC-USDT") — the agent streams back thinking blocks, tool calls, and a final response
 4. At the end of analysis, the agent calls `submit_recommendation` to produce a structured decision (action, confidence, entry/SL/TP, key factors)
 5. Sessions are persisted in MongoDB — messages, tool calls, and thinking content are all saved and resumable
@@ -188,7 +188,8 @@ The primary interface is a real-time chat with Claude AI over WebSocket (`/agent
 ```
 Historical Context → search knowledge base for past strategies, lessons, patterns
   → Data Gathering → fetch ticker, indicators, on-chain metrics, news
-    → Technical Analysis → RSI, MACD, Bollinger, chart patterns
+    → Explore & Extract → browse promising URLs, extract strategies to knowledge base
+      → Technical Analysis → RSI, MACD, Bollinger, chart patterns
       → Fundamental Analysis → on-chain flows, macro indicators
         → Sentiment Analysis → news sentiment, web search
           → Risk Assessment → position sizing, stop-loss placement
@@ -207,6 +208,7 @@ Historical Context → search knowledge base for past strategies, lessons, patte
 | Strategy Mgmt      | `list_user_strategies`, `toggle_strategy`                      |
 | Trading            | `get_account_balance`, `get_open_orders`, `place_order`, `cancel_order` |
 | Web Search         | `search_web`, `search_news`                                    |
+| Browser            | `browse_url`, `extract_strategy_from_url`                      |
 | Memory             | `save_memory`, `search_memories`, `update_memory`, `delete_memory` |
 | Interactive        | `ask_user`, `create_task`                                      |
 | Output             | `submit_recommendation`, `modify_task`                         |
@@ -244,8 +246,8 @@ Summary of what the agent can **read**, **modify**, and **not access**.
 | Market data (OKX) | Read | Ticker, orderbook, candlesticks (1m–1D) |
 | Technical analysis | Read | RSI, MACD, Bollinger Bands, chart patterns, price action (calculated from candles) |
 | Fundamentals | Read | On-chain metrics, tokenomics, TVL (CoinGecko + DefiLlama), macro indicators |
-| News & web search | Read | Articles from DB with sentiment, Brave web/news search (cached 5 min) |
-| Knowledge base (RAG) | Read | Strategies, trade lessons, trading patterns via semantic search |
+| News & web search | Read | Articles from DB with sentiment, Brave web/news search (cached 5 min), browse any URL for full content |
+| Knowledge base (RAG) | Read + **Write** (strategies) | Strategies via `extract_strategy_from_url` during chat; trade lessons and patterns via semantic search (read-only) |
 | Account & positions | Read | Balance, equity, open orders from OKX |
 | Orders | **Modify** | Place market/limit orders, cancel open orders — **blocked when sandbox mode is on** |
 | User strategies | **Modify** | Toggle `is_active` only — cannot create or delete strategies |
@@ -256,7 +258,7 @@ Summary of what the agent can **read**, **modify**, and **not access**.
 | File system | None | No disk read/write access |
 | User accounts | None | Cannot create, delete, or modify users |
 | News sources | None | Cannot add, remove, or edit source configuration |
-| Knowledge base | None (direct) | Cannot directly write strategies/lessons/patterns — only auto-discovery populates these |
+| Knowledge base | **Write** (strategies) | Can save strategies via `extract_strategy_from_url` during chat; lessons and patterns remain auto-generated only |
 
 **Guardrails:**
 
