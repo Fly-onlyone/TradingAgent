@@ -144,7 +144,7 @@ async def init_db() -> None:
     # Import all document models for Beanie initialization
     from app.db.models.agent_decision import AgentDecision
     from app.db.models.agent_memory import AgentMemory
-    from app.db.models.agent_session import AgentSession
+    from app.db.models.agent_session import AgentSession, AgentSessionMessage
     from app.db.models.agent_task import AgentTask
     from app.db.models.app_settings import AppSettings
     from app.db.models.knowledge import (
@@ -182,6 +182,7 @@ async def init_db() -> None:
         AgentTask,
         AgentDecision,
         AgentSession,
+        AgentSessionMessage,
         AgentMemory,
         # Notification models
         Notification,

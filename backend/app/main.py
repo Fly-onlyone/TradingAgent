@@ -5,7 +5,7 @@ import logging
 import os
 import re
 import sys
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -37,6 +37,25 @@ from app.news.scheduler import NewsScheduler
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
+
+
+def _start_background_service(
+    name: str,
+    coroutine: Awaitable[Any],
+) -> asyncio.Task[Any]:
+    """Run non-critical startup work in the background and log failures."""
+    task = asyncio.create_task(coroutine)
+
+    def _report_completion(completed_task: asyncio.Task[Any]) -> None:
+        try:
+            completed_task.result()
+        except asyncio.CancelledError:
+            logger.debug("Background startup task cancelled: %s", name)
+        except Exception:
+            logger.exception("Background startup task failed: %s", name)
+
+    task.add_done_callback(_report_completion)
+    return task
 
 
 def _is_benign_windows_proactor_transport_reset(context: dict[str, Any]) -> bool:
@@ -175,28 +194,34 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     setup_logging()
     _install_asyncio_exception_handler()
     await init_db()
+    startup_tasks: list[asyncio.Task[Any]] = []
 
     scheduler = get_scheduler()
-    if settings.debug:
-        asyncio.create_task(scheduler.start())
-    else:
-        await scheduler.start()
+    startup_tasks.append(
+        _start_background_service("agent task scheduler startup", scheduler.start())
+    )
 
     news_scheduler = NewsScheduler()
-    if settings.debug:
-        asyncio.create_task(news_scheduler.start())
-    else:
-        await news_scheduler.start()
+    startup_tasks.append(
+        _start_background_service("news scheduler startup", news_scheduler.start())
+    )
 
     # Keep heavyweight embedding warmup opt-in so idle startup stays lighter on RAM.
     if settings.preload_embeddings_on_startup:
-        asyncio.create_task(preload_embedding_model())
+        startup_tasks.append(
+            _start_background_service("embedding preload", preload_embedding_model())
+        )
 
     start_all_mongo_handlers()
     logger.info("Application started")
     yield
     # Shutdown
     logger.info("Application shutting down")
+    for task in startup_tasks:
+        if not task.done():
+            task.cancel()
+    if startup_tasks:
+        await asyncio.gather(*startup_tasks, return_exceptions=True)
     await news_scheduler.stop()
     await scheduler.stop()
     await stop_all_mongo_handlers()

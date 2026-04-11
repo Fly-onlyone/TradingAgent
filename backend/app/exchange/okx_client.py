@@ -6,6 +6,7 @@ from collections.abc import Callable
 from decimal import Decimal
 from typing import Any
 
+import httpx
 import okx.Account as Account
 import okx.MarketData as MarketData
 import okx.PublicData as PublicData
@@ -15,6 +16,8 @@ import sentry_sdk
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+_TRANSIENT_NETWORK_ERRORS = (OSError, httpx.RequestError)
 
 
 class OKXClient:
@@ -44,13 +47,16 @@ class OKXClient:
     async def _traced(self, name: str, fn: Callable, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """Execute an OKX SDK call in a thread with a Sentry span.
 
-        Retries once after 1s on transient network errors (DNS failure, connection refused)
-        to handle wake-from-sleep scenarios transparently.
+        Retry once after 1s on transient network errors.
+
+        The OKX SDK uses httpx under the hood, which wraps DNS and connection
+        failures in httpx.RequestError subclasses instead of bubbling raw
+        OSError values.
         """
         with sentry_sdk.start_span(op="http.client", description=f"okx.{name}"):
             try:
                 return await asyncio.to_thread(fn, *args, **kwargs)
-            except OSError:
+            except _TRANSIENT_NETWORK_ERRORS:
                 logger.debug("OKX %s hit transient network error, retrying in 1s", name)
                 await asyncio.sleep(1)
                 return await asyncio.to_thread(fn, *args, **kwargs)

@@ -20,7 +20,11 @@ from app.db.models.agent_decision import (
     DecisionType,
     ExecutionStatus,
 )
-from app.db.models.agent_session import AgentSession, MessageRole, SessionMessage
+from app.db.models.agent_session import (
+    AgentSession,
+    delete_session_message_history,
+    persist_session_message,
+)
 from app.db.models.agent_task import (
     AgentMode,
     AgentTask,
@@ -390,7 +394,6 @@ class AgentTaskScheduler:
 
     async def _cleanup_old_sessions(self) -> None:
         """Delete chat sessions older than the configured retention period."""
-        from app.db.models.agent_session import AgentSession
         from app.db.models.app_settings import AppSettings
 
         with sentry_sdk.start_transaction(op="task", name="session-cleanup"):
@@ -414,6 +417,7 @@ class AgentTaskScheduler:
 
                 if old_sessions:
                     for session in old_sessions:
+                        await delete_session_message_history(session.id)
                         await session.delete()
                     logger.info(
                         "Cleaned up %d old sessions (retention=%d days)", len(old_sessions), days
@@ -764,18 +768,6 @@ class AgentTaskScheduler:
                 session = AgentSession(
                     user_id=task.user_id,
                     title=f"{task.name} — {symbol}",
-                    messages=[
-                        SessionMessage(role=MessageRole.USER, content=prompt, timestamp=now),
-                        SessionMessage(
-                            role=MessageRole.ASSISTANT,
-                            content=result.get("reasoning")
-                            or result.get("summary", "Analysis completed"),
-                            timestamp=now,
-                        ),
-                    ],
-                    total_messages=2,
-                    user_messages=1,
-                    assistant_messages=1,
                     symbols_discussed=[symbol],
                     is_active=False,
                     started_at=now,
@@ -783,6 +775,19 @@ class AgentTaskScheduler:
                     last_message_at=now,
                 )
                 await session.insert()
+                await persist_session_message(
+                    session,
+                    role="user",
+                    content=prompt,
+                    timestamp=now,
+                )
+                await persist_session_message(
+                    session,
+                    role="assistant",
+                    content=result.get("reasoning") or result.get("summary", "Analysis completed"),
+                    timestamp=now,
+                )
+                await session.save()
 
                 # Store decision
                 decision = AgentDecision(
@@ -886,18 +891,6 @@ class AgentTaskScheduler:
                 session = AgentSession(
                     user_id=task.user_id,
                     title=f"{task.name} — {symbol}",
-                    messages=[
-                        SessionMessage(role=MessageRole.USER, content=prompt, timestamp=now),
-                        SessionMessage(
-                            role=MessageRole.ASSISTANT,
-                            content=result.get("reasoning")
-                            or result.get("summary", "Analysis completed"),
-                            timestamp=now,
-                        ),
-                    ],
-                    total_messages=2,
-                    user_messages=1,
-                    assistant_messages=1,
                     symbols_discussed=[symbol],
                     is_active=False,
                     started_at=now,
@@ -905,6 +898,19 @@ class AgentTaskScheduler:
                     last_message_at=now,
                 )
                 await session.insert()
+                await persist_session_message(
+                    session,
+                    role="user",
+                    content=prompt,
+                    timestamp=now,
+                )
+                await persist_session_message(
+                    session,
+                    role="assistant",
+                    content=result.get("reasoning") or result.get("summary", "Analysis completed"),
+                    timestamp=now,
+                )
+                await session.save()
 
                 # Create decision record
                 decision = AgentDecision(

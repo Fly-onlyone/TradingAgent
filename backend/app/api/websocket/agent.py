@@ -20,7 +20,11 @@ from app.agent.trading_agent import create_agent_with_tools
 from app.api.v1.auth import _DEV_USER_ID, is_token_revoked_by_password_change
 from app.api.websocket.connection_manager import manager
 from app.config import get_settings
-from app.db.models.agent_session import AgentSession
+from app.db.models.agent_session import (
+    AgentSession,
+    fetch_session_messages,
+    persist_session_message,
+)
 from app.db.models.app_settings import AgentAuthMode, AppSettings
 from app.db.models.notification import NotificationType
 from app.db.models.user import User
@@ -33,6 +37,8 @@ logger = logging.getLogger(__name__)
 _RESUME_HISTORY_MESSAGE_LIMIT = 12
 _RESUME_HISTORY_CHAR_LIMIT = 12_000
 _AGENT_TURN_TIMEOUT_SECONDS = 1200.0
+_PERSISTED_THINKING_CHAR_LIMIT = 12_000
+_PERSISTED_TOOL_CALL_LIMIT = 24
 
 # Windows STATUS_CONTROL_C_EXIT — subprocess was terminated externally
 _WIN_STATUS_CONTROL_C_EXIT = 3221225786
@@ -135,9 +141,10 @@ def _build_user_message(message: dict) -> str:
         return message.get("content", "") or message.get("message", "")
 
 
-def _build_resume_history(session: AgentSession) -> str | None:
+async def _build_resume_history(session: AgentSession) -> str | None:
     """Format recent persisted messages so legacy sessions can resume cleanly."""
-    history = session.messages[:-1]
+    history, _ = await fetch_session_messages(session)
+    history = history[:-1]
     if not history:
         return None
 
@@ -171,6 +178,20 @@ def _build_resume_history(session: AgentSession) -> str | None:
         f"{transcript}\n"
         "[END SESSION CONTEXT]"
     )
+
+
+def _truncate_text(value: str | None, *, limit: int) -> str | None:
+    """Trim persisted text fields so session documents do not grow unbounded."""
+    if not value:
+        return None
+    if len(value) <= limit:
+        return value
+    return f"{value[:limit]}...[truncated]"
+
+
+def _trim_tool_calls(tool_calls: list[dict]) -> list[dict]:
+    """Cap persisted tool call metadata for historical chat messages."""
+    return tool_calls[:_PERSISTED_TOOL_CALL_LIMIT]
 
 
 @router.websocket("/chat")
@@ -309,7 +330,7 @@ async def agent_chat_websocket(
 
         session.is_active = True
         session.ended_at = None
-        session.add_message(role="user", content=user_message)
+        await persist_session_message(session, role="user", content=user_message)
         await session.save()
 
     async def _prepare_agent_message(
@@ -330,7 +351,7 @@ async def agent_chat_websocket(
             except Exception:
                 logger.debug("Failed to load session memories", exc_info=True)
         elif rehydrate_session_history:
-            history_ctx = _build_resume_history(session)
+            history_ctx = await _build_resume_history(session)
             if history_ctx:
                 agent_message = f"{history_ctx}\n\n{user_message}"
         return agent_message
@@ -459,7 +480,6 @@ async def agent_chat_websocket(
                     "content": content,
                     "timestamp": int(datetime.now(UTC).timestamp() * 1000),
                     "toolCalls": tool_calls if tool_calls else None,
-                    "thinkingContent": thinking_content,
                     "model": agent.model,
                 },
             },
@@ -482,17 +502,21 @@ async def agent_chat_websocket(
             op="db.write",
             description="save assistant message",
         ):
+            persisted_tool_calls = _trim_tool_calls(tool_calls)
+            persisted_thinking_content = _truncate_text(
+                thinking_content,
+                limit=_PERSISTED_THINKING_CHAR_LIMIT,
+            )
             if agent.session_id:
                 session.sdk_session_id = agent.session_id
-            session.add_message(
+            await persist_session_message(
+                session,
                 role="assistant",
                 content=content,
-                tool_calls=tool_calls if tool_calls else None,
-                thinking_content=thinking_content,
+                tool_calls=persisted_tool_calls if persisted_tool_calls else None,
+                thinking_content=persisted_thinking_content,
                 tokens=turn_tokens,
             )
-            if not session.title:
-                session.title = session.generate_title()
             await session.save()
 
         # Fire ANALYSIS_READY notification (persisted + Web Push)

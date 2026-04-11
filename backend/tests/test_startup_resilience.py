@@ -93,6 +93,20 @@ async def test_start_wraps_initial_crawl_exceptions_in_application_logging(
     assert "Task exception was never retrieved" not in caplog.text
 
 
+@pytest.mark.asyncio
+async def test_background_startup_service_logs_failures(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    async def fail() -> None:
+        raise RuntimeError("startup boom")
+
+    with caplog.at_level(logging.ERROR):
+        task = app_main._start_background_service("failing startup task", fail())
+        await asyncio.gather(task, return_exceptions=True)
+
+    assert "Background startup task failed: failing startup task" in caplog.text
+
+
 def test_asyncio_handler_suppresses_known_windows_transport_reset(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,

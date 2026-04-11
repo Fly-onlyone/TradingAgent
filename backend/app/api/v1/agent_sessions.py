@@ -8,7 +8,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.api.v1.auth import get_current_active_user
-from app.db.models.agent_session import AgentSession, PendingQuestionState, SessionMessage
+from app.db.models.agent_session import (
+    AgentSession,
+    PendingQuestionState,
+    SessionMessage,
+    delete_session_message_history,
+    fetch_session_messages,
+    persist_session_message,
+)
 from app.db.models.user import User
 
 router = APIRouter()
@@ -363,7 +370,8 @@ async def get_session(
         raise HTTPException(status_code=404, detail="Session not found")
 
     response = session_to_response(session).model_dump()
-    response["messages"] = [message_to_response(m) for m in session.messages]
+    messages, _ = await fetch_session_messages(session)
+    response["messages"] = [message_to_response(m) for m in messages]
     return response
 
 
@@ -382,12 +390,12 @@ async def get_session_messages(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    total = len(session.messages)
     start_idx = (page - 1) * page_size
-    end_idx = start_idx + page_size
-
-    # Get messages in chronological order with pagination
-    messages = session.messages[start_idx:end_idx]
+    messages, total = await fetch_session_messages(
+        session,
+        skip=start_idx,
+        limit=page_size,
+    )
 
     return {
         "messages": [message_to_response(m) for m in messages],
@@ -418,7 +426,8 @@ async def add_message(
     if message_data.decision_id:
         decision_id = PydanticObjectId(message_data.decision_id)
 
-    message = session.add_message(
+    message = await persist_session_message(
+        session,
         role=message_data.role,
         content=message_data.content,
         decision_id=decision_id,
@@ -484,5 +493,6 @@ async def delete_session(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
+    await delete_session_message_history(session.id)
     await session.delete()
     return {"message": "Session deleted successfully"}

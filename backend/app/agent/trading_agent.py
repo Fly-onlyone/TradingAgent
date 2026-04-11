@@ -60,6 +60,13 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+_TRUNCATION_MARKER = "...[truncated]"
+_MAX_TOOL_CALLS_PER_TURN = 32
+_MAX_TOOL_ARGUMENT_STRING_CHARS = 200
+_MAX_TOOL_ARGUMENT_LIST_ITEMS = 10
+_MAX_TOOL_ARGUMENT_DICT_ITEMS = 20
+_MAX_THINKING_CHARS_PER_TURN = 12_000
+
 # Built-in Claude Code tools that don't work in a headless subprocess.
 # The agent should ask questions via the ask_user MCP tool instead.
 DISALLOWED_BUILTIN_TOOLS = [
@@ -130,6 +137,36 @@ Be concise but thorough. Explain your reasoning clearly.
 After completing your analysis, you MUST call the `submit_recommendation` tool with your structured recommendation. This tool accepts: action (buy/sell/hold/wait), confidence (0-100), summary, and optional entry_price, stop_loss, take_profit, position_size, key_factors. Always call this tool as the final step of your analysis."""
 
 
+def _append_bounded_text(existing: str, chunk: str, *, limit: int) -> str:
+    """Append text while keeping a bounded in-memory buffer."""
+    if not chunk:
+        return existing
+    if existing.endswith(_TRUNCATION_MARKER) or len(existing) >= limit:
+        return existing
+
+    remaining = max(limit - len(existing), 0)
+    if len(chunk) <= remaining:
+        return existing + chunk
+
+    marker_budget = min(len(_TRUNCATION_MARKER), remaining)
+    content_budget = max(remaining - marker_budget, 0)
+    return f"{existing}{chunk[:content_budget]}{_TRUNCATION_MARKER}"
+
+
+def _truncate_tool_argument(value: Any) -> Any:
+    """Trim large tool argument payloads before storing them in memory."""
+    if isinstance(value, str) and len(value) > _MAX_TOOL_ARGUMENT_STRING_CHARS:
+        return f"{value[:_MAX_TOOL_ARGUMENT_STRING_CHARS]}{_TRUNCATION_MARKER}"
+    if isinstance(value, list):
+        return [_truncate_tool_argument(item) for item in value[:_MAX_TOOL_ARGUMENT_LIST_ITEMS]]
+    if isinstance(value, dict):
+        truncated: dict[str, Any] = {}
+        for key, item in list(value.items())[:_MAX_TOOL_ARGUMENT_DICT_ITEMS]:
+            truncated[str(key)] = _truncate_tool_argument(item)
+        return truncated
+    return value
+
+
 class TradingAgent:
     """Trading agent using Claude Agent SDK with in-process MCP tools.
 
@@ -149,6 +186,8 @@ class TradingAgent:
         self._thinking_content_this_turn: str = ""
         self._partial_response_this_turn: str = ""
         self._model_this_turn: str | None = None
+        self._saw_text_delta_this_turn = False
+        self._saw_thinking_delta_this_turn = False
         self._cancel_event = asyncio.Event()
         self._session_id = resume_session_id or session_id
         self._resume_session_id = resume_session_id
@@ -253,6 +292,8 @@ class TradingAgent:
         self._input_tokens = 0
         self._output_tokens = 0
         self._model_this_turn = None
+        self._saw_text_delta_this_turn = False
+        self._saw_thinking_delta_this_turn = False
 
         with sentry_sdk.start_span(op="ai.agent.chat", description="claude.chat") as span:
             await self._client.query(user_message, session_id=self._session_id or "default")
@@ -271,8 +312,13 @@ class TradingAgent:
                         self._model_this_turn = message.model
                     for block in message.content:
                         if isinstance(block, ThinkingBlock):
-                            self._thinking_content_this_turn += block.thinking + "\n"
-                            if on_event:
+                            if not self._saw_thinking_delta_this_turn:
+                                self._thinking_content_this_turn = _append_bounded_text(
+                                    self._thinking_content_this_turn,
+                                    f"{block.thinking}\n",
+                                    limit=_MAX_THINKING_CHARS_PER_TURN,
+                                )
+                            if on_event and not self._saw_thinking_delta_this_turn:
                                 await on_event(
                                     {
                                         "type": "thinking",
@@ -284,7 +330,7 @@ class TradingAgent:
                             tool_info: dict[str, Any] = {
                                 "id": block.id,
                                 "name": block.name,
-                                "arguments": block.input,
+                                "arguments": _truncate_tool_argument(block.input),
                             }
 
                             # Merge captured result from the MCP tool buffer
@@ -293,7 +339,8 @@ class TradingAgent:
                                 tool_info["result_summary"] = tool_result["result_summary"]
                                 tool_info["execution_time_ms"] = tool_result["execution_time_ms"]
 
-                            self._tool_calls_this_turn.append(tool_info)
+                            if len(self._tool_calls_this_turn) < _MAX_TOOL_CALLS_PER_TURN:
+                                self._tool_calls_this_turn.append(tool_info)
 
                             if on_event:
                                 await on_event({"type": "tool_call", "data": tool_info})
@@ -307,7 +354,8 @@ class TradingAgent:
                             logger.info(f"Tool called: {block.name}")
 
                         elif isinstance(block, TextBlock):
-                            final_text_parts.append(block.text)
+                            if not self._saw_text_delta_this_turn:
+                                final_text_parts.append(block.text)
 
                 elif isinstance(message, StreamEvent):
                     event = message.event
@@ -318,6 +366,7 @@ class TradingAgent:
                         if delta.get("type") == "text_delta":
                             text_chunk = delta.get("text", "")
                             if text_chunk:
+                                self._saw_text_delta_this_turn = True
                                 self._partial_response_this_turn += text_chunk
                             if text_chunk and on_event:
                                 await on_event(
@@ -329,7 +378,12 @@ class TradingAgent:
                         elif delta.get("type") == "thinking_delta":
                             thinking_chunk = delta.get("thinking", "")
                             if thinking_chunk:
-                                self._thinking_content_this_turn += thinking_chunk
+                                self._saw_thinking_delta_this_turn = True
+                                self._thinking_content_this_turn = _append_bounded_text(
+                                    self._thinking_content_this_turn,
+                                    thinking_chunk,
+                                    limit=_MAX_THINKING_CHARS_PER_TURN,
+                                )
                                 if on_event:
                                     await on_event(
                                         {

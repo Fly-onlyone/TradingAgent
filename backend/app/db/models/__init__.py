@@ -7,7 +7,7 @@ from app.db.models.agent_decision import (
     DecisionType,
 )
 from app.db.models.agent_memory import AgentMemory, MemoryCategory
-from app.db.models.agent_session import AgentSession, MessageRole
+from app.db.models.agent_session import AgentSession, AgentSessionMessage, MessageRole
 from app.db.models.agent_task import (
     AgentMode,
     AgentTask,
@@ -72,6 +72,7 @@ __all__ = [
     "MemoryCategory",
     # Agent Session
     "AgentSession",
+    "AgentSessionMessage",
     "MessageRole",
     # Notification
     "Notification",

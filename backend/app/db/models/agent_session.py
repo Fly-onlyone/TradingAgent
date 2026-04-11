@@ -1,4 +1,4 @@
-"""Agent session model for chat history persistence."""
+"""Agent session models for chat metadata and persisted message history."""
 
 from datetime import UTC, datetime
 from enum import Enum
@@ -42,6 +42,66 @@ class PendingQuestionState(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class AgentSessionMessage(Document):
+    """Persist a single chat message outside the hot session document."""
+
+    session_id: Indexed(PydanticObjectId)  # type: ignore[valid-type]
+    user_id: Indexed(PydanticObjectId)  # type: ignore[valid-type]
+    role: MessageRole
+    content: str
+    timestamp: Indexed(datetime) = Field(default_factory=lambda: datetime.now(UTC))  # type: ignore[valid-type]
+    decision_id: PydanticObjectId | None = None
+    tool_calls: list[dict] = Field(default_factory=list)
+    thinking_content: str | None = None
+    tokens_used: int | None = None
+
+    class Settings:
+        name = "agent_session_messages"
+        indexes = [
+            IndexModel(
+                [("session_id", ASCENDING), ("timestamp", ASCENDING)],
+                name="session_messages_session_timestamp_asc",
+            ),
+            IndexModel(
+                [("user_id", ASCENDING), ("session_id", ASCENDING), ("timestamp", DESCENDING)],
+                name="session_messages_user_session_timestamp_desc",
+            ),
+        ]
+
+    def to_session_message(self) -> SessionMessage:
+        """Convert the persisted message document to the API/session model."""
+        return SessionMessage(
+            role=self.role,
+            content=self.content,
+            timestamp=self.timestamp,
+            decision_id=self.decision_id,
+            tool_calls=self.tool_calls,
+            thinking_content=self.thinking_content,
+            tokens_used=self.tokens_used,
+        )
+
+    @classmethod
+    def from_session_message(
+        cls,
+        *,
+        session_id: PydanticObjectId,
+        user_id: PydanticObjectId,
+        message: SessionMessage,
+    ) -> "AgentSessionMessage":
+        """Build a persisted message document from a session message value."""
+        return cls(
+            session_id=session_id,
+            user_id=user_id,
+            role=message.role,
+            content=message.content,
+            timestamp=message.timestamp,
+            decision_id=message.decision_id,
+            tool_calls=message.tool_calls,
+            thinking_content=message.thinking_content,
+            tokens_used=message.tokens_used,
+        )
+
+
 class AgentSession(Document):
     """Agent chat session document."""
 
@@ -52,7 +112,8 @@ class AgentSession(Document):
     title: str | None = None  # Auto-generated or user-provided
     description: str | None = None
 
-    # Conversation history
+    # Legacy embedded conversation history kept for older sessions.
+    # New writes go to AgentSessionMessage instead.
     messages: list[SessionMessage] = Field(default_factory=list)
     active_pending_question: PendingQuestionState | None = None
 
@@ -126,16 +187,29 @@ class AgentSession(Document):
         )
 
         self.messages.append(message)
+        if role_enum == MessageRole.USER and not self.title:
+            self.title = self.build_message_title(content)
+        self.record_message(role_enum, tokens=tokens, timestamp=message.timestamp)
+
+        return message
+
+    def record_message(
+        self,
+        role: MessageRole | str,
+        *,
+        tokens: int = 0,
+        timestamp: datetime | None = None,
+    ) -> None:
+        """Update counters and timestamps for a newly persisted session message."""
+        role_enum = role if isinstance(role, MessageRole) else MessageRole(role)
         self.total_messages += 1
-        self.last_message_at = datetime.now(UTC)
+        self.last_message_at = timestamp or datetime.now(UTC)
         self.total_tokens += tokens
 
         if role_enum == MessageRole.USER:
             self.user_messages += 1
         elif role_enum == MessageRole.ASSISTANT:
             self.assistant_messages += 1
-
-        return message
 
     def set_pending_question(
         self,
@@ -181,14 +255,86 @@ class AgentSession(Document):
         self.is_active = False
         self.ended_at = datetime.now(UTC)
 
+    @staticmethod
+    def build_message_title(content: str) -> str:
+        """Generate a session title from a user message."""
+        title = content[:50]
+        if len(content) > 50:
+            title += "..."
+        return title
+
     def generate_title(self) -> str:
         """Generate a title from the first user message."""
         for msg in self.messages:
             if msg.role != MessageRole.USER:
                 continue
-            title = msg.content[:50]
-            if len(msg.content) > 50:
-                title += "..."
-            return title
+            return self.build_message_title(msg.content)
 
         return f"Session {self.started_at.strftime('%Y-%m-%d %H:%M')}"
+
+
+async def fetch_session_messages(
+    session: AgentSession,
+    *,
+    skip: int = 0,
+    limit: int | None = None,
+) -> tuple[list[SessionMessage], int]:
+    """Load session messages from the dedicated collection with legacy fallback."""
+    query = AgentSessionMessage.find(AgentSessionMessage.session_id == session.id).sort(
+        "+timestamp"
+    )
+
+    if session.messages:
+        persisted_docs = await query.to_list()
+        combined = [*session.messages, *[doc.to_session_message() for doc in persisted_docs]]
+        combined.sort(key=lambda message: message.timestamp)
+        total = len(combined)
+        if limit is None:
+            return combined[skip:], total
+        return combined[skip : skip + limit], total
+
+    total = await AgentSessionMessage.find(AgentSessionMessage.session_id == session.id).count()
+    if limit is None:
+        docs = await query.to_list()
+    else:
+        docs = await query.skip(skip).limit(limit).to_list()
+    return [doc.to_session_message() for doc in docs], total
+
+
+async def persist_session_message(
+    session: AgentSession,
+    *,
+    role: str,
+    content: str,
+    decision_id: PydanticObjectId | None = None,
+    tool_calls: list[dict] | None = None,
+    thinking_content: str | None = None,
+    tokens: int = 0,
+    timestamp: datetime | None = None,
+) -> SessionMessage:
+    """Persist a message in the dedicated collection and update session counters."""
+    role_enum = MessageRole(role)
+    message = SessionMessage(
+        role=role_enum,
+        content=content,
+        timestamp=timestamp or datetime.now(UTC),
+        decision_id=decision_id,
+        tool_calls=tool_calls or [],
+        thinking_content=thinking_content,
+        tokens_used=tokens if tokens > 0 else None,
+    )
+    document = AgentSessionMessage.from_session_message(
+        session_id=session.id,
+        user_id=session.user_id,
+        message=message,
+    )
+    await document.insert()
+    if role_enum == MessageRole.USER and not session.title:
+        session.title = session.build_message_title(content)
+    session.record_message(role_enum, tokens=tokens, timestamp=message.timestamp)
+    return message
+
+
+async def delete_session_message_history(session_id: PydanticObjectId) -> None:
+    """Delete all persisted messages associated with a session."""
+    await AgentSessionMessage.get_pymongo_collection().delete_many({"session_id": session_id})
