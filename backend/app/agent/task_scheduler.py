@@ -77,6 +77,29 @@ class AgentTaskScheduler:
     # Transient error types that justify a retry
     _RETRYABLE_ERRORS = (ConnectionError, TimeoutError, OSError)
 
+    # Patterns that indicate an expired/invalid auth token from the Claude CLI subprocess
+    _AUTH_ERROR_PATTERNS = (
+        "authentication_error",
+        "Failed to authenticate",
+        "Invalid authentication credentials",
+    )
+
+    @staticmethod
+    def _is_auth_error(exc: Exception) -> bool:
+        """Check whether an exception indicates an expired/invalid auth token."""
+        msg = str(exc)
+        return any(p in msg for p in AgentTaskScheduler._AUTH_ERROR_PATTERNS)
+
+    async def _reset_trading_agent(self) -> None:
+        """Disconnect and discard the cached agent so the next call gets a fresh one."""
+        if self._trading_agent is not None:
+            try:
+                await self._trading_agent.disconnect()
+            except Exception:
+                logger.debug("Error disconnecting stale trading agent", exc_info=True)
+            self._trading_agent = None
+            logger.info("Trading agent reset after authentication failure")
+
     async def _execute_with_retry(
         self,
         fn: Callable[[], Awaitable[Any]],
@@ -92,6 +115,22 @@ class AgentTaskScheduler:
                 wait = 2**attempt * 5  # 5s, 10s, 20s …
                 logger.warning(
                     "Retry %d/%d after transient error: %s (waiting %ds)",
+                    attempt + 1,
+                    max_retries,
+                    e,
+                    wait,
+                )
+                await asyncio.sleep(wait)
+            except Exception as e:
+                if not self._is_auth_error(e):
+                    raise
+                # Auth token expired — kill the CLI subprocess and retry with fresh creds
+                await self._reset_trading_agent()
+                if attempt == max_retries:
+                    raise
+                wait = 2**attempt * 5
+                logger.warning(
+                    "Retry %d/%d after auth error: %s (waiting %ds)",
                     attempt + 1,
                     max_retries,
                     e,
@@ -391,15 +430,64 @@ class AgentTaskScheduler:
             await self._schedule_session_cleanup()
 
     async def _load_active_tasks(self) -> None:
-        """Load all active tasks from database and schedule them."""
+        """Load all active tasks from database and schedule them.
+
+        Detects tasks that missed runs during downtime and triggers one
+        catch-up execution for each before resuming the normal schedule.
+        """
         tasks = await AgentTask.find(AgentTask.status == TaskStatus.ACTIVE).to_list()
         logger.info(f"Loading {len(tasks)} active tasks")
 
+        overdue_task_ids: list[str] = []
         for task in tasks:
             try:
+                if self._is_overdue(task):
+                    overdue_task_ids.append(str(task.id))
                 await self.schedule_task(task)
             except Exception as e:
                 logger.error(f"Error scheduling task {task.id}: {e}")
+
+        # Catch up overdue tasks (one execution each)
+        if overdue_task_ids:
+            logger.info(
+                "Catching up %d overdue task(s) missed during downtime",
+                len(overdue_task_ids),
+            )
+            for task_id in overdue_task_ids:
+                asyncio.create_task(self._execute_task(task_id))
+
+    def _is_overdue(self, task: AgentTask) -> bool:
+        """Check if a task missed its scheduled run(s) during app downtime."""
+        if not task.schedules:
+            return False
+
+        ref_time = task.last_run_at or task.created_at
+        if not ref_time:
+            return False
+
+        now = datetime.now(UTC)
+        for schedule in task.schedules:
+            if not schedule.enabled or schedule.frequency == TaskFrequency.ONCE:
+                continue
+            interval = self._get_schedule_interval(schedule)
+            if interval and (now - ref_time) > interval:
+                return True
+        return False
+
+    @staticmethod
+    def _get_schedule_interval(schedule: TaskSchedule) -> timedelta | None:
+        """Return the effective interval for a schedule entry."""
+        from app.db.models.agent_task import IntervalUnit
+
+        if schedule.interval_value and schedule.interval_unit:
+            if schedule.interval_unit == IntervalUnit.MINUTES:
+                return timedelta(minutes=schedule.interval_value)
+            return timedelta(hours=schedule.interval_value)
+        if schedule.frequency == TaskFrequency.DAILY:
+            return timedelta(days=1)
+        if schedule.frequency == TaskFrequency.WEEKLY:
+            return timedelta(weeks=1)
+        return None
 
     async def schedule_task(self, task: AgentTask) -> None:
         """Schedule a task for execution (one job per schedule entry)."""
@@ -604,7 +692,28 @@ class AgentTaskScheduler:
                         await self._check_auto_pause(task)
                         await task.save()
         finally:
+            try:
+                await self._update_next_run_at(task_id)
+            except Exception:
+                logger.debug("Failed to update next_run_at for task %s", task_id, exc_info=True)
             self._running_tasks.pop(task_id, None)
+
+    async def _update_next_run_at(self, task_id: str) -> None:
+        """Refresh task.next_run_at from APScheduler's actual next fire time."""
+        task = await AgentTask.get(PydanticObjectId(task_id))
+        if not task:
+            return
+
+        earliest: datetime | None = None
+        prefix = f"task_{task_id}"
+        for job in self.scheduler.get_jobs():
+            if job.id == prefix or job.id.startswith(f"{prefix}_sched_"):
+                nrt = job.next_run_time
+                if nrt and (earliest is None or nrt < earliest):
+                    earliest = nrt
+
+        task.next_run_at = earliest.astimezone(UTC) if earliest else None
+        await task.save()
 
     async def _execute_analysis_task(self, task: AgentTask) -> None:
         """Execute an analysis-only task."""
@@ -659,7 +768,8 @@ class AgentTaskScheduler:
                         SessionMessage(role=MessageRole.USER, content=prompt, timestamp=now),
                         SessionMessage(
                             role=MessageRole.ASSISTANT,
-                            content=result.get("reasoning") or result.get("summary", "Analysis completed"),
+                            content=result.get("reasoning")
+                            or result.get("summary", "Analysis completed"),
                             timestamp=now,
                         ),
                     ],
@@ -780,7 +890,8 @@ class AgentTaskScheduler:
                         SessionMessage(role=MessageRole.USER, content=prompt, timestamp=now),
                         SessionMessage(
                             role=MessageRole.ASSISTANT,
-                            content=result.get("reasoning") or result.get("summary", "Analysis completed"),
+                            content=result.get("reasoning")
+                            or result.get("summary", "Analysis completed"),
                             timestamp=now,
                         ),
                     ],

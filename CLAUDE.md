@@ -92,6 +92,9 @@ Separate Sentry projects per layer (org: `fly-theonlyone`):
 
 ## Key Patterns
 
+- **Production debugging**: When investigating production issues, query the production MongoDB (`trading_agent` DB) and
+  check the `logs` collection first. Use the MongoDB MCP tools (`find`, `aggregate`) to inspect task state, error
+  history, and app settings before reading code
 - **Backend model**: Beanie `Document` with `class Settings` for collection name + indexes. See `log.py`
 - **Backend API**: Router with Pydantic request/response schemas. Aggregation uses `get_pymongo_collection()` (not the
   deprecated `get_motor_collection`)
