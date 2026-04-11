@@ -238,6 +238,35 @@ export default function App() {
         setElapsed(0);
         logIdCounter = 0;
 
+        // Auto-sync version if the input differs from the saved version
+        if (versionInput.trim() && versionInput !== version) {
+            try {
+                await invoke("sync_versions", {version: versionInput});
+                setVersion(versionInput);
+                setLogs((prev) => [
+                    ...prev,
+                    {
+                        id: ++logIdCounter,
+                        line: `Version synced to ${versionInput}`,
+                        stream: "stdout",
+                        timestamp: Date.now(),
+                        type: "success",
+                    },
+                ]);
+            } catch (e) {
+                setStatus("error");
+                const entry: LogEntry = {
+                    id: ++logIdCounter,
+                    line: `Failed to sync version: ${String(e)}`,
+                    stream: "stderr",
+                    timestamp: Date.now(),
+                    type: "error",
+                };
+                setLogs((prev) => [...prev, entry]);
+                return;
+            }
+        }
+
         // Start elapsed timer
         const startTime = Date.now();
         timerRef.current = setInterval(() => {
@@ -261,7 +290,7 @@ export default function App() {
             };
             setLogs((prev) => [...prev, entry]);
         }
-    }, [options]);
+    }, [options, version, versionInput]);
 
     const handleCancelBuild = useCallback(async () => {
         try {
