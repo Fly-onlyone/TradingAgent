@@ -777,7 +777,10 @@ function AgentPage() {
 									position: "relative",
 								}}
 							>
-								{messages.length === 0 && !isThinking ? (
+								{messages.length === 0 &&
+								!isThinking &&
+								!streamingText &&
+								!hasActiveRun ? (
 									<Box
 										sx={{
 											display: "flex",

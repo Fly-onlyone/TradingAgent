@@ -50,7 +50,8 @@ class AgentTaskScheduler:
         self.scheduler = AsyncIOScheduler()
         self._running = False
         self._trading_agent = None  # Lazy load to avoid circular imports
-        self._running_tasks: dict[str, dict] = {}  # task_id -> progress dict
+        self._running_tasks: dict[str, dict] = {}  # task_id -> progress dict (JSON-safe)
+        self._task_runners: dict[str, asyncio.Task] = {}  # task_id -> asyncio.Task handle
 
     def _get_trading_agent(self):
         """Lazy load trading agent to avoid circular imports."""
@@ -622,6 +623,25 @@ class AgentTaskScheduler:
 
         return IntervalTrigger(**kwargs)
 
+    async def _should_abort_run(self, task_id: str) -> bool:
+        """Return True if the task is no longer ACTIVE (e.g. paused via emergency stop)."""
+        fresh = await AgentTask.get(PydanticObjectId(task_id))
+        if fresh is None or fresh.status != TaskStatus.ACTIVE:
+            if task_id in self._running_tasks:
+                self._running_tasks[task_id]["aborted"] = True
+            return True
+        return False
+
+    async def _emit_run_end_if_aborted(self, task_id: str, on_event: Callable) -> None:
+        """Emit cancel_ack so the frontend clears the thinking/streaming UI state."""
+        aborted = self._running_tasks.get(task_id, {}).get("aborted", False)
+        if not aborted:
+            return
+        try:
+            await on_event({"type": "cancel_ack", "data": {"reason": "emergency_stop"}})
+        except Exception:
+            logger.debug("Failed to emit cancel_ack for task %s", task_id, exc_info=True)
+
     async def _execute_task(self, task_id: str) -> None:
         """Execute a scheduled task."""
         if task_id in self._running_tasks:
@@ -635,6 +655,9 @@ class AgentTaskScheduler:
             "total": 0,
             "session_ids": [],
         }
+        current = asyncio.current_task()
+        if current is not None:
+            self._task_runners[task_id] = current
 
         try:
             with sentry_sdk.start_transaction(op="task", name="agent-task-execution") as txn:
@@ -667,30 +690,33 @@ class AgentTaskScheduler:
                     else:
                         await self._execute_analysis_task(task)
 
-                    if task.monitoring_enabled:
+                    if task.monitoring_enabled and not await self._should_abort_run(task_id):
                         await self._execute_monitoring_task(task)
 
-                    # Mark as completed if all schedules are one-time
+                    aborted = self._running_tasks.get(task_id, {}).get("aborted", False)
+
+                    # Mark as completed if all schedules are one-time (skip if aborted)
                     all_once = all(s.frequency == TaskFrequency.ONCE for s in task.schedules)
-                    if all_once:
+                    if all_once and not aborted:
                         task.complete()
                         await task.save()
                         self._remove_task_jobs(str(task.id))
 
-                    # Create completion notification (with desktop toast)
-                    try:
-                        from app.services.notification_service import NotificationService
+                    # Create completion notification (with desktop toast) — skip if aborted
+                    if not aborted:
+                        try:
+                            from app.services.notification_service import NotificationService
 
-                        svc = NotificationService()
-                        await svc.create_notification(
-                            user_id=task.user_id,
-                            title=f"Task Completed: {task.name}",
-                            body=f"Analyzed {len(task.symbols)} symbol(s) successfully.",
-                            notification_type=NotificationType.TASK_COMPLETED,
-                            task_id=task.id,
-                        )
-                    except Exception:
-                        logger.debug("Failed to create completion notification", exc_info=True)
+                            svc = NotificationService()
+                            await svc.create_notification(
+                                user_id=task.user_id,
+                                title=f"Task Completed: {task.name}",
+                                body=f"Analyzed {len(task.symbols)} symbol(s) successfully.",
+                                notification_type=NotificationType.TASK_COMPLETED,
+                                task_id=task.id,
+                            )
+                        except Exception:
+                            logger.debug("Failed to create completion notification", exc_info=True)
 
                 except Exception as e:
                     logger.error(f"Error executing task {task_id}: {e}")
@@ -699,12 +725,17 @@ class AgentTaskScheduler:
                         task.record_execution(success=False, error=str(e))
                         await self._check_auto_pause(task)
                         await task.save()
+        except asyncio.CancelledError:
+            # Emergency stop cancelled this run — swallow so APScheduler doesn't
+            # treat it as an error. Cleanup happens in the finally block below.
+            logger.info("Task %s cancelled via emergency stop", task_id)
         finally:
             try:
                 await self._update_next_run_at(task_id)
             except Exception:
                 logger.debug("Failed to update next_run_at for task %s", task_id, exc_info=True)
             self._running_tasks.pop(task_id, None)
+            self._task_runners.pop(task_id, None)
 
     async def _update_next_run_at(self, task_id: str) -> None:
         """Refresh task.next_run_at from APScheduler's actual next fire time."""
@@ -757,6 +788,9 @@ class AgentTaskScheduler:
 
         try:
             for symbol in task.symbols:
+                if await self._should_abort_run(task_id):
+                    logger.info("Task %s aborted mid-run; skipping remaining symbols", task_id)
+                    break
                 if task_id in self._running_tasks:
                     self._running_tasks[task_id]["current_symbol"] = symbol
                 try:
@@ -855,6 +889,7 @@ class AgentTaskScheduler:
             session.ended_at = now
             session.last_message_at = now
             await session.save()
+            await self._emit_run_end_if_aborted(task_id, on_event)
 
     async def _execute_trading_task(self, task: AgentTask) -> None:
         """Execute a trading task (analysis + potential trade).
@@ -891,6 +926,9 @@ class AgentTaskScheduler:
 
         try:
             for symbol in task.symbols:
+                if await self._should_abort_run(task_id):
+                    logger.info("Task %s aborted mid-run; skipping remaining symbols", task_id)
+                    break
                 if task_id in self._running_tasks:
                     self._running_tasks[task_id]["current_symbol"] = symbol
                 try:
@@ -1053,6 +1091,7 @@ class AgentTaskScheduler:
             session.ended_at = now
             session.last_message_at = now
             await session.save()
+            await self._emit_run_end_if_aborted(task_id, on_event)
 
     async def _get_today_trade_count(self, task_id: PydanticObjectId) -> int:
         """Count today's executed trades for a task."""
@@ -1084,7 +1123,11 @@ class AgentTaskScheduler:
         from app.agent.tools.market_tools import get_ticker
         from app.agent.tools.technical_tools import get_technical_indicators
 
+        task_id = str(task.id)
         for symbol in task.symbols:
+            if await self._should_abort_run(task_id):
+                logger.info("Task %s aborted mid-run; skipping remaining symbols", task_id)
+                break
             try:
                 # Fetch market data
                 ticker = await get_ticker(symbol)
@@ -1627,7 +1670,10 @@ Provide:
         return action_map.get(action_str.lower())
 
     async def pause_all_tasks(self) -> int:
-        """Pause all active tasks and unschedule their jobs. Returns count paused."""
+        """Pause all active tasks, unschedule jobs, and cancel in-flight runs.
+
+        Returns the number of tasks whose status was flipped to PAUSED.
+        """
         tasks = await AgentTask.find(AgentTask.status == TaskStatus.ACTIVE).to_list()
         paused = 0
         for task in tasks:
@@ -1638,7 +1684,24 @@ Provide:
                 paused += 1
             except Exception:
                 logger.exception("Failed to pause task %s during emergency stop", task.id)
-        logger.info("Emergency stop: paused %d of %d active tasks", paused, len(tasks))
+
+        # Hard-cancel any currently-executing task coroutines (interrupts mid-symbol,
+        # including a live Claude streaming call).
+        cancelled = 0
+        for task_id, info in list(self._running_tasks.items()):
+            info["aborted"] = True
+        for task_id, runner in list(self._task_runners.items()):
+            if not runner.done():
+                runner.cancel()
+                cancelled += 1
+                logger.info("Emergency stop: cancelled running task %s", task_id)
+
+        logger.info(
+            "Emergency stop: paused %d of %d active tasks, cancelled %d in-flight run(s)",
+            paused,
+            len(tasks),
+            cancelled,
+        )
         return paused
 
     async def unschedule_task(self, task_id: str) -> None:
