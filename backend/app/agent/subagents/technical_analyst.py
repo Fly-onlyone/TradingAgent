@@ -11,6 +11,7 @@ from claude_agent_sdk import (
     TextBlock,
 )
 
+from app.agent.tools.knowledge_tools import search_lessons, search_patterns
 from app.agent.tools.technical_tools import (
     detect_chart_patterns,
     get_price_action,
@@ -29,9 +30,11 @@ TECHNICAL_ANALYST_PROMPT = """You are an expert technical analyst specializing i
 3. **Volatility Analysis**: Bollinger Bands, ATR
 4. **Pattern Recognition**: Chart patterns, candlestick patterns
 5. **Support/Resistance**: Key levels, pivot points
+6. **Historical Setup Recall**: Leverage prior discovered patterns and past trade lessons for the same symbol
 
 ## Analysis Framework:
 When analyzing a market:
+0. **Historical Pattern Check (REQUIRED)**: A "Historical Patterns" and "Past Lessons" section is provided in the context below — if it contains entries, weight your analysis toward those proven setups and explicitly flag any conflicts with current indicators. If the section is empty, state "no prior knowledge found" and proceed.
 1. Identify the primary trend (bullish/bearish/sideways)
 2. Check momentum indicators for overbought/oversold conditions
 3. Look for chart patterns and candlestick signals
@@ -111,6 +114,9 @@ class TechnicalAnalyst:
         patterns = await detect_chart_patterns(symbol, timeframe)
         price_action = await get_price_action(symbol, timeframe)
 
+        # Historical RAG context
+        rag_section = await self._fetch_historical_context(symbol, timeframe)
+
         # Fetch analyst commentary from web
         web_section = await self._fetch_analyst_commentary(symbol)
 
@@ -118,7 +124,7 @@ class TechnicalAnalyst:
         context = f"""
 Symbol: {symbol}
 Timeframe: {timeframe}
-
+{rag_section}
 ## Technical Indicators:
 {self._format_indicators(indicators)}
 
@@ -147,6 +153,50 @@ Based on this technical data, provide your analysis and trading signal.
             "analysis": analysis_text,
             "signal": signal,
         }
+
+    async def _fetch_historical_context(self, symbol: str, timeframe: str) -> str:
+        """Retrieve prior patterns and trade lessons for this symbol from the RAG store."""
+        asset = symbol.upper().replace("-USDT", "").replace("-USD", "")
+        query = f"{asset} {timeframe} technical setup"
+        lines: list[str] = []
+
+        try:
+            pattern_results = await search_patterns(query=query, limit=5)
+            patterns = pattern_results.get("patterns", [])
+            if patterns:
+                lines.append("\n## Historical Patterns (from knowledge base):")
+                for p in patterns:
+                    lines.append(
+                        f"- {p.get('pattern_name')} ({p.get('pattern_type')}): "
+                        f"success_rate={p.get('success_rate')}, "
+                        f"avg_return={p.get('avg_return')}, "
+                        f"samples={p.get('sample_count')}"
+                    )
+                    if p.get("description"):
+                        lines.append(f"  {p['description'][:200]}")
+            else:
+                lines.append(
+                    "\n## Historical Patterns: no prior patterns found for this asset/timeframe"
+                )
+        except Exception:
+            logger.debug("Pattern RAG lookup failed", exc_info=True)
+
+        try:
+            lesson_results = await search_lessons(query=query, symbol=symbol, limit=5)
+            lessons = lesson_results.get("lessons", [])
+            if lessons:
+                lines.append("\n## Past Lessons (same symbol):")
+                for lesson in lessons:
+                    lines.append(
+                        f"- [{lesson.get('outcome')}] {lesson.get('side')} "
+                        f"(profit {lesson.get('profit_pct')}%): {lesson.get('lesson_summary', '')[:200]}"
+                    )
+            else:
+                lines.append("\n## Past Lessons: no prior lessons found for this symbol")
+        except Exception:
+            logger.debug("Lesson RAG lookup failed", exc_info=True)
+
+        return "\n".join(lines) + "\n" if lines else ""
 
     async def _fetch_analyst_commentary(self, symbol: str) -> str:
         """Fetch analyst commentary from Brave Search."""

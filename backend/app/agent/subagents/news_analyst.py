@@ -25,9 +25,11 @@ NEWS_ANALYST_PROMPT = """You are an expert news analyst specializing in cryptocu
 3. **Source Credibility**: Consider the reliability of news sources
 4. **Timing Analysis**: Assess if news is priced in or new information
 5. **Cross-Reference**: Connect related news items for broader context
+6. **Narrative Continuity**: Detect repeat narratives vs. new information by comparing against historical news in the knowledge base
 
 ## Analysis Framework:
 When analyzing news:
+0. **Historical Context (REQUIRED)**: A "Historical News Coverage" section is provided in the context below — if it contains entries, compare the current story against them. Call out whether the new item is repeating a known narrative (likely priced in) or introducing novel information. If the section is empty, state "no prior coverage found" and proceed.
 1. Identify the main topic and affected assets
 2. Assess sentiment (bullish/bearish/neutral)
 3. Evaluate source credibility
@@ -112,6 +114,9 @@ class NewsAnalyst:
         news = await get_latest_news(assets=assets, limit=15)
         sentiment = await get_news_sentiment(assets=assets, hours=hours)
 
+        # Historical RAG news
+        historical_section = await self._fetch_historical_news(assets)
+
         # Fetch real-time web news
         web_news_section = await self._fetch_web_news(assets)
 
@@ -119,7 +124,7 @@ class NewsAnalyst:
         context = f"""
 Assets of Interest: {", ".join(assets) if assets else "All major crypto"}
 Time Window: Last {hours} hours
-
+{historical_section}
 ## Latest News:
 {self._format_news(news)}
 
@@ -218,6 +223,30 @@ Analyze this news and provide:
             "signal": signal,
             "news": news.get("articles", []),
         }
+
+    async def _fetch_historical_news(self, assets: list[str] | None) -> str:
+        """Retrieve prior news coverage from the RAG knowledge base for narrative-continuity checks."""
+        try:
+            asset_str = " ".join(assets) if assets else "crypto market"
+            results = await search_news(
+                query=f"{asset_str} market narrative",
+                assets=assets,
+                limit=5,
+            )
+            articles = results.get("articles", [])
+            if not articles:
+                return "\n## Historical News Coverage: no prior coverage found\n"
+
+            lines = ["\n## Historical News Coverage (from knowledge base):"]
+            for i, article in enumerate(articles, 1):
+                lines.append(f"{i}. {article.get('title')}")
+                if article.get("summary"):
+                    lines.append(f"   {article['summary'][:200]}")
+            lines.append("")
+            return "\n".join(lines)
+        except Exception:
+            logger.debug("Historical news RAG lookup failed", exc_info=True)
+            return ""
 
     async def _fetch_web_news(self, assets: list[str] | None) -> str:
         """Fetch real-time news from Brave Search API."""
