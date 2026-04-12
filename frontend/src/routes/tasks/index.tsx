@@ -258,6 +258,22 @@ function TaskConfigPage() {
 		},
 	});
 
+	const mergeDuplicatesMutation = useMutation({
+		mutationFn: () => tasksApi.mergeDuplicateTasks(),
+		onSuccess: (result) => {
+			setError(null);
+			void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+			if (result.sessionId) {
+				// Jump straight to the merge chat session
+				sessionStorage.setItem("agent:pendingSession", result.sessionId);
+				void navigate({ to: "/agent" });
+			} else {
+				notify.success("Cleanup", result.message);
+			}
+		},
+		onError: () => setError("Failed to merge duplicate tasks"),
+	});
+
 	// ── Debounced auto-save ──────────────────────────────────────────────
 
 	const { triggerSave, saveStatus } = useDebouncedSave<TaskUpdate>({
@@ -565,6 +581,40 @@ function TaskConfigPage() {
 							</Box>
 						}
 					/>
+
+					{/* ── Duplicate Tasks Cleanup Banner ─────────────── */}
+					{allTasks.length > 1 && (
+						<Alert
+							severity="warning"
+							sx={{ mb: 2 }}
+							action={
+								<Button
+									color="inherit"
+									size="small"
+									startIcon={
+										mergeDuplicatesMutation.isPending ? (
+											<CircularProgress size={14} color="inherit" />
+										) : (
+											<AutoModeIcon />
+										)
+									}
+									onClick={() => mergeDuplicatesMutation.mutate()}
+									disabled={mergeDuplicatesMutation.isPending}
+								>
+									{mergeDuplicatesMutation.isPending
+										? "Merging…"
+										: "Merge with AI"}
+								</Button>
+							}
+						>
+							<Typography variant="body2">
+								You have <strong>{allTasks.length}</strong> tasks. Only one task
+								is supported — click <em>Merge with AI</em> to consolidate them
+								into a single task. The merge runs in a chat session you can
+								watch live.
+							</Typography>
+						</Alert>
+					)}
 
 					{/* ── Running Tasks Bar ─────────────────────────── */}
 					{runningTasks.length > 0 && (

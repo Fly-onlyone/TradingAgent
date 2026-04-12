@@ -724,307 +724,335 @@ class AgentTaskScheduler:
         await task.save()
 
     async def _execute_analysis_task(self, task: AgentTask) -> None:
-        """Execute an analysis-only task."""
+        """Execute an analysis-only task.
+
+        All symbols are analyzed inside a single ``AgentSession`` for the run,
+        so the session viewer shows one chat per scheduled execution instead of
+        one per coin.
+        """
         agent = self._get_trading_agent()
         task_id = str(task.id)
 
-        for symbol in task.symbols:
-            if task_id in self._running_tasks:
-                self._running_tasks[task_id]["current_symbol"] = symbol
-            try:
-                # Build prompt — optionally enriched with subagent results
-                subagent_context = None
-                if task.use_subagents:
-                    logger.info("Running subagent analysis for %s", symbol)
-                    subagent_context = await self._run_subagent_analysis(symbol, task)
-                    prompt = self._build_enriched_prompt(symbol, task, subagent_context)
-                else:
-                    prompt = self._build_analysis_prompt(symbol, task)
+        if not task.symbols:
+            return
 
-                # Inject user memory context
-                try:
-                    from app.agent.tools.memory_tools import load_session_memories
+        # Create ONE session for the whole run (covering all symbols)
+        now = datetime.now(UTC)
+        session = AgentSession(
+            user_id=task.user_id,
+            title=task.name,
+            symbols_discussed=list(task.symbols),
+            is_active=True,
+            started_at=now,
+            last_message_at=now,
+        )
+        await session.insert()
+        session_id_str = str(session.id)
+        if task_id in self._running_tasks:
+            self._running_tasks[task_id]["active_session_id"] = session_id_str
+            self._running_tasks[task_id]["session_ids"].append(session_id_str)
 
-                    mem_ctx = await load_session_memories(str(task.user_id))
-                    if mem_ctx:
-                        prompt = f"{mem_ctx}\n\n{prompt}"
-                except Exception:
-                    logger.debug("Failed to inject memory context for task", exc_info=True)
+        # One event emitter shared across all symbol turns in this run
+        on_event = self._make_task_event_emitter(task.user_id, session_id_str)
 
-                # Create session BEFORE analysis so user can watch it live
-                now = datetime.now(UTC)
-                session = AgentSession(
-                    user_id=task.user_id,
-                    title=f"{task.name} — {symbol}",
-                    symbols_discussed=[symbol],
-                    is_active=True,
-                    started_at=now,
-                    last_message_at=now,
-                )
-                await session.insert()
-                await persist_session_message(
-                    session,
-                    role="user",
-                    content=prompt,
-                    timestamp=now,
-                )
-
-                # Expose active session ID so frontend can navigate to it
-                session_id_str = str(session.id)
+        try:
+            for symbol in task.symbols:
                 if task_id in self._running_tasks:
-                    self._running_tasks[task_id]["active_session_id"] = session_id_str
-                    self._running_tasks[task_id]["session_ids"].append(session_id_str)
-
-                # Create event emitter for live streaming to user's WebSocket
-                on_event = self._make_task_event_emitter(task.user_id, session_id_str)
-
-                # Set task context for modify_task tool
-                request_id = f"task-{task.id}-{symbol}"
-                self._set_modification_context(request_id, task)
-
-                # Run agent analysis with retry on transient errors
+                    self._running_tasks[task_id]["current_symbol"] = symbol
                 try:
-                    result = await self._execute_with_retry(
-                        lambda: agent.analyze(
-                            user_message=prompt,
-                            user_id=str(task.user_id),
-                            on_event=on_event,
-                        ),
-                        max_retries=task.max_retries,
+                    # Build prompt — optionally enriched with subagent results
+                    subagent_context = None
+                    if task.use_subagents:
+                        logger.info("Running subagent analysis for %s", symbol)
+                        subagent_context = await self._run_subagent_analysis(symbol, task)
+                        prompt = self._build_enriched_prompt(symbol, task, subagent_context)
+                    else:
+                        prompt = self._build_analysis_prompt(symbol, task)
+
+                    # Inject user memory context
+                    try:
+                        from app.agent.tools.memory_tools import load_session_memories
+
+                        mem_ctx = await load_session_memories(str(task.user_id))
+                        if mem_ctx:
+                            prompt = f"{mem_ctx}\n\n{prompt}"
+                    except Exception:
+                        logger.debug("Failed to inject memory context for task", exc_info=True)
+
+                    # Persist this symbol's user prompt into the shared session
+                    now = datetime.now(UTC)
+                    await persist_session_message(
+                        session,
+                        role="user",
+                        content=prompt,
+                        timestamp=now,
                     )
-                finally:
-                    self._clear_modification_context(request_id)
 
-                # Persist assistant response and close the session
-                now = datetime.now(UTC)
-                await persist_session_message(
-                    session,
-                    role="assistant",
-                    content=result.get("reasoning") or result.get("summary", "Analysis completed"),
-                    timestamp=now,
-                )
-                session.is_active = False
-                session.ended_at = now
-                session.last_message_at = now
-                await session.save()
+                    # Set task context for modify_task tool
+                    request_id = f"task-{task.id}-{symbol}"
+                    self._set_modification_context(request_id, task)
 
-                # Store decision
-                decision = AgentDecision(
-                    user_id=task.user_id,
-                    session_id=session.id,
-                    task_id=task.id,
-                    decision_type=DecisionType.ANALYSIS,
-                    symbol=symbol,
-                    summary=result.get("summary", "Analysis completed"),
-                    reasoning=result.get("reasoning", ""),
-                    key_factors=result.get("key_factors", []),
-                    tools_used=result.get("tools_used", []),
-                    market_context=result.get("market_context"),
-                    confidence=result.get("confidence"),
-                    action=self._parse_action(result.get("action")),
-                )
-                await decision.insert()
+                    # Run agent analysis with retry on transient errors
+                    try:
+                        result = await self._execute_with_retry(
+                            lambda: agent.analyze(
+                                user_message=prompt,
+                                user_id=str(task.user_id),
+                                on_event=on_event,
+                            ),
+                            max_retries=task.max_retries,
+                        )
+                    finally:
+                        self._clear_modification_context(request_id)
 
-                task.last_decision_id = decision.id
-                task.last_session_id = session.id
-                task.record_execution(success=True)
-                await task.save()
+                    # Append assistant response to the shared session
+                    now = datetime.now(UTC)
+                    await persist_session_message(
+                        session,
+                        role="assistant",
+                        content=result.get("reasoning")
+                        or result.get("summary", "Analysis completed"),
+                        timestamp=now,
+                    )
 
-                logger.info(f"Analysis completed for {symbol}")
-                if task_id in self._running_tasks:
-                    self._running_tasks[task_id]["completed"] += 1
+                    # Store decision
+                    decision = AgentDecision(
+                        user_id=task.user_id,
+                        session_id=session.id,
+                        task_id=task.id,
+                        decision_type=DecisionType.ANALYSIS,
+                        symbol=symbol,
+                        summary=result.get("summary", "Analysis completed"),
+                        reasoning=result.get("reasoning", ""),
+                        key_factors=result.get("key_factors", []),
+                        tools_used=result.get("tools_used", []),
+                        market_context=result.get("market_context"),
+                        confidence=result.get("confidence"),
+                        action=self._parse_action(result.get("action")),
+                    )
+                    await decision.insert()
 
-            except Exception as e:
-                logger.error(f"Error analyzing {symbol}: {e}")
-                task.record_execution(success=False, error=str(e))
-                await self._check_auto_pause(task)
-                await task.save()
-                if task_id in self._running_tasks:
-                    self._running_tasks[task_id]["completed"] += 1
+                    task.last_decision_id = decision.id
+                    task.last_session_id = session.id
+                    task.record_execution(success=True)
+                    await task.save()
+
+                    logger.info(f"Analysis completed for {symbol}")
+                    if task_id in self._running_tasks:
+                        self._running_tasks[task_id]["completed"] += 1
+
+                except Exception as e:
+                    logger.error(f"Error analyzing {symbol}: {e}")
+                    task.record_execution(success=False, error=str(e))
+                    await self._check_auto_pause(task)
+                    await task.save()
+                    if task_id in self._running_tasks:
+                        self._running_tasks[task_id]["completed"] += 1
+        finally:
+            # Close the session exactly once, even if the loop bails out early
+            now = datetime.now(UTC)
+            session.is_active = False
+            session.ended_at = now
+            session.last_message_at = now
+            await session.save()
 
     async def _execute_trading_task(self, task: AgentTask) -> None:
-        """Execute a trading task (analysis + potential trade)."""
+        """Execute a trading task (analysis + potential trade).
+
+        All symbols in this run share a single ``AgentSession`` — one chat per
+        scheduled execution, not one per coin.
+        """
         agent = self._get_trading_agent()
         risk_config = self._get_risk_config(task.risk_level)
         min_confidence = float(risk_config["min_confidence"])
         task_id = str(task.id)
 
-        for symbol in task.symbols:
-            if task_id in self._running_tasks:
-                self._running_tasks[task_id]["current_symbol"] = symbol
-            try:
-                # Build prompt — optionally enriched with subagent results
-                subagent_context = None
-                if task.use_subagents:
-                    logger.info("Running subagent analysis for %s", symbol)
-                    subagent_context = await self._run_subagent_analysis(symbol, task)
-                    prompt = self._build_enriched_prompt(symbol, task, subagent_context)
-                else:
-                    prompt = self._build_trading_prompt(symbol, task)
+        if not task.symbols:
+            return
 
-                # Inject relevant knowledge context from RAG
-                try:
-                    from app.knowledge.retriever import get_retriever
+        # Create ONE session for the whole run (covering all symbols)
+        now = datetime.now(UTC)
+        session = AgentSession(
+            user_id=task.user_id,
+            title=task.name,
+            symbols_discussed=list(task.symbols),
+            is_active=True,
+            started_at=now,
+            last_message_at=now,
+        )
+        await session.insert()
+        session_id_str = str(session.id)
+        if task_id in self._running_tasks:
+            self._running_tasks[task_id]["active_session_id"] = session_id_str
+            self._running_tasks[task_id]["session_ids"].append(session_id_str)
 
-                    knowledge_ctx = await get_retriever().get_relevant_context(
-                        f"{symbol} trading",
-                        max_results=6,
-                    )
-                    if knowledge_ctx and knowledge_ctx != "No relevant knowledge found.":
-                        prompt = (
-                            f"## Historical Knowledge Context\n{knowledge_ctx}\n\n---\n\n{prompt}"
-                        )
-                except Exception:
-                    logger.debug("Failed to inject knowledge context", exc_info=True)
+        # One event emitter shared across all symbol turns in this run
+        on_event = self._make_task_event_emitter(task.user_id, session_id_str)
 
-                # Inject user memory context
-                try:
-                    from app.agent.tools.memory_tools import load_session_memories
-
-                    mem_ctx = await load_session_memories(str(task.user_id))
-                    if mem_ctx:
-                        prompt = f"{mem_ctx}\n\n{prompt}"
-                except Exception:
-                    logger.debug("Failed to inject memory context for task", exc_info=True)
-
-                # Create session BEFORE analysis so user can watch it live
-                now = datetime.now(UTC)
-                session = AgentSession(
-                    user_id=task.user_id,
-                    title=f"{task.name} — {symbol}",
-                    symbols_discussed=[symbol],
-                    is_active=True,
-                    started_at=now,
-                    last_message_at=now,
-                )
-                await session.insert()
-                await persist_session_message(
-                    session,
-                    role="user",
-                    content=prompt,
-                    timestamp=now,
-                )
-
-                # Expose active session ID so frontend can navigate to it
-                session_id_str = str(session.id)
+        try:
+            for symbol in task.symbols:
                 if task_id in self._running_tasks:
-                    self._running_tasks[task_id]["active_session_id"] = session_id_str
-                    self._running_tasks[task_id]["session_ids"].append(session_id_str)
-
-                # Create event emitter for live streaming to user's WebSocket
-                on_event = self._make_task_event_emitter(task.user_id, session_id_str)
-
-                # Set task context for modify_task tool
-                request_id = f"task-{task.id}-{symbol}"
-                self._set_modification_context(request_id, task)
-
-                # Run agent analysis with retry on transient errors
+                    self._running_tasks[task_id]["current_symbol"] = symbol
                 try:
-                    result = await self._execute_with_retry(
-                        lambda: agent.analyze(
-                            user_message=prompt,
-                            user_id=str(task.user_id),
-                            on_event=on_event,
-                        ),
-                        max_retries=task.max_retries,
-                    )
-                finally:
-                    self._clear_modification_context(request_id)
+                    # Build prompt — optionally enriched with subagent results
+                    subagent_context = None
+                    if task.use_subagents:
+                        logger.info("Running subagent analysis for %s", symbol)
+                        subagent_context = await self._run_subagent_analysis(symbol, task)
+                        prompt = self._build_enriched_prompt(symbol, task, subagent_context)
+                    else:
+                        prompt = self._build_trading_prompt(symbol, task)
 
-                action = self._parse_action(result.get("action"))
-                confidence = float(result.get("confidence") or 0)
+                    # Inject relevant knowledge context from RAG
+                    try:
+                        from app.knowledge.retriever import get_retriever
 
-                # Persist assistant response and close the session
-                now = datetime.now(UTC)
-                await persist_session_message(
-                    session,
-                    role="assistant",
-                    content=result.get("reasoning") or result.get("summary", "Analysis completed"),
-                    timestamp=now,
-                )
-                session.is_active = False
-                session.ended_at = now
-                session.last_message_at = now
-                await session.save()
+                        knowledge_ctx = await get_retriever().get_relevant_context(
+                            f"{symbol} trading",
+                            max_results=6,
+                        )
+                        if knowledge_ctx and knowledge_ctx != "No relevant knowledge found.":
+                            prompt = (
+                                f"## Historical Knowledge Context\n{knowledge_ctx}\n\n"
+                                f"---\n\n{prompt}"
+                            )
+                    except Exception:
+                        logger.debug("Failed to inject knowledge context", exc_info=True)
 
-                # Create decision record
-                decision = AgentDecision(
-                    user_id=task.user_id,
-                    session_id=session.id,
-                    task_id=task.id,
-                    decision_type=DecisionType.RECOMMENDATION,
-                    symbol=symbol,
-                    action=action,
-                    confidence=confidence,
-                    summary=result.get("summary", ""),
-                    reasoning=result.get("reasoning", ""),
-                    key_factors=result.get("key_factors", []),
-                    suggested_entry=result.get("suggested_entry"),
-                    suggested_stop_loss=result.get("suggested_stop_loss"),
-                    suggested_take_profit=result.get("suggested_take_profit"),
-                    suggested_position_size=result.get("suggested_position_size"),
-                    risk_reward_ratio=result.get("risk_reward_ratio"),
-                    tools_used=result.get("tools_used", []),
-                    market_context=result.get("market_context"),
-                    execution_status=ExecutionStatus.QUEUED,
-                )
+                    # Inject user memory context
+                    try:
+                        from app.agent.tools.memory_tools import load_session_memories
 
-                # Determine if we should trade
-                should_trade = action in [DecisionAction.BUY, DecisionAction.SELL]
+                        mem_ctx = await load_session_memories(str(task.user_id))
+                        if mem_ctx:
+                            prompt = f"{mem_ctx}\n\n{prompt}"
+                    except Exception:
+                        logger.debug("Failed to inject memory context for task", exc_info=True)
 
-                if should_trade and confidence < min_confidence:
-                    should_trade = False
-                    decision.execution_status = ExecutionStatus.FAILED
-                    decision.execution_error_code = "confidence_below_threshold"
-                    decision.execution_error_message = (
-                        f"Confidence {confidence:.1f}% is below minimum {min_confidence:.1f}%"
+                    # Persist this symbol's user prompt into the shared session
+                    now = datetime.now(UTC)
+                    await persist_session_message(
+                        session,
+                        role="user",
+                        content=prompt,
+                        timestamp=now,
                     )
 
-                if should_trade and task.max_daily_trades is not None:
-                    trade_count_today = await self._get_today_trade_count(task.id)
-                    if trade_count_today >= task.max_daily_trades:
+                    # Set task context for modify_task tool
+                    request_id = f"task-{task.id}-{symbol}"
+                    self._set_modification_context(request_id, task)
+
+                    # Run agent analysis with retry on transient errors
+                    try:
+                        result = await self._execute_with_retry(
+                            lambda: agent.analyze(
+                                user_message=prompt,
+                                user_id=str(task.user_id),
+                                on_event=on_event,
+                            ),
+                            max_retries=task.max_retries,
+                        )
+                    finally:
+                        self._clear_modification_context(request_id)
+
+                    action = self._parse_action(result.get("action"))
+                    confidence = float(result.get("confidence") or 0)
+
+                    # Append assistant response to the shared session
+                    now = datetime.now(UTC)
+                    await persist_session_message(
+                        session,
+                        role="assistant",
+                        content=result.get("reasoning")
+                        or result.get("summary", "Analysis completed"),
+                        timestamp=now,
+                    )
+
+                    # Create decision record
+                    decision = AgentDecision(
+                        user_id=task.user_id,
+                        session_id=session.id,
+                        task_id=task.id,
+                        decision_type=DecisionType.RECOMMENDATION,
+                        symbol=symbol,
+                        action=action,
+                        confidence=confidence,
+                        summary=result.get("summary", ""),
+                        reasoning=result.get("reasoning", ""),
+                        key_factors=result.get("key_factors", []),
+                        suggested_entry=result.get("suggested_entry"),
+                        suggested_stop_loss=result.get("suggested_stop_loss"),
+                        suggested_take_profit=result.get("suggested_take_profit"),
+                        suggested_position_size=result.get("suggested_position_size"),
+                        risk_reward_ratio=result.get("risk_reward_ratio"),
+                        tools_used=result.get("tools_used", []),
+                        market_context=result.get("market_context"),
+                        execution_status=ExecutionStatus.QUEUED,
+                    )
+
+                    # Determine if we should trade
+                    should_trade = action in [DecisionAction.BUY, DecisionAction.SELL]
+
+                    if should_trade and confidence < min_confidence:
                         should_trade = False
                         decision.execution_status = ExecutionStatus.FAILED
-                        decision.execution_error_code = "max_daily_trades_reached"
+                        decision.execution_error_code = "confidence_below_threshold"
                         decision.execution_error_message = (
-                            f"Daily trade limit reached ({task.max_daily_trades})"
+                            f"Confidence {confidence:.1f}% is below minimum {min_confidence:.1f}%"
                         )
 
-                if should_trade:
-                    if task.agent_mode == AgentMode.AUTO:
-                        # Auto mode: execute immediately
-                        decision.status = DecisionStatus.CONFIRMED
-                        decision.execution_status = ExecutionStatus.SUBMITTED
-                        await decision.insert()
-                        await self.execute_trade_for_decision(
-                            task=task,
-                            decision=decision,
-                            execution_source="task_auto",
-                        )
+                    if should_trade and task.max_daily_trades is not None:
+                        trade_count_today = await self._get_today_trade_count(task.id)
+                        if trade_count_today >= task.max_daily_trades:
+                            should_trade = False
+                            decision.execution_status = ExecutionStatus.FAILED
+                            decision.execution_error_code = "max_daily_trades_reached"
+                            decision.execution_error_message = (
+                                f"Daily trade limit reached ({task.max_daily_trades})"
+                            )
+
+                    if should_trade:
+                        if task.agent_mode == AgentMode.AUTO:
+                            # Auto mode: execute immediately
+                            decision.status = DecisionStatus.CONFIRMED
+                            decision.execution_status = ExecutionStatus.SUBMITTED
+                            await decision.insert()
+                            await self.execute_trade_for_decision(
+                                task=task,
+                                decision=decision,
+                                execution_source="task_auto",
+                            )
+                        else:
+                            # Ask mode: create notification and wait for confirmation
+                            decision.status = DecisionStatus.PENDING
+                            decision.expires_at = datetime.now(UTC) + timedelta(hours=1)
+                            await decision.insert()
+                            await self._create_trade_confirmation_notification(task, decision)
                     else:
-                        # Ask mode: create notification and wait for confirmation
-                        decision.status = DecisionStatus.PENDING
-                        decision.expires_at = datetime.now(UTC) + timedelta(hours=1)
+                        decision.status = DecisionStatus.EXECUTED
                         await decision.insert()
-                        await self._create_trade_confirmation_notification(task, decision)
-                else:
-                    decision.status = DecisionStatus.EXECUTED
-                    await decision.insert()
 
-                task.last_decision_id = decision.id
-                task.last_session_id = session.id
-                task.record_execution(success=True)
-                await task.save()
-                if task_id in self._running_tasks:
-                    self._running_tasks[task_id]["completed"] += 1
+                    task.last_decision_id = decision.id
+                    task.last_session_id = session.id
+                    task.record_execution(success=True)
+                    await task.save()
+                    if task_id in self._running_tasks:
+                        self._running_tasks[task_id]["completed"] += 1
 
-            except Exception as e:
-                logger.error(f"Error in trading task for {symbol}: {e}")
-                task.record_execution(success=False, error=str(e))
-                await self._check_auto_pause(task)
-                await task.save()
-                if task_id in self._running_tasks:
-                    self._running_tasks[task_id]["completed"] += 1
+                except Exception as e:
+                    logger.error(f"Error in trading task for {symbol}: {e}")
+                    task.record_execution(success=False, error=str(e))
+                    await self._check_auto_pause(task)
+                    await task.save()
+                    if task_id in self._running_tasks:
+                        self._running_tasks[task_id]["completed"] += 1
+        finally:
+            # Close the session exactly once, even if the loop bails out early
+            now = datetime.now(UTC)
+            session.is_active = False
+            session.ended_at = now
+            session.last_message_at = now
+            await session.save()
 
     async def _get_today_trade_count(self, task_id: PydanticObjectId) -> int:
         """Count today's executed trades for a task."""

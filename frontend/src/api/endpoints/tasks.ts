@@ -263,6 +263,28 @@ export const tasksApi = {
 		);
 		return { pausedCount: response.data.paused_count as number };
 	},
+
+	/**
+	 * Kick off an AI-powered merge of all the user's tasks.
+	 * Returns immediately with a `sessionId` so the caller can navigate to
+	 * the chat session and watch the merge stream live over the existing
+	 * `agent:chat:*` WebSocket channel.
+	 */
+	async mergeDuplicateTasks(): Promise<{
+		merged: boolean;
+		sessionId: string | null;
+		message: string;
+	}> {
+		const response = await apiClient.post<Record<string, unknown>>(
+			"/agent/tasks/merge-duplicates",
+		);
+		const raw = response.data;
+		return {
+			merged: raw.merged as boolean,
+			sessionId: (raw.session_id as string | null) ?? null,
+			message: raw.message as string,
+		};
+	},
 };
 
 export default tasksApi;

@@ -263,6 +263,17 @@ async def create_task(
     current_user: User = Depends(get_current_active_user),
 ) -> TaskResponse:
     """Create a new scheduled task."""
+    # Enforce single-task cap: edit the existing task instead of creating another
+    existing_count = await AgentTask.find(AgentTask.user_id == current_user.id).count()
+    if existing_count >= 1:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Only one task is allowed. Edit the existing task's description, "
+                "symbols, or schedule instead of creating a new one."
+            ),
+        )
+
     # Validate each schedule
     for schedule in task_data.schedules:
         if schedule.frequency == TaskFrequency.CUSTOM and not schedule.cron_expression:
@@ -332,6 +343,298 @@ async def create_task(
     await scheduler.schedule_task(task)
 
     return task_to_response(task)
+
+
+class MergeDuplicatesResponse(BaseModel):
+    """Response from POST /tasks/merge-duplicates.
+
+    The endpoint returns immediately once the session has been created so the
+    frontend can navigate to ``session_id`` and watch the merge stream live.
+    The actual AI merge runs in the background.
+    """
+
+    merged: bool
+    session_id: str | None = None
+    message: str
+
+
+async def _run_merge_in_background(
+    user_id: PydanticObjectId,
+    task_ids: list[PydanticObjectId],
+    session_id: PydanticObjectId,
+) -> None:
+    """Perform the actual AI merge and broadcast progress to the user's WS.
+
+    Emits ``text_delta`` events (the same shape the chat UI consumes for
+    streaming assistant replies) so the user sees live progress while the
+    merge runs.
+    """
+    import asyncio
+    from datetime import UTC
+
+    from app.agent.task_scheduler import get_scheduler
+    from app.api.websocket.connection_manager import manager
+    from app.db.models.agent_session import AgentSession, persist_session_message
+    from app.services.task_merger import TaskMerger
+
+    channel = f"agent:chat:{hash(str(user_id)) % 1000000}"
+    session_id_str = str(session_id)
+
+    async def emit_text(content: str) -> None:
+        """Stream a chunk as a text_delta (matches trading_agent's on_event shape)."""
+        await manager.broadcast_to_channel(
+            channel,
+            {
+                "type": "text_delta",
+                "session_id": session_id_str,
+                "data": {"content": content},
+            },
+        )
+        # Tiny yield so the WS frame flushes before the next chunk
+        await asyncio.sleep(0)
+
+    async def emit_final_message(content: str, role: str = "assistant") -> None:
+        """Emit a final ``message`` event so the chat UI clears the loading
+        spinner and renders the durable message, then invalidate the tasks
+        query on the client."""
+        import time
+        import uuid
+
+        await manager.broadcast_to_channel(
+            channel,
+            {
+                "type": "message",
+                "session_id": session_id_str,
+                "data": {
+                    "id": str(uuid.uuid4()),
+                    "role": role,
+                    "content": content,
+                    "timestamp": int(time.time() * 1000),
+                },
+            },
+        )
+        # Tell the frontend tasks list to refetch
+        await manager.broadcast_to_channel(
+            channel,
+            {
+                "type": "data_event",
+                "data": {"category": "tasks", "event": "merged"},
+            },
+        )
+
+    async def emit_thinking(content: str) -> None:
+        """Emit a short thinking block so the UI shows the reasoning pill."""
+        await manager.broadcast_to_channel(
+            channel,
+            {
+                "type": "thinking",
+                "session_id": session_id_str,
+                "data": {"content": content},
+            },
+        )
+
+    session = await AgentSession.get(session_id)
+    if session is None:
+        return
+
+    try:
+        tasks = await AgentTask.find({"_id": {"$in": task_ids}}).to_list()
+        tasks.sort(key=lambda t: t.created_at)
+
+        if len(tasks) < 2:
+            await emit_text("No duplicates left to merge.\n")
+            return
+
+        # Show the reasoning up front so the user sees *why* the merge is safe
+        await emit_thinking(
+            f"Consolidating {len(tasks)} duplicate tasks into one. "
+            "Plan: take the union of symbols across all sources, concatenate "
+            "every custom instruction so price levels / stop-losses / "
+            "escalation rules are preserved, OR the capability flags, pick the "
+            "most-conservative risk level, and keep the task with the highest "
+            "run_count as the anchor (deleting the rest)."
+        )
+
+        merger = await TaskMerger.create()
+        merged = await merger.merge(tasks)
+        used_fallback = getattr(merger, "_last_used_fallback", False)
+        if used_fallback:
+            await emit_thinking(
+                "AI call returned no usable output, so I fell back to the "
+                "deterministic rule-based merge. Data preservation is still "
+                "guaranteed — every symbol and instruction is kept verbatim."
+            )
+
+        keep_idx = max(0, min(merged.preferred_source_index, len(tasks) - 1))
+        kept = tasks[keep_idx]
+        to_delete = [t for i, t in enumerate(tasks) if i != keep_idx]
+
+        await emit_thinking(
+            f"Keeping task `{kept.id}` ({kept.name}) as the anchor because it "
+            f"has the most activity (run_count={kept.run_count}, "
+            f"{len(kept.symbols)} symbols). Deleting {len(to_delete)} other "
+            "task(s) and rescheduling the kept one."
+        )
+
+        # Stream the merged result in readable chunks so the UI renders progressively
+        await emit_text(f"**Merged task:** {merged.name}\n\n")
+        await emit_text(f"**Description:** {merged.description}\n\n")
+        await emit_text(f"**Symbols ({len(merged.symbols)}):** {', '.join(merged.symbols)}\n\n")
+        await emit_text(f"**Custom instructions:**\n{merged.custom_instructions}\n\n")
+        await emit_text(
+            f"**Flags:** trading={merged.trading_enabled}, "
+            f"monitoring={merged.monitoring_enabled}, "
+            f"subagents={merged.use_subagents}, "
+            f"risk={merged.risk_level}, mode={merged.agent_mode}\n\n"
+        )
+        await emit_text(f"Keeping task `{kept.id}`; deleting {len(to_delete)} duplicate(s).\n\n")
+
+        # Apply merged payload
+        kept.name = merged.name[:100]
+        kept.description = merged.description or None
+        kept.symbols = list(merged.symbols)
+        kept.custom_instructions = merged.custom_instructions or None
+        kept.trading_enabled = merged.trading_enabled
+        kept.monitoring_enabled = merged.monitoring_enabled
+        kept.use_subagents = merged.use_subagents
+        try:
+            kept.risk_level = RiskLevel(merged.risk_level)
+        except ValueError:
+            pass
+        try:
+            kept.agent_mode = AgentMode(merged.agent_mode)
+        except ValueError:
+            pass
+        kept.max_position_size = merged.max_position_size
+        kept.max_daily_trades = merged.max_daily_trades
+        await kept.save()
+
+        # Delete duplicates (unschedule first)
+        scheduler = get_scheduler()
+        deleted_ids: list[str] = []
+        for dup in to_delete:
+            dup_id = str(dup.id)
+            try:
+                await scheduler.unschedule_task(dup_id)
+            except Exception:
+                pass
+            await dup.delete()
+            deleted_ids.append(dup_id)
+
+        # Reschedule the kept task
+        try:
+            await scheduler.unschedule_task(str(kept.id))
+            await scheduler.schedule_task(kept)
+        except Exception:
+            pass
+
+        final_summary = (
+            f"✅ Done. Merged {len(tasks)} tasks into 1. "
+            f"Deleted duplicate task IDs: {', '.join(deleted_ids) or '(none)'}"
+        )
+        full_transcript = (
+            f"**Merged task:** {merged.name}\n\n"
+            f"**Description:** {merged.description}\n\n"
+            f"**Symbols ({len(merged.symbols)}):** {', '.join(merged.symbols)}\n\n"
+            f"**Custom instructions:**\n{merged.custom_instructions}\n\n"
+            f"**Flags:** trading={merged.trading_enabled}, "
+            f"monitoring={merged.monitoring_enabled}, "
+            f"subagents={merged.use_subagents}, "
+            f"risk={merged.risk_level}, mode={merged.agent_mode}\n\n"
+            f"{final_summary}"
+        )
+
+        # Persist the full transcript as a single assistant message so the
+        # session has durable content after reload
+        await persist_session_message(
+            session,
+            role="assistant",
+            content=full_transcript,
+            timestamp=datetime.now(UTC),
+        )
+        # Final message event clears the loading spinner and triggers
+        # tasks-list refetch on the client.
+        await emit_final_message(full_transcript)
+    except Exception as exc:
+        err = f"❌ Merge failed: {exc}"
+        await persist_session_message(
+            session,
+            role="assistant",
+            content=err,
+            timestamp=datetime.now(UTC),
+        )
+        try:
+            await emit_final_message(err)
+        except Exception:
+            pass
+    finally:
+        session.is_active = False
+        session.ended_at = datetime.now(UTC)
+        session.last_message_at = session.ended_at
+        await session.save()
+
+
+@router.post("/merge-duplicates", response_model=MergeDuplicatesResponse)
+async def merge_duplicate_tasks(
+    current_user: User = Depends(get_current_active_user),
+) -> MergeDuplicatesResponse:
+    """Kick off an AI-powered merge of all the user's tasks.
+
+    Returns immediately with a ``session_id`` so the client can navigate to
+    the chat session and watch the merge stream in real time via the existing
+    ``agent:chat:*`` WebSocket channel.
+    """
+    import asyncio
+    from datetime import UTC
+
+    from app.db.models.agent_session import AgentSession, persist_session_message
+
+    tasks = (
+        await AgentTask.find(AgentTask.user_id == current_user.id)
+        .sort(+AgentTask.created_at)
+        .to_list()
+    )
+
+    if len(tasks) <= 1:
+        return MergeDuplicatesResponse(merged=False, message="No duplicates to merge.")
+
+    now = datetime.now(UTC)
+    session = AgentSession(
+        user_id=current_user.id,
+        title="Task cleanup: merge duplicate tasks",
+        symbols_discussed=sorted({s for t in tasks for s in t.symbols}),
+        is_active=True,
+        started_at=now,
+        last_message_at=now,
+    )
+    await session.insert()
+
+    input_summary = "\n".join(
+        f"- Task {i + 1} ({t.id}): {t.name} — symbols={list(t.symbols)} "
+        f"runs={t.run_count} last_run={t.last_run_at}"
+        for i, t in enumerate(tasks)
+    )
+    await persist_session_message(
+        session,
+        role="user",
+        content=(
+            f"Merging {len(tasks)} duplicate tasks into one consolidated task.\n\n{input_summary}"
+        ),
+        timestamp=now,
+    )
+
+    # Fire the merge as a background task so the HTTP response returns fast
+    # and the frontend can navigate to the session immediately.
+    task_ids = [t.id for t in tasks]
+    asyncio.create_task(  # noqa: RUF006
+        _run_merge_in_background(current_user.id, task_ids, session.id)
+    )
+
+    return MergeDuplicatesResponse(
+        merged=True,
+        session_id=str(session.id),
+        message=f"Merge started for {len(tasks)} tasks. Opening chat session…",
+    )
 
 
 @router.get("", response_model=TaskListResponse)
