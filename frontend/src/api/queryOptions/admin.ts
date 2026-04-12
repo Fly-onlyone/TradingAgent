@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { adminApi } from "@/api/endpoints/admin";
 import { logsApi } from "@/api/endpoints/logs";
+import { strategyDiscoveryApi } from "@/api/endpoints/strategyDiscovery";
 import type { AdminDocumentFilter } from "@/types";
 import type { LogsFilter } from "@/types/log";
 
@@ -47,6 +48,22 @@ export function adminCollectionsQueryOptions() {
 	return queryOptions({
 		queryKey: ["admin-collections"] as const,
 		queryFn: () => adminApi.getCollections(),
+		staleTime: ADMIN_STALE_TIME,
+		gcTime: ADMIN_GC_TIME,
+		refetchOnMount: false,
+	});
+}
+
+export function strategyDiscoveryCyclesQueryOptions(
+	params: { page?: number; pageSize?: number } = {},
+) {
+	return queryOptions({
+		queryKey: [
+			"admin-strategy-discovery-cycles",
+			params.page ?? 1,
+			params.pageSize ?? 20,
+		] as const,
+		queryFn: () => strategyDiscoveryApi.listCycles(params),
 		staleTime: ADMIN_STALE_TIME,
 		gcTime: ADMIN_GC_TIME,
 		refetchOnMount: false,

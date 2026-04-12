@@ -98,6 +98,10 @@ class AppSettings(Document):
     auto_discover_interval_hours: int = 6
     auto_discover_min_confidence: float = 0.5
     auto_discover_max_sources: int = 30
+    # Max candidate articles the Explorer agent will queue per cycle (→ parallel Extractors).
+    auto_discover_max_candidates: int = 20
+    # Concurrency cap on parallel Extractor subagents; caps wall-clock + API burst.
+    auto_discover_max_parallel_extractions: int = 4
     auto_discover_last_run_at: datetime | None = None
 
     # Cross-encoder re-ranking for RAG results

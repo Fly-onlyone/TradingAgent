@@ -1,6 +1,10 @@
 /**
  * Expandable tool call block — shows tool name, key arguments,
  * execution time, and (on expand) full arguments + result summary.
+ *
+ * Special-case renderer: `delegate_to_extractor` tool calls emitted by the
+ * strategy auto-discovery orchestrator render as an "Open extractor session"
+ * card instead of a generic expandable row.
  */
 
 import BuildIcon from "@mui/icons-material/Build";
@@ -8,9 +12,21 @@ import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import { Box, Chip, Collapse, Divider, Typography } from "@mui/material";
+import HourglassTopIcon from "@mui/icons-material/HourglassTop";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import SubdirectoryArrowRightIcon from "@mui/icons-material/SubdirectoryArrowRight";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import {
+	Box,
+	Button,
+	Chip,
+	Collapse,
+	Divider,
+	Typography,
+} from "@mui/material";
 import { useState } from "react";
 import type { ToolCall } from "@/api/websocket/useAgentSocket";
+import { useAgentStore } from "@/store/agentStore";
 
 /** Strip MCP prefix and convert snake_case tool names to human labels. */
 export function humanizeToolName(name: string): string {
@@ -38,10 +54,148 @@ export function humanizeToolName(name: string): string {
 		ask_user: "Asking user",
 		search_web: "Searching web",
 		search_news: "Searching news",
+		fetch_article: "Fetching article",
+		list_configured_sources: "Listing sources",
+		has_been_extracted: "Checking dedup memory",
+		submit_candidates: "Submitting candidates",
+		delegate_to_extractor: "Delegating extraction",
 	};
 
-	const stripped = name.replace(/^mcp__trading__/, "");
+	const stripped = name
+		.replace(/^mcp__trading__/, "")
+		.replace(/^mcp__strategy_explorer__/, "");
 	return TOOL_LABELS[stripped] || stripped.replaceAll("_", " ");
+}
+
+function isDelegationTool(name: string): boolean {
+	const stripped = name
+		.replace(/^mcp__trading__/, "")
+		.replace(/^mcp__strategy_explorer__/, "");
+	return stripped === "delegate_to_extractor";
+}
+
+interface DelegationResult {
+	session_id?: string | null;
+	article_url?: string;
+	article_title?: string;
+	status?: "running" | "ok" | "failed" | "skipped" | "skipped_low_confidence";
+}
+
+function DelegationCard({ toolCall }: { toolCall: ToolCall }) {
+	const { setSelectedSessionId } = useAgentStore();
+	const result = (toolCall.result ?? {}) as DelegationResult;
+	const args = toolCall.arguments as {
+		article_title?: string;
+		article_url?: string;
+	};
+
+	const title = result.article_title || args.article_title || "extraction";
+	const url = result.article_url || args.article_url || "";
+	const status = result.status ?? "running";
+	const sessionId = result.session_id ?? null;
+
+	const statusChip = (() => {
+		switch (status) {
+			case "running":
+				return (
+					<Chip
+						size="small"
+						icon={<HourglassTopIcon />}
+						label="Running"
+						color="info"
+						variant="outlined"
+					/>
+				);
+			case "ok":
+				return (
+					<Chip
+						size="small"
+						icon={<CheckCircleOutlineIcon />}
+						label="Saved"
+						color="success"
+						variant="outlined"
+					/>
+				);
+			case "failed":
+				return (
+					<Chip
+						size="small"
+						icon={<ErrorOutlineIcon />}
+						label="Failed"
+						color="error"
+						variant="outlined"
+					/>
+				);
+			case "skipped":
+			case "skipped_low_confidence":
+				return (
+					<Chip
+						size="small"
+						icon={<WarningAmberIcon />}
+						label="Low confidence"
+						color="warning"
+						variant="outlined"
+					/>
+				);
+			default:
+				return <Chip size="small" label={status} />;
+		}
+	})();
+
+	return (
+		<Box
+			sx={{
+				border: "1px solid",
+				borderColor: "primary.main",
+				borderRadius: 1,
+				px: 1.5,
+				py: 1,
+				bgcolor: "action.hover",
+			}}
+		>
+			<Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+				<SubdirectoryArrowRightIcon
+					sx={{ fontSize: 16, color: "primary.main" }}
+				/>
+				<Typography variant="caption" fontWeight={600}>
+					Delegating extraction
+				</Typography>
+				{statusChip}
+			</Box>
+			<Typography variant="body2" sx={{ mb: 0.25, fontWeight: 500 }}>
+				{title}
+			</Typography>
+			{url && (
+				<Typography
+					variant="caption"
+					color="text.secondary"
+					sx={(theme) => ({
+						fontFamily: theme.trading.mono,
+						fontSize: "0.7rem",
+						display: "block",
+						overflow: "hidden",
+						textOverflow: "ellipsis",
+						whiteSpace: "nowrap",
+					})}
+				>
+					{url}
+				</Typography>
+			)}
+			<Box sx={{ mt: 1, display: "flex", justifyContent: "flex-end" }}>
+				<Button
+					size="small"
+					variant="outlined"
+					endIcon={<OpenInNewIcon />}
+					disabled={!sessionId}
+					onClick={() => {
+						if (sessionId) setSelectedSessionId(sessionId);
+					}}
+				>
+					Open extractor session
+				</Button>
+			</Box>
+		</Box>
+	);
 }
 
 /** Pick the most meaningful argument to display inline. */
@@ -69,6 +223,11 @@ interface ToolCallBlockProps {
 export function ToolCallBlock({ toolCall, forceExpanded }: ToolCallBlockProps) {
 	const [localExpanded, setLocalExpanded] = useState(false);
 	const expanded = forceExpanded ?? localExpanded;
+
+	if (isDelegationTool(toolCall.name)) {
+		return <DelegationCard toolCall={toolCall} />;
+	}
+
 	const keyArg = getKeyArgument(toolCall.arguments);
 	const hasError = toolCall.resultSummary?.startsWith("Error:");
 	const hasResult = Boolean(toolCall.resultSummary);

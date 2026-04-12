@@ -160,6 +160,7 @@ async def init_db() -> None:
     from app.db.models.notification import Notification, UserNotificationSettings
     from app.db.models.order import Order
     from app.db.models.strategy import Strategy
+    from app.db.models.strategy_discovery_cycle import StrategyDiscoveryCycle
     from app.db.models.strategy_rating import StrategyRating
     from app.db.models.user import User
 
@@ -167,6 +168,7 @@ async def init_db() -> None:
         User,
         Order,
         Strategy,
+        StrategyDiscoveryCycle,
         StrategyKnowledge,
         StrategyRating,
         TradeLesson,
