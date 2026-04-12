@@ -1,139 +1,332 @@
-"""Auto-discovery of trading strategies from news sources."""
+"""Auto-discovery of trading strategies via Explorer + parallel Extractor subagents.
 
+Phases per cycle:
+
+1. Open a `StrategyDiscoveryCycle` document for bookkeeping + UI linkage.
+2. Run `StrategyExplorerAgent` — an agentic scout that picks Brave queries,
+   crawls results, filters against `has_been_extracted`, and emits a list
+   of candidate articles.
+3. Fetch the body of each candidate via `article_fetcher`.
+4. Fan out one `StrategyExtractorAgent` subagent per article, capped by
+   `asyncio.Semaphore(auto_discover_max_parallel_extractions)`.
+5. Dedup parallel results, filter by `auto_discover_min_confidence`, save
+   each survivor as `StrategyKnowledge` + embedding + notification.
+
+Every Explorer + Extractor subagent owns its own `AgentSession`; the
+Explorer session additionally records `delegate_to_extractor` tool_call
+messages so the chat viewer shows the fan-out visually.
+"""
+
+from __future__ import annotations
+
+import asyncio
 import logging
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 
 from beanie import PydanticObjectId
 
+from app.agent.session_recorder import AgentSessionRecorder
+from app.agent.subagents.strategy_explorer import (
+    ArticleCandidate,
+    StrategyExplorerAgent,
+)
+from app.agent.subagents.strategy_extractor_agent import (
+    ExtractionResult,
+    StrategyExtractorAgent,
+)
+from app.db.models.agent_session import AgentSession
 from app.db.models.app_settings import AppSettings
 from app.db.models.knowledge import StrategyKnowledge
-from app.db.models.news import NewsArticle, NewsSource
 from app.db.models.notification import NotificationType
+from app.db.models.strategy_discovery_cycle import (
+    DiscoveryCycleStatus,
+    StrategyDiscoveryCycle,
+)
 from app.db.models.user import User
 from app.knowledge.embeddings import StrategyEmbeddingGenerator
-from app.news.crawler import NewsCrawler
+from app.services.article_fetcher import fetch_article
 from app.services.notification_service import NotificationService
-from app.services.source_discovery import SourceDiscoveryService
-from app.services.strategy_extractor import StrategyExtractor
+from app.services.strategy_dedup import (
+    ExtractionEvidence,
+    MergedExtraction,
+    merge_extractions,
+)
 
 logger = logging.getLogger(__name__)
 
 
+ProgressCallback = Callable[[dict], Awaitable[None]]
+
+
 class StrategyDiscoveryService:
-    """Discovers trading strategies from news sources via AI extraction."""
+    """Orchestrates one end-to-end auto-discovery cycle."""
 
     def __init__(self) -> None:
-        self.crawler = NewsCrawler()
-        self._extractor: StrategyExtractor | None = None
         self.embedding_gen = StrategyEmbeddingGenerator()
         self.notification_service = NotificationService()
 
-    async def _get_extractor(self) -> StrategyExtractor:
-        if self._extractor is None:
-            self._extractor = await StrategyExtractor.create()
-        return self._extractor
-
     async def run_discovery_cycle(
         self,
-        on_progress: Callable[[dict], Awaitable[None]] | None = None,
+        on_progress: ProgressCallback | None = None,
         user_id: PydanticObjectId | None = None,
+        *,
+        manual: bool = False,
     ) -> dict:
-        """Run one full discovery cycle across all strategy-extraction-enabled sources."""
+        """Run one full discovery cycle and return summary stats.
+
+        `user_id` scopes the subagent sessions. When omitted, the first
+        superuser is used so scheduled runs still produce viewable chats.
+        """
         app_settings = await AppSettings.get_instance()
         min_confidence = app_settings.auto_discover_min_confidence
+        max_candidates = max(1, app_settings.auto_discover_max_candidates)
+        max_parallel = max(1, app_settings.auto_discover_max_parallel_extractions)
 
         async def emit(event: dict) -> None:
             if on_progress:
                 await on_progress(event)
 
-        # Phase 1: Discover new sources and extract strategies via Brave Search
-        discovery_stats = {"new_sources": 0, "articles_fetched": 0, "strategies_extracted": 0}
-        try:
-            source_discovery = SourceDiscoveryService()
-            discovery_stats = await source_discovery.discover_and_extract(
-                on_progress=on_progress,
-                user_id=user_id,
-            )
-        except Exception:
-            logger.warning("Source discovery via Brave Search failed", exc_info=True)
+        session_user_id = await self._resolve_session_user_id(user_id)
+        if session_user_id is None:
+            msg = "No user available to own Explorer/Extractor sessions"
+            logger.warning(msg)
+            return {
+                "candidates_found": 0,
+                "strategies_saved": 0,
+                "strategies_skipped_low_confidence": 0,
+                "strategies_failed": 0,
+                "error": msg,
+            }
 
-        # Phase 2: Crawl all strategy-extraction-enabled sources (including newly discovered ones)
-        sources = await NewsSource.find(
-            NewsSource.strategy_extraction == True,  # noqa: E712
-            NewsSource.crawl_enabled == True,  # noqa: E712
-        ).to_list()
+        cycle = StrategyDiscoveryCycle(
+            manual=manual,
+            triggered_by_user_id=user_id if manual else None,
+        )
+        await cycle.insert()
+        await emit({"step": "cycle_started", "cycle_id": str(cycle.id)})
 
-        stats = {
-            "sources_crawled": 0,
-            "articles_processed": 0,
-            "strategies_found": 0,
-            "discovery_new_sources": discovery_stats["new_sources"],
-            "discovery_articles_fetched": discovery_stats["articles_fetched"],
-            "discovery_strategies_extracted": discovery_stats["strategies_extracted"],
+        stats: dict = {
+            "cycle_id": str(cycle.id),
+            "candidates_found": 0,
+            "strategies_saved": 0,
+            "strategies_skipped_low_confidence": 0,
+            "strategies_failed": 0,
         }
 
-        if not sources:
-            logger.info("Strategy discovery: no sources with strategy_extraction enabled")
+        # Phase 1 — Explorer
+        explorer = StrategyExplorerAgent(
+            user_id=session_user_id,
+            max_candidates=max_candidates,
+            cycle_id=cycle.id,
+        )
+        explorer_result = await explorer.run()
+
+        cycle.explorer_session_id = explorer_result.session_id
+        stats["explorer_session_id"] = str(explorer_result.session_id)
+
+        if explorer_result.error is not None:
+            cycle.status = DiscoveryCycleStatus.FAILED
+            cycle.error = explorer_result.error
+            cycle.ended_at = datetime.now(UTC)
+            await cycle.save()
+            stats["error"] = explorer_result.error
+            await emit({"step": "cycle_failed", "error": explorer_result.error})
             return stats
 
-        for source in sources:
+        candidates = explorer_result.candidates[:max_candidates]
+        cycle.candidates_found = len(candidates)
+        stats["candidates_found"] = len(candidates)
+        await cycle.save()
+        await emit({"step": "candidates_ready", "count": len(candidates)})
+
+        if not candidates:
+            cycle.status = DiscoveryCycleStatus.OK
+            cycle.ended_at = datetime.now(UTC)
+            await cycle.save()
+            return stats
+
+        # Phase 2 — fetch + fan out extractors in parallel
+        explorer_session = await AgentSession.get(explorer_result.session_id)
+        explorer_recorder = AgentSessionRecorder(explorer_session) if explorer_session else None
+
+        semaphore = asyncio.Semaphore(max_parallel)
+        tasks = [
+            asyncio.create_task(
+                self._process_candidate(
+                    candidate=candidate,
+                    user_id=session_user_id,
+                    semaphore=semaphore,
+                    explorer_recorder=explorer_recorder,
+                )
+            )
+            for candidate in candidates
+        ]
+
+        extraction_results: list[tuple[ArticleCandidate, ExtractionResult | None]] = []
+        for task in asyncio.as_completed(tasks):
             try:
-                await emit({"step": "crawling_source", "source": source.name})
-                articles = await self.crawler.crawl_source(source)
-                stats["sources_crawled"] += 1
+                candidate, result = await task
+            except Exception as exc:
+                logger.exception("Extractor task crashed")
+                await emit({"step": "extractor_error", "error": str(exc)})
+                stats["strategies_failed"] += 1
+                continue
+            extraction_results.append((candidate, result))
+            if result and result.session_id:
+                if result.session_id not in cycle.extractor_session_ids:
+                    cycle.extractor_session_ids.append(result.session_id)
+                await cycle.save()
+
+        # Phase 3 — dedup + min-confidence filter
+        evidences: list[ExtractionEvidence] = []
+        for candidate, result in extraction_results:
+            if result is None:
+                stats["strategies_failed"] += 1
+                continue
+            if result.extracted is None:
+                if result.error in {"skipped_low_confidence"}:
+                    stats["strategies_skipped_low_confidence"] += 1
+                else:
+                    stats["strategies_failed"] += 1
+                continue
+            if result.confidence < min_confidence:
+                stats["strategies_skipped_low_confidence"] += 1
+                continue
+            evidences.append(
+                ExtractionEvidence(
+                    extracted=result.extracted,
+                    confidence=result.confidence,
+                    source_url=candidate.url,
+                    source_session_id=result.session_id,
+                    article_title=candidate.title,
+                )
+            )
+
+        merged = merge_extractions(evidences)
+        await emit({"step": "dedup_complete", "merged": len(merged)})
+
+        # Phase 4 — persist survivors
+        for merged_extraction in merged:
+            saved = await self._save_strategy(
+                merged_extraction,
+                user_id=user_id,
+            )
+            if saved is not None:
+                stats["strategies_saved"] += 1
                 await emit(
-                    {"step": "source_crawled", "source": source.name, "articles": len(articles)}
+                    {
+                        "step": "strategy_saved",
+                        "name": saved.name,
+                        "source_session_id": str(saved.source_session_id)
+                        if saved.source_session_id
+                        else None,
+                    }
                 )
 
-                for article in articles:
-                    stats["articles_processed"] += 1
-                    strategy = await self._extract_and_save(
-                        article, source, min_confidence, user_id
-                    )
-                    if strategy:
-                        stats["strategies_found"] += 1
+        cycle.strategies_saved = stats["strategies_saved"]
+        cycle.strategies_skipped_low_confidence = stats["strategies_skipped_low_confidence"]
+        cycle.strategies_failed = stats["strategies_failed"]
+        cycle.status = DiscoveryCycleStatus.OK
+        cycle.ended_at = datetime.now(UTC)
+        await cycle.save()
+        await emit({"step": "cycle_complete", "stats": stats})
 
-            except Exception:
-                logger.exception("Strategy discovery failed for source %s", source.name)
-
-        logger.info(
-            "Strategy discovery cycle complete: %d sources, %d articles, %d strategies",
-            stats["sources_crawled"],
-            stats["articles_processed"],
-            stats["strategies_found"],
-        )
+        logger.info("Strategy discovery cycle complete: %s", stats)
         return stats
 
-    async def _extract_and_save(
+    # ------------------------------------------------------------------
+    # Per-candidate pipeline (runs under the concurrency semaphore)
+    # ------------------------------------------------------------------
+
+    async def _process_candidate(
         self,
-        article: NewsArticle,
-        source: NewsSource,
-        min_confidence: float,
-        user_id: PydanticObjectId | None = None,
+        *,
+        candidate: ArticleCandidate,
+        user_id: PydanticObjectId,
+        semaphore: asyncio.Semaphore,
+        explorer_recorder: AgentSessionRecorder | None,
+    ) -> tuple[ArticleCandidate, ExtractionResult | None]:
+        async with semaphore:
+            fetched = await fetch_article(candidate.url, title=candidate.title)
+            if fetched.error or not fetched.content:
+                # Fetch failed — surface a failed delegation card with no
+                # clickable session link (no Extractor session exists yet).
+                if explorer_recorder is not None:
+                    await explorer_recorder.record_delegation(
+                        child_session_id=None,
+                        article_url=candidate.url,
+                        article_title=candidate.title,
+                        status="failed",
+                        detail=f"Fetch failed: {fetched.error}",
+                    )
+                return candidate, None
+
+            agent = StrategyExtractorAgent(
+                user_id=user_id,
+                article_url=candidate.url,
+                article_title=candidate.title,
+                article_content=fetched.content,
+            )
+
+            async def announce_running(session_id: PydanticObjectId) -> None:
+                if explorer_recorder is None:
+                    return
+                await explorer_recorder.record_delegation(
+                    child_session_id=session_id,
+                    article_url=candidate.url,
+                    article_title=candidate.title,
+                    status="running",
+                    detail=(
+                        f"Extracting from: {candidate.title}"
+                        + (f" — {candidate.reason}" if candidate.reason else "")
+                    ),
+                )
+
+            try:
+                result: ExtractionResult = await agent.run(
+                    on_session_created=announce_running,
+                )
+            except Exception as exc:
+                logger.exception("Extractor subagent crashed for %s", candidate.url)
+                if explorer_recorder is not None:
+                    await explorer_recorder.update_delegation_status(
+                        child_session_id=agent.session.id if agent.session else None,
+                        article_url=candidate.url,
+                        article_title=candidate.title,
+                        status="failed",
+                        detail=f"Subagent crash: {exc}",
+                    )
+                return candidate, None
+
+            if explorer_recorder is not None:
+                await explorer_recorder.update_delegation_status(
+                    child_session_id=result.session_id,
+                    article_url=candidate.url,
+                    article_title=candidate.title,
+                    status=_terminal_status(result),
+                    detail=_terminal_detail(result, candidate),
+                )
+
+            return candidate, result
+
+    # ------------------------------------------------------------------
+    # Persistence
+    # ------------------------------------------------------------------
+
+    async def _save_strategy(
+        self,
+        merged: MergedExtraction,
+        *,
+        user_id: PydanticObjectId | None,
     ) -> StrategyKnowledge | None:
-        """Extract strategy from an article, deduplicate, and save to knowledge base."""
-        if not article.content or len(article.content) < 200:
-            return None
+        extracted = merged.extracted
 
-        try:
-            extractor = await self._get_extractor()
-            extracted = await extractor.extract_from_text(article.content, source_hint=article.url)
-        except Exception:
-            logger.debug("AI extraction failed for article %s", article.url, exc_info=True)
-            return None
-
-        # Validate: must have a meaningful name and at least entry rules
-        if not extracted.name or extracted.name == "Imported Strategy":
-            return None
-        if not extracted.entry_rules:
-            return None
-
-        # Deduplicate by strategy name
+        # Name dedup against existing DB entries (consistent with legacy).
         existing = await StrategyKnowledge.find_one(StrategyKnowledge.name == extracted.name)
-        if existing:
+        if existing is not None:
             return None
 
-        # Create StrategyKnowledge entry with provenance from the source article
         knowledge = StrategyKnowledge(
             name=extracted.name,
             description=extracted.description,
@@ -143,13 +336,11 @@ class StrategyDiscoveryService:
             market_conditions=extracted.market_conditions,
             asset_classes=extracted.asset_classes,
             timeframes=extracted.timeframes,
-            source_article_id=article.id,
-            source_url=article.url,
-            source_sentiment=article.sentiment_score,
+            source_url=merged.primary_source_url,
+            source_session_id=merged.primary_source_session_id,
         )
         await knowledge.insert()
 
-        # Generate embedding
         try:
             knowledge.embedding = await self.embedding_gen.generate_strategy_embedding(
                 extracted.model_dump()
@@ -157,15 +348,13 @@ class StrategyDiscoveryService:
             if knowledge.embedding is not None:
                 await knowledge.save()
         except Exception:
-            logger.warning(
-                "Failed to generate embedding for discovered strategy %s",
-                knowledge.id,
-                exc_info=True,
-            )
+            logger.warning("Failed to generate embedding for %s", knowledge.id, exc_info=True)
 
-        # Calculate initial rating
+        # Initial rating (best-effort).
         try:
-            from app.services.strategy_rating_calculator import StrategyRatingCalculator
+            from app.services.strategy_rating_calculator import (
+                StrategyRatingCalculator,
+            )
 
             calculator = StrategyRatingCalculator()
             overall, confidence = await calculator.calculate_overall_rating(knowledge)
@@ -174,17 +363,17 @@ class StrategyDiscoveryService:
             await knowledge.save()
         except Exception:
             logger.warning(
-                "Failed to calculate initial rating for strategy %s",
+                "Failed to calculate initial rating for %s",
                 knowledge.id,
                 exc_info=True,
             )
 
-        # Also create an inactive Strategy linked to the StrategyKnowledge
-        if user_id:
+        # Inactive Strategy shadow for the Strategies page.
+        if user_id is not None:
             from app.db.models.strategy import Strategy
 
             existing_strategy = await Strategy.find_one(Strategy.name == extracted.name)
-            if not existing_strategy:
+            if existing_strategy is None:
                 strategy_doc = Strategy(
                     user_id=user_id,
                     name=extracted.name,
@@ -196,36 +385,64 @@ class StrategyDiscoveryService:
                     timeframes=extracted.timeframes,
                     is_active=False,
                     auto_discovered=True,
-                    source_url=article.url,
+                    source_url=merged.primary_source_url,
                     knowledge_id=knowledge.id,
                 )
                 await strategy_doc.insert()
 
-        # Notify all superusers
-        await self._notify_superusers(knowledge, article)
-
-        logger.info(
-            "Discovered strategy '%s' from %s (%s)",
-            knowledge.name,
-            source.name,
-            article.url,
-        )
+        await self._notify_superusers(knowledge, merged)
+        logger.info("Discovered strategy '%s' from %s", knowledge.name, merged.source_urls)
         return knowledge
 
-    async def _notify_superusers(self, strategy: StrategyKnowledge, article: NewsArticle) -> None:
-        """Send notification to all superusers about a discovered strategy."""
+    async def _notify_superusers(
+        self, strategy: StrategyKnowledge, merged: MergedExtraction
+    ) -> None:
         superusers = await User.find(User.is_superuser == True).to_list()  # noqa: E712
+        body_sources = ", ".join(merged.article_titles[:2]) or merged.primary_source_url
         for user in superusers:
             try:
                 await self.notification_service.create_notification(
                     user_id=user.id,
                     title="Strategy Discovered",
-                    body=f"New strategy '{strategy.name}' extracted from {article.title}",
+                    body=f"New strategy '{strategy.name}' from {body_sources}",
                     notification_type=NotificationType.STRATEGY_DISCOVERED,
                     data={
                         "strategy_knowledge_id": str(strategy.id),
-                        "source_article_url": article.url,
+                        "source_url": merged.primary_source_url,
+                        "source_session_id": str(merged.primary_source_session_id)
+                        if merged.primary_source_session_id
+                        else None,
                     },
                 )
             except Exception:
                 logger.debug("Failed to notify user %s", user.id, exc_info=True)
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def _resolve_session_user_id(
+        preferred: PydanticObjectId | None,
+    ) -> PydanticObjectId | None:
+        if preferred is not None:
+            return preferred
+        superuser = await User.find_one(User.is_superuser == True)  # noqa: E712
+        return superuser.id if superuser else None
+
+
+def _terminal_status(result: ExtractionResult) -> str:
+    if result.extracted is None:
+        return "failed" if result.error not in {"skipped_low_confidence"} else "skipped"
+    return "ok"
+
+
+def _terminal_detail(
+    result: ExtractionResult,
+    candidate: ArticleCandidate,
+) -> str:
+    if result.extracted is not None:
+        return f"Extracted '{result.extracted.name}' — confidence {result.confidence:.2f}"
+    if result.error == "skipped_low_confidence":
+        return f"Skipped '{candidate.title}' — low confidence ({result.confidence:.2f})"
+    return f"Extraction failed for '{candidate.title}': {result.error or 'unknown error'}"

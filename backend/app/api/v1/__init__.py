@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.api.v1 import (
     admin,
+    admin_strategy_discovery,
     agent_decisions,
     agent_memories,
     agent_sessions,
@@ -46,4 +47,9 @@ router.include_router(settings.router, prefix="/settings", tags=["settings"])
 router.include_router(client_logs.router, prefix="/logs", tags=["logs"])
 router.include_router(logs.router, prefix="/admin/logs", tags=["logs"])
 router.include_router(backup.router, prefix="/admin/backup", tags=["backup"])
+router.include_router(
+    admin_strategy_discovery.router,
+    prefix="/admin/strategy-discovery",
+    tags=["admin-strategy-discovery"],
+)
 router.include_router(admin.router, prefix="/admin", tags=["admin"])

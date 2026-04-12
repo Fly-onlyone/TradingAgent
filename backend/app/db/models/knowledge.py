@@ -60,6 +60,8 @@ class StrategyKnowledge(Document):
         ge=-1.0,
         le=1.0,
     )  # Sentiment of the source article at extraction time
+    # FK → AgentSession for the extractor subagent run that produced this strategy
+    source_session_id: PydanticObjectId | None = None
 
     # Extraction conversation history (populated during AI import)
     extraction_messages: list[dict] = Field(default_factory=list)
