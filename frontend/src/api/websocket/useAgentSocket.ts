@@ -173,6 +173,13 @@ export function useAgentSocketConnection() {
 		(message: WebSocketMessage) => {
 			const agentMessage = message as AgentSocketMessage;
 
+			// Route task execution events — track which session is currently streaming
+			const taskSessionId = (agentMessage as unknown as Record<string, unknown>)
+				.session_id as string | undefined;
+			if (taskSessionId) {
+				setActiveRunSessionId(taskSessionId);
+			}
+
 			switch (agentMessage.type) {
 				case "message": {
 					const msg = agentMessage.data as AgentMessage;
@@ -216,6 +223,11 @@ export function useAgentSocketConnection() {
 					addMessage(targetSessionId, msg);
 					if (msg.role === "assistant" || msg.role === "system") {
 						setThinking(targetSessionId, false);
+					}
+
+					// Clear task streaming state when final message arrives
+					if (taskSessionId && msg.role === "assistant") {
+						setActiveRunSessionId(null);
 					}
 
 					if (msg.role === "assistant") {

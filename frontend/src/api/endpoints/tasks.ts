@@ -75,6 +75,8 @@ function transformTask(data: Record<string, unknown>): AgentTask {
 		successCount: data.success_count as number,
 		failureCount: data.failure_count as number,
 		lastError: data.last_error as string | undefined,
+		lastDecisionId: data.last_decision_id as string | undefined,
+		lastSessionId: data.last_session_id as string | undefined,
 		isRunning: (data.is_running as boolean) ?? false,
 		runningProgress: data.running_progress
 			? {
@@ -84,6 +86,10 @@ function transformTask(data: Record<string, unknown>): AgentTask {
 						.completed as number,
 					total: (data.running_progress as Record<string, unknown>)
 						.total as number,
+					activeSessionId: (data.running_progress as Record<string, unknown>)
+						.active_session_id as string | undefined,
+					sessionIds: (data.running_progress as Record<string, unknown>)
+						.session_ids as string[] | undefined,
 				}
 			: undefined,
 		createdAt: data.created_at as string,

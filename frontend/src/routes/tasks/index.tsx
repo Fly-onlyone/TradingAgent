@@ -4,7 +4,9 @@
  */
 
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
+import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import AutoModeIcon from "@mui/icons-material/AutoMode";
+import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
 import HistoryIcon from "@mui/icons-material/History";
@@ -26,8 +28,10 @@ import {
 	FormControlLabel,
 	IconButton,
 	InputLabel,
+	Menu,
 	MenuItem,
 	Slider,
+	Stack,
 	Switch,
 	TextField,
 	ToggleButton,
@@ -42,6 +46,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { format, parse } from "date-fns";
 import { motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { decisionsApi } from "@/api/endpoints/decisions";
 import type { SymbolOption } from "@/api/endpoints/market";
 import { tasksApi } from "@/api/endpoints/tasks";
 import { CoinIcon } from "@/components/common/CoinIcon";
@@ -53,6 +58,7 @@ import { ZoomAwareSelect } from "@/components/common/ZoomAwareSelect";
 import { StrategyDiscoveryCard } from "@/components/strategies/StrategyDiscoveryCard";
 import { useDebouncedSave } from "@/hooks/useDebouncedSave";
 import { useSymbolOptions } from "@/hooks/useSymbolOptions";
+import { useZoomAwareMenu } from "@/hooks/useZoomAwareMenu";
 import { useAgentStore } from "@/store/agentStore";
 import { useAuthStore } from "@/store/authStore";
 import { notify, useUIStore } from "@/store/uiStore";
@@ -186,11 +192,19 @@ function TaskConfigPage() {
 		queryKey: ["tasks"],
 		queryFn: () => tasksApi.getTasks(),
 		staleTime: 30_000,
-		refetchInterval: manualRunning || prevIsRunningRef.current ? 3_000 : false,
+		refetchInterval: (query) => {
+			const tasks = query.state.data?.tasks ?? [];
+			const anyRunning = tasks.some((t) => t.isRunning);
+			return manualRunning || prevIsRunningRef.current || anyRunning
+				? 3_000
+				: false;
+		},
 	});
 
-	const task = tasksQuery.data?.tasks?.[0] ?? null;
+	const allTasks = tasksQuery.data?.tasks ?? [];
+	const task = allTasks[0] ?? null;
 	const isTaskRunning = task?.isRunning || manualRunning;
+	const runningTasks = allTasks.filter((t) => t.isRunning);
 
 	// ── Mutations ────────────────────────────────────────────────────────
 
@@ -481,11 +495,43 @@ function TaskConfigPage() {
 		return <Chip label={c.label} size="small" color={c.color} />;
 	};
 
+	const liveChatMenu = useZoomAwareMenu();
+
+	const navigateToSession = useCallback(
+		(sessionId: string) => {
+			sessionStorage.setItem("agent:pendingSession", sessionId);
+			void navigate({ to: "/agent" });
+		},
+		[navigate],
+	);
+
 	const handleViewExecutionHistory = useCallback(() => {
 		if (!taskId) return;
 		useAgentStore.getState().setDecisionTaskFilter(taskId);
 		void navigate({ to: "/agent" });
 	}, [taskId, navigate]);
+
+	const handleViewLastChat = useCallback(async () => {
+		if (!taskId) return;
+
+		// Prefer lastSessionId; otherwise fall back to latest decision's sessionId
+		let sessionId = task?.lastSessionId;
+		if (!sessionId) {
+			try {
+				const res = await decisionsApi.getDecisions({ taskId, pageSize: 1 });
+				sessionId = res.decisions?.[0]?.sessionId;
+			} catch {
+				// ignore — will use task-filter fallback below
+			}
+		}
+
+		if (sessionId) {
+			navigateToSession(sessionId);
+		} else {
+			useAgentStore.getState().setDecisionTaskFilter(taskId);
+			void navigate({ to: "/agent" });
+		}
+	}, [taskId, task?.lastSessionId, navigate, navigateToSession]);
 
 	// ── Render ────────────────────────────────────────────────────────────
 
@@ -520,6 +566,42 @@ function TaskConfigPage() {
 						}
 					/>
 
+					{/* ── Running Tasks Bar ─────────────────────────── */}
+					{runningTasks.length > 0 && (
+						<Alert
+							severity="info"
+							icon={<CircularProgress size={16} />}
+							sx={{ mb: 2 }}
+						>
+							<Box
+								sx={{
+									display: "flex",
+									alignItems: "center",
+									gap: 1,
+									flexWrap: "wrap",
+								}}
+							>
+								<Typography variant="body2" fontWeight={600}>
+									Running:
+								</Typography>
+								{runningTasks.map((rt) => (
+									<Chip
+										key={rt.id}
+										label={`${rt.name}${rt.runningProgress?.currentSymbol ? ` — ${rt.runningProgress.currentSymbol}` : ""}`}
+										size="small"
+										color="info"
+										variant="outlined"
+										onClick={() => {
+											const sid = rt.runningProgress?.activeSessionId;
+											if (sid) navigateToSession(sid);
+										}}
+										sx={{ cursor: "pointer" }}
+									/>
+								))}
+							</Box>
+						</Alert>
+					)}
+
 					{taskId && task && (
 						<Box
 							sx={{
@@ -547,6 +629,58 @@ function TaskConfigPage() {
 									>
 										{isTaskRunning ? "Running..." : "Run Now"}
 									</Button>
+									{isTaskRunning &&
+										task.runningProgress?.sessionIds &&
+										task.runningProgress.sessionIds.length > 0 && (
+											<div ref={liveChatMenu.anchorRef}>
+												<Button
+													variant="contained"
+													size="small"
+													color="info"
+													startIcon={<ChatBubbleOutlineIcon />}
+													endIcon={
+														task.runningProgress.sessionIds.length > 1 ? (
+															<ArrowDropDownIcon />
+														) : undefined
+													}
+													onClick={
+														task.runningProgress.sessionIds.length === 1
+															? () =>
+																	navigateToSession(
+																		task.runningProgress?.sessionIds?.[0] ?? "",
+																	)
+															: liveChatMenu.handleOpen
+													}
+												>
+													Live Chat ({task.runningProgress.sessionIds.length})
+												</Button>
+												{task.runningProgress.sessionIds.length > 1 && (
+													<Menu
+														open={liveChatMenu.open}
+														onClose={liveChatMenu.handleClose}
+														{...liveChatMenu.menuProps}
+													>
+														{task.runningProgress.sessionIds.map((sid, idx) => {
+															const isActive =
+																sid === task.runningProgress?.activeSessionId;
+															return (
+																<MenuItem
+																	key={sid}
+																	onClick={() => {
+																		liveChatMenu.handleClose();
+																		navigateToSession(sid);
+																	}}
+																	sx={{ fontWeight: isActive ? 700 : 400 }}
+																>
+																	{task.symbols[idx] ?? `Session ${idx + 1}`}
+																	{isActive && " (active)"}
+																</MenuItem>
+															);
+														})}
+													</Menu>
+												)}
+											</div>
+										)}
 									<Button
 										variant="outlined"
 										size="small"
@@ -570,6 +704,27 @@ function TaskConfigPage() {
 								>
 									Resume
 								</Button>
+							)}
+
+							{task.runCount > 0 && (
+								<>
+									<Button
+										variant="outlined"
+										size="small"
+										startIcon={<ChatBubbleOutlineIcon />}
+										onClick={handleViewLastChat}
+									>
+										View Last Chat
+									</Button>
+									<Button
+										variant="outlined"
+										size="small"
+										startIcon={<HistoryIcon />}
+										onClick={handleViewExecutionHistory}
+									>
+										View History
+									</Button>
+								</>
 							)}
 
 							<Box sx={{ display: "flex", gap: 1.5, ml: "auto" }}>
@@ -1724,13 +1879,24 @@ function TaskConfigPage() {
 													View decisions and analysis from task runs
 												</Typography>
 											</Box>
-											<Button
-												variant="outlined"
-												startIcon={<HistoryIcon />}
-												onClick={handleViewExecutionHistory}
-											>
-												View History
-											</Button>
+											<Stack direction="row" spacing={1}>
+												{task?.lastSessionId && (
+													<Button
+														variant="outlined"
+														startIcon={<ChatBubbleOutlineIcon />}
+														onClick={handleViewLastChat}
+													>
+														View Last Chat
+													</Button>
+												)}
+												<Button
+													variant="outlined"
+													startIcon={<HistoryIcon />}
+													onClick={handleViewExecutionHistory}
+												>
+													View History
+												</Button>
+											</Stack>
 										</CardContent>
 									</Card>
 								</motion.div>

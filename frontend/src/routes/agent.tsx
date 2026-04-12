@@ -106,7 +106,6 @@ function AgentPage() {
 	const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 	const useDrawerSidebar = useMediaQuery(theme.breakpoints.down("lg"));
 	const isPageVisible = usePageVisibility();
-
 	// Prefetch notification settings so useAgentSocket can read from cache
 	useQuery({
 		queryKey: ["notification-settings"],
@@ -508,10 +507,15 @@ function AgentPage() {
 		[prepareForAutoScroll, setSelectedSessionId, setMainTab],
 	);
 
-	// Always start with a blank chat when navigating to the agent page
+	// Check if another page requested a specific session
 	useEffect(() => {
+		const pending = sessionStorage.getItem("agent:pendingSession");
+		if (pending) {
+			sessionStorage.removeItem("agent:pendingSession");
+			setSelectedSessionId(pending);
+			useAgentStore.getState().setMainTab("chat");
+		}
 		prepareForAutoScroll();
-		setSelectedSessionId(null);
 	}, [prepareForAutoScroll, setSelectedSessionId]);
 
 	// Auto-scroll to bottom on new messages or thinking state changes

@@ -503,7 +503,12 @@ class TradingAgent:
         )
         return float(match.group(1)) if match else None
 
-    async def analyze(self, user_message: str, user_id: str | None = None) -> dict[str, Any]:
+    async def analyze(
+        self,
+        user_message: str,
+        user_id: str | None = None,
+        on_event: Callable | None = None,
+    ) -> dict[str, Any]:
         """Analyze market/trading prompt and normalize output for task scheduler.
 
         Prefers structured data from the submit_recommendation tool.
@@ -511,7 +516,7 @@ class TradingAgent:
         """
         _ = user_id
         request_id = uuid.uuid4().hex
-        response = await self.chat(user_message)
+        response = await self.chat(user_message, on_event=on_event)
 
         # Check for structured recommendation from the submit_recommendation tool
         recommendation = get_pending_recommendation(request_id)

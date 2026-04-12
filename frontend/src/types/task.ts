@@ -74,6 +74,8 @@ export interface AgentTask {
 	successCount: number;
 	failureCount: number;
 	lastError?: string;
+	lastDecisionId?: string;
+	lastSessionId?: string;
 
 	// Running state
 	isRunning: boolean;
@@ -81,6 +83,8 @@ export interface AgentTask {
 		currentSymbol: string | null;
 		completed: number;
 		total: number;
+		activeSessionId?: string;
+		sessionIds?: string[];
 	};
 
 	// Timestamps

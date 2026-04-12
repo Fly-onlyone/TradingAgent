@@ -629,7 +629,12 @@ class AgentTaskScheduler:
             return
 
         logger.info(f"Executing task {task_id}")
-        self._running_tasks[task_id] = {"current_symbol": None, "completed": 0, "total": 0}
+        self._running_tasks[task_id] = {
+            "current_symbol": None,
+            "completed": 0,
+            "total": 0,
+            "session_ids": [],
+        }
 
         try:
             with sentry_sdk.start_transaction(op="task", name="agent-task-execution") as txn:
@@ -689,7 +694,6 @@ class AgentTaskScheduler:
 
                 except Exception as e:
                     logger.error(f"Error executing task {task_id}: {e}")
-                    # Record failure
                     task = await AgentTask.get(PydanticObjectId(task_id))
                     if task:
                         task.record_execution(success=False, error=str(e))
@@ -747,6 +751,33 @@ class AgentTaskScheduler:
                 except Exception:
                     logger.debug("Failed to inject memory context for task", exc_info=True)
 
+                # Create session BEFORE analysis so user can watch it live
+                now = datetime.now(UTC)
+                session = AgentSession(
+                    user_id=task.user_id,
+                    title=f"{task.name} — {symbol}",
+                    symbols_discussed=[symbol],
+                    is_active=True,
+                    started_at=now,
+                    last_message_at=now,
+                )
+                await session.insert()
+                await persist_session_message(
+                    session,
+                    role="user",
+                    content=prompt,
+                    timestamp=now,
+                )
+
+                # Expose active session ID so frontend can navigate to it
+                session_id_str = str(session.id)
+                if task_id in self._running_tasks:
+                    self._running_tasks[task_id]["active_session_id"] = session_id_str
+                    self._running_tasks[task_id]["session_ids"].append(session_id_str)
+
+                # Create event emitter for live streaming to user's WebSocket
+                on_event = self._make_task_event_emitter(task.user_id, session_id_str)
+
                 # Set task context for modify_task tool
                 request_id = f"task-{task.id}-{symbol}"
                 self._set_modification_context(request_id, task)
@@ -757,36 +788,24 @@ class AgentTaskScheduler:
                         lambda: agent.analyze(
                             user_message=prompt,
                             user_id=str(task.user_id),
+                            on_event=on_event,
                         ),
                         max_retries=task.max_retries,
                     )
                 finally:
                     self._clear_modification_context(request_id)
 
-                # Create session to store the analysis conversation
+                # Persist assistant response and close the session
                 now = datetime.now(UTC)
-                session = AgentSession(
-                    user_id=task.user_id,
-                    title=f"{task.name} — {symbol}",
-                    symbols_discussed=[symbol],
-                    is_active=False,
-                    started_at=now,
-                    ended_at=now,
-                    last_message_at=now,
-                )
-                await session.insert()
-                await persist_session_message(
-                    session,
-                    role="user",
-                    content=prompt,
-                    timestamp=now,
-                )
                 await persist_session_message(
                     session,
                     role="assistant",
                     content=result.get("reasoning") or result.get("summary", "Analysis completed"),
                     timestamp=now,
                 )
+                session.is_active = False
+                session.ended_at = now
+                session.last_message_at = now
                 await session.save()
 
                 # Store decision
@@ -807,6 +826,7 @@ class AgentTaskScheduler:
                 await decision.insert()
 
                 task.last_decision_id = decision.id
+                task.last_session_id = session.id
                 task.record_execution(success=True)
                 await task.save()
 
@@ -867,6 +887,33 @@ class AgentTaskScheduler:
                 except Exception:
                     logger.debug("Failed to inject memory context for task", exc_info=True)
 
+                # Create session BEFORE analysis so user can watch it live
+                now = datetime.now(UTC)
+                session = AgentSession(
+                    user_id=task.user_id,
+                    title=f"{task.name} — {symbol}",
+                    symbols_discussed=[symbol],
+                    is_active=True,
+                    started_at=now,
+                    last_message_at=now,
+                )
+                await session.insert()
+                await persist_session_message(
+                    session,
+                    role="user",
+                    content=prompt,
+                    timestamp=now,
+                )
+
+                # Expose active session ID so frontend can navigate to it
+                session_id_str = str(session.id)
+                if task_id in self._running_tasks:
+                    self._running_tasks[task_id]["active_session_id"] = session_id_str
+                    self._running_tasks[task_id]["session_ids"].append(session_id_str)
+
+                # Create event emitter for live streaming to user's WebSocket
+                on_event = self._make_task_event_emitter(task.user_id, session_id_str)
+
                 # Set task context for modify_task tool
                 request_id = f"task-{task.id}-{symbol}"
                 self._set_modification_context(request_id, task)
@@ -877,6 +924,7 @@ class AgentTaskScheduler:
                         lambda: agent.analyze(
                             user_message=prompt,
                             user_id=str(task.user_id),
+                            on_event=on_event,
                         ),
                         max_retries=task.max_retries,
                     )
@@ -886,30 +934,17 @@ class AgentTaskScheduler:
                 action = self._parse_action(result.get("action"))
                 confidence = float(result.get("confidence") or 0)
 
-                # Create session for the trading analysis
+                # Persist assistant response and close the session
                 now = datetime.now(UTC)
-                session = AgentSession(
-                    user_id=task.user_id,
-                    title=f"{task.name} — {symbol}",
-                    symbols_discussed=[symbol],
-                    is_active=False,
-                    started_at=now,
-                    ended_at=now,
-                    last_message_at=now,
-                )
-                await session.insert()
-                await persist_session_message(
-                    session,
-                    role="user",
-                    content=prompt,
-                    timestamp=now,
-                )
                 await persist_session_message(
                     session,
                     role="assistant",
                     content=result.get("reasoning") or result.get("summary", "Analysis completed"),
                     timestamp=now,
                 )
+                session.is_active = False
+                session.ended_at = now
+                session.last_message_at = now
                 await session.save()
 
                 # Create decision record
@@ -977,6 +1012,7 @@ class AgentTaskScheduler:
                     await decision.insert()
 
                 task.last_decision_id = decision.id
+                task.last_session_id = session.id
                 task.record_execution(success=True)
                 await task.save()
                 if task_id in self._running_tasks:
@@ -1585,6 +1621,19 @@ Provide:
     async def run_task_now(self, task_id: str) -> None:
         """Fire-and-forget: schedule immediate execution as a background task."""
         asyncio.create_task(self._execute_task(task_id))
+
+    @staticmethod
+    def _make_task_event_emitter(user_id: PydanticObjectId, session_id: str) -> Callable:
+        """Create a callback that broadcasts agent events to the user's WebSocket."""
+
+        async def emit(event: dict) -> None:
+            from app.api.websocket.connection_manager import manager
+
+            channel = f"agent:chat:{hash(str(user_id)) % 1000000}"
+            event["session_id"] = session_id
+            await manager.broadcast_to_channel(channel, event)
+
+        return emit
 
     def is_task_running(self, task_id: str) -> bool:
         return task_id in self._running_tasks

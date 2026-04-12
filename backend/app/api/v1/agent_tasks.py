@@ -148,6 +148,8 @@ class TaskResponse(BaseModel):
     success_count: int
     failure_count: int
     last_error: str | None
+    last_decision_id: str | None = None
+    last_session_id: str | None = None
 
     # Running state
     is_running: bool = False
@@ -246,6 +248,8 @@ def task_to_response(task: AgentTask) -> TaskResponse:
         success_count=task.success_count,
         failure_count=task.failure_count,
         last_error=task.last_error,
+        last_decision_id=str(task.last_decision_id) if task.last_decision_id else None,
+        last_session_id=str(task.last_session_id) if task.last_session_id else None,
         is_running=scheduler.is_task_running(task_id),
         running_progress=scheduler.get_task_progress(task_id),
         created_at=task.created_at,
