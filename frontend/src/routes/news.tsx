@@ -29,7 +29,7 @@ import { SentimentBadge } from "@/components/data-display/SentimentBadge";
 import { StatCard } from "@/components/data-display/StatCard";
 import { useDebounce } from "@/hooks/useDebounce";
 import type { NewsArticle, PaginatedResponse } from "@/types";
-import { useMotionTier } from "@/utils/animations/hooks";
+import { useReducedMotion } from "@/utils/animations/hooks";
 import { spring } from "@/utils/animations/variants";
 import { formatRelativeTime } from "@/utils/formatters";
 import { requireAuth } from "./-guards";
@@ -47,7 +47,7 @@ function NewsPage() {
 	const [page, setPage] = useState(1);
 	const [pageSize, setPageSize] = useState(20);
 	const debouncedQuery = useDebounce(searchQuery, 300);
-	const motionTier = useMotionTier({ heavyRoute: true });
+	const reducedMotion = useReducedMotion();
 
 	/** Reset to page 1 when filters change */
 	const handleSearchChange = useCallback((value: string) => {
@@ -219,14 +219,10 @@ function NewsPage() {
 							>
 								<motion.div
 									initial={
-										motionTier === "full"
-											? { opacity: 0, y: 40, scale: 0.95 }
-											: false
+										reducedMotion ? false : { opacity: 0, y: 40, scale: 0.95 }
 									}
 									animate={
-										motionTier === "full"
-											? { opacity: 1, y: 0, scale: 1 }
-											: undefined
+										reducedMotion ? undefined : { opacity: 1, y: 0, scale: 1 }
 									}
 									transition={{ ...spring.snappy, delay: index * 0.06 }}
 								>

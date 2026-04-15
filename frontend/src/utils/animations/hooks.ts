@@ -1,36 +1,14 @@
 /**
- * Animation hooks — reduced motion, adaptive motion tier, and page visibility.
+ * Animation hooks — reduced motion and page visibility.
  */
 
 import { useEffect, useState } from "react";
 import { useUIStore } from "@/store/uiStore";
 
-export type MotionTier = "full" | "reduced" | "minimal";
-
-type AdaptiveMotionOptions = {
-	heavyRoute?: boolean;
-};
-
-type NavigatorWithMemory = Navigator & {
-	deviceMemory?: number;
-};
-
 function getMediaReducedMotion(): boolean {
 	return (
 		globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false
 	);
-}
-
-function isLowPowerDevice(): boolean {
-	if (typeof navigator === "undefined") {
-		return false;
-	}
-
-	const nav = navigator as NavigatorWithMemory;
-	const deviceMemory = nav.deviceMemory ?? 8;
-	const hardwareConcurrency = navigator.hardwareConcurrency ?? 8;
-
-	return deviceMemory <= 4 || hardwareConcurrency <= 4;
 }
 
 /**
@@ -40,37 +18,6 @@ function isLowPowerDevice(): boolean {
 export function useReducedMotion(): boolean {
 	const storeReduced = useUIStore((s) => s.reducedMotion);
 	return storeReduced || getMediaReducedMotion();
-}
-
-/**
- * Choose an adaptive motion tier based on user preference, device capability,
- * and whether the current route is known to be render-heavy.
- */
-export function useMotionTier({
-	heavyRoute = false,
-}: AdaptiveMotionOptions = {}): MotionTier {
-	const storeReduced = useUIStore((s) => s.reducedMotion);
-	const effectsEnabled = useUIStore((s) => s.effectsEnabled);
-	const mediaReduced = getMediaReducedMotion();
-	const lowPowerDevice = isLowPowerDevice();
-
-	if (storeReduced || mediaReduced) {
-		return "minimal";
-	}
-
-	if (!effectsEnabled) {
-		return "reduced";
-	}
-
-	if (heavyRoute && lowPowerDevice) {
-		return "minimal";
-	}
-
-	if (heavyRoute || lowPowerDevice) {
-		return "reduced";
-	}
-
-	return "full";
 }
 
 /**

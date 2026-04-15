@@ -21,7 +21,11 @@ import { routeTree } from "./routeTree.gen";
 import { useAuthStore } from "./store/authStore";
 import { useUIStore } from "./store/uiStore";
 import { syncAutostartPreference } from "./utils/autostart";
-import { bootstrapObservability, reportReactRenderError } from "./utils/sentry";
+import {
+	bootstrapObservability,
+	reportReactRenderError,
+	runWithoutSentryTracing,
+} from "./utils/sentry";
 import { getApiBaseUrl, getBackendBaseUrl, isTauri } from "./utils/tauriEnv";
 
 // Create React Query client
@@ -29,7 +33,7 @@ const queryClient = new QueryClient({
 	defaultOptions: {
 		queries: {
 			staleTime: 1000 * 60, // 1 minute
-			gcTime: 1000 * 60 * 10, // 10 minutes
+			gcTime: 1000 * 60 * 5, // 5 minutes
 			retry: 3,
 			retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
 			refetchOnMount: false,
@@ -42,10 +46,8 @@ const queryClient = new QueryClient({
 const router = createRouter({
 	routeTree,
 	context: {},
-	defaultPreload: "intent",
 	scrollRestoration: true,
 	defaultStructuralSharing: true,
-	defaultPreloadStaleTime: 30_000,
 	defaultPendingMs: 200,
 	defaultPendingMinMs: 500,
 	defaultPendingComponent: AppLoadingScreen,
@@ -93,16 +95,17 @@ function AppLoadingScreen(): ReactNode {
 }
 
 const HEALTH_POLL_FAST_MS = 3000;
-const HEALTH_POLL_SLOW_MS = 30000;
 const backendHealthUrl = isTauri()
 	? `${getBackendBaseUrl()}/health`
 	: `${getApiBaseUrl().replace(/\/api\/v1$/, "")}/health`;
 let hasLoggedFrontendStartup = false;
 let backendHealthMonitorStarted = false;
+let backendHealthListenersRegistered = false;
 let backendHasConnected = false;
 let lastBackendStatus: "connecting" | "online" | "offline" | null = null;
 let lastBackendStatusMessage = "";
 let hasReconciledAutostart = false;
+let offlineHealthIntervalId: number | null = null;
 
 type DesktopStartupFailure = {
 	code: string;
@@ -167,9 +170,11 @@ async function checkBackendHealth(
 	) => void,
 ) {
 	try {
-		const response = await fetch(backendHealthUrl, {
-			cache: "no-store",
-		});
+		const response = await runWithoutSentryTracing(() =>
+			fetch(backendHealthUrl, {
+				cache: "no-store",
+			}),
+		);
 		if (!response.ok) {
 			reportBackendHealthFailure(
 				setBackendStatus,
@@ -193,6 +198,57 @@ async function checkBackendHealth(
 	}
 }
 
+function stopOfflineHealthPolling() {
+	if (offlineHealthIntervalId !== null) {
+		window.clearInterval(offlineHealthIntervalId);
+		offlineHealthIntervalId = null;
+	}
+}
+
+function scheduleOfflineHealthPolling(
+	setBackendStatus: (
+		status: "connecting" | "online" | "offline",
+		message?: string,
+	) => void,
+) {
+	if (offlineHealthIntervalId !== null) {
+		return;
+	}
+
+	offlineHealthIntervalId = window.setInterval(() => {
+		if (document.hidden) {
+			return;
+		}
+
+		void checkBackendHealth(setBackendStatus).then(() => {
+			const isOnline = lastBackendStatus === "online";
+			onlineManager.setOnline(isOnline);
+			if (isOnline) {
+				stopOfflineHealthPolling();
+			}
+		});
+	}, HEALTH_POLL_FAST_MS);
+}
+
+function runBackendHealthCheck(
+	setBackendStatus: (
+		status: "connecting" | "online" | "offline",
+		message?: string,
+	) => void,
+) {
+	void checkBackendHealth(setBackendStatus).then(() => {
+		const isOnline = lastBackendStatus === "online";
+		onlineManager.setOnline(isOnline);
+
+		if (isOnline) {
+			stopOfflineHealthPolling();
+			return;
+		}
+
+		scheduleOfflineHealthPolling(setBackendStatus);
+	});
+}
+
 function ensureBackendHealthMonitor(
 	setBackendStatus: (
 		status: "connecting" | "online" | "offline",
@@ -205,39 +261,26 @@ function ensureBackendHealthMonitor(
 
 	backendHealthMonitorStarted = true;
 	reportBackendStatus(setBackendStatus, "connecting", backendHealthUrl);
-	void checkBackendHealth(setBackendStatus);
+	runBackendHealthCheck(setBackendStatus);
 
-	let wasOnline = false;
-	let intervalId: number | undefined;
+	if (backendHealthListenersRegistered) {
+		return;
+	}
 
-	const schedulePolling = (ms: number) => {
-		if (intervalId) window.clearInterval(intervalId);
-		intervalId = window.setInterval(poll, ms);
-	};
-
-	const poll = () => {
-		if (document.hidden) return;
-		void checkBackendHealth(setBackendStatus).then(() => {
-			const isOnline = lastBackendStatus === "online";
-
-			// Notify TanStack Query of backend connectivity changes
-			if (isOnline !== wasOnline) {
-				onlineManager.setOnline(isOnline);
-			}
-
-			// Adaptive interval: fast when offline, slow when stable
-			if (isOnline && !wasOnline) {
-				schedulePolling(HEALTH_POLL_SLOW_MS);
-			} else if (!isOnline && wasOnline) {
-				schedulePolling(HEALTH_POLL_FAST_MS);
-			}
-
-			wasOnline = isOnline;
-		});
-	};
-
-	// Start with fast polling
-	schedulePolling(HEALTH_POLL_FAST_MS);
+	backendHealthListenersRegistered = true;
+	document.addEventListener("visibilitychange", () => {
+		if (!document.hidden) {
+			runBackendHealthCheck(setBackendStatus);
+		}
+	});
+	window.addEventListener("online", () => {
+		runBackendHealthCheck(setBackendStatus);
+	});
+	window.addEventListener("offline", () => {
+		onlineManager.setOnline(false);
+		reportBackendStatus(setBackendStatus, "offline", "Browser offline");
+		stopOfflineHealthPolling();
+	});
 }
 
 function DesktopStartupErrorScreen({

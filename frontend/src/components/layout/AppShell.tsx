@@ -6,9 +6,8 @@ import { Box, Toolbar, useMediaQuery, useTheme } from "@mui/material";
 import { useRouterState } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { useAgentSocketConnection } from "@/api/websocket/useAgentSocket";
 import { useUIStore } from "@/store/uiStore";
-import { useMotionTier, useReducedMotion } from "@/utils/animations/hooks";
+import { useReducedMotion } from "@/utils/animations/hooks";
 
 const MeshBlobs = lazy(() =>
 	import("@/components/effects/MeshBlobs").then((m) => ({
@@ -38,8 +37,15 @@ interface AppShellProps {
 	children: ReactNode;
 }
 
+type WindowWithIdleCallback = Window & {
+	requestIdleCallback?: (
+		callback: IdleRequestCallback,
+		options?: IdleRequestOptions,
+	) => number;
+	cancelIdleCallback?: (handle: number) => void;
+};
+
 export function AppShell({ children }: AppShellProps) {
-	useAgentSocketConnection();
 	const theme = useTheme();
 	const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 	const { notifications, removeNotification, effectsEnabled } = useUIStore();
@@ -48,17 +54,9 @@ export function AppShell({ children }: AppShellProps) {
 		select: (state) => state.location.pathname,
 	});
 	const contentRef = useRef<HTMLDivElement>(null);
-	const [showParticleGrid, setShowParticleGrid] = useState(false);
-	const [showDelayedMeshBlobs, setShowDelayedMeshBlobs] = useState(false);
+	const [effectsReady, setEffectsReady] = useState(false);
 	const isAuthPage = currentPath.startsWith("/auth/");
 	const isAgentPage = currentPath.startsWith("/agent");
-	const isHeavyRoute =
-		currentPath === "/" ||
-		currentPath === "/agent" ||
-		currentPath === "/trading" ||
-		currentPath === "/orders" ||
-		currentPath === "/news";
-	const motionTier = useMotionTier({ heavyRoute: isHeavyRoute });
 	const showLayout = !isAuthPage;
 
 	useEffect(() => {
@@ -74,49 +72,33 @@ export function AppShell({ children }: AppShellProps) {
 	}, [currentPath]);
 
 	useEffect(() => {
-		if (isMobile || !effectsEnabled || motionTier !== "full") {
-			setShowParticleGrid(false);
+		if (!effectsEnabled || reducedMotion) {
+			setEffectsReady(false);
 			return;
 		}
 
-		const frameId = window.requestAnimationFrame(() => {
-			setShowParticleGrid(true);
-		});
+		let timeoutId: number | undefined;
+		let idleId: number | undefined;
+		const markReady = () => setEffectsReady(true);
+		const idleWindow = window as WindowWithIdleCallback;
 
-		return () => {
-			window.cancelAnimationFrame(frameId);
-		};
-	}, [effectsEnabled, isMobile, motionTier]);
-
-	useEffect(() => {
-		if (
-			isMobile ||
-			!showLayout ||
-			!effectsEnabled ||
-			!isHeavyRoute ||
-			motionTier !== "reduced"
-		) {
-			setShowDelayedMeshBlobs(false);
-			return;
+		if (idleWindow.requestIdleCallback) {
+			idleId = idleWindow.requestIdleCallback(markReady, { timeout: 1500 });
+		} else {
+			timeoutId = window.setTimeout(markReady, 0);
 		}
 
-		setShowDelayedMeshBlobs(false);
-		const timeoutId = window.setTimeout(() => {
-			setShowDelayedMeshBlobs(true);
-		}, 1200);
-
 		return () => {
-			window.clearTimeout(timeoutId);
+			if (idleId !== undefined && idleWindow.cancelIdleCallback) {
+				idleWindow.cancelIdleCallback(idleId);
+			}
+			if (timeoutId !== undefined) {
+				window.clearTimeout(timeoutId);
+			}
 		};
-	}, [effectsEnabled, isHeavyRoute, isMobile, motionTier, showLayout]);
+	}, [effectsEnabled, reducedMotion]);
 
-	const showFullEffects = showLayout && effectsEnabled && motionTier === "full";
-	const showHeavyRouteEffects =
-		showLayout &&
-		effectsEnabled &&
-		isHeavyRoute &&
-		motionTier === "reduced" &&
-		showDelayedMeshBlobs;
+	const showVisualEffects = effectsEnabled && !reducedMotion && effectsReady;
 
 	return (
 		<Box
@@ -128,15 +110,12 @@ export function AppShell({ children }: AppShellProps) {
 		>
 			{/* Background Effects Layer */}
 			<Suspense fallback={null}>
-				{showFullEffects && (
+				{showVisualEffects && (
 					<>
 						<MeshBlobs />
-						{showParticleGrid && (
-							<ParticleGrid config={{ color: theme.trading.primaryRgb }} />
-						)}
+						<ParticleGrid config={{ color: theme.trading.primaryRgb }} />
 					</>
 				)}
-				{showHeavyRouteEffects && <MeshBlobs />}
 			</Suspense>
 
 			{/* Header - only show when authenticated */}

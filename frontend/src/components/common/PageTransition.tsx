@@ -4,12 +4,8 @@
 
 import { motion } from "framer-motion";
 import type { ReactNode } from "react";
-import { useMotionTier, useReducedMotion } from "@/utils/animations/hooks";
-import {
-	pageEntrance,
-	pageInstant,
-	reducedMotionPage,
-} from "@/utils/animations/variants";
+import { useReducedMotion } from "@/utils/animations/hooks";
+import { pageEntrance, reducedMotionPage } from "@/utils/animations/variants";
 
 interface PageTransitionProps {
 	children: ReactNode;
@@ -22,13 +18,9 @@ export function PageTransition({
 	pageKey,
 	heavy = false,
 }: PageTransitionProps) {
+	void heavy;
 	const reducedMotion = useReducedMotion();
-	const motionTier = useMotionTier({ heavyRoute: heavy });
-	const variants = reducedMotion
-		? reducedMotionPage
-		: motionTier === "full"
-			? pageEntrance
-			: pageInstant;
+	const variants = reducedMotion ? reducedMotionPage : pageEntrance;
 
 	return (
 		<motion.div

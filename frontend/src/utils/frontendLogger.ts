@@ -4,6 +4,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { getAccessToken } from "@/api/client";
+import { runWithoutSentryTracing } from "@/utils/sentry";
 import { getApiBaseUrl, isTauri } from "@/utils/tauriEnv";
 
 type FrontendLogLevel = "DEBUG" | "INFO" | "WARNING" | "ERROR" | "CRITICAL";
@@ -36,6 +37,7 @@ const MAX_MESSAGE_LENGTH = 4000;
 const MAX_TRACEBACK_LENGTH = 16000;
 const DEDUPE_WINDOW_MS = 1000;
 const ENABLE_CONSOLE_FORWARDING = import.meta.env.DEV;
+const ENABLE_WARNING_CONSOLE_FORWARDING = false;
 
 let isInitialized = false;
 let nativeConsoleForwardingAvailable = true;
@@ -132,12 +134,14 @@ function postLog(payload: FrontendLogPayload): void {
 		headers.Authorization = `Bearer ${token}`;
 	}
 
-	void fetch(LOG_ENDPOINT, {
-		method: "POST",
-		headers,
-		body: JSON.stringify(payload),
-		keepalive: true,
-	}).catch(() => {
+	void runWithoutSentryTracing(() =>
+		fetch(LOG_ENDPOINT, {
+			method: "POST",
+			headers,
+			body: JSON.stringify(payload),
+			keepalive: true,
+		}),
+	).catch(() => {
 		// Intentionally ignore to avoid recursive logging loops.
 	});
 }
@@ -215,20 +219,22 @@ function installGlobalErrorHandlers(): void {
 }
 
 function installConsoleHooks(): void {
-	const originalWarn = console.warn.bind(console);
 	const originalError = console.error.bind(console);
 
-	console.warn = (...args: unknown[]) => {
-		originalWarn(...args);
-		reportFrontendLog(
-			"WARNING",
-			truncate(
-				args.map((arg) => stringifyConsoleArg(arg)).join(" "),
-				MAX_MESSAGE_LENGTH,
-			),
-			{ loggerName: "frontend.console.warn" },
-		);
-	};
+	if (ENABLE_WARNING_CONSOLE_FORWARDING) {
+		const originalWarn = console.warn.bind(console);
+		console.warn = (...args: unknown[]) => {
+			originalWarn(...args);
+			reportFrontendLog(
+				"WARNING",
+				truncate(
+					args.map((arg) => stringifyConsoleArg(arg)).join(" "),
+					MAX_MESSAGE_LENGTH,
+				),
+				{ loggerName: "frontend.console.warn" },
+			);
+		};
+	}
 
 	console.error = (...args: unknown[]) => {
 		originalError(...args);

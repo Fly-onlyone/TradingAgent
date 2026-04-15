@@ -7,6 +7,7 @@ type PendingNavigation = {
 };
 
 const pendingNavigations = new Map<string, PendingNavigation>();
+const NAVIGATION_LOG_THRESHOLD_MS = 800;
 
 export function markNavStart(routeId: string): void {
 	if (typeof performance === "undefined") {
@@ -60,6 +61,10 @@ export function reportNavDuration(routeId: string, durationMs: number): void {
 
 	if (import.meta.env.DEV) {
 		console.info(message);
+	}
+
+	if (rounded < NAVIGATION_LOG_THRESHOLD_MS) {
+		return;
 	}
 
 	reportFrontendLog("INFO", message, {

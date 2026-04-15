@@ -182,6 +182,14 @@ export function startSentrySpanManual(
 	);
 }
 
+export function runWithoutSentryTracing<T>(callback: () => T): T {
+	if (sentryModule) {
+		return sentryModule.suppressTracing(callback);
+	}
+
+	return callback();
+}
+
 export function reportReactRenderError(
 	error: unknown,
 	info?: ReactErrorInfoLike,

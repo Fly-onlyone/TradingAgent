@@ -15,6 +15,7 @@ interface PageLoadTimings {
 }
 
 const REPORT_TIMEOUT_MS = 10_000;
+const PAGELOAD_LOG_THRESHOLD_MS = 3000;
 
 const timings: PageLoadTimings = {
 	lcp_ms: null,
@@ -47,6 +48,17 @@ function sendReport(): void {
 
 	if (import.meta.env.DEV) {
 		console.info(message);
+	}
+
+	if (
+		Math.max(
+			timings.lcp_ms ?? 0,
+			timings.fcp_ms ?? 0,
+			timings.ttfb_ms ?? 0,
+			timings.dom_load_ms ?? 0,
+		) < PAGELOAD_LOG_THRESHOLD_MS
+	) {
+		return;
 	}
 
 	reportFrontendLog("INFO", message, {

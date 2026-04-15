@@ -32,7 +32,6 @@ import {
 	Typography,
 	useTheme,
 } from "@mui/material";
-import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useRouter } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { useCallback, useState } from "react";
@@ -220,7 +219,6 @@ function MenuSection({
 export function Sidebar() {
 	const location = useLocation();
 	const router = useRouter();
-	const queryClient = useQueryClient();
 	const { sidebarState, toggleSidebar } = useUIStore();
 	const { user } = useAuthStore();
 	const [isHovered, setIsHovered] = useState(false);
@@ -238,10 +236,10 @@ export function Sidebar() {
 		(to: string) => {
 			if (location.pathname !== to) {
 				markNavStart(to);
-				void preloadNavigationTarget(to, router, queryClient);
+				void preloadNavigationTarget(to, router);
 			}
 		},
-		[location.pathname, router, queryClient],
+		[location.pathname, router],
 	);
 
 	if (isHidden) return null;
