@@ -6,10 +6,7 @@ import * as Sentry from "@sentry/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
 import type { NotificationSettings } from "@/api/endpoints/notifications";
-import {
-	agentSessionQueryOptions,
-	agentSessionsGroupedQueryOptions,
-} from "@/api/queryOptions/agent";
+import { agentSessionsGroupedQueryOptions } from "@/api/queryOptions/agent";
 import { useAgentStore } from "@/store/agentStore";
 import { useAuthStore } from "@/store/authStore";
 import type { WebSocketMessage } from "@/types";
@@ -242,9 +239,6 @@ export function useAgentSocketConnection() {
 					if (msg.role === "assistant") {
 						void queryClient.invalidateQueries({
 							queryKey: ["agent-sessions-grouped"],
-						});
-						void queryClient.invalidateQueries({
-							queryKey: agentSessionQueryOptions(targetSessionId).queryKey,
 						});
 
 						// Fire "analysis ready" native toast

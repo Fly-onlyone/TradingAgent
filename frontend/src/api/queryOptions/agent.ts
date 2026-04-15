@@ -5,7 +5,7 @@ import { settingsApi } from "@/api/endpoints/settings";
 import { createQueryOptionsFactory } from "./_factory";
 
 const AGENT_STALE_TIME = 60_000;
-const AGENT_GC_TIME = 10 * 60_000;
+const AGENT_GC_TIME = 2 * 60_000;
 
 const agentQuery = createQueryOptionsFactory({
 	staleTime: AGENT_STALE_TIME,

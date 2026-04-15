@@ -123,8 +123,8 @@ export interface SessionListResponse {
 export interface MessageListResponse {
 	messages: SessionMessage[];
 	total: number;
-	page: number;
-	pageSize: number;
+	hasMore: boolean;
+	nextBefore: string | null;
 }
 
 export interface SessionsByDateGroup {

@@ -17,6 +17,7 @@ import UnfoldMoreIcon from "@mui/icons-material/UnfoldMore";
 import {
 	Badge,
 	Box,
+	Button,
 	Card,
 	CardContent,
 	Divider,
@@ -51,7 +52,10 @@ import {
 	agentSessionQueryOptions,
 	agentSessionsGroupedQueryOptions,
 } from "@/api/queryOptions/agent";
-import { useAgentSocket } from "@/api/websocket/useAgentSocket";
+import {
+	useAgentSocket,
+	useAgentSocketConnection,
+} from "@/api/websocket/useAgentSocket";
 import { AgentStatusBadge } from "@/components/agent/AgentStatusBadge";
 import { AskUserBlock } from "@/components/agent/AskUserBlock";
 import { ChatInput } from "@/components/agent/ChatInput";
@@ -100,8 +104,29 @@ const quickActions = [
 		icon: RocketLaunchIcon,
 	},
 ] as const;
+const MESSAGE_PAGE_SIZE = 100;
+
+function mapSessionMessages(sessionId: string, messages: SessionMessage[]) {
+	return messages.map((msg: SessionMessage, index: number) => ({
+		id: msg.id || `${sessionId}-${index}`,
+		role: msg.role,
+		content: msg.content,
+		timestamp: new Date(msg.timestamp).getTime(),
+		decision: undefined,
+		thinkingContent: msg.thinkingContent,
+		toolCalls: msg.toolCalls?.map((tc, i) => ({
+			id: `${msg.id || sessionId}-${index}-tc-${i}`,
+			name: tc.name,
+			arguments: tc.arguments,
+			result: tc.result,
+			resultSummary: tc.resultSummary,
+			executionTimeMs: tc.executionTimeMs,
+		})),
+	}));
+}
 
 function AgentPage() {
+	useAgentSocketConnection();
 	const theme = useTheme();
 	const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 	const useDrawerSidebar = useMediaQuery(theme.breakpoints.down("lg"));
@@ -154,7 +179,10 @@ function AgentPage() {
 	const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 	const [decisionPage, setDecisionPage] = useState(1);
 	const [showScrollBottom, setShowScrollBottom] = useState(false);
+	const [hasMoreMessages, setHasMoreMessages] = useState(false);
+	const [nextBeforeCursor, setNextBeforeCursor] = useState<string | null>(null);
 	const isDecisionsTabActive = mainTab === "decisions";
+	const loadOlderScrollHeightRef = useRef<number | null>(null);
 
 	// WebSocket connection
 	const {
@@ -280,45 +308,92 @@ function AgentPage() {
 		enabled: !!selectedSessionId && !isDraftSessionId(selectedSessionId),
 	});
 	const sessionData = sessionQuery.data;
+	const sessionMessagesQuery = useQuery({
+		queryKey: [
+			"agent-session-messages",
+			selectedSessionId ?? "",
+			MESSAGE_PAGE_SIZE,
+		],
+		queryFn: () =>
+			sessionsApi.getSessionMessages(selectedSessionId ?? "", {
+				limit: MESSAGE_PAGE_SIZE,
+			}),
+		enabled: !!selectedSessionId && !isDraftSessionId(selectedSessionId),
+		staleTime: 30_000,
+		gcTime: 2 * 60_000,
+	});
+	const loadOlderMessagesMutation = useMutation({
+		mutationFn: () => {
+			if (!selectedSessionId || !nextBeforeCursor) {
+				throw new Error("No older messages available");
+			}
 
-	// Load messages when session data changes
+			loadOlderScrollHeightRef.current =
+				messagesContainerRef.current?.scrollHeight ?? null;
+
+			return sessionsApi.getSessionMessages(selectedSessionId, {
+				before: nextBeforeCursor,
+				limit: MESSAGE_PAGE_SIZE,
+			});
+		},
+		onSuccess: (data) => {
+			if (!selectedSessionId) {
+				return;
+			}
+
+			hydrateSessionMessages(
+				selectedSessionId,
+				mapSessionMessages(selectedSessionId, data.messages),
+			);
+			setHasMoreMessages(data.hasMore);
+			setNextBeforeCursor(data.nextBefore);
+
+			window.requestAnimationFrame(() => {
+				const el = messagesContainerRef.current;
+				const previousHeight = loadOlderScrollHeightRef.current;
+				if (!el || previousHeight === null) {
+					return;
+				}
+
+				el.scrollTop += el.scrollHeight - previousHeight;
+				loadOlderScrollHeightRef.current = null;
+			});
+		},
+	});
+
 	useEffect(() => {
-		if (!sessionData?.messages || !selectedSessionId) {
+		setHasMoreMessages(false);
+		setNextBeforeCursor(null);
+		loadOlderScrollHeightRef.current = null;
+		if (!selectedSessionId) {
+			return;
+		}
+	}, [selectedSessionId]);
+
+	useEffect(() => {
+		if (!sessionMessagesQuery.data || !selectedSessionId) {
 			return;
 		}
 
-		// Convert session messages to agent message format. Use the DB id
-		// when available so WS `message_updated` events can address the
-		// bubble by id for in-place mutation (delegation running → saved).
-		const agentMessages = sessionData.messages.map(
-			(msg: SessionMessage, index: number) => ({
-				id: msg.id || `${sessionData.id}-${index}`,
-				role: msg.role,
-				content: msg.content,
-				timestamp: new Date(msg.timestamp).getTime(),
-				decision: undefined,
-				thinkingContent: msg.thinkingContent,
-				toolCalls: msg.toolCalls?.map((tc, i) => ({
-					id: `${sessionData.id}-${index}-tc-${i}`,
-					name: tc.name,
-					arguments: tc.arguments,
-					// Preserve the full `result` object — DelegationCard reads
-					// result.status to show "Saved" vs "Running" etc.
-					result: tc.result,
-					resultSummary: tc.resultSummary,
-					executionTimeMs: tc.executionTimeMs,
-				})),
-			}),
+		hydrateSessionMessages(
+			selectedSessionId,
+			mapSessionMessages(selectedSessionId, sessionMessagesQuery.data.messages),
 		);
+		setHasMoreMessages(sessionMessagesQuery.data.hasMore);
+		setNextBeforeCursor(sessionMessagesQuery.data.nextBefore);
+	}, [hydrateSessionMessages, selectedSessionId, sessionMessagesQuery.data]);
 
-		hydrateSessionMessages(selectedSessionId, agentMessages);
+	useEffect(() => {
+		if (!sessionData || !selectedSessionId) {
+			return;
+		}
+
 		setSessionPendingQuestion(
 			selectedSessionId,
 			sessionData.pendingQuestion ?? null,
 		);
 		setSessionTotalTokens(selectedSessionId, sessionData.totalTokens);
 	}, [
-		hydrateSessionMessages,
 		selectedSessionId,
 		sessionData,
 		setSessionPendingQuestion,
@@ -880,14 +955,36 @@ function AgentPage() {
 										)}
 									</Box>
 								) : (
-									messages.map((message) => (
-										<ChatMessage
-											key={message.id}
-											message={message}
-											showThinkingContent={showThinkingContent}
-											expandAllTools={expandAllTools}
-										/>
-									))
+									<>
+										{selectedSessionId && hasMoreMessages && (
+											<Box
+												sx={{
+													display: "flex",
+													justifyContent: "center",
+													mb: 2,
+												}}
+											>
+												<Button
+													size="small"
+													variant="outlined"
+													onClick={() => loadOlderMessagesMutation.mutate()}
+													disabled={loadOlderMessagesMutation.isPending}
+												>
+													{loadOlderMessagesMutation.isPending
+														? "Loading older messages..."
+														: "Load older messages"}
+												</Button>
+											</Box>
+										)}
+										{messages.map((message) => (
+											<ChatMessage
+												key={message.id}
+												message={message}
+												showThinkingContent={showThinkingContent}
+												expandAllTools={expandAllTools}
+											/>
+										))}
+									</>
 								)}
 								{streamingText && (
 									<ChatMessage

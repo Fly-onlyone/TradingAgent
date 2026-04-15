@@ -307,6 +307,39 @@ async def fetch_session_messages(
     return [doc.to_session_message() for doc in docs], total
 
 
+async def fetch_session_message_window(
+    session: AgentSession,
+    *,
+    before: datetime | None = None,
+    limit: int = 100,
+) -> tuple[list[SessionMessage], int, bool, datetime | None]:
+    """Load the newest message window with an optional older-history cursor."""
+    if limit <= 0:
+        return [], 0, False, None
+
+    if session.messages:
+        combined, total = await fetch_session_messages(session)
+        if before is not None:
+            combined = [message for message in combined if message.timestamp < before]
+        has_more = len(combined) > limit
+        window = combined[-limit:]
+        next_before = window[0].timestamp if has_more and window else None
+        return window, total, has_more, next_before
+
+    total = await AgentSessionMessage.find(AgentSessionMessage.session_id == session.id).count()
+    query = AgentSessionMessage.find(AgentSessionMessage.session_id == session.id)
+    if before is not None:
+        query = query.find(AgentSessionMessage.timestamp < before)
+
+    docs = await query.sort("-timestamp").limit(limit + 1).to_list()
+    has_more = len(docs) > limit
+    window_docs = docs[:limit]
+    window_docs.reverse()
+    messages = [doc.to_session_message() for doc in window_docs]
+    next_before = messages[0].timestamp if has_more and messages else None
+    return messages, total, has_more, next_before
+
+
 async def persist_session_message_doc(
     session: AgentSession,
     *,

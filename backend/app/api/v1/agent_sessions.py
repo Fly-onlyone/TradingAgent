@@ -13,7 +13,7 @@ from app.db.models.agent_session import (
     PendingQuestionState,
     SessionMessage,
     delete_session_message_history,
-    fetch_session_messages,
+    fetch_session_message_window,
     persist_session_message,
 )
 from app.db.models.user import User
@@ -84,12 +84,6 @@ class SessionResponse(BaseModel):
         from_attributes = True
 
 
-class SessionWithMessagesResponse(SessionResponse):
-    """Session response with messages."""
-
-    messages: list[MessageResponse]
-
-
 class SessionListResponse(BaseModel):
     """Paginated session list response."""
 
@@ -100,12 +94,12 @@ class SessionListResponse(BaseModel):
 
 
 class MessageListResponse(BaseModel):
-    """Paginated message list response."""
+    """Windowed session message response."""
 
     messages: list[MessageResponse]
     total: int
-    page: int
-    page_size: int
+    has_more: bool = False
+    next_before: str | None = None
 
 
 class SessionsByDateGroup(BaseModel):
@@ -361,12 +355,12 @@ async def list_sessions_grouped(
     }
 
 
-@router.get("/{session_id}", response_model=SessionWithMessagesResponse)
+@router.get("/{session_id}", response_model=SessionResponse)
 async def get_session(
     session_id: str,
     current_user: User = Depends(get_current_active_user),
-) -> dict:
-    """Get a specific session with all messages."""
+) -> SessionResponse:
+    """Get a specific session without hydrating the full message history."""
     session = await AgentSession.find_one(
         AgentSession.id == PydanticObjectId(session_id),
         AgentSession.user_id == current_user.id,
@@ -374,20 +368,17 @@ async def get_session(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    response = session_to_response(session).model_dump()
-    messages, _ = await fetch_session_messages(session)
-    response["messages"] = [message_to_response(m) for m in messages]
-    return response
+    return session_to_response(session)
 
 
 @router.get("/{session_id}/messages", response_model=MessageListResponse)
 async def get_session_messages(
     session_id: str,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=200),
+    before: datetime | None = Query(None),
+    limit: int = Query(100, ge=1, le=200),
     current_user: User = Depends(get_current_active_user),
 ) -> dict:
-    """Get paginated messages for a session."""
+    """Get the newest message window for a session."""
     session = await AgentSession.find_one(
         AgentSession.id == PydanticObjectId(session_id),
         AgentSession.user_id == current_user.id,
@@ -395,18 +386,17 @@ async def get_session_messages(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    start_idx = (page - 1) * page_size
-    messages, total = await fetch_session_messages(
+    messages, total, has_more, next_before = await fetch_session_message_window(
         session,
-        skip=start_idx,
-        limit=page_size,
+        before=before,
+        limit=limit,
     )
 
     return {
         "messages": [message_to_response(m) for m in messages],
         "total": total,
-        "page": page,
-        "page_size": page_size,
+        "has_more": has_more,
+        "next_before": next_before.isoformat() if next_before else None,
     }
 
 

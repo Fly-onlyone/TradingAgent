@@ -5,7 +5,6 @@
 import type { PaginationParams } from "@/types";
 import type {
 	AgentSession,
-	AgentSessionWithMessages,
 	GroupedSessionsResponse,
 	MessageCreate,
 	MessageListResponse,
@@ -77,13 +76,8 @@ function transformMessage(data: Record<string, unknown>): SessionMessage {
 
 function transformSessionWithMessages(
 	data: Record<string, unknown>,
-): AgentSessionWithMessages {
-	return {
-		...transformSession(data),
-		messages: ((data.messages as Record<string, unknown>[]) || []).map(
-			transformMessage,
-		),
-	};
+): AgentSession {
+	return transformSession(data);
 }
 
 function transformSessionGroup(
@@ -113,7 +107,7 @@ export const sessionsApi = {
 	/**
 	 * Get session by ID with all messages
 	 */
-	async getSession(sessionId: string): Promise<AgentSessionWithMessages> {
+	async getSession(sessionId: string): Promise<AgentSession> {
 		const response = await apiClient.get<Record<string, unknown>>(
 			`/agent/sessions/${sessionId}`,
 		);
@@ -164,7 +158,10 @@ export const sessionsApi = {
 	 */
 	async getSessionMessages(
 		sessionId: string,
-		params?: PaginationParams,
+		params?: {
+			before?: string;
+			limit?: number;
+		},
 	): Promise<MessageListResponse> {
 		const response = await apiClient.get<Record<string, unknown>>(
 			`/agent/sessions/${sessionId}/messages`,
@@ -178,8 +175,12 @@ export const sessionsApi = {
 				>[]
 			).map(transformMessage),
 			total: response.data.total as number,
-			page: response.data.page as number,
-			pageSize: (response.data.page_size ?? response.data.pageSize) as number,
+			hasMore: Boolean(
+				response.data.has_more ?? response.data.hasMore ?? false,
+			),
+			nextBefore: (response.data.next_before ?? response.data.nextBefore) as
+				| string
+				| null,
 		};
 	},
 

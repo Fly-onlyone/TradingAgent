@@ -100,7 +100,7 @@ interface AgentState {
 	finalizeInterruptedTurns: () => void;
 }
 
-const MAX_MESSAGES = 100;
+const MAX_MESSAGES = 500;
 const MAX_TOOL_CALLS = 200;
 const MAX_DECISIONS = 100;
 
