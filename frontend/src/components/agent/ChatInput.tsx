@@ -32,7 +32,7 @@ import {
 import type { AgentConfig, AgentConfigUpdate } from "@/api/endpoints/settings";
 import { settingsApi } from "@/api/endpoints/settings";
 import { agentConfigQueryOptions } from "@/api/queryOptions/agent";
-import { useZoomAwareMenu } from "@/hooks/useZoomAwareMenu";
+import { useAgentConfigMenus } from "@/hooks/useAgentConfigMenus";
 
 /** Capitalize first letter for display */
 function capitalize(s: string): string {
@@ -151,32 +151,7 @@ export function ChatInput({
 		},
 	});
 
-	// Model menu (zoom-aware)
-	const {
-		anchorRef: modelRef,
-		open: modelOpen,
-		handleOpen: handleModelOpen,
-		handleClose: handleModelClose,
-		menuProps: modelMenuProps,
-	} = useZoomAwareMenu();
-
-	// Thinking mode menu (zoom-aware)
-	const {
-		anchorRef: thinkingRef,
-		open: thinkingOpen,
-		handleOpen: handleThinkingOpen,
-		handleClose: handleThinkingClose,
-		menuProps: thinkingMenuProps,
-	} = useZoomAwareMenu();
-
-	// Effort level menu (zoom-aware)
-	const {
-		anchorRef: effortRef,
-		open: effortOpen,
-		handleOpen: handleEffortOpen,
-		handleClose: handleEffortClose,
-		menuProps: effortMenuProps,
-	} = useZoomAwareMenu();
+	const menus = useAgentConfigMenus((update) => updateMutation.mutate(update));
 
 	const handleSend = useCallback(() => {
 		if (message.trim() && !isThinking && !disabled) {
@@ -190,21 +165,6 @@ export function ChatInput({
 			e.preventDefault();
 			handleSend();
 		}
-	};
-
-	const handleModelSelect = (value: string) => {
-		updateMutation.mutate({ model: value });
-		handleModelClose();
-	};
-
-	const handleThinkingSelect = (value: string) => {
-		updateMutation.mutate({ thinkingMode: value });
-		handleThinkingClose();
-	};
-
-	const handleEffortSelect = (value: string) => {
-		updateMutation.mutate({ effort: value });
-		handleEffortClose();
 	};
 
 	// Derived display values
@@ -334,10 +294,10 @@ export function ChatInput({
 						/>
 
 						{/* Model selector */}
-						<Box ref={modelRef}>
+						<Box ref={menus.model.anchorRef}>
 							<Button
 								size="small"
-								onClick={handleModelOpen}
+								onClick={menus.model.handleOpen}
 								disabled={updateMutation.isPending}
 								sx={{
 									textTransform: "none",
@@ -368,15 +328,15 @@ export function ChatInput({
 						</Box>
 
 						<Menu
-							open={modelOpen}
-							onClose={handleModelClose}
-							{...modelMenuProps}
+							open={menus.model.open}
+							onClose={menus.model.handleClose}
+							{...menus.model.menuProps}
 						>
 							{resolvedModelOptions.map((opt) => (
 								<MenuItem
 									key={opt.value}
 									selected={opt.value === currentModel}
-									onClick={() => handleModelSelect(opt.value)}
+									onClick={() => menus.model.onSelect(opt.value)}
 								>
 									<Box
 										sx={{
@@ -401,10 +361,10 @@ export function ChatInput({
 						</Menu>
 
 						{/* Thinking mode selector */}
-						<Box ref={thinkingRef}>
+						<Box ref={menus.thinking.anchorRef}>
 							<Button
 								size="small"
-								onClick={handleThinkingOpen}
+								onClick={menus.thinking.handleOpen}
 								disabled={updateMutation.isPending}
 								endIcon={
 									<KeyboardArrowDownIcon sx={{ fontSize: "16px !important" }} />
@@ -438,15 +398,15 @@ export function ChatInput({
 						</Box>
 
 						<Menu
-							open={thinkingOpen}
-							onClose={handleThinkingClose}
-							{...thinkingMenuProps}
+							open={menus.thinking.open}
+							onClose={menus.thinking.handleClose}
+							{...menus.thinking.menuProps}
 						>
 							{thinkingOptions.map((opt) => (
 								<MenuItem
 									key={opt.value}
 									selected={opt.value === currentThinking}
-									onClick={() => handleThinkingSelect(opt.value)}
+									onClick={() => menus.thinking.onSelect(opt.value)}
 								>
 									<Box
 										sx={{
@@ -471,10 +431,10 @@ export function ChatInput({
 						</Menu>
 
 						{/* Effort level selector */}
-						<Box ref={effortRef}>
+						<Box ref={menus.effort.anchorRef}>
 							<Button
 								size="small"
-								onClick={handleEffortOpen}
+								onClick={menus.effort.handleOpen}
 								disabled={updateMutation.isPending}
 								sx={{
 									textTransform: "none",
@@ -505,15 +465,15 @@ export function ChatInput({
 						</Box>
 
 						<Menu
-							open={effortOpen}
-							onClose={handleEffortClose}
-							{...effortMenuProps}
+							open={menus.effort.open}
+							onClose={menus.effort.handleClose}
+							{...menus.effort.menuProps}
 						>
 							{effortOptions.map((opt) => (
 								<MenuItem
 									key={opt.value}
 									selected={opt.value === currentEffort}
-									onClick={() => handleEffortSelect(opt.value)}
+									onClick={() => menus.effort.onSelect(opt.value)}
 								>
 									<Box
 										sx={{
