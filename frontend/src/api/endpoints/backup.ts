@@ -35,6 +35,11 @@ function transformBackupInfo(data: Record<string, unknown>): BackupInfo {
 	};
 }
 
+export interface BackupBlob {
+	blob: Blob;
+	filename: string;
+}
+
 export const backupApi = {
 	/** Get backup info: collection names, doc counts, sizes. */
 	async getBackupInfo(): Promise<BackupInfo> {
@@ -43,13 +48,12 @@ export const backupApi = {
 		return transformBackupInfo(response.data);
 	},
 
-	/** Export full database as a downloadable JSON file. */
-	async exportBackup(): Promise<void> {
+	/** Fetch the full database backup as a Blob + suggested filename. */
+	async fetchBackupBlob(): Promise<BackupBlob> {
 		const response = await apiClient.post("/admin/backup/export", null, {
 			responseType: "blob",
 		});
 
-		// Extract filename from Content-Disposition header, or use default
 		const contentDisposition = response.headers["content-disposition"] as
 			| string
 			| undefined;
@@ -61,10 +65,15 @@ export const backupApi = {
 			}
 		}
 
-		// Trigger browser download
 		const blob = new Blob([response.data as BlobPart], {
 			type: "application/json",
 		});
+		return { blob, filename };
+	},
+
+	/** Browser fallback — fetch + trigger an anchor download. */
+	async exportBackup(): Promise<void> {
+		const { blob, filename } = await this.fetchBackupBlob();
 		const url = URL.createObjectURL(blob);
 		const link = document.createElement("a");
 		link.href = url;

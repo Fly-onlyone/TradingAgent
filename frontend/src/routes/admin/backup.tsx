@@ -27,8 +27,10 @@ import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { PageTransition } from "@/components/common/PageTransition";
 import { SectionHeader } from "@/components/common/SectionHeader";
 import { ShimmerSkeleton } from "@/components/common/ShimmerSkeleton";
+import { useBackupDrop } from "@/hooks/useBackupDrop";
 import { spring, staggerCascade } from "@/utils/animations/variants";
 import { formatBytes } from "@/utils/formatters";
+import { isTauri } from "@/utils/tauriEnv";
 import { requireAdmin } from "../-guards";
 
 const BACKUP_STALE_TIME = 60_000;
@@ -47,6 +49,7 @@ function BackupAdminPage() {
 		collectionsRestored: number;
 		totalDocuments: number;
 	} | null>(null);
+	const [exportedPath, setExportedPath] = useState<string | null>(null);
 
 	const infoQuery = useQuery({
 		queryKey: ["admin-backup-info"] as const,
@@ -56,7 +59,28 @@ function BackupAdminPage() {
 	});
 
 	const exportMutation = useMutation({
-		mutationFn: () => backupApi.exportBackup(),
+		mutationFn: async (): Promise<{ path: string | null }> => {
+			if (!isTauri()) {
+				await backupApi.exportBackup();
+				return { path: null };
+			}
+			const { blob, filename } = await backupApi.fetchBackupBlob();
+			const [{ save }, { writeFile }] = await Promise.all([
+				import("@tauri-apps/plugin-dialog"),
+				import("@tauri-apps/plugin-fs"),
+			]);
+			const chosen = await save({
+				defaultPath: filename,
+				filters: [{ name: "JSON", extensions: ["json"] }],
+			});
+			if (!chosen) return { path: null };
+			const bytes = new Uint8Array(await blob.arrayBuffer());
+			await writeFile(chosen, bytes);
+			return { path: chosen };
+		},
+		onSuccess: ({ path }) => {
+			setExportedPath(path);
+		},
 	});
 
 	const importMutation = useMutation({
@@ -79,18 +103,24 @@ function BackupAdminPage() {
 		},
 	});
 
+	const applySelectedFile = useCallback((file: File) => {
+		setSelectedFile(file);
+		setImportResult(null);
+	}, []);
+
 	const handleFileSelect = useCallback(
 		(event: React.ChangeEvent<HTMLInputElement>) => {
 			const file = event.target.files?.[0];
 			if (file) {
-				setSelectedFile(file);
-				setImportResult(null);
+				applySelectedFile(file);
 			}
 			// Reset so the same file can be re-selected
 			event.target.value = "";
 		},
-		[],
+		[applySelectedFile],
 	);
+
+	const { isDragging, dndHandlers } = useBackupDrop(applySelectedFile);
 
 	const handleImportConfirm = useCallback(() => {
 		if (selectedFile) {
@@ -265,26 +295,35 @@ function BackupAdminPage() {
 											color="text.secondary"
 											sx={{ mb: 2 }}
 										>
-											Download a full JSON backup of all collections. The file
-											uses MongoDB-safe serialisation for ObjectId, dates, and
-											other BSON types.
+											{isTauri()
+												? "Save a full JSON backup to a location of your choice. The native file picker lets you browse folders or type a full path."
+												: "Download a full JSON backup of all collections. The file uses MongoDB-safe serialisation for ObjectId, dates, and other BSON types."}
 										</Typography>
 
 										<Button
 											variant="contained"
 											startIcon={<CloudDownloadIcon />}
-											onClick={() => exportMutation.mutate()}
+											onClick={() => {
+												setExportedPath(null);
+												exportMutation.mutate();
+											}}
 											disabled={exportMutation.isPending}
 											fullWidth
 										>
 											{exportMutation.isPending
 												? "Exporting..."
-												: "Export Backup"}
+												: isTauri()
+													? "Choose Location & Export"
+													: "Export Backup"}
 										</Button>
 
 										{exportMutation.isSuccess && (
 											<Alert severity="success" sx={{ mt: 2 }}>
-												Backup downloaded successfully.
+												{exportedPath
+													? `Backup saved to ${exportedPath}`
+													: isTauri()
+														? "Export cancelled."
+														: "Backup downloaded successfully."}
 											</Alert>
 										)}
 										{exportMutation.error && (
@@ -343,18 +382,24 @@ function BackupAdminPage() {
 										{/* Upload drop zone */}
 										<Box
 											onClick={() => fileInputRef.current?.click()}
+											{...dndHandlers}
 											sx={{
 												border: 2,
 												borderStyle: "dashed",
-												borderColor: selectedFile ? "primary.main" : "divider",
+												borderColor:
+													isDragging || selectedFile
+														? "primary.main"
+														: "divider",
 												borderRadius: 2,
 												p: 3,
 												textAlign: "center",
 												cursor: "pointer",
 												transition: "all 0.2s",
-												bgcolor: selectedFile
-													? "action.selected"
-													: "transparent",
+												bgcolor: isDragging
+													? "action.hover"
+													: selectedFile
+														? "action.selected"
+														: "transparent",
 												"&:hover": {
 													borderColor: "primary.main",
 													bgcolor: "action.hover",
@@ -364,9 +409,10 @@ function BackupAdminPage() {
 											<BackupIcon
 												sx={{
 													fontSize: 40,
-													color: selectedFile
-														? "primary.main"
-														: "text.disabled",
+													color:
+														isDragging || selectedFile
+															? "primary.main"
+															: "text.disabled",
 													mb: 1,
 												}}
 											/>
@@ -376,13 +422,16 @@ function BackupAdminPage() {
 														{selectedFile.name}
 													</Typography>
 													<Typography variant="caption" color="text.secondary">
-														{formatBytes(selectedFile.size)} — Click to change
+														{formatBytes(selectedFile.size)} — Click or drop to
+														change
 													</Typography>
 												</>
 											) : (
 												<>
 													<Typography variant="body2" color="text.secondary">
-														Click to select a backup file
+														{isDragging
+															? "Release to load backup file"
+															: "Click or drop a backup file here"}
 													</Typography>
 													<Typography variant="caption" color="text.disabled">
 														Only .json files are accepted

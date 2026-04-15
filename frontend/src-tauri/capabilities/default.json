@@ -12,6 +12,14 @@
     "autostart:allow-is-enabled",
     "shell:allow-open",
     "shell:allow-spawn",
-    "shell:allow-kill"
+    "shell:allow-kill",
+    "dialog:default",
+    "fs:default",
+    "fs:allow-write-file",
+    "fs:allow-read-file",
+    {
+      "identifier": "fs:scope",
+      "allow": [{ "path": "**" }]
+    }
   ]
 }
