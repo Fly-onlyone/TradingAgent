@@ -17,6 +17,7 @@ from app.api.deps import get_current_superuser
 from app.config import get_settings
 from app.db.models.app_settings import AgentAuthMode, AppSettings
 from app.db.models.user import User
+from app.security.resolver import resolve_secret
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -106,8 +107,8 @@ def _check_cli_login() -> bool:
 
 
 def _resolve_api_key(app_settings: AppSettings) -> str:
-    """Return the effective API key: DB setting first, then env var fallback."""
-    return app_settings.get_agent_api_key() or settings.anthropic_api_key
+    """Return the effective Anthropic API key."""
+    return resolve_secret(app_settings.get_agent_api_key, settings.anthropic_api_key)
 
 
 def _ensure_encryption_available() -> None:
@@ -883,15 +884,15 @@ class ExchangeConfigUpdate(BaseModel):
 
 
 def _resolve_okx_api_key(app_settings: AppSettings) -> str:
-    return app_settings.get_okx_api_key() or settings.okx_api_key
+    return resolve_secret(app_settings.get_okx_api_key, settings.okx_api_key)
 
 
 def _resolve_okx_secret_key(app_settings: AppSettings) -> str:
-    return app_settings.get_okx_secret_key() or settings.okx_secret_key
+    return resolve_secret(app_settings.get_okx_secret_key, settings.okx_secret_key)
 
 
 def _resolve_okx_passphrase(app_settings: AppSettings) -> str:
-    return app_settings.get_okx_passphrase() or settings.okx_passphrase
+    return resolve_secret(app_settings.get_okx_passphrase, settings.okx_passphrase)
 
 
 def _build_exchange_response(app_settings: AppSettings) -> dict:
@@ -987,7 +988,7 @@ class BraveSearchConfigUpdate(BaseModel):
 
 
 def _resolve_brave_search_api_key(app_settings: AppSettings) -> str:
-    return app_settings.get_brave_search_api_key() or settings.brave_search_api_key
+    return resolve_secret(app_settings.get_brave_search_api_key, settings.brave_search_api_key)
 
 
 def _build_brave_search_response(app_settings: AppSettings) -> dict:
