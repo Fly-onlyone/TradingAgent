@@ -160,16 +160,16 @@ agents, AI merge, etc.). Writing to the DB is necessary but NOT sufficient.
 
 | Leg | Requirement | How |
 |---|---|---|
-| Persistence | Insert messages via `persist_session_message()` (or `persist_session_message_doc()` if you need the inserted id for in-place updates) | `backend/app/db/models/agent_session.py:persist_session_message_doc` |
-| Live stream | Broadcast a WebSocket event on every insert | `manager.send_to_user(_agent_channel_user_id(user_id), {...})` with `type: "message"` and outer `session_id`. User-channel hash is `hash(str(user.id)) % 1000000` — must match `_get_user_id_int` in `backend/app/api/websocket/agent.py:110` |
-| Sidebar spinner | Multi-message runs set `keep_running: true` on the WS payload | Frontend auto-clears `activeRunSessionId` (sidebar `<CircularProgress>`) on every assistant message unless `keep_running` is true. Clear by broadcasting a FINAL message without the flag. |
-| In-place updates | For cards that transition state (running → saved), mutate the existing row + emit `message_updated` | Don't insert a second row. Capture `document.id` on first insert, later `AgentSessionMessage.get(id)` → mutate `content`/`tool_calls` → `doc.save()` → `_broadcast_message_updated(...)`. Frontend `useAgentSocket` routes the event through `updateMessage(sessionId, id, patch)`. |
-| Message id on wire | REST `MessageResponse` and frontend `SessionMessage` type MUST carry `id` | Needed for in-place updates AND for merge-on-hydrate dedup. Frontend dedups by 24-char hex DB id; REST-fetched rows win over local state when both have the same id (DB is canonical). |
-| Suppress Claude CLI hooks | Every `ClaudeAgentOptions(...)` passes `extra_args={"setting-sources": "local"}` | Without it, the user-level Stop hook fires a toast on every subagent turn. Audit: `grep -n 'ClaudeAgentOptions(' backend/` — every hit must include this flag. |
-| Completion toast | Fire `NotificationService.create_notification(type=TASK_COMPLETED, session_id=...)` on success and `TASK_FAILED` on failure | Hooks into `desktop_notify._send_desktop_toast` (winotify on Windows). Pass session id so the toast deep-links. |
-| Failure visibility | Wrap the cycle body in try/except that flips any "running" row to failed | Stuck rows come from crashes that never updated status. Plus add a startup hook that flips orphan running rows (see `task_scheduler._mark_orphaned_discovery_cycles_failed`). |
-| UI surfaces | Every place listing cycles/runs: animated spinner on in-flight rows + `setSelectedSessionId(id)` click-through | `setSelectedSessionId(id)` + `navigate({to: "/agent"})`. `StrategyDiscoveryCard` is the reference. |
-| Strategy shadow (if applicable) | If the feature creates `StrategyKnowledge`, it MUST also create a `Strategy` shadow doc owned by a real user | `Strategy` is what the Strategies page reads. Scheduler-triggered runs need to resolve a superuser user_id first — passing `user_id=None` silently skips the shadow. |
+| Persistence | Insert via `persist_session_message()` — or `persist_session_message_doc()` when you need the inserted id for in-place updates | `backend/app/db/models/agent_session.py` |
+| Live stream | Broadcast a WebSocket event on every insert with `type: "message"` + outer `session_id` | `manager.send_to_user(_agent_channel_user_id(user_id), ...)`; see `_get_user_id_int` in `backend/app/api/websocket/agent.py` |
+| Sidebar spinner | Multi-message runs set `keep_running: true` on the WS payload; clear it by broadcasting a final message without the flag | Frontend auto-clears `activeRunSessionId` on every assistant message unless `keep_running` is set |
+| In-place updates | For rows that transition state (running → saved), mutate the existing doc + emit `message_updated`; don't insert a second row | Capture `document.id` on insert → `AgentSessionMessage.get(id).save()` → `_broadcast_message_updated(...)` |
+| Message id on wire | REST `MessageResponse` and frontend `SessionMessage` MUST carry `id` | Needed for in-place updates and merge-on-hydrate dedup; frontend dedups by 24-char hex DB id, DB wins |
+| Suppress Claude CLI hooks | Every `ClaudeAgentOptions(...)` passes `extra_args={"setting-sources": "local"}` | Without it, the user-level Stop hook fires a toast on every subagent turn. Audit: `grep -n 'ClaudeAgentOptions(' backend/` — every hit must include this flag |
+| Completion toast | Fire `NotificationService.create_notification(type=TASK_COMPLETED, session_id=...)` on success and `TASK_FAILED` on failure | Hooks into `desktop_notify._send_desktop_toast`; pass `session_id` so the toast deep-links |
+| Failure visibility | Wrap the cycle body in try/except that flips any "running" row to failed, and add a startup hook for orphans | See `task_scheduler._mark_orphaned_discovery_cycles_failed` |
+| UI surfaces | Every place listing cycles/runs: animated spinner on in-flight rows + `setSelectedSessionId(id)` + `navigate({to: "/agent"})` click-through | Reference: `StrategyDiscoveryCard` |
+| Strategy shadow | If the feature creates `StrategyKnowledge`, also create a `Strategy` shadow doc owned by a real user | The Strategies page reads `Strategy`; scheduler paths must resolve a superuser first — `user_id=None` silently skips the shadow |
 
 **Subagent pattern**: Match the existing TechnicalAnalyst / NewsAnalyst /
 FundamentalAnalyst pattern — subagents are pure compute, they return dicts,
@@ -177,25 +177,4 @@ they do NOT create their own `AgentSession`. The parent's session captures
 the timeline via delegation tool-call bubbles. Creating a session per
 subagent clutters the chat sidebar and does not match the codebase.
 
-**Reference incidents (all fixed):**
-- Strategy auto-discovery launched with leg 1 only — messages persisted but
-  not broadcast → chat appeared frozen during live runs. Fix: add broadcasts.
-- Each Extractor created its own `AgentSession` → 30+ "Strategy Extract —
-  X" rows cluttered the sidebar. Fix: make extractors pure compute per above.
-- `message_id` missing on REST `SessionMessage` → two bubbles per article
-  ("running" then "saved") because `update_delegation_status` couldn't find
-  the row to mutate. Fix: thread id through REST/WS/store.
-- Merge-on-hydrate used `(role, content, timestamp)` key → in-place mutated
-  messages kept both old and new copies with the same React key. Fix: dedup
-  by DB ObjectId first, semantic key only for ids that aren't 24-char hex.
-- Scheduler path skipped the Strategy shadow doc because it passed
-  `user_id=None` → Strategies page stayed empty. Fix: resolve first
-  superuser in `_run_strategy_discovery`.
-- Every `ClaudeAgentOptions` except the main `TradingAgent` leaked the
-  user's Claude Code Stop hook as a toast on every subagent completion.
-  Fix: add `extra_args={"setting-sources": "local"}` to all 8 SDK callers.
-
-**When adding a new surface (card, page, admin route) that references chat
-sessions:** audit every applicable leg in the table above before merging.
-If any leg is missing, either add it or flag a follow-up in the plan
-explicitly.
+When adding a new chat-session surface, audit every applicable leg above — or flag the gap explicitly in the plan.

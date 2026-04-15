@@ -30,9 +30,6 @@ This file provides guidance to Coding agent when working with this project.
 - Required on Windows:
     - Rust (`cargo`) available in PATH (`%USERPROFILE%\.cargo\bin`)
     - Visual Studio 2022 Build Tools with C++ workload (`MSVC v143` + Windows SDK)
-- Quick checks:
-    - `cargo --version`
-    - `cmd /c "where link && where cl"`
 - Tauri v2 config note:
     - Do not use `plugins.shell.scope` in `tauri.conf.json`
     - Keep `plugins.shell` minimal (e.g. `open`)
@@ -40,22 +37,10 @@ This file provides guidance to Coding agent when working with this project.
 
 ## Sentry
 
-Separate Sentry projects per layer (org: `fly-theonlyone`):
+Separate Sentry projects per layer (org: `fly-theonlyone`). Env vars live in `.env.example`.
 
-- **Backend project**: `trading-agent-backend` — `sentry-sdk[fastapi]`, conditional init when `SENTRY_DSN` is set
-    - FastAPI auto-integration (transactions, error capture), `LoggingIntegration` (ERROR+ as events, INFO+ as
-      breadcrumbs)
-    - Config: `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`, `SENTRY_TRACES_SAMPLE_RATE`,
-      `SENTRY_PROFILES_SAMPLE_RATE`
-    - Test endpoint: `POST /api/v1/admin/sentry-test` (superuser)
-- **Frontend project**: `trading-agent-frontend` — `@sentry/react`, conditional init when `VITE_SENTRY_DSN` is set
-    - `Sentry.ErrorBoundary` wraps the React tree in `main.tsx`
-    - Browser tracing + profiling integrations
-    - Source maps uploaded via `@sentry/vite-plugin` to `trading-agent-frontend` project when `SENTRY_AUTH_TOKEN` is set
-      at build time
-    - Config: `VITE_SENTRY_DSN`, `VITE_SENTRY_ENVIRONMENT`, `VITE_SENTRY_RELEASE`, `VITE_SENTRY_TRACES_SAMPLE_RATE`,
-      `VITE_SENTRY_PROFILE_SESSION_SAMPLE_RATE`, `VITE_SENTRY_PROFILE_LIFECYCLE`
-- **Admin page**: `/admin/sentry` — status, captured items, test events, dashboard links
+- **Backend** (`trading-agent-backend`): `sentry-sdk[fastapi]`, conditional init when `SENTRY_DSN` is set. FastAPI auto-integration + `LoggingIntegration` (ERROR+ as events, INFO+ as breadcrumbs). Test endpoint: `POST /api/v1/admin/sentry-test` (superuser).
+- **Frontend** (`trading-agent-frontend`): `@sentry/react`, conditional init when `VITE_SENTRY_DSN` is set. `Sentry.ErrorBoundary` wraps the React tree in `main.tsx`. Source maps uploaded via `@sentry/vite-plugin` at build time when `SENTRY_AUTH_TOKEN` is set.
 
 ## Project Overview
 
@@ -115,7 +100,7 @@ Separate Sentry projects per layer (org: `fly-theonlyone`):
   `ADMIN_GC_TIME`
 - **Route pages**: TanStack Router file-based routing. `@tanstack/router-plugin` in `frontend/vite.config.ts`
   auto-generates the route tree during dev/build, so manual `router-cli generate` is usually unnecessary.
-- **Sidebar nav**: Items defined as arrays in `Sidebar.tsx` — `adminMenuItems` for admin section
+- **Sidebar nav**: Items defined as arrays in `Sidebar.tsx` — `adminGroup` for admin section
 - **RAG retrieval pipeline**: `_vectorized_search()` in `retriever.py` — Motor projection loads only `_id` +
   `embedding`,
   NumPy matrix dot product scores all docs at once, time-decay weighting applied per-collection, then top-k full docs
@@ -142,11 +127,6 @@ Separate Sentry projects per layer (org: `fly-theonlyone`):
   skeleton rows/cards instead of array indexes.
 - **Hook ordering**: Biome enforces `useHookAtTopLevel` — early returns (like auth guards) must come AFTER all hooks,
   not before
-- **Current CI state**: `uv run ruff check backend/`, `uv run ruff format --check backend/`,
-  `uv run pytest --tb=short -q`,
-  `cd frontend && bun run check`, `cd frontend && bun run test`, and `cd frontend && bun run build` are currently
-  green. Remaining warnings are non-blocking (for example Pydantic v2 deprecation warnings in tests and Vite chunk-size
-  warnings in frontend builds).
 
 ## Context7 IDs
 
