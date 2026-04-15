@@ -92,11 +92,35 @@ async def test_persist_session_message_sets_title_without_embedded_messages(
     inserted_docs: list[object] = []
 
     class _InsertedDocument:
+        id = PydanticObjectId()
+        role = agent_session.MessageRole.USER
+        content = ""
+        timestamp = datetime.now(UTC)
+        decision_id = None
+        tool_calls: list[dict] = []
+        thinking_content = None
+        tokens_used = None
+
         async def insert(self) -> None:
             inserted_docs.append(self)
 
-    def fake_from_session_message(**_: object) -> _InsertedDocument:
-        return _InsertedDocument()
+        def to_session_message(self) -> agent_session.SessionMessage:
+            return agent_session.SessionMessage(
+                id=self.id,
+                role=self.role,
+                content=self.content,
+                timestamp=self.timestamp,
+                tool_calls=self.tool_calls,
+            )
+
+    def fake_from_session_message(**kwargs: object) -> _InsertedDocument:
+        doc = _InsertedDocument()
+        msg = kwargs.get("message")
+        if isinstance(msg, agent_session.SessionMessage):
+            doc.content = msg.content
+            doc.role = msg.role
+            doc.timestamp = msg.timestamp
+        return doc
 
     monkeypatch.setattr(
         agent_session.AgentSessionMessage,

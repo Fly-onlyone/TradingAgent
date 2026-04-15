@@ -12,21 +12,11 @@ import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import HourglassTopIcon from "@mui/icons-material/HourglassTop";
-import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import SubdirectoryArrowRightIcon from "@mui/icons-material/SubdirectoryArrowRight";
-import WarningAmberIcon from "@mui/icons-material/WarningAmber";
-import {
-	Box,
-	Button,
-	Chip,
-	Collapse,
-	Divider,
-	Typography,
-} from "@mui/material";
+import { Box, Chip, Collapse, Divider, Typography } from "@mui/material";
 import { useState } from "react";
 import type { ToolCall } from "@/api/websocket/useAgentSocket";
-import { useAgentStore } from "@/store/agentStore";
+import { StatusChip } from "@/components/common/StatusChip";
 
 /** Strip MCP prefix and convert snake_case tool names to human labels. */
 export function humanizeToolName(name: string): string {
@@ -82,7 +72,6 @@ interface DelegationResult {
 }
 
 function DelegationCard({ toolCall }: { toolCall: ToolCall }) {
-	const { setSelectedSessionId } = useAgentStore();
 	const result = (toolCall.result ?? {}) as DelegationResult;
 	const args = toolCall.arguments as {
 		article_title?: string;
@@ -92,55 +81,6 @@ function DelegationCard({ toolCall }: { toolCall: ToolCall }) {
 	const title = result.article_title || args.article_title || "extraction";
 	const url = result.article_url || args.article_url || "";
 	const status = result.status ?? "running";
-	const sessionId = result.session_id ?? null;
-
-	const statusChip = (() => {
-		switch (status) {
-			case "running":
-				return (
-					<Chip
-						size="small"
-						icon={<HourglassTopIcon />}
-						label="Running"
-						color="info"
-						variant="outlined"
-					/>
-				);
-			case "ok":
-				return (
-					<Chip
-						size="small"
-						icon={<CheckCircleOutlineIcon />}
-						label="Saved"
-						color="success"
-						variant="outlined"
-					/>
-				);
-			case "failed":
-				return (
-					<Chip
-						size="small"
-						icon={<ErrorOutlineIcon />}
-						label="Failed"
-						color="error"
-						variant="outlined"
-					/>
-				);
-			case "skipped":
-			case "skipped_low_confidence":
-				return (
-					<Chip
-						size="small"
-						icon={<WarningAmberIcon />}
-						label="Low confidence"
-						color="warning"
-						variant="outlined"
-					/>
-				);
-			default:
-				return <Chip size="small" label={status} />;
-		}
-	})();
 
 	return (
 		<Box
@@ -160,7 +100,7 @@ function DelegationCard({ toolCall }: { toolCall: ToolCall }) {
 				<Typography variant="caption" fontWeight={600}>
 					Delegating extraction
 				</Typography>
-				{statusChip}
+				<StatusChip status={status} />
 			</Box>
 			<Typography variant="body2" sx={{ mb: 0.25, fontWeight: 500 }}>
 				{title}
@@ -181,19 +121,6 @@ function DelegationCard({ toolCall }: { toolCall: ToolCall }) {
 					{url}
 				</Typography>
 			)}
-			<Box sx={{ mt: 1, display: "flex", justifyContent: "flex-end" }}>
-				<Button
-					size="small"
-					variant="outlined"
-					endIcon={<OpenInNewIcon />}
-					disabled={!sessionId}
-					onClick={() => {
-						if (sessionId) setSelectedSessionId(sessionId);
-					}}
-				>
-					Open extractor session
-				</Button>
-			</Box>
 		</Box>
 	);
 }

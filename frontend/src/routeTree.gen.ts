@@ -26,7 +26,6 @@ import { Route as AuthResetPasswordRouteImport } from './routes/auth/reset-passw
 import { Route as AuthRegisterRouteImport } from './routes/auth/register'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AuthForgotPasswordRouteImport } from './routes/auth/forgot-password'
-import { Route as AdminStrategyDiscoveryRouteImport } from './routes/admin/strategy-discovery'
 import { Route as AdminLogsRouteImport } from './routes/admin/logs'
 import { Route as AdminDatabaseRouteImport } from './routes/admin/database'
 import { Route as AdminDataManagementRouteImport } from './routes/admin/data-management'
@@ -117,11 +116,6 @@ const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
   path: '/auth/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminStrategyDiscoveryRoute = AdminStrategyDiscoveryRouteImport.update({
-  id: '/admin/strategy-discovery',
-  path: '/admin/strategy-discovery',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AdminLogsRoute = AdminLogsRouteImport.update({
   id: '/admin/logs',
   path: '/admin/logs',
@@ -154,7 +148,6 @@ export interface FileRoutesByFullPath {
   '/admin/data-management': typeof AdminDataManagementRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/logs': typeof AdminLogsRoute
-  '/admin/strategy-discovery': typeof AdminStrategyDiscoveryRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
@@ -178,7 +171,6 @@ export interface FileRoutesByTo {
   '/admin/data-management': typeof AdminDataManagementRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/logs': typeof AdminLogsRoute
-  '/admin/strategy-discovery': typeof AdminStrategyDiscoveryRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
@@ -203,7 +195,6 @@ export interface FileRoutesById {
   '/admin/data-management': typeof AdminDataManagementRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/logs': typeof AdminLogsRoute
-  '/admin/strategy-discovery': typeof AdminStrategyDiscoveryRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
@@ -229,7 +220,6 @@ export interface FileRouteTypes {
     | '/admin/data-management'
     | '/admin/database'
     | '/admin/logs'
-    | '/admin/strategy-discovery'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/register'
@@ -253,7 +243,6 @@ export interface FileRouteTypes {
     | '/admin/data-management'
     | '/admin/database'
     | '/admin/logs'
-    | '/admin/strategy-discovery'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/register'
@@ -277,7 +266,6 @@ export interface FileRouteTypes {
     | '/admin/data-management'
     | '/admin/database'
     | '/admin/logs'
-    | '/admin/strategy-discovery'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/register'
@@ -302,7 +290,6 @@ export interface RootRouteChildren {
   AdminDataManagementRoute: typeof AdminDataManagementRoute
   AdminDatabaseRoute: typeof AdminDatabaseRoute
   AdminLogsRoute: typeof AdminLogsRoute
-  AdminStrategyDiscoveryRoute: typeof AdminStrategyDiscoveryRoute
   AuthForgotPasswordRoute: typeof AuthForgotPasswordRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthRegisterRoute: typeof AuthRegisterRoute
@@ -437,13 +424,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/strategy-discovery': {
-      id: '/admin/strategy-discovery'
-      path: '/admin/strategy-discovery'
-      fullPath: '/admin/strategy-discovery'
-      preLoaderRoute: typeof AdminStrategyDiscoveryRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/admin/logs': {
       id: '/admin/logs'
       path: '/admin/logs'
@@ -486,7 +466,6 @@ const rootRouteChildren: RootRouteChildren = {
   AdminDataManagementRoute: AdminDataManagementRoute,
   AdminDatabaseRoute: AdminDatabaseRoute,
   AdminLogsRoute: AdminLogsRoute,
-  AdminStrategyDiscoveryRoute: AdminStrategyDiscoveryRoute,
   AuthForgotPasswordRoute: AuthForgotPasswordRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthRegisterRoute: AuthRegisterRoute,

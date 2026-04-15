@@ -65,6 +65,7 @@ function transformPendingQuestion(
 
 function transformMessage(data: Record<string, unknown>): SessionMessage {
 	return {
+		id: data.id as string | undefined,
 		role: data.role as SessionMessage["role"],
 		content: data.content as string,
 		timestamp: data.timestamp as string,

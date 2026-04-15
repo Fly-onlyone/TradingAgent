@@ -13,6 +13,7 @@ from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from beanie import PydanticObjectId
 
+from app.agent.constants import agent_channel_user_id
 from app.db.models.agent_decision import (
     AgentDecision,
     DecisionAction,
@@ -24,6 +25,7 @@ from app.db.models.agent_session import (
     AgentSession,
     delete_session_message_history,
     persist_session_message,
+    persist_session_message_doc,
 )
 from app.db.models.agent_task import (
     AgentMode,
@@ -41,6 +43,42 @@ from app.db.models.notification import Notification, NotificationType
 logger = logging.getLogger(__name__)
 
 _SESSION_CLEANUP_INTERVAL_HOURS = 6
+
+
+async def _persist_and_broadcast_assistant(
+    *,
+    session: AgentSession,
+    task: AgentTask,
+    content: str,
+) -> None:
+    """Persist a final assistant message AND broadcast a live `message` event.
+
+    Matches legs Persistence + Live stream of `.claude/rules/code-guide.md`
+    "Chat-Session Features". Without the broadcast the chat viewer only
+    picks up the message on page reload.
+    """
+    now = datetime.now(UTC)
+    persisted_doc = await persist_session_message_doc(
+        session, role="assistant", content=content, timestamp=now
+    )
+    try:
+        from app.api.websocket.connection_manager import manager
+
+        await manager.broadcast_to_channel(
+            f"agent:chat:{agent_channel_user_id(task.user_id)}",
+            {
+                "type": "message",
+                "session_id": str(session.id),
+                "data": {
+                    "id": str(persisted_doc.id),
+                    "role": "assistant",
+                    "content": content,
+                    "timestamp": int(now.timestamp() * 1000),
+                },
+            },
+        )
+    except Exception:
+        logger.debug("Task final-message broadcast failed", exc_info=True)
 
 
 class AgentTaskScheduler:
@@ -167,6 +205,8 @@ class AgentTaskScheduler:
             self._schedule_session_cleanup(),
             self._schedule_auto_discovery(),
             self._schedule_pattern_mining(),
+            self._mark_orphaned_discovery_cycles_failed(),
+            self._backfill_strategy_shadows(),
         )
 
     async def stop(self) -> None:
@@ -181,6 +221,145 @@ class AgentTaskScheduler:
                 logger.warning("Error disconnecting scheduler trading agent: %s", exc)
 
         logger.info("Agent task scheduler stopped")
+
+    async def _mark_orphaned_discovery_cycles_failed(self) -> None:
+        """Flip stale `running` cycles + active subagent sessions to closed state.
+
+        A prior process crash leaves cycles stuck in `running` AND their
+        Explorer/Extractor `AgentSession` rows stuck with `is_active=True`.
+        The latter pollutes the chat sidebar with "live" rows that will
+        never emit another message.
+        """
+        try:
+            from app.db.models.agent_session import AgentSession
+            from app.db.models.strategy_discovery_cycle import (
+                DiscoveryCycleStatus,
+                StrategyDiscoveryCycle,
+            )
+
+            now = datetime.now(UTC)
+
+            cycles_collection = StrategyDiscoveryCycle.get_pymongo_collection()
+            cycle_result = await cycles_collection.update_many(
+                {"status": DiscoveryCycleStatus.RUNNING.value},
+                {
+                    "$set": {
+                        "status": DiscoveryCycleStatus.FAILED.value,
+                        "error": "Process restarted while cycle was running",
+                        "ended_at": now,
+                    }
+                },
+            )
+
+            sessions_collection = AgentSession.get_pymongo_collection()
+            messages_collection = sessions_collection.database["agent_session_messages"]
+
+            # Per-Extractor AgentSessions are no longer created (extractors
+            # are pure compute and feed back into the Explorer's session).
+            # Delete any historical "Strategy Extract — *" sessions left
+            # over from the older design so the sidebar doesn't show them.
+            extract_docs = await sessions_collection.find(
+                {"title": {"$regex": "^Strategy Extract"}},
+                {"_id": 1},
+            ).to_list(length=None)
+            extract_ids = [doc["_id"] for doc in extract_docs]
+            extract_msgs_deleted = 0
+            extract_sessions_deleted = 0
+            if extract_ids:
+                msg_result = await messages_collection.delete_many(
+                    {"session_id": {"$in": extract_ids}}
+                )
+                extract_msgs_deleted = msg_result.deleted_count
+                sess_result = await sessions_collection.delete_many({"_id": {"$in": extract_ids}})
+                extract_sessions_deleted = sess_result.deleted_count
+
+            # Active Explorer sessions whose process is gone — flip closed.
+            session_result = await sessions_collection.update_many(
+                {
+                    "is_active": True,
+                    "title": {"$regex": "^Strategy Explorer"},
+                },
+                {"$set": {"is_active": False, "ended_at": now}},
+            )
+
+            if (
+                cycle_result.modified_count
+                or session_result.modified_count
+                or extract_sessions_deleted
+            ):
+                logger.info(
+                    "Startup cleanup: %d orphan cycle(s), %d orphan explorer session(s), "
+                    "deleted %d legacy extractor session(s) (%d messages)",
+                    cycle_result.modified_count,
+                    session_result.modified_count,
+                    extract_sessions_deleted,
+                    extract_msgs_deleted,
+                )
+        except Exception:
+            logger.debug("Orphaned-cycle cleanup failed", exc_info=True)
+
+    async def _backfill_strategy_shadows(self) -> None:
+        """Create Strategy shadow docs for any StrategyKnowledge missing one.
+
+        Older scheduler runs were invoked without a `user_id`, so they
+        populated `StrategyKnowledge` but skipped the `Strategy` branch.
+        The Strategies UI reads `Strategy`, so those auto-discovered rows
+        were invisible. Create the missing shadows on startup.
+        """
+        try:
+            from app.db.models.knowledge import StrategyKnowledge
+            from app.db.models.strategy import Strategy
+            from app.db.models.user import User
+
+            superuser = await User.find_one(User.is_superuser == True)  # noqa: E712
+            if superuser is None:
+                return
+
+            existing_names = {
+                s.name
+                async for s in Strategy.find_all().project(Strategy)  # type: ignore[attr-defined]
+            }
+            # Fallback — Beanie's project may not be usable here; fetch names directly.
+            if not existing_names:
+                coll = Strategy.get_pymongo_collection()
+                existing_names = {
+                    doc["name"] async for doc in coll.find({}, {"name": 1}) if "name" in doc
+                }
+
+            created = 0
+            async for knowledge in StrategyKnowledge.find_all():
+                if knowledge.name in existing_names:
+                    continue
+                if not knowledge.entry_rules:
+                    # Same validation legacy code used — skip malformed entries.
+                    continue
+                try:
+                    strategy_doc = Strategy(
+                        user_id=superuser.id,
+                        name=knowledge.name,
+                        description=knowledge.description,
+                        entry_rules=knowledge.entry_rules,
+                        exit_rules=knowledge.exit_rules,
+                        risk_params=knowledge.risk_params,
+                        symbols=[],
+                        timeframes=knowledge.timeframes or [],
+                        is_active=False,
+                        auto_discovered=True,
+                        source_url=knowledge.source_url,
+                        knowledge_id=knowledge.id,
+                    )
+                    await strategy_doc.insert()
+                    existing_names.add(knowledge.name)
+                    created += 1
+                except Exception:
+                    logger.debug("Backfill failed for strategy %s", knowledge.name, exc_info=True)
+            if created:
+                logger.info(
+                    "Backfilled %d Strategy shadow doc(s) from orphaned StrategyKnowledge",
+                    created,
+                )
+        except Exception:
+            logger.debug("Strategy shadow backfill failed", exc_info=True)
 
     async def _schedule_auto_discovery(self) -> None:
         """Schedule or remove the strategy auto-discovery job based on settings."""
@@ -223,12 +402,24 @@ class AgentTaskScheduler:
 
     async def _run_strategy_discovery(self) -> None:
         """Execute one strategy discovery cycle."""
+        from app.db.models.user import User
         from app.services.strategy_discovery import StrategyDiscoveryService
+
+        # Resolve a user_id so `_save_strategy` creates the Strategy shadow
+        # doc in addition to StrategyKnowledge. Without this, auto-discovered
+        # strategies are invisible on the Strategies page.
+        owner_user_id = None
+        try:
+            superuser = await User.find_one(User.is_superuser == True)  # noqa: E712
+            if superuser is not None:
+                owner_user_id = superuser.id
+        except Exception:
+            logger.debug("Could not resolve superuser for scheduler run", exc_info=True)
 
         with sentry_sdk.start_transaction(op="task", name="strategy-discovery"):
             try:
                 service = StrategyDiscoveryService()
-                stats = await service.run_discovery_cycle()
+                stats = await service.run_discovery_cycle(user_id=owner_user_id)
                 logger.info("Strategy discovery stats: %s", stats)
 
                 # Persist last-run timestamp for missed-run detection on restart
@@ -839,14 +1030,11 @@ class AgentTaskScheduler:
                     finally:
                         self._clear_modification_context(request_id)
 
-                    # Append assistant response to the shared session
-                    now = datetime.now(UTC)
-                    await persist_session_message(
-                        session,
-                        role="assistant",
+                    await _persist_and_broadcast_assistant(
+                        session=session,
+                        task=task,
                         content=result.get("reasoning")
                         or result.get("summary", "Analysis completed"),
-                        timestamp=now,
                     )
 
                     # Store decision
@@ -996,14 +1184,11 @@ class AgentTaskScheduler:
                     action = self._parse_action(result.get("action"))
                     confidence = float(result.get("confidence") or 0)
 
-                    # Append assistant response to the shared session
-                    now = datetime.now(UTC)
-                    await persist_session_message(
-                        session,
-                        role="assistant",
+                    await _persist_and_broadcast_assistant(
+                        session=session,
+                        task=task,
                         content=result.get("reasoning")
                         or result.get("summary", "Analysis completed"),
-                        timestamp=now,
                     )
 
                     # Create decision record
@@ -1720,7 +1905,7 @@ Provide:
         async def emit(event: dict) -> None:
             from app.api.websocket.connection_manager import manager
 
-            channel = f"agent:chat:{hash(str(user_id)) % 1000000}"
+            channel = f"agent:chat:{agent_channel_user_id(user_id)}"
             event["session_id"] = session_id
             await manager.broadcast_to_channel(channel, event)
 

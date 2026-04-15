@@ -50,6 +50,7 @@ export interface PendingQuestion {
 
 // Session message
 export interface SessionMessage {
+	id?: string; // AgentSessionMessage._id — present for messages persisted to the separate collection
 	role: MessageRole;
 	content: string;
 	timestamp: string;
@@ -61,6 +62,7 @@ export interface SessionMessage {
 export interface ToolCall {
 	name: string;
 	arguments: Record<string, unknown>;
+	result?: unknown;
 	resultSummary?: string;
 	executionTimeMs?: number;
 }

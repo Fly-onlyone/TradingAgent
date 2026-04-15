@@ -287,10 +287,12 @@ function AgentPage() {
 			return;
 		}
 
-		// Convert session messages to agent message format
+		// Convert session messages to agent message format. Use the DB id
+		// when available so WS `message_updated` events can address the
+		// bubble by id for in-place mutation (delegation running → saved).
 		const agentMessages = sessionData.messages.map(
 			(msg: SessionMessage, index: number) => ({
-				id: `${sessionData.id}-${index}`,
+				id: msg.id || `${sessionData.id}-${index}`,
 				role: msg.role,
 				content: msg.content,
 				timestamp: new Date(msg.timestamp).getTime(),
@@ -300,6 +302,9 @@ function AgentPage() {
 					id: `${sessionData.id}-${index}-tc-${i}`,
 					name: tc.name,
 					arguments: tc.arguments,
+					// Preserve the full `result` object — DelegationCard reads
+					// result.status to show "Saved" vs "Running" etc.
+					result: tc.result,
 					resultSummary: tc.resultSummary,
 					executionTimeMs: tc.executionTimeMs,
 				})),

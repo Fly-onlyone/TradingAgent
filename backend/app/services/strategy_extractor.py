@@ -227,14 +227,24 @@ class StrategyExtractor:
         app_settings = await AppSettings.get_instance()
         api_key = await resolve_anthropic_api_key()
 
+        from app.agent.constants import SUPPRESS_CLI_HOOKS
         from app.agent.trading_agent import DISALLOWED_BUILTIN_TOOLS
+        from app.api.v1.settings import FAMILY_TO_API_MODEL
+
+        # Map settings family alias ("sonnet"/"opus") → API model id
+        # ("claude-sonnet-4-6"). Passing the raw family name made the SDK
+        # return empty text and silently fall through to the "Imported
+        # Strategy" placeholder, which the extractor subagent then rejects.
+        family = app_settings.agent_model or "sonnet"
+        api_model = FAMILY_TO_API_MODEL.get(family, family)
 
         options = ClaudeAgentOptions(
             system_prompt=SYSTEM_PROMPT_JSON,
-            model=app_settings.agent_model or "claude-sonnet-4-6",
+            model=api_model,
             max_turns=1,
             permission_mode="bypassPermissions",
             disallowed_tools=DISALLOWED_BUILTIN_TOOLS,
+            extra_args=SUPPRESS_CLI_HOOKS,
         )
         if api_key:
             options.env["ANTHROPIC_API_KEY"] = api_key

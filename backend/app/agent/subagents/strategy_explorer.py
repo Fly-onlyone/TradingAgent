@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -40,6 +41,8 @@ from app.agent.session_recorder import (
 from app.db.models.agent_session import AgentSession, persist_session_message
 
 logger = logging.getLogger(__name__)
+
+SessionCreatedCallback = Callable[[PydanticObjectId], Awaitable[None]]
 
 # Max SDK turns inside the Explorer tool_use loop. The agent is instructed
 # to call `submit_candidates` to terminate; this is the hard safety ceiling.
@@ -108,7 +111,17 @@ class StrategyExplorerAgent:
         self._client: ClaudeSDKClient | None = None
         self.session: AgentSession | None = None
 
-    async def run(self) -> ExplorerResult:
+    async def run(
+        self,
+        on_session_created: SessionCreatedCallback | None = None,
+    ) -> ExplorerResult:
+        """Run one Explorer cycle.
+
+        `on_session_created` fires the moment the AgentSession row is
+        inserted so the orchestrator can stamp `cycle.explorer_session_id`
+        immediately — otherwise the Tasks card "Explorer" button stays
+        disabled for the entire run.
+        """
         title = (
             f"Strategy Explorer — cycle {self.cycle_id}" if self.cycle_id else "Strategy Explorer"
         )
@@ -117,6 +130,11 @@ class StrategyExplorerAgent:
             title=title,
             description=f"max_candidates={self.max_candidates}",
         )
+        if on_session_created is not None:
+            try:
+                await on_session_created(self.session.id)
+            except Exception:
+                logger.debug("on_session_created hook failed", exc_info=True)
         recorder = AgentSessionRecorder(self.session)
         candidates: list[ArticleCandidate] = []
 
@@ -165,6 +183,7 @@ class StrategyExplorerAgent:
     # ------------------------------------------------------------------
 
     async def _connect(self) -> None:
+        from app.agent.constants import SUPPRESS_CLI_HOOKS
         from app.agent.trading_agent import DISALLOWED_BUILTIN_TOOLS
 
         server = create_explorer_mcp_server()
@@ -175,6 +194,7 @@ class StrategyExplorerAgent:
             disallowed_tools=DISALLOWED_BUILTIN_TOOLS,
             permission_mode="bypassPermissions",
             max_turns=_MAX_TURNS,
+            extra_args=SUPPRESS_CLI_HOOKS,
         )
         api_key = await resolve_anthropic_api_key()
         if api_key:
@@ -214,15 +234,39 @@ class StrategyExplorerAgent:
             content = "".join(text_parts).strip()
             if not content and not tool_calls:
                 return
+            final_content = content or "(tool use only)"
+            final_tool_calls = tool_calls or None
+            final_thinking = "".join(thinking_parts).strip() or None
             await persist_session_message(
                 recorder.session,
                 role="assistant",
-                content=content or "(tool use only)",
-                tool_calls=tool_calls or None,
-                thinking_content="".join(thinking_parts).strip() or None,
+                content=final_content,
+                tool_calls=final_tool_calls,
+                thinking_content=final_thinking,
                 tokens=turn_tokens,
             )
             await recorder.session.save()
+            # Broadcast to the agent WebSocket so the chat viewer streams live.
+            # See `.claude/rules/code-guide.md` "Chat-Session Features" rule.
+            from app.agent.session_recorder import (
+                broadcast_assistant_message,
+                broadcast_thinking,
+            )
+
+            await broadcast_assistant_message(
+                recorder.session,
+                role="assistant",
+                content=final_content,
+                tool_calls=final_tool_calls,
+                thinking_content=final_thinking,
+                # More turns coming as long as the loop used tools — keep
+                # the sidebar spinner on.
+                keep_running=bool(final_tool_calls),
+            )
+            # If this turn used tools, more turns are coming — keep the chat
+            # thinking pill alive in the UI until the next message arrives.
+            if final_tool_calls:
+                await broadcast_thinking(recorder.session, thinking=True)
             text_parts = []
             thinking_parts = []
             tool_calls = []

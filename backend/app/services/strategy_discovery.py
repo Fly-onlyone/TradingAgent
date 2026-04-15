@@ -114,16 +114,82 @@ class StrategyDiscoveryService:
             "strategies_failed": 0,
         }
 
+        try:
+            return await self._run_cycle_body(
+                cycle=cycle,
+                stats=stats,
+                emit=emit,
+                session_user_id=session_user_id,
+                user_id=user_id,
+                min_confidence=min_confidence,
+                max_candidates=max_candidates,
+                max_parallel=max_parallel,
+            )
+        except Exception as exc:
+            # Never leave a cycle row stuck in "running" — otherwise the UI
+            # shows ghost active cycles forever.
+            logger.exception("Discovery cycle %s crashed", cycle.id)
+            try:
+                cycle.status = DiscoveryCycleStatus.FAILED
+                cycle.error = f"Uncaught exception: {exc}"
+                cycle.ended_at = datetime.now(UTC)
+                await cycle.save()
+            except Exception:
+                logger.debug("Failed to finalize crashed cycle", exc_info=True)
+            stats["error"] = str(exc)
+            await emit({"step": "cycle_failed", "error": str(exc)})
+            await self._notify_cycle_failed(
+                session_user_id=session_user_id,
+                cycle=cycle,
+                error=str(exc),
+            )
+            return stats
+
+    async def _run_cycle_body(
+        self,
+        *,
+        cycle: StrategyDiscoveryCycle,
+        stats: dict,
+        emit: Callable[[dict], Awaitable[None]],
+        session_user_id: PydanticObjectId,
+        user_id: PydanticObjectId | None,
+        min_confidence: float,
+        max_candidates: int,
+        max_parallel: int,
+    ) -> dict:
+        """Inner body of run_discovery_cycle — wrapped in try/except above."""
+
         # Phase 1 — Explorer
         explorer = StrategyExplorerAgent(
             user_id=session_user_id,
             max_candidates=max_candidates,
             cycle_id=cycle.id,
         )
-        explorer_result = await explorer.run()
 
-        cycle.explorer_session_id = explorer_result.session_id
-        stats["explorer_session_id"] = str(explorer_result.session_id)
+        async def _on_explorer_session_created(
+            session_id: PydanticObjectId,
+        ) -> None:
+            """Stamp the cycle with the explorer's session id ASAP so the UI
+            can navigate into the live chat instead of waiting for run end."""
+            cycle.explorer_session_id = session_id
+            await cycle.save()
+            stats["explorer_session_id"] = str(session_id)
+            await emit(
+                {
+                    "step": "explorer_ready",
+                    "explorer_session_id": str(session_id),
+                }
+            )
+
+        explorer_result = await explorer.run(
+            on_session_created=_on_explorer_session_created,
+        )
+
+        # Belt-and-suspenders: ensure the id is set even if the callback was
+        # somehow skipped (e.g. session creation succeeded but callback raised).
+        if cycle.explorer_session_id is None:
+            cycle.explorer_session_id = explorer_result.session_id
+            stats["explorer_session_id"] = str(explorer_result.session_id)
 
         if explorer_result.error is not None:
             cycle.status = DiscoveryCycleStatus.FAILED
@@ -132,6 +198,11 @@ class StrategyDiscoveryService:
             await cycle.save()
             stats["error"] = explorer_result.error
             await emit({"step": "cycle_failed", "error": explorer_result.error})
+            await self._notify_cycle_failed(
+                session_user_id=session_user_id,
+                cycle=cycle,
+                error=explorer_result.error,
+            )
             return stats
 
         candidates = explorer_result.candidates[:max_candidates]
@@ -144,6 +215,12 @@ class StrategyDiscoveryService:
             cycle.status = DiscoveryCycleStatus.OK
             cycle.ended_at = datetime.now(UTC)
             await cycle.save()
+            # Clear spinner with a final note.
+            explorer_session = await AgentSession.get(explorer_result.session_id)
+            if explorer_session is not None:
+                await AgentSessionRecorder(explorer_session).record_summary(
+                    "✅ Cycle complete — no candidates returned by the Explorer."
+                )
             return stats
 
         # Phase 2 — fetch + fan out extractors in parallel
@@ -173,13 +250,10 @@ class StrategyDiscoveryService:
                 stats["strategies_failed"] += 1
                 continue
             extraction_results.append((candidate, result))
-            if result and result.session_id:
-                if result.session_id not in cycle.extractor_session_ids:
-                    cycle.extractor_session_ids.append(result.session_id)
-                await cycle.save()
 
         # Phase 3 — dedup + min-confidence filter
         evidences: list[ExtractionEvidence] = []
+        explorer_sid = cycle.explorer_session_id
         for candidate, result in extraction_results:
             if result is None:
                 stats["strategies_failed"] += 1
@@ -198,7 +272,9 @@ class StrategyDiscoveryService:
                     extracted=result.extracted,
                     confidence=result.confidence,
                     source_url=candidate.url,
-                    source_session_id=result.session_id,
+                    # Saved strategies link back to the Explorer session — the
+                    # only chat that exists for this cycle.
+                    source_session_id=explorer_sid,
                     article_title=candidate.title,
                 )
             )
@@ -232,8 +308,76 @@ class StrategyDiscoveryService:
         await cycle.save()
         await emit({"step": "cycle_complete", "stats": stats})
 
+        # Final summary message in the Explorer chat — this message clears
+        # the "thinking" spinner that the per-extraction broadcasts kept
+        # alive across phase 2.
+        if explorer_recorder is not None:
+            saved = stats["strategies_saved"]
+            cands = stats["candidates_found"]
+            skipped = stats["strategies_skipped_low_confidence"]
+            failed = stats["strategies_failed"]
+            await explorer_recorder.record_summary(
+                f"✅ Cycle complete — {cands} candidates, {saved} saved"
+                + (f", {skipped} skipped (low confidence)" if skipped else "")
+                + (f", {failed} failed" if failed else "")
+                + "."
+            )
+
+        await self._notify_cycle_complete(
+            session_user_id=session_user_id,
+            cycle=cycle,
+            explorer_session_id=cycle.explorer_session_id,
+        )
+
         logger.info("Strategy discovery cycle complete: %s", stats)
         return stats
+
+    async def _notify_cycle_complete(
+        self,
+        *,
+        session_user_id: PydanticObjectId,
+        cycle: StrategyDiscoveryCycle,
+        explorer_session_id: PydanticObjectId | None,
+    ) -> None:
+        try:
+            from app.db.models.notification import NotificationType
+
+            saved = cycle.strategies_saved
+            cands = cycle.candidates_found
+            body = (
+                f"{saved} new strategies saved from {cands} candidates."
+                if saved > 0
+                else f"No new strategies — {cands} candidates evaluated."
+            )
+            await self.notification_service.create_notification(
+                user_id=session_user_id,
+                title="Strategy Discovery Complete",
+                body=body,
+                notification_type=NotificationType.TASK_COMPLETED,
+                session_id=explorer_session_id,
+            )
+        except Exception:
+            logger.debug("Cycle completion notification failed", exc_info=True)
+
+    async def _notify_cycle_failed(
+        self,
+        *,
+        session_user_id: PydanticObjectId,
+        cycle: StrategyDiscoveryCycle,
+        error: str,
+    ) -> None:
+        try:
+            from app.db.models.notification import NotificationType
+
+            await self.notification_service.create_notification(
+                user_id=session_user_id,
+                title="Strategy Discovery Failed",
+                body=str(error)[:200],
+                notification_type=NotificationType.TASK_FAILED,
+                session_id=cycle.explorer_session_id,
+            )
+        except Exception:
+            logger.debug("Cycle failure notification failed", exc_info=True)
 
     # ------------------------------------------------------------------
     # Per-candidate pipeline (runs under the concurrency semaphore)
@@ -247,67 +391,59 @@ class StrategyDiscoveryService:
         semaphore: asyncio.Semaphore,
         explorer_recorder: AgentSessionRecorder | None,
     ) -> tuple[ArticleCandidate, ExtractionResult | None]:
+        del user_id  # extractor no longer owns a session
         async with semaphore:
+            # Announce "running" delegation card BEFORE fetching content so
+            # the Explorer chat shows progress immediately. We capture the
+            # message id so subsequent status updates mutate this same
+            # bubble instead of adding new ones.
+            message_id: str | None = None
+            if explorer_recorder is not None:
+                message_id = await explorer_recorder.record_delegation(
+                    child_session_id=None,  # no per-extractor session by design
+                    article_url=candidate.url,
+                    article_title=candidate.title,
+                    status="running",
+                    detail=(
+                        f"Extracting: {candidate.title}"
+                        + (f" — {candidate.reason}" if candidate.reason else "")
+                    ),
+                )
+
+            async def update_status(status: str, detail: str) -> None:
+                if explorer_recorder is None or message_id is None:
+                    return
+                await explorer_recorder.update_delegation_status(
+                    message_id=message_id,
+                    child_session_id=None,
+                    article_url=candidate.url,
+                    article_title=candidate.title,
+                    status=status,
+                    detail=detail,
+                )
+
             fetched = await fetch_article(candidate.url, title=candidate.title)
             if fetched.error or not fetched.content:
-                # Fetch failed — surface a failed delegation card with no
-                # clickable session link (no Extractor session exists yet).
-                if explorer_recorder is not None:
-                    await explorer_recorder.record_delegation(
-                        child_session_id=None,
-                        article_url=candidate.url,
-                        article_title=candidate.title,
-                        status="failed",
-                        detail=f"Fetch failed: {fetched.error}",
-                    )
+                await update_status("failed", f"Fetch failed: {fetched.error}")
                 return candidate, None
 
             agent = StrategyExtractorAgent(
-                user_id=user_id,
                 article_url=candidate.url,
                 article_title=candidate.title,
                 article_content=fetched.content,
             )
 
-            async def announce_running(session_id: PydanticObjectId) -> None:
-                if explorer_recorder is None:
-                    return
-                await explorer_recorder.record_delegation(
-                    child_session_id=session_id,
-                    article_url=candidate.url,
-                    article_title=candidate.title,
-                    status="running",
-                    detail=(
-                        f"Extracting from: {candidate.title}"
-                        + (f" — {candidate.reason}" if candidate.reason else "")
-                    ),
-                )
-
             try:
-                result: ExtractionResult = await agent.run(
-                    on_session_created=announce_running,
-                )
+                result: ExtractionResult = await agent.run()
             except Exception as exc:
-                logger.exception("Extractor subagent crashed for %s", candidate.url)
-                if explorer_recorder is not None:
-                    await explorer_recorder.update_delegation_status(
-                        child_session_id=agent.session.id if agent.session else None,
-                        article_url=candidate.url,
-                        article_title=candidate.title,
-                        status="failed",
-                        detail=f"Subagent crash: {exc}",
-                    )
+                logger.exception("Extractor crashed for %s", candidate.url)
+                await update_status("failed", f"Extractor crash: {exc}")
                 return candidate, None
 
-            if explorer_recorder is not None:
-                await explorer_recorder.update_delegation_status(
-                    child_session_id=result.session_id,
-                    article_url=candidate.url,
-                    article_title=candidate.title,
-                    status=_terminal_status(result),
-                    detail=_terminal_detail(result, candidate),
-                )
-
+            await update_status(
+                _terminal_status(result),
+                _terminal_detail(result, candidate),
+            )
             return candidate, result
 
     # ------------------------------------------------------------------

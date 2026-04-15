@@ -82,6 +82,7 @@ interface UsageData {
 interface AgentSocketMessage extends WebSocketMessage {
 	type:
 		| "message"
+		| "message_updated"
 		| "thinking"
 		| "text_delta"
 		| "tool_call"
@@ -132,6 +133,7 @@ export function useAgentSocketConnection() {
 	const socketBaseUrl = getWsUrl("/ws/agent/chat");
 	const {
 		addMessage,
+		updateMessage,
 		updateStatus,
 		setSocketConnected,
 		setThinking,
@@ -176,6 +178,11 @@ export function useAgentSocketConnection() {
 			// Route task execution events — track which session is currently streaming
 			const taskSessionId = (agentMessage as unknown as Record<string, unknown>)
 				.session_id as string | undefined;
+			// Intermediate message in a multi-message run — the sidebar
+			// spinner should stay on past this message.
+			const keepRunning = Boolean(
+				(agentMessage as unknown as Record<string, unknown>).keep_running,
+			);
 			if (taskSessionId) {
 				setActiveRunSessionId(taskSessionId);
 			}
@@ -225,8 +232,10 @@ export function useAgentSocketConnection() {
 						setThinking(targetSessionId, false);
 					}
 
-					// Clear task streaming state when final message arrives
-					if (taskSessionId && msg.role === "assistant") {
+					// Clear task streaming state when final message arrives.
+					// Subagent runs that have more messages coming set
+					// keep_running=true to keep the sidebar spinner on.
+					if (taskSessionId && msg.role === "assistant" && !keepRunning) {
 						setActiveRunSessionId(null);
 					}
 
@@ -251,6 +260,25 @@ export function useAgentSocketConnection() {
 							void sendNativeNotification("Agent response ready", preview);
 						}
 					}
+					break;
+				}
+				case "message_updated": {
+					const targetSessionId = getTargetSessionId();
+					const updateData = agentMessage.data as {
+						id: string;
+						content?: string;
+						toolCalls?: ToolCall[];
+					};
+					if (!targetSessionId || !updateData?.id) {
+						break;
+					}
+					const patch: Partial<Pick<AgentMessage, "content" | "toolCalls">> =
+						{};
+					if (updateData.content !== undefined)
+						patch.content = updateData.content;
+					if (updateData.toolCalls !== undefined)
+						patch.toolCalls = updateData.toolCalls;
+					updateMessage(targetSessionId, updateData.id, patch);
 					break;
 				}
 				case "thinking": {
@@ -414,6 +442,7 @@ export function useAgentSocketConnection() {
 		},
 		[
 			addMessage,
+			updateMessage,
 			addToolCall,
 			appendStreamingText,
 			appendThinkingContent,

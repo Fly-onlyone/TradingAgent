@@ -18,7 +18,6 @@ import ScheduleIcon from "@mui/icons-material/Schedule";
 import SettingsIcon from "@mui/icons-material/Settings";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import StorageIcon from "@mui/icons-material/Storage";
-import TravelExploreIcon from "@mui/icons-material/TravelExplore";
 import {
 	Box,
 	Divider,
@@ -101,11 +100,6 @@ const adminGroup: NavGroup = {
 		},
 		{ path: "/admin/backup", label: "Backup", icon: BackupIcon },
 		{ path: "/admin/logs", label: "Logs", icon: ArticleIcon },
-		{
-			path: "/admin/strategy-discovery",
-			label: "Strategy Discovery",
-			icon: TravelExploreIcon,
-		},
 	],
 };
 

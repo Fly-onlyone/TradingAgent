@@ -61,6 +61,11 @@ interface AgentState {
 	setSessionTotalTokens: (sessionId: string, totalTokens: number) => void;
 	setSessionModel: (sessionId: string, model: string) => void;
 	addMessage: (sessionId: string, message: AgentMessage) => void;
+	updateMessage: (
+		sessionId: string,
+		messageId: string,
+		patch: Partial<Pick<AgentMessage, "content" | "toolCalls">>,
+	) => void;
 	addToolCall: (sessionId: string, toolCall: ToolCall) => void;
 	updateToolCallResult: (
 		sessionId: string,
@@ -227,20 +232,47 @@ export const useAgentStore = create<AgentState>()(
 			hydrateSessionMessages: (sessionId, messages) =>
 				set((state) => {
 					const existingState = state.sessionStates[sessionId];
-					if (
-						existingState?.hasLocalUpdates ||
-						existingState?.isThinking ||
-						existingState?.streamingText
-					) {
+					// Only skip when the agent is actively text-streaming a
+					// reply — replacing messages mid-stream would lose the
+					// in-flight content. Otherwise MERGE REST-fetched messages
+					// with any WS-arrived ones already in the store.
+					if (existingState?.streamingText) {
 						return {};
 					}
+
+					// DB ObjectId = 24 hex chars. REST wins on ObjectId
+					// collisions (DB is canonical for mutated rows). Local-only
+					// messages (WS arrived post-fetch) are kept; semantic
+					// fallback dedups legacy / non-DB messages.
+					const isDbId = (id: string | undefined) =>
+						!!id && /^[a-f\d]{24}$/i.test(id);
+					const fallbackKey = (m: AgentMessage) =>
+						`${m.role}:${m.content}:${Math.floor((m.timestamp ?? 0) / 1000)}`;
+
+					const byDbId = new Map<string, AgentMessage>();
+					const bySemantic = new Map<string, AgentMessage>();
+
+					const add = (msg: AgentMessage, restWins: boolean) => {
+						if (isDbId(msg.id)) {
+							if (restWins || !byDbId.has(msg.id)) byDbId.set(msg.id, msg);
+						} else {
+							const k = fallbackKey(msg);
+							if (restWins || !bySemantic.has(k)) bySemantic.set(k, msg);
+						}
+					};
+					for (const msg of messages) add(msg, true);
+					for (const msg of existingState?.messages ?? []) add(msg, false);
+
+					const merged = [...byDbId.values(), ...bySemantic.values()].sort(
+						(a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0),
+					);
 
 					return {
 						sessionStates: {
 							...state.sessionStates,
 							[sessionId]: {
 								...(existingState ?? createEmptySessionState()),
-								messages,
+								messages: merged,
 								pendingQuestion: existingState?.pendingQuestion ?? null,
 								hasLocalUpdates: false,
 							},
@@ -337,6 +369,35 @@ export const useAgentStore = create<AgentState>()(
 							state.status === "thinking"
 								? "connected"
 								: state.status,
+					};
+				}),
+
+			updateMessage: (sessionId, messageId, patch) =>
+				set((state) => {
+					const sessionState = state.sessionStates[sessionId];
+					if (!sessionState) return {};
+					const idx = sessionState.messages.findIndex(
+						(m) => m.id === messageId,
+					);
+					if (idx === -1) return {};
+					const current = sessionState.messages[idx];
+					// No-op guard: skip the set() if the patch produces the same
+					// values, otherwise Zustand notifies subscribers and all
+					// chat message children re-render for nothing.
+					const changed = (Object.keys(patch) as (keyof typeof patch)[]).some(
+						(k) => patch[k] !== current[k],
+					);
+					if (!changed) return {};
+					const merged = [...sessionState.messages];
+					merged[idx] = { ...current, ...patch };
+					return {
+						sessionStates: {
+							...state.sessionStates,
+							[sessionId]: {
+								...sessionState,
+								messages: merged,
+							},
+						},
 					};
 				}),
 

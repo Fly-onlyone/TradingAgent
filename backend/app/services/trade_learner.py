@@ -220,6 +220,7 @@ class TradeLearner:
         app_settings = await AppSettings.get_instance()
         api_key = await resolve_anthropic_api_key()
 
+        from app.agent.constants import SUPPRESS_CLI_HOOKS
         from app.agent.trading_agent import DISALLOWED_BUILTIN_TOOLS
 
         options = ClaudeAgentOptions(
@@ -228,6 +229,7 @@ class TradeLearner:
             max_turns=1,
             permission_mode="bypassPermissions",
             disallowed_tools=DISALLOWED_BUILTIN_TOOLS,
+            extra_args=SUPPRESS_CLI_HOOKS,
         )
         if api_key:
             options.env["ANTHROPIC_API_KEY"] = api_key

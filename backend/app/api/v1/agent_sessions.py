@@ -41,6 +41,7 @@ class MessageCreate(BaseModel):
 
 
 class MessageResponse(BaseModel):
+    id: str | None = None  # AgentSessionMessage._id — used for in-place updates
     role: str
     content: str
     timestamp: str
@@ -205,6 +206,7 @@ def session_summary_to_response(session: dict[str, Any]) -> SessionResponse:
 def message_to_response(message: SessionMessage | dict) -> MessageResponse:
     if isinstance(message, SessionMessage):
         return MessageResponse(
+            id=str(message.id) if message.id else None,
             role=message.role.value,
             content=message.content,
             timestamp=message.timestamp.isoformat(),
@@ -221,7 +223,10 @@ def message_to_response(message: SessionMessage | dict) -> MessageResponse:
     if decision_id is not None:
         decision_id = str(decision_id)
 
+    raw_id = message.get("_id") or message.get("id")
+
     return MessageResponse(
+        id=str(raw_id) if raw_id else None,
         role=message.get("role", ""),
         content=message.get("content", ""),
         timestamp=timestamp,

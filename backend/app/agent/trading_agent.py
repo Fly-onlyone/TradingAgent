@@ -48,6 +48,7 @@ from claude_agent_sdk import (
 )
 from claude_agent_sdk.types import StreamEvent
 
+from app.agent.constants import SUPPRESS_CLI_HOOKS
 from app.agent.mcp_tools import (
     ALLOWED_TOOL_NAMES,
     create_trading_mcp_server,
@@ -226,7 +227,7 @@ class TradingAgent:
             disallowed_tools=DISALLOWED_BUILTIN_TOOLS,
             permission_mode="bypassPermissions",
             max_turns=10,
-            extra_args={"setting-sources": "local"},
+            extra_args=SUPPRESS_CLI_HOOKS,
             model=FAMILY_TO_API_MODEL.get(app_settings.agent_model, app_settings.agent_model)
             or None,
             thinking=thinking,

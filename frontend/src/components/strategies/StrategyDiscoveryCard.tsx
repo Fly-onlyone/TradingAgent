@@ -4,6 +4,7 @@
  */
 
 import HistoryIcon from "@mui/icons-material/History";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import ScheduleIcon from "@mui/icons-material/Schedule";
 import {
@@ -23,14 +24,18 @@ import {
 	Typography,
 } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
 	type StrategyDiscoveryConfig,
 	settingsApi,
 } from "@/api/endpoints/settings";
+import { strategyDiscoveryCyclesQueryOptions } from "@/api/queryOptions/admin";
 import { SaveIndicator } from "@/components/common/SaveIndicator";
+import { StatusChip } from "@/components/common/StatusChip";
 import { ZoomAwareSelect } from "@/components/common/ZoomAwareSelect";
 import { useMutationSaveStatus } from "@/hooks/useMutationSaveStatus";
+import { useAgentStore } from "@/store/agentStore";
 import { useAuthStore } from "@/store/authStore";
 import { useDiscoveryStore } from "@/store/discoveryStore";
 import { notify } from "@/store/uiStore";
@@ -49,10 +54,42 @@ export function StrategyDiscoveryCard() {
 	const token = useAuthStore((s) => s.token);
 	const queryClient = useQueryClient();
 
+	const navigate = useNavigate();
+	const { setSelectedSessionId } = useAgentStore();
 	const isRunning = useDiscoveryStore((s) => s.isRunning);
 	const progressMessages = useDiscoveryStore((s) => s.progressMessages);
 	const runResult = useDiscoveryStore((s) => s.runResult);
 	const startRun = useDiscoveryStore((s) => s.startRun);
+	const currentExplorerSessionId = useDiscoveryStore(
+		(s) => s.currentExplorerSessionId,
+	);
+
+	// Poll while EITHER our local Run Now is in flight OR the latest fetch
+	// shows a scheduled backend run still running. One `refetchInterval`
+	// handles both — no second `setInterval` needed.
+	const cyclesQuery = useQuery({
+		...strategyDiscoveryCyclesQueryOptions({ pageSize: 5 }),
+		enabled: !!isSuperuser,
+		refetchInterval: (q) => {
+			if (isRunning) return 3000;
+			const cycles = q.state.data?.cycles ?? [];
+			return cycles.some((c) => c.status === "running") ? 3000 : false;
+		},
+	});
+
+	useEffect(() => {
+		if (!isRunning && !!runResult) {
+			void queryClient.invalidateQueries({
+				queryKey: ["admin-strategy-discovery-cycles"],
+			});
+		}
+	}, [isRunning, runResult, queryClient]);
+
+	const openSession = (sessionId: string | null | undefined) => {
+		if (!sessionId) return;
+		setSelectedSessionId(sessionId);
+		void navigate({ to: "/agent" });
+	};
 	const logRef = useRef<HTMLDivElement>(null);
 	const [draftMinConfidence, setDraftMinConfidence] = useState<number | null>(
 		null,
@@ -417,6 +454,16 @@ export function StrategyDiscoveryCard() {
 							>
 								{isRunning ? "Running..." : "Run Now"}
 							</Button>
+							{isRunning && currentExplorerSessionId && (
+								<Button
+									size="small"
+									variant="text"
+									endIcon={<OpenInNewIcon fontSize="inherit" />}
+									onClick={() => openSession(currentExplorerSessionId)}
+								>
+									View live explorer chat
+								</Button>
+							)}
 							{runResult && !isRunning && (
 								<Typography variant="caption" color="text.secondary">
 									{runResult}
@@ -452,6 +499,72 @@ export function StrategyDiscoveryCard() {
 								</Typography>
 							)}
 						</Box>
+
+						{/* Recent cycles — each links into the explorer + extractor chats */}
+						{cyclesQuery.data && cyclesQuery.data.cycles.length > 0 && (
+							<Box>
+								<Typography variant="body2" sx={{ mb: 1 }}>
+									Recent Runs
+								</Typography>
+								<Box
+									sx={{
+										display: "flex",
+										flexDirection: "column",
+										gap: 0.5,
+									}}
+								>
+									{cyclesQuery.data.cycles.map((cycle) => {
+										return (
+											<Box
+												key={cycle.id}
+												sx={{
+													borderRadius: 1,
+													bgcolor: "action.hover",
+												}}
+											>
+												<Box
+													sx={{
+														display: "flex",
+														alignItems: "center",
+														gap: 1,
+														px: 1,
+														py: 0.5,
+													}}
+												>
+													<StatusChip
+														status={cycle.status}
+														label={cycle.status}
+													/>
+													<Typography
+														variant="caption"
+														color="text.secondary"
+														sx={{ minWidth: 140 }}
+													>
+														{formatDateTime(cycle.startedAt)}
+													</Typography>
+													<Typography variant="caption" sx={{ flex: 1 }}>
+														{cycle.candidatesFound} candidates ·{" "}
+														{cycle.strategiesSaved} saved
+														{cycle.strategiesSkippedLowConfidence > 0 &&
+															` · ${cycle.strategiesSkippedLowConfidence} skipped`}
+														{cycle.strategiesFailed > 0 &&
+															` · ${cycle.strategiesFailed} failed`}
+													</Typography>
+													<Button
+														size="small"
+														variant="text"
+														disabled={!cycle.explorerSessionId}
+														onClick={() => openSession(cycle.explorerSessionId)}
+													>
+														Open chat
+													</Button>
+												</Box>
+											</Box>
+										);
+									})}
+								</Box>
+							</Box>
+						)}
 
 						{/* Progress log */}
 						{isRunning && progressMessages.length > 0 && (

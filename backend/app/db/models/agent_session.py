@@ -19,6 +19,11 @@ class MessageRole(str, Enum):
 class SessionMessage(BaseModel):
     """Individual message in a session (embedded, not a separate collection)."""
 
+    # Populated when the message was read from `AgentSessionMessage` so the
+    # frontend can address it for in-place updates (delegation status etc.).
+    # Legacy embedded messages leave this None.
+    id: PydanticObjectId | None = None
+
     role: MessageRole
     content: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -71,6 +76,7 @@ class AgentSessionMessage(Document):
     def to_session_message(self) -> SessionMessage:
         """Convert the persisted message document to the API/session model."""
         return SessionMessage(
+            id=self.id,
             role=self.role,
             content=self.content,
             timestamp=self.timestamp,
@@ -301,7 +307,7 @@ async def fetch_session_messages(
     return [doc.to_session_message() for doc in docs], total
 
 
-async def persist_session_message(
+async def persist_session_message_doc(
     session: AgentSession,
     *,
     role: str,
@@ -311,8 +317,13 @@ async def persist_session_message(
     thinking_content: str | None = None,
     tokens: int = 0,
     timestamp: datetime | None = None,
-) -> SessionMessage:
-    """Persist a message in the dedicated collection and update session counters."""
+) -> AgentSessionMessage:
+    """Persist a message and return the inserted document (with id).
+
+    Use this when callers need to reference the message later for in-place
+    updates — e.g. `StrategyExtractorAgent` mutating its delegation card
+    from "running" to "saved" on completion.
+    """
     role_enum = MessageRole(role)
     message = SessionMessage(
         role=role_enum,
@@ -332,7 +343,32 @@ async def persist_session_message(
     if role_enum == MessageRole.USER and not session.title:
         session.title = session.build_message_title(content)
     session.record_message(role_enum, tokens=tokens, timestamp=message.timestamp)
-    return message
+    return document
+
+
+async def persist_session_message(
+    session: AgentSession,
+    *,
+    role: str,
+    content: str,
+    decision_id: PydanticObjectId | None = None,
+    tool_calls: list[dict] | None = None,
+    thinking_content: str | None = None,
+    tokens: int = 0,
+    timestamp: datetime | None = None,
+) -> SessionMessage:
+    """Persist a message in the dedicated collection and update session counters."""
+    document = await persist_session_message_doc(
+        session,
+        role=role,
+        content=content,
+        decision_id=decision_id,
+        tool_calls=tool_calls,
+        thinking_content=thinking_content,
+        tokens=tokens,
+        timestamp=timestamp,
+    )
+    return document.to_session_message()
 
 
 async def delete_session_message_history(session_id: PydanticObjectId) -> None:

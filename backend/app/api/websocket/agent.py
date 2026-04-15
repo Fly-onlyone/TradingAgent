@@ -24,6 +24,7 @@ from app.db.models.agent_session import (
     AgentSession,
     fetch_session_messages,
     persist_session_message,
+    persist_session_message_doc,
 )
 from app.db.models.app_settings import AgentAuthMode, AppSettings
 from app.db.models.notification import NotificationType
@@ -109,7 +110,9 @@ async def get_user_from_token(token: str) -> User | None:
 
 def _get_user_id_int(user: User) -> int:
     """Get a deterministic integer user ID for the connection manager."""
-    return hash(str(user.id)) % 1000000
+    from app.agent.constants import agent_channel_user_id
+
+    return agent_channel_user_id(user.id)
 
 
 def _build_user_message(message: dict) -> str:
@@ -470,12 +473,38 @@ async def agent_chat_websocket(
         if not content.strip():
             return
 
+        # Persist first so we have the real AgentSessionMessage id, then
+        # broadcast it on the wire. Lets the frontend address this bubble
+        # by DB id for any later in-place mutation — see
+        # `.claude/rules/code-guide.md` "Chat-Session Features" leg
+        # "Message id on wire".
+        with sentry_sdk.start_span(
+            op="db.write",
+            description="save assistant message",
+        ):
+            persisted_tool_calls = _trim_tool_calls(tool_calls)
+            persisted_thinking_content = _truncate_text(
+                thinking_content,
+                limit=_PERSISTED_THINKING_CHAR_LIMIT,
+            )
+            if agent.session_id:
+                session.sdk_session_id = agent.session_id
+            persisted_doc = await persist_session_message_doc(
+                session,
+                role="assistant",
+                content=content,
+                tool_calls=persisted_tool_calls if persisted_tool_calls else None,
+                thinking_content=persisted_thinking_content,
+                tokens=turn_tokens,
+            )
+            await session.save()
+
         await manager.send_personal(
             websocket,
             {
                 "type": "message",
                 "data": {
-                    "id": str(uuid.uuid4()),
+                    "id": str(persisted_doc.id),
                     "role": "assistant",
                     "content": content,
                     "timestamp": int(datetime.now(UTC).timestamp() * 1000),
@@ -497,27 +526,6 @@ async def agent_chat_websocket(
                 },
             },
         )
-
-        with sentry_sdk.start_span(
-            op="db.write",
-            description="save assistant message",
-        ):
-            persisted_tool_calls = _trim_tool_calls(tool_calls)
-            persisted_thinking_content = _truncate_text(
-                thinking_content,
-                limit=_PERSISTED_THINKING_CHAR_LIMIT,
-            )
-            if agent.session_id:
-                session.sdk_session_id = agent.session_id
-            await persist_session_message(
-                session,
-                role="assistant",
-                content=content,
-                tool_calls=persisted_tool_calls if persisted_tool_calls else None,
-                thinking_content=persisted_thinking_content,
-                tokens=turn_tokens,
-            )
-            await session.save()
 
         # Fire ANALYSIS_READY notification (persisted + Web Push)
         try:

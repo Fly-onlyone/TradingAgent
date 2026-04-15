@@ -16,11 +16,33 @@ interface ProgressEvent {
 	articles?: number;
 	name?: string;
 	message?: string;
-	stats?: Record<string, number>;
+	count?: number;
+	merged?: number;
+	cycle_id?: string;
+	source_session_id?: string;
+	explorer_session_id?: string;
+	error?: string;
+	stats?: Record<string, number | string | null>;
 }
 
 function formatProgressEvent(event: ProgressEvent): string {
 	switch (event.step) {
+		// Agentic pipeline events
+		case "cycle_started":
+			return `Cycle started (${event.cycle_id ?? "?"})`;
+		case "candidates_ready":
+			return `Explorer submitted ${event.count ?? 0} candidate(s)`;
+		case "extractor_error":
+			return `Extractor error: ${event.error ?? "unknown"}`;
+		case "dedup_complete":
+			return `Dedup complete: ${event.merged ?? 0} unique strategies`;
+		case "strategy_saved":
+			return `Saved strategy: ${event.name ?? "(unnamed)"}`;
+		case "cycle_failed":
+			return `Cycle failed: ${event.error ?? "unknown"}`;
+		case "cycle_complete":
+			return "Cycle complete";
+		// Legacy events kept for backward compatibility
 		case "brave_search":
 			return `Searching: "${event.query}" — ${event.results ?? 0} results`;
 		case "source_discovered":
@@ -45,6 +67,8 @@ interface DiscoveryState {
 	progressMessages: string[];
 	runResult: string | null;
 	abortController: AbortController | null;
+	/** Session id of the currently-running Explorer subagent, if any. */
+	currentExplorerSessionId: string | null;
 
 	startRun: (token: string) => void;
 	reset: () => void;
@@ -57,6 +81,7 @@ export const useDiscoveryStore = create<DiscoveryState>()(
 			progressMessages: [],
 			runResult: null,
 			abortController: null,
+			currentExplorerSessionId: null,
 
 			startRun: (token: string) => {
 				if (get().isRunning) return;
@@ -67,6 +92,7 @@ export const useDiscoveryStore = create<DiscoveryState>()(
 					runResult: null,
 					progressMessages: [],
 					abortController: controller,
+					currentExplorerSessionId: null,
 				});
 
 				// Fire and forget — runs in background regardless of component mount
@@ -81,6 +107,7 @@ export const useDiscoveryStore = create<DiscoveryState>()(
 					progressMessages: [],
 					runResult: null,
 					abortController: null,
+					currentExplorerSessionId: null,
 				});
 			},
 		}),
@@ -131,30 +158,40 @@ async function runDiscoveryStream(
 					const event = JSON.parse(line.slice(6)) as ProgressEvent;
 
 					if (event.step === "complete") {
-						const s = event.stats ?? {};
+						const s = (event.stats ?? {}) as Record<
+							string,
+							number | string | null
+						>;
+						const candidates = Number(s.candidates_found ?? 0);
+						const saved = Number(s.strategies_saved ?? 0);
+						const skipped = Number(s.strategies_skipped_low_confidence ?? 0);
+						const failed = Number(s.strategies_failed ?? 0);
+
 						const parts: string[] = [];
-						if ((s.discovery_new_sources ?? 0) > 0)
-							parts.push(`Discovered ${s.discovery_new_sources} new sources`);
-						if ((s.discovery_strategies_extracted ?? 0) > 0)
-							parts.push(
-								`extracted ${s.discovery_strategies_extracted} strategies from web`,
-							);
-						if ((s.sources_crawled ?? 0) > 0)
-							parts.push(
-								`crawled ${s.sources_crawled} sources, found ${s.strategies_found ?? 0} more`,
-							);
+						if (candidates > 0) parts.push(`${candidates} candidate(s)`);
+						if (saved > 0) parts.push(`${saved} saved`);
+						if (skipped > 0) parts.push(`${skipped} skipped (low confidence)`);
+						if (failed > 0) parts.push(`${failed} failed`);
+
 						set({
 							runResult:
-								parts.length > 0 ? parts.join(", ") : "No new strategies found",
+								parts.length > 0 ? parts.join(", ") : "No candidates found",
 						});
-						if ((s.strategies_found ?? 0) > 0) {
-							notify.success(`Discovered ${s.strategies_found} new strategies`);
+						if (saved > 0) {
+							notify.success(`Discovered ${saved} new strategies`);
+						} else if (candidates > 0) {
+							notify.info(`${candidates} candidates, none saved`);
 						} else {
 							notify.info("No new strategies found");
 						}
 					} else if (event.step === "error") {
 						notify.error(event.message ?? "Discovery failed");
 					} else {
+						if (event.step === "explorer_ready" && event.explorer_session_id) {
+							set({
+								currentExplorerSessionId: event.explorer_session_id,
+							});
+						}
 						set((state) => ({
 							progressMessages: [
 								...state.progressMessages,

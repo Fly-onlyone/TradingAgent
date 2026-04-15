@@ -1,5 +1,6 @@
 """Agent task management endpoints."""
 
+import logging
 from datetime import datetime
 
 from beanie import PydanticObjectId
@@ -23,6 +24,8 @@ from app.db.models.agent_task import (
     TaskStatus,
 )
 from app.db.models.user import User
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -372,12 +375,16 @@ async def _run_merge_in_background(
     import asyncio
     from datetime import UTC
 
+    from app.agent.constants import agent_channel_user_id
     from app.agent.task_scheduler import get_scheduler
     from app.api.websocket.connection_manager import manager
-    from app.db.models.agent_session import AgentSession, persist_session_message
+    from app.db.models.agent_session import (
+        AgentSession,
+        persist_session_message_doc,
+    )
     from app.services.task_merger import TaskMerger
 
-    channel = f"agent:chat:{hash(str(user_id)) % 1000000}"
+    channel = f"agent:chat:{agent_channel_user_id(user_id)}"
     session_id_str = str(session_id)
 
     async def emit_text(content: str) -> None:
@@ -393,10 +400,25 @@ async def _run_merge_in_background(
         # Tiny yield so the WS frame flushes before the next chunk
         await asyncio.sleep(0)
 
-    async def emit_final_message(content: str, role: str = "assistant") -> None:
+    async def emit_final_message(
+        content: str,
+        role: str = "assistant",
+        message_id: str | None = None,
+    ) -> None:
         """Emit a final ``message`` event so the chat UI clears the loading
         spinner and renders the durable message, then invalidate the tasks
-        query on the client."""
+        query on the client.
+
+        Passes the DB ``AgentSessionMessage._id`` as the message id so the
+        frontend store indexes this bubble by the same key it'll see from
+        REST hydration — see `.claude/rules/code-guide.md` "Chat-Session
+        Features" leg "Message id on wire".
+
+        Note: this is the ONLY `message` event the merge flow emits. If
+        future code adds intermediate `message` events, those MUST set
+        ``keep_running: true`` on the outer payload so the sidebar spinner
+        doesn't clear prematurely.
+        """
         import time
         import uuid
 
@@ -406,7 +428,7 @@ async def _run_merge_in_background(
                 "type": "message",
                 "session_id": session_id_str,
                 "data": {
-                    "id": str(uuid.uuid4()),
+                    "id": message_id or str(uuid.uuid4()),
                     "role": role,
                     "content": content,
                     "timestamp": int(time.time() * 1000),
@@ -545,8 +567,10 @@ async def _run_merge_in_background(
         )
 
         # Persist the full transcript as a single assistant message so the
-        # session has durable content after reload
-        await persist_session_message(
+        # session has durable content after reload. Capture the doc id so
+        # the WS payload carries the same id — see `.claude/rules/code-guide.md`
+        # "Chat-Session Features" leg "Message id on wire".
+        final_doc = await persist_session_message_doc(
             session,
             role="assistant",
             content=full_transcript,
@@ -554,19 +578,47 @@ async def _run_merge_in_background(
         )
         # Final message event clears the loading spinner and triggers
         # tasks-list refetch on the client.
-        await emit_final_message(full_transcript)
+        await emit_final_message(full_transcript, message_id=str(final_doc.id))
+
+        # Windows toast — same path the task scheduler uses on task completion.
+        try:
+            from app.db.models.notification import NotificationType
+            from app.services.notification_service import NotificationService
+
+            await NotificationService().create_notification(
+                user_id=user_id,
+                title="Task Merge Complete",
+                body=f"Merged {len(tasks)} duplicate task(s) into '{merged.name}'.",
+                notification_type=NotificationType.TASK_COMPLETED,
+                session_id=session.id,
+            )
+        except Exception:
+            logger.debug("Merge completion notification failed", exc_info=True)
     except Exception as exc:
         err = f"❌ Merge failed: {exc}"
-        await persist_session_message(
+        err_doc = await persist_session_message_doc(
             session,
             role="assistant",
             content=err,
             timestamp=datetime.now(UTC),
         )
         try:
-            await emit_final_message(err)
+            await emit_final_message(err, message_id=str(err_doc.id))
         except Exception:
             pass
+        try:
+            from app.db.models.notification import NotificationType
+            from app.services.notification_service import NotificationService
+
+            await NotificationService().create_notification(
+                user_id=user_id,
+                title="Task Merge Failed",
+                body=str(exc)[:200],
+                notification_type=NotificationType.TASK_FAILED,
+                session_id=session.id,
+            )
+        except Exception:
+            logger.debug("Merge failure notification failed", exc_info=True)
     finally:
         session.is_active = False
         session.ended_at = datetime.now(UTC)
