@@ -12,6 +12,7 @@ from app.api.v1 import (
     auth,
     backup,
     client_logs,
+    dashboard,
     knowledge,
     logs,
     market,
@@ -38,6 +39,7 @@ router.include_router(strategies.router, prefix="/strategies", tags=["strategies
 router.include_router(knowledge.router, prefix="/knowledge", tags=["knowledge"])
 router.include_router(news.router, prefix="/news", tags=["news"])
 router.include_router(market.router, prefix="/market", tags=["market"])
+router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 router.include_router(agent_tasks.router, prefix="/agent/tasks", tags=["agent-tasks"])
 router.include_router(agent_sessions.router, prefix="/agent/sessions", tags=["agent-sessions"])
 router.include_router(agent_decisions.router, prefix="/agent/decisions", tags=["agent-decisions"])

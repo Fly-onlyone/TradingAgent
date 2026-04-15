@@ -4,6 +4,7 @@
 
 export * from "./admin";
 export * from "./api";
+export * from "./dashboard";
 export * from "./knowledge";
 export * from "./log";
 export * from "./market";
