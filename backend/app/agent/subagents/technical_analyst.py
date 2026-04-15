@@ -3,14 +3,9 @@
 import logging
 from typing import Any
 
-from claude_agent_sdk import (
-    AssistantMessage,
-    ClaudeAgentOptions,
-    ClaudeSDKClient,
-    ResultMessage,
-    TextBlock,
-)
+from claude_agent_sdk import ClaudeSDKClient
 
+from app.agent.sdk_client import build_sdk_client, collect_text_response
 from app.agent.tools.knowledge_tools import search_lessons, search_patterns
 from app.agent.tools.technical_tools import (
     detect_chart_patterns,
@@ -58,21 +53,7 @@ class TechnicalAnalyst:
 
     async def connect(self) -> None:
         """Initialize the SDK client."""
-        from app.agent.auth import resolve_anthropic_api_key
-        from app.agent.constants import SUPPRESS_CLI_HOOKS
-        from app.agent.trading_agent import DISALLOWED_BUILTIN_TOOLS
-
-        options = ClaudeAgentOptions(
-            system_prompt=TECHNICAL_ANALYST_PROMPT,
-            permission_mode="bypassPermissions",
-            disallowed_tools=DISALLOWED_BUILTIN_TOOLS,
-            max_turns=1,
-            extra_args=SUPPRESS_CLI_HOOKS,
-        )
-        api_key = await resolve_anthropic_api_key()
-        if api_key:
-            options.env["ANTHROPIC_API_KEY"] = api_key
-        self._client = ClaudeSDKClient(options=options)
+        self._client = await build_sdk_client(system_prompt=TECHNICAL_ANALYST_PROMPT)
         await self._client.connect()
         logger.info("TechnicalAnalyst connected")
 
@@ -85,18 +66,7 @@ class TechnicalAnalyst:
 
     async def _collect_response(self) -> str:
         """Collect text from SDK response stream."""
-        parts: list[str] = []
-        async for message in self._client.receive_response():
-            if isinstance(message, AssistantMessage):
-                for block in message.content:
-                    if isinstance(block, TextBlock):
-                        parts.append(block.text)
-            elif isinstance(message, ResultMessage):
-                if message.is_error:
-                    raise RuntimeError(message.result or "TechnicalAnalyst SDK error")
-                if message.result and not parts:
-                    parts.append(message.result)
-        return "".join(parts)
+        return await collect_text_response(self._client, source="TechnicalAnalyst")
 
     async def analyze(self, symbol: str, timeframe: str = "1H") -> dict[str, Any]:
         """Perform technical analysis on a symbol.

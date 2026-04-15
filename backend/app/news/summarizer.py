@@ -46,37 +46,19 @@ class NewsSummarizer:
 
     async def _call_via_sdk(self, prompt: str, max_tokens: int) -> str:
         """Call Claude via the Agent SDK (subscription mode)."""
-        from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, TextBlock
-
-        from app.agent.auth import resolve_anthropic_api_key
-        from app.agent.constants import SUPPRESS_CLI_HOOKS
-        from app.agent.trading_agent import DISALLOWED_BUILTIN_TOOLS
+        from app.agent.sdk_client import build_sdk_client, collect_text_response
         from app.db.models.app_settings import AppSettings
 
         app_settings = await AppSettings.get_instance()
-        api_key = await resolve_anthropic_api_key()
 
-        options = ClaudeAgentOptions(
+        client = await build_sdk_client(
             system_prompt="You are a concise financial news analyst. Respond only with what is asked.",
             model=app_settings.agent_model or "claude-sonnet-4-6",
-            max_turns=1,
-            permission_mode="bypassPermissions",
-            disallowed_tools=DISALLOWED_BUILTIN_TOOLS,
-            extra_args=SUPPRESS_CLI_HOOKS,
         )
-        if api_key:
-            options.env["ANTHROPIC_API_KEY"] = api_key
-
-        client = ClaudeSDKClient(options=options)
         await client.connect()
         try:
-            text_parts: list[str] = []
             await client.query(prompt)
-            async for message in client.receive_response():
-                for block in getattr(message, "content", []):
-                    if isinstance(block, TextBlock):
-                        text_parts.append(block.text)
-            return "".join(text_parts).strip()
+            return (await collect_text_response(client, source="NewsSummarizer")).strip()
         finally:
             await client.disconnect()
 

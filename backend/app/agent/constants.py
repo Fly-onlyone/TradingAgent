@@ -11,6 +11,14 @@ from beanie import PydanticObjectId
 # "Chat-Session Features" leg "Suppress Claude CLI hooks".
 SUPPRESS_CLI_HOOKS: dict[str, str] = {"setting-sources": "local"}
 
+# Built-in Claude Code tools that don't work in a headless subprocess.
+# The agent should ask questions via the ask_user MCP tool instead.
+DISALLOWED_BUILTIN_TOOLS: list[str] = [
+    "AskUserQuestion",
+    "AskFollowupQuestion",
+    "ToolSearch",
+]
+
 
 def agent_channel_user_id(user_id: PydanticObjectId | str) -> int:
     """Deterministic channel-partition key for the agent WebSocket.

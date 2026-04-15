@@ -239,16 +239,11 @@ class TaskMerger:
         raise RuntimeError("Claude did not call save_merged_task tool")
 
     async def _merge_via_sdk(self, user_message: str) -> MergedTask:
-        from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, TextBlock
-
-        from app.agent.auth import resolve_anthropic_api_key
-        from app.agent.constants import SUPPRESS_CLI_HOOKS
-        from app.agent.trading_agent import DISALLOWED_BUILTIN_TOOLS
+        from app.agent.sdk_client import build_sdk_client, collect_text_response
         from app.api.v1.settings import DEFAULT_MODEL_BY_FAMILY
         from app.db.models.app_settings import AppSettings
 
         app_settings = await AppSettings.get_instance()
-        api_key = await resolve_anthropic_api_key()
 
         # Resolve family alias (e.g. "opus-1m") to a real SDK model id;
         # an unknown alias causes the SDK to return empty content.
@@ -259,28 +254,14 @@ class TaskMerger:
             or "claude-sonnet-4-6"
         )
 
-        options = ClaudeAgentOptions(
+        client = await build_sdk_client(
             system_prompt=SYSTEM_PROMPT_JSON,
             model=resolved_model,
-            max_turns=1,
-            permission_mode="bypassPermissions",
-            disallowed_tools=DISALLOWED_BUILTIN_TOOLS,
-            extra_args=SUPPRESS_CLI_HOOKS,
         )
-        if api_key:
-            options.env["ANTHROPIC_API_KEY"] = api_key
-
-        client = ClaudeSDKClient(options=options)
         await client.connect()
         try:
-            text_parts: list[str] = []
             await client.query(user_message)
-            async for message in client.receive_response():
-                for block in getattr(message, "content", []):
-                    if isinstance(block, TextBlock):
-                        text_parts.append(block.text)
-
-            raw = "".join(text_parts).strip()
+            raw = (await collect_text_response(client, source="TaskMerger")).strip()
             if not raw:
                 raise RuntimeError(f"SDK returned empty response (model={resolved_model})")
 

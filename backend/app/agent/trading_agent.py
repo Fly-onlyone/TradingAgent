@@ -48,7 +48,7 @@ from claude_agent_sdk import (
 )
 from claude_agent_sdk.types import StreamEvent
 
-from app.agent.constants import SUPPRESS_CLI_HOOKS
+from app.agent.constants import DISALLOWED_BUILTIN_TOOLS, SUPPRESS_CLI_HOOKS
 from app.agent.mcp_tools import (
     ALLOWED_TOOL_NAMES,
     create_trading_mcp_server,
@@ -67,14 +67,6 @@ _MAX_TOOL_ARGUMENT_STRING_CHARS = 200
 _MAX_TOOL_ARGUMENT_LIST_ITEMS = 10
 _MAX_TOOL_ARGUMENT_DICT_ITEMS = 20
 _MAX_THINKING_CHARS_PER_TURN = 12_000
-
-# Built-in Claude Code tools that don't work in a headless subprocess.
-# The agent should ask questions via the ask_user MCP tool instead.
-DISALLOWED_BUILTIN_TOOLS = [
-    "AskUserQuestion",
-    "AskFollowupQuestion",
-    "ToolSearch",
-]
 
 
 SYSTEM_PROMPT = """You are an expert autonomous trading agent for cryptocurrency markets. Your role is to analyze market conditions and make informed trading decisions.
