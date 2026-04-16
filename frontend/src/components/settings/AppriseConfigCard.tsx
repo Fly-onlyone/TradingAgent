@@ -25,6 +25,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import type { AppriseConfigUpdate } from "@/api/endpoints/settings";
 import { appriseApi } from "@/api/endpoints/settings";
+import { useRecoverableQueryState } from "@/hooks/useRecoverableQueryState";
 import { useAuthStore } from "@/store/authStore";
 import { notify } from "@/store/uiStore";
 import { getErrorMessage } from "@/utils/errors";
@@ -49,6 +50,10 @@ export function AppriseConfigCard() {
 		queryFn: () => appriseApi.getAppriseConfig(),
 		enabled: isSuperuser || import.meta.env.DEV,
 		staleTime: 60_000,
+		refetchOnMount: "always",
+	});
+	const configQueryState = useRecoverableQueryState(configQuery, {
+		hasData: configQuery.data !== undefined,
 	});
 
 	const updateMutation = useMutation({
@@ -147,11 +152,11 @@ export function AppriseConfigCard() {
 					.
 				</Typography>
 
-				{configQuery.isLoading ? (
+				{configQueryState.isLoading ? (
 					<Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
 						<CircularProgress size={24} />
 					</Box>
-				) : configQuery.error ? (
+				) : configQueryState.showError ? (
 					<Alert severity="error">
 						Failed to load notification configuration
 					</Alert>

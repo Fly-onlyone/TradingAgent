@@ -24,12 +24,14 @@ import {
 	TaskStatStrip,
 } from "@/components/tasks";
 import { useDebouncedSave } from "@/hooks/useDebouncedSave";
+import { useRecoverableQueryState } from "@/hooks/useRecoverableQueryState";
 import { useSymbolOptions } from "@/hooks/useSymbolOptions";
 import { useAgentStore } from "@/store/agentStore";
 import { useAuthStore } from "@/store/authStore";
 import { notify, useUIStore } from "@/store/uiStore";
 import type { TaskCreate, TaskUpdate } from "@/types/task";
 import { staggerCascade } from "@/utils/animations/variants";
+import { getErrorMessage } from "@/utils/errors";
 import { requireAuth } from "../-guards";
 
 export const Route = createFileRoute("/tasks/")({
@@ -126,6 +128,7 @@ function TaskConfigPage() {
 		queryKey: ["tasks"],
 		queryFn: () => tasksApi.getTasks(),
 		staleTime: 30_000,
+		refetchOnMount: "always",
 		refetchInterval: (query) => {
 			const tasks = query.state.data?.tasks ?? [];
 			const anyRunning = tasks.some((t) => t.isRunning);
@@ -133,6 +136,9 @@ function TaskConfigPage() {
 				? 3_000
 				: false;
 		},
+	});
+	const tasksQueryState = useRecoverableQueryState(tasksQuery, {
+		hasData: tasksQuery.data !== undefined,
 	});
 
 	const allTasks = tasksQuery.data?.tasks ?? [];
@@ -149,9 +155,14 @@ function TaskConfigPage() {
 			autoCreatingRef.current = false;
 			void queryClient.invalidateQueries({ queryKey: ["tasks"] });
 		},
-		onError: () => {
-			setError("Failed to create task");
+		onError: (mutationError) => {
 			autoCreatingRef.current = false;
+			const message = getErrorMessage(mutationError, "Failed to create task");
+			if (message.includes("Only one task is allowed")) {
+				void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+				return;
+			}
+			setError(message);
 		},
 	});
 
@@ -284,14 +295,19 @@ function TaskConfigPage() {
 	// ── Auto-create when no task exists ──────────────────────────────────
 
 	useEffect(() => {
-		if (tasksQuery.isLoading || tasksQuery.isError) return;
+		if (backendStatus !== "online") return;
+		if (!tasksQuery.isSuccess || !tasksQuery.isFetchedAfterMount) return;
+		if (tasksQuery.isFetching || tasksQueryState.showError) return;
 		if (task) return;
 		if (autoCreatingRef.current || createTaskMutation.isPending) return;
 		autoCreatingRef.current = true;
 		createTaskMutation.mutate({ ...DEFAULT_FORM });
 	}, [
-		tasksQuery.isLoading,
-		tasksQuery.isError,
+		backendStatus,
+		tasksQuery.isFetchedAfterMount,
+		tasksQuery.isFetching,
+		tasksQuery.isSuccess,
+		tasksQueryState.showError,
 		task,
 		createTaskMutation.isPending,
 		createTaskMutation.mutate,
@@ -307,13 +323,6 @@ function TaskConfigPage() {
 		}
 		triggerSave(update);
 	}, [formData, taskId, triggerSave]);
-
-	// ── Retry on reconnect ──────────────────────────────────────────────
-
-	useEffect(() => {
-		if (backendStatus !== "online" || !tasksQuery.isError) return;
-		void tasksQuery.refetch();
-	}, [backendStatus, tasksQuery.isError, tasksQuery.refetch]);
 
 	// ── Clear manualRunning once server confirms not running ────────────
 
@@ -344,9 +353,7 @@ function TaskConfigPage() {
 
 	// ── Derived ──────────────────────────────────────────────────────────
 
-	const isWaitingForBackend =
-		backendStatus === "connecting" && tasksQuery.isError && !tasksQuery.data;
-	const isLoadingTasks = tasksQuery.isLoading || isWaitingForBackend;
+	const isLoadingTasks = tasksQueryState.isLoading;
 
 	// ── Handlers ─────────────────────────────────────────────────────────
 
@@ -473,7 +480,7 @@ function TaskConfigPage() {
 							/>
 						)}
 
-						{(error || (tasksQuery.isError && !isWaitingForBackend)) && (
+						{(error || tasksQueryState.showError) && (
 							<Alert
 								severity="error"
 								onClose={() => setError(null)}

@@ -30,6 +30,7 @@ import type { AgentConfig, AgentConfigUpdate } from "@/api/endpoints/settings";
 import { settingsApi } from "@/api/endpoints/settings";
 import { agentConfigQueryOptions } from "@/api/queryOptions/agent";
 import { usePollingLogin } from "@/hooks/usePollingLogin";
+import { useRecoverableQueryState } from "@/hooks/useRecoverableQueryState";
 import { useZoomAwareMenu } from "@/hooks/useZoomAwareMenu";
 import { notify } from "@/store/uiStore";
 
@@ -62,13 +63,20 @@ export function AgentConfigPanel({
 		open: isModelMenuOpen,
 	} = useZoomAwareMenu();
 
-	const configQuery = useQuery(agentConfigQueryOptions());
+	const configQuery = useQuery({
+		...agentConfigQueryOptions(),
+		refetchOnMount: "always",
+	});
+	const configQueryState = useRecoverableQueryState(configQuery, {
+		hasData: configQuery.data !== undefined,
+	});
 
 	const modelOptionsQuery = useQuery({
 		queryKey: ["agent-model-options"],
 		queryFn: () => settingsApi.getAgentModels(),
 		enabled: configQuery.isSuccess,
 		staleTime: 60_000,
+		refetchOnMount: "always",
 	});
 
 	const updateMutation = useMutation({
@@ -219,11 +227,11 @@ export function AgentConfigPanel({
 		updateMutation.mutate({ apiKey: "" });
 	};
 
-	const body = configQuery.isLoading ? (
+	const body = configQueryState.isLoading ? (
 		<Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
 			<CircularProgress size={24} />
 		</Box>
-	) : configQuery.error ? (
+	) : configQueryState.showError ? (
 		<Alert severity="error">Failed to load agent configuration</Alert>
 	) : config ? (
 		<Box

@@ -38,6 +38,7 @@ import {
 } from "@/components/data-display/metric";
 import { MagneticButton } from "@/components/effects/MagneticButton";
 import { ScrollReveal } from "@/components/effects/ScrollReveal";
+import { useRecoverableQueryState } from "@/hooks/useRecoverableQueryState";
 import { useOrderStore } from "@/store/orderStore";
 import type { AccountBalance, DashboardSummary, TradeSummary } from "@/types";
 import { usePageVisibility, useReducedMotion } from "@/utils/animations/hooks";
@@ -215,7 +216,11 @@ function Dashboard() {
 	const dashboardQuery = useQuery({
 		...dashboardSummaryQueryOptions(),
 		gcTime: DASHBOARD_GC_TIME,
+		refetchOnMount: "always",
 		refetchInterval: isPageVisible ? 60_000 : false,
+	});
+	const dashboardQueryState = useRecoverableQueryState(dashboardQuery, {
+		hasData: dashboardQuery.data !== undefined,
 	});
 
 	const chartTradesQuery = useQuery({
@@ -230,12 +235,15 @@ function Dashboard() {
 	const showChart = deferredContentReady && chartInView;
 	const showStatusCard = deferredContentReady && statusInView;
 	const showBottomSections = deferredContentReady && bottomSectionsInView;
-	const accountError = dashboardQuery.isError || summaryData?.account.error;
+	const summaryErrorMessage = dashboardQueryState.showError
+		? "Unable to load the dashboard summary. Check your exchange and backend configuration."
+		: null;
+	const accountErrorMessage = summaryData?.account.error ?? null;
 	const decisionsCount = summaryData?.totalDecisions ?? 0;
 	const tradesCount = summaryData?.recentTrades.length ?? 0;
 	const isFirstTimeUser =
 		deferredContentReady &&
-		!dashboardQuery.isPending &&
+		!dashboardQueryState.isLoading &&
 		tradesCount === 0 &&
 		decisionsCount === 0 &&
 		positions.length === 0;
@@ -258,10 +266,12 @@ function Dashboard() {
 					}
 				/>
 
-				{accountError && (
-					<Alert severity="warning" sx={{ mb: 3 }}>
-						{summaryData?.account.error ??
-							"Unable to load the dashboard summary. Check your exchange and backend configuration."}
+				{(summaryErrorMessage || accountErrorMessage) && (
+					<Alert
+						severity={summaryErrorMessage ? "error" : "warning"}
+						sx={{ mb: 3 }}
+					>
+						{summaryErrorMessage ?? accountErrorMessage}
 					</Alert>
 				)}
 
@@ -299,7 +309,7 @@ function Dashboard() {
 				<StatsSection
 					account={summaryData?.account}
 					summary={summaryData?.tradeSummary}
-					loading={dashboardQuery.isPending}
+					loading={dashboardQueryState.isLoading}
 					decisionsCount={decisionsCount}
 					reducedMotion={reducedMotion}
 				/>
@@ -356,7 +366,7 @@ function Dashboard() {
 									>
 										<LazyAgentDecisionsSection
 											decisions={summaryData?.recentDecisions ?? []}
-											loading={dashboardQuery.isPending}
+											loading={dashboardQueryState.isLoading}
 											onOpenAgent={() => navigate({ to: "/agent" })}
 										/>
 									</Suspense>
@@ -373,7 +383,7 @@ function Dashboard() {
 									>
 										<LazyRecentTradesSection
 											trades={summaryData?.recentTrades ?? []}
-											loading={dashboardQuery.isPending}
+											loading={dashboardQueryState.isLoading}
 										/>
 									</Suspense>
 								) : (

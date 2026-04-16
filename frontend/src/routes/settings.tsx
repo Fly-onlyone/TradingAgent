@@ -61,6 +61,7 @@ import { AppriseConfigCard } from "@/components/settings/AppriseConfigCard";
 import { ProcessSelectorDialog } from "@/components/settings/ProcessSelectorDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { useDebouncedSave } from "@/hooks/useDebouncedSave";
+import { useRecoverableQueryState } from "@/hooks/useRecoverableQueryState";
 import { useZoomAwareMenu } from "@/hooks/useZoomAwareMenu";
 import { useAuthStore } from "@/store/authStore";
 import { notify, useUIStore } from "@/store/uiStore";
@@ -96,6 +97,10 @@ function EmbeddingConfigCard() {
 		queryFn: () => settingsApi.getEmbeddingConfig(),
 		enabled: isSuperuser || import.meta.env.DEV,
 		staleTime: 60_000,
+		refetchOnMount: "always",
+	});
+	const configQueryState = useRecoverableQueryState(configQuery, {
+		hasData: configQuery.data !== undefined,
 	});
 
 	const updateMutation = useMutation({
@@ -138,11 +143,11 @@ function EmbeddingConfigCard() {
 					Embedding Configuration
 				</Typography>
 
-				{configQuery.isLoading ? (
+				{configQueryState.isLoading ? (
 					<Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
 						<CircularProgress size={24} />
 					</Box>
-				) : configQuery.error ? (
+				) : configQueryState.showError ? (
 					<Alert severity="error">Failed to load embedding configuration</Alert>
 				) : config ? (
 					<Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -670,6 +675,10 @@ function AuthConfigCard() {
 		queryFn: () => settingsApi.getAuthConfig(),
 		enabled: isSuperuser || import.meta.env.DEV,
 		staleTime: 60_000,
+		refetchOnMount: "always",
+	});
+	const configQueryState = useRecoverableQueryState(configQuery, {
+		hasData: configQuery.data !== undefined,
 	});
 
 	const { triggerSave: triggerExpirySave, saveStatus: expiryStatus } =
@@ -721,11 +730,11 @@ function AuthConfigCard() {
 					Token Expiry
 				</Typography>
 
-				{configQuery.isLoading ? (
+				{configQueryState.isLoading ? (
 					<Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
 						<CircularProgress size={24} />
 					</Box>
-				) : configQuery.error ? (
+				) : configQueryState.showError ? (
 					<Alert severity="error">Failed to load auth configuration</Alert>
 				) : config ? (
 					<Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -805,6 +814,10 @@ function SessionRetentionCard() {
 		queryFn: () => settingsApi.getSessionRetentionConfig(),
 		enabled: isSuperuser || import.meta.env.DEV,
 		staleTime: 60_000,
+		refetchOnMount: "always",
+	});
+	const configQueryState = useRecoverableQueryState(configQuery, {
+		hasData: configQuery.data !== undefined,
 	});
 
 	const { triggerSave: triggerRetentionSave, saveStatus: retentionStatus } =
@@ -856,11 +869,11 @@ function SessionRetentionCard() {
 					Session Retention
 				</Typography>
 
-				{configQuery.isLoading ? (
+				{configQueryState.isLoading ? (
 					<Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
 						<CircularProgress size={24} />
 					</Box>
-				) : configQuery.error ? (
+				) : configQueryState.showError ? (
 					<Alert severity="error">
 						Failed to load session retention config
 					</Alert>
@@ -940,6 +953,10 @@ function ExchangeConfigCard() {
 		queryFn: () => settingsApi.getExchangeConfig(),
 		enabled: isSuperuser || import.meta.env.DEV,
 		staleTime: 60_000,
+		refetchOnMount: "always",
+	});
+	const configQueryState = useRecoverableQueryState(configQuery, {
+		hasData: configQuery.data !== undefined,
 	});
 
 	const updateMutation = useMutation({
@@ -1078,11 +1095,11 @@ function ExchangeConfigCard() {
 					OKX Exchange Configuration
 				</Typography>
 
-				{configQuery.isLoading ? (
+				{configQueryState.isLoading ? (
 					<Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
 						<CircularProgress size={24} />
 					</Box>
-				) : configQuery.error ? (
+				) : configQueryState.showError ? (
 					<Alert severity="error">Failed to load exchange configuration</Alert>
 				) : config ? (
 					<Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -1305,6 +1322,10 @@ function BraveSearchConfigCard() {
 		queryFn: () => settingsApi.getBraveSearchConfig(),
 		enabled: isSuperuser || import.meta.env.DEV,
 		staleTime: 60_000,
+		refetchOnMount: "always",
+	});
+	const configQueryState = useRecoverableQueryState(configQuery, {
+		hasData: configQuery.data !== undefined,
 	});
 
 	const updateMutation = useMutation({
@@ -1406,11 +1427,11 @@ function BraveSearchConfigCard() {
 					Brave Search
 				</Typography>
 
-				{configQuery.isLoading ? (
+				{configQueryState.isLoading ? (
 					<Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
 						<CircularProgress size={24} />
 					</Box>
-				) : configQuery.error ? (
+				) : configQueryState.showError ? (
 					<Alert severity="error">
 						Failed to load Brave Search configuration
 					</Alert>
@@ -1527,6 +1548,10 @@ function NotificationPreferencesCard() {
 		queryKey: ["notification-settings"],
 		queryFn: () => notificationsApi.getSettings(),
 		staleTime: 60_000,
+		refetchOnMount: "always",
+	});
+	const settingsQueryState = useRecoverableQueryState(settingsQuery, {
+		hasData: settingsQuery.data !== undefined,
 	});
 
 	const updateMutation = useMutation({
@@ -1560,11 +1585,11 @@ function NotificationPreferencesCard() {
 					Notifications
 				</Typography>
 
-				{settingsQuery.isLoading ? (
+				{settingsQueryState.isLoading ? (
 					<Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
 						<CircularProgress size={24} />
 					</Box>
-				) : settingsQuery.error ? (
+				) : settingsQueryState.showError ? (
 					<Alert severity="error">Failed to load notification settings</Alert>
 				) : settings ? (
 					<Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
@@ -1721,6 +1746,10 @@ function DesktopCard() {
 		},
 		enabled: isSuperuser || import.meta.env.DEV,
 		staleTime: 60_000,
+		refetchOnMount: "always",
+	});
+	const configQueryState = useRecoverableQueryState(configQuery, {
+		hasData: configQuery.data !== undefined,
 	});
 
 	const updateMutation = useMutation({
@@ -1760,6 +1789,10 @@ function DesktopCard() {
 		queryFn: () => nativeNotificationApi.getNativeNotificationConfig(),
 		enabled: isSuperuser || import.meta.env.DEV,
 		staleTime: 60_000,
+		refetchOnMount: "always",
+	});
+	const notifQueryState = useRecoverableQueryState(notifQuery, {
+		hasData: notifQuery.data !== undefined,
 	});
 
 	const windowStartupQuery = useQuery({
@@ -1767,6 +1800,10 @@ function DesktopCard() {
 		queryFn: () => getWindowStartupConfig(),
 		enabled: isSuperuser || import.meta.env.DEV,
 		staleTime: 60_000,
+		refetchOnMount: "always",
+	});
+	const windowStartupQueryState = useRecoverableQueryState(windowStartupQuery, {
+		hasData: windowStartupQuery.data !== undefined,
 	});
 
 	const windowStartupMutation = useMutation({
@@ -1810,11 +1847,13 @@ function DesktopCard() {
 	if (!isSuperuser && !import.meta.env.DEV) return null;
 
 	const isLoading =
-		configQuery.isLoading ||
-		notifQuery.isLoading ||
-		windowStartupQuery.isLoading;
+		configQueryState.isLoading ||
+		notifQueryState.isLoading ||
+		windowStartupQueryState.isLoading;
 	const hasError =
-		configQuery.error || notifQuery.error || windowStartupQuery.error;
+		configQueryState.showError ||
+		notifQueryState.showError ||
+		windowStartupQueryState.showError;
 
 	return (
 		<Card sx={{ mb: 3 }}>
