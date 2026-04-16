@@ -40,3 +40,10 @@ mslnk = "0.1"
 lto = "thin"
 codegen-units = 16
 strip = true
+
+[profile.dev]
+debug = "line-tables-only"
+split-debuginfo = "unpacked"
+
+[profile.dev.package."*"]
+debug = 0
