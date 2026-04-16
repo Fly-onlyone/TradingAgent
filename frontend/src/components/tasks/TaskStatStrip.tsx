@@ -1,7 +1,13 @@
+import AutorenewIcon from "@mui/icons-material/Autorenew";
+import PlaylistAddCheckIcon from "@mui/icons-material/PlaylistAddCheck";
 import Grid from "@mui/material/Grid2";
-import { formatDistanceToNowStrict } from "date-fns";
 import { motion } from "framer-motion";
-import { StatCard } from "@/components/data-display/StatCard";
+import {
+	CountdownMetric,
+	KpiMetric,
+	TimeAgoMetric,
+	TrendIconMetric,
+} from "@/components/data-display/metric";
 import type { AgentTask } from "@/types/task";
 import { staggerCascade } from "@/utils/animations/variants";
 
@@ -15,24 +21,6 @@ export function TaskStatStrip({ task }: TaskStatStripProps) {
 			? Math.round((task.successCount / task.runCount) * 100)
 			: 0;
 
-	const nextRunLabel = task.nextRunAt
-		? formatDistanceToNowStrict(new Date(task.nextRunAt), {
-				addSuffix: true,
-			})
-		: "Not scheduled";
-
-	const lastRunLabel = task.lastRunAt
-		? formatDistanceToNowStrict(new Date(task.lastRunAt), {
-				addSuffix: true,
-			})
-		: "Never";
-
-	const lastRunTrend: "up" | "down" | "neutral" = task.lastError
-		? "down"
-		: task.runCount > 0
-			? "up"
-			: "neutral";
-
 	return (
 		<motion.div
 			variants={staggerCascade.container}
@@ -42,37 +30,51 @@ export function TaskStatStrip({ task }: TaskStatStripProps) {
 			<Grid container spacing={2} sx={{ mb: 2 }}>
 				<Grid size={{ xs: 6, sm: 3 }}>
 					<motion.div variants={staggerCascade.item}>
-						<StatCard title="Total Runs" value={task.runCount} useRolling />
+						<KpiMetric
+							label="Total Runs"
+							value={String(task.runCount)}
+							rolling
+							icon={<AutorenewIcon />}
+						/>
 					</motion.div>
 				</Grid>
 				<Grid size={{ xs: 6, sm: 3 }}>
 					<motion.div variants={staggerCascade.item}>
-						<StatCard
-							title="Success Rate"
-							value={successRate}
-							suffix="%"
-							trend={
-								successRate >= 80
-									? "up"
-									: successRate >= 50
-										? "neutral"
-										: "down"
+						<TrendIconMetric
+							label="Success Rate"
+							value={task.runCount > 0 ? `${successRate}%` : "—"}
+							subtitle={
+								task.runCount > 0
+									? `${task.successCount} of ${task.runCount} runs`
+									: "No runs yet"
+							}
+							icon={<PlaylistAddCheckIcon />}
+							tone={
+								task.runCount === 0
+									? "neutral"
+									: successRate >= 70
+										? "success"
+										: successRate >= 40
+											? "warning"
+											: "error"
 							}
 						/>
 					</motion.div>
 				</Grid>
 				<Grid size={{ xs: 6, sm: 3 }}>
 					<motion.div variants={staggerCascade.item}>
-						<StatCard title="Next Run" value={nextRunLabel} />
+						<CountdownMetric label="Next Run" targetAt={task.nextRunAt} />
 					</motion.div>
 				</Grid>
 				<Grid size={{ xs: 6, sm: 3 }}>
 					<motion.div variants={staggerCascade.item}>
-						<StatCard
-							title="Last Run"
-							value={lastRunLabel}
-							trend={lastRunTrend}
-							changeLabel={task.lastError ? "Failed" : undefined}
+						<TimeAgoMetric
+							label="Last Run"
+							at={task.lastRunAt}
+							hasError={!!task.lastError}
+							errorHint={
+								typeof task.lastError === "string" ? task.lastError : undefined
+							}
 						/>
 					</motion.div>
 				</Grid>

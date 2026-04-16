@@ -4,6 +4,7 @@
 
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import SearchIcon from "@mui/icons-material/Search";
+import ShowChartIcon from "@mui/icons-material/ShowChart";
 import {
 	Box,
 	Card,
@@ -25,8 +26,8 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { PageTransition } from "@/components/common/PageTransition";
 import { SectionHeader } from "@/components/common/SectionHeader";
 import { ShimmerSkeleton } from "@/components/common/ShimmerSkeleton";
+import { AssetListMetric, MetricShell } from "@/components/data-display/metric";
 import { SentimentBadge } from "@/components/data-display/SentimentBadge";
-import { StatCard } from "@/components/data-display/StatCard";
 import { useDebounce } from "@/hooks/useDebounce";
 import type { NewsArticle, PaginatedResponse } from "@/types";
 import { useReducedMotion } from "@/utils/animations/hooks";
@@ -112,45 +113,44 @@ function NewsPage() {
 				{/* Market Sentiment Overview */}
 				<Grid container spacing={3} sx={{ mb: 4 }}>
 					<Grid size={{ xs: 12, md: 4 }}>
-						<Card sx={{ p: 2 }}>
+						<MetricShell
+							label="Overall Market Sentiment"
+							tone="neutral"
+							icon={<ShowChartIcon />}
+						>
 							<Typography
-								variant="subtitle2"
+								variant="body2"
 								color="text.secondary"
-								sx={{ mb: 1.5 }}
+								sx={{ mb: 0.5 }}
 							>
-								Overall Market Sentiment
+								Summary is temporarily unavailable.
 							</Typography>
-							<Box
-								sx={{
-									display: "flex",
-									flexDirection: "column",
-									gap: 1,
-									minHeight: 70,
-									justifyContent: "center",
-								}}
+							<Typography
+								variant="caption"
+								color="text.disabled"
+								sx={{ fontSize: "0.6875rem" }}
 							>
-								<Typography variant="body2" color="text.secondary">
-									Summary is temporarily unavailable.
-								</Typography>
-								<Typography variant="caption" color="text.disabled">
-									Article feeds remain available while the sentiment endpoint is
-									disabled.
-								</Typography>
-							</Box>
-						</Card>
+								Article feeds remain available while the sentiment endpoint is
+								disabled.
+							</Typography>
+						</MetricShell>
 					</Grid>
 					<Grid size={{ xs: 12, md: 4 }}>
-						<StatCard
-							title="Bullish Assets"
-							value="Unavailable"
-							loading={false}
+						<AssetListMetric
+							label="Bullish Assets"
+							assets={[]}
+							direction="up"
+							emptyLabel="No signal yet"
+							emptyHint="Restore the sentiment endpoint to populate."
 						/>
 					</Grid>
 					<Grid size={{ xs: 12, md: 4 }}>
-						<StatCard
-							title="Bearish Assets"
-							value="Unavailable"
-							loading={false}
+						<AssetListMetric
+							label="Bearish Assets"
+							assets={[]}
+							direction="down"
+							emptyLabel="No signal yet"
+							emptyHint="Restore the sentiment endpoint to populate."
 						/>
 					</Grid>
 				</Grid>

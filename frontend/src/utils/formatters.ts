@@ -85,7 +85,9 @@ export function formatVolume(value: number | null | undefined): string {
 
 // Date formatting
 
-function safeParseDate(date: string | Date | null | undefined): Date | null {
+export function safeParseDate(
+	date: string | Date | null | undefined,
+): Date | null {
 	if (date == null) return null;
 	let input = date;
 	// MongoDB stores UTC but pymongo returns naive datetimes (no timezone).

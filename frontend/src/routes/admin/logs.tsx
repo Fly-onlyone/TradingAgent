@@ -13,8 +13,6 @@ import {
 	Alert,
 	Box,
 	Button,
-	Card,
-	CardContent,
 	Chip,
 	Dialog,
 	DialogActions,
@@ -53,6 +51,7 @@ import { PageTransition } from "@/components/common/PageTransition";
 import { SectionHeader } from "@/components/common/SectionHeader";
 import { ShimmerSkeleton } from "@/components/common/ShimmerSkeleton";
 import { ZoomAwareSelect } from "@/components/common/ZoomAwareSelect";
+import { KpiMetric, type MetricTone } from "@/components/data-display/metric";
 import { useLogStore } from "@/store/logStore";
 import type { LogEntry } from "@/types/log";
 import { spring } from "@/utils/animations/variants";
@@ -223,30 +222,25 @@ const LEVEL_ICONS: Record<string, ReactNode> = {
 	CRITICAL: <BugReportIcon fontSize="small" />,
 };
 
-function StatCard({
+function LogCountCard({
 	label,
 	value,
-	color,
+	tone,
+	icon,
 }: {
 	label: string;
 	value: number;
-	color?: string;
+	tone?: MetricTone;
+	icon?: ReactNode;
 }) {
 	return (
-		<Card variant="outlined">
-			<CardContent sx={{ py: 1.5, px: 2, "&:last-child": { pb: 1.5 } }}>
-				<Typography variant="body2" color="text.secondary">
-					{label}
-				</Typography>
-				<Typography
-					variant="h5"
-					fontWeight={700}
-					color={color || "text.primary"}
-				>
-					{value.toLocaleString()}
-				</Typography>
-			</CardContent>
-		</Card>
+		<KpiMetric
+			label={label}
+			value={value.toLocaleString()}
+			tone={tone}
+			icon={icon}
+			density="compact"
+		/>
 	);
 }
 
@@ -326,27 +320,34 @@ function LogViewerPage() {
 				{/* Stats Cards */}
 				<Grid container spacing={2} sx={{ mb: 3 }}>
 					<Grid size={{ xs: 6, sm: 3 }}>
-						<StatCard label="Total" value={stats?.totalCount ?? 0} />
+						<LogCountCard
+							label="Total"
+							value={stats?.totalCount ?? 0}
+							tone="primary"
+						/>
 					</Grid>
 					<Grid size={{ xs: 6, sm: 3 }}>
-						<StatCard
+						<LogCountCard
 							label="Errors"
 							value={stats?.levelCounts?.ERROR ?? 0}
-							color="error.main"
+							tone="error"
+							icon={<ErrorOutlineIcon />}
 						/>
 					</Grid>
 					<Grid size={{ xs: 6, sm: 3 }}>
-						<StatCard
+						<LogCountCard
 							label="Warnings"
 							value={stats?.levelCounts?.WARNING ?? 0}
-							color="warning.main"
+							tone="warning"
+							icon={<WarningAmberIcon />}
 						/>
 					</Grid>
 					<Grid size={{ xs: 6, sm: 3 }}>
-						<StatCard
+						<LogCountCard
 							label="Info"
 							value={stats?.levelCounts?.INFO ?? 0}
-							color="info.main"
+							tone="primary"
+							icon={<InfoOutlinedIcon />}
 						/>
 					</Grid>
 				</Grid>

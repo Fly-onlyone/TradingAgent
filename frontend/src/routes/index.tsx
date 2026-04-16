@@ -2,7 +2,11 @@
  * Dashboard Page — Agent Command Center
  */
 
+import AutoGraphIcon from "@mui/icons-material/AutoGraph";
+import InsightsIcon from "@mui/icons-material/Insights";
+import PsychologyIcon from "@mui/icons-material/Psychology";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
+import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import {
 	Alert,
 	Box,
@@ -27,14 +31,18 @@ import { dashboardSummaryQueryOptions } from "@/api/queryOptions/dashboard";
 import { PageTransition } from "@/components/common/PageTransition";
 import { SectionHeader } from "@/components/common/SectionHeader";
 import { ShimmerSkeleton } from "@/components/common/ShimmerSkeleton";
-import { StatCard } from "@/components/data-display/StatCard";
+import {
+	DeltaMetric,
+	KpiMetric,
+	TrendIconMetric,
+} from "@/components/data-display/metric";
 import { MagneticButton } from "@/components/effects/MagneticButton";
 import { ScrollReveal } from "@/components/effects/ScrollReveal";
 import { useOrderStore } from "@/store/orderStore";
 import type { AccountBalance, DashboardSummary, TradeSummary } from "@/types";
 import { usePageVisibility, useReducedMotion } from "@/utils/animations/hooks";
 import { staggerCascade } from "@/utils/animations/variants";
-import { formatPercent, formatUSD } from "@/utils/formatters";
+import { formatUSD } from "@/utils/formatters";
 import { requireAuth } from "./-guards";
 
 const LazyEquityChart = lazy(() => import("@/components/charts/EquityChart"));
@@ -82,12 +90,12 @@ function StatsSection({
 						variants={staggerCascade.item}
 						initial={shouldAnimate ? undefined : false}
 					>
-						<StatCard
-							title="Total Equity"
+						<KpiMetric
+							label="Total Equity"
 							value={formatUSD(account?.totalEquity ?? 0)}
 							loading={loading}
-							sparklineData={[]}
-							useRolling
+							rolling
+							icon={<AutoGraphIcon />}
 						/>
 					</motion.div>
 				</Grid>
@@ -96,17 +104,16 @@ function StatsSection({
 						variants={staggerCascade.item}
 						initial={shouldAnimate ? undefined : false}
 					>
-						<StatCard
-							title="Unrealized P&L"
+						<DeltaMetric
+							label="Unrealized P&L"
 							value={formatUSD(account?.unrealizedPnl ?? 0)}
 							change={
 								account?.totalEquity
 									? (account.unrealizedPnl / account.totalEquity) * 100
 									: undefined
 							}
-							trend={(account?.unrealizedPnl ?? 0) >= 0 ? "up" : "down"}
 							loading={loading}
-							useRolling
+							icon={<TrendingUpIcon />}
 						/>
 					</motion.div>
 				</Grid>
@@ -115,9 +122,26 @@ function StatsSection({
 						variants={staggerCascade.item}
 						initial={shouldAnimate ? undefined : false}
 					>
-						<StatCard
-							title="Agent Win Rate"
-							value={formatPercent(summary?.winRate ?? 0, 1)}
+						<TrendIconMetric
+							label="Agent Win Rate"
+							value={
+								summary && summary.totalTrades > 0
+									? `${summary.winRate.toFixed(1)}%`
+									: "—"
+							}
+							subtitle={
+								summary && summary.totalTrades > 0
+									? `${summary.winningTrades} of ${summary.totalTrades} trades`
+									: "No trades yet"
+							}
+							icon={<InsightsIcon />}
+							tone={
+								!summary || summary.totalTrades === 0
+									? "neutral"
+									: summary.winRate >= 50
+										? "success"
+										: "warning"
+							}
 							loading={loading}
 						/>
 					</motion.div>
@@ -127,10 +151,11 @@ function StatsSection({
 						variants={staggerCascade.item}
 						initial={shouldAnimate ? undefined : false}
 					>
-						<StatCard
-							title="Decisions Today"
+						<KpiMetric
+							label="Decisions Today"
 							value={decisionsCount}
 							loading={loading}
+							icon={<PsychologyIcon />}
 						/>
 					</motion.div>
 				</Grid>
