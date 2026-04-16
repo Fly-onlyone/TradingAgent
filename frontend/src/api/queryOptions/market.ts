@@ -1,4 +1,5 @@
 import { marketApi } from "@/api/endpoints/market";
+import type { Timeframe } from "@/types";
 import { createQueryOptionsFactory } from "./_factory";
 
 const MARKET_STALE_TIME = 60_000;
@@ -28,6 +29,18 @@ export function marketTickerQueryOptions(symbol: string) {
 		queryKey: ["market", "ticker", symbol] as const,
 		queryFn: () => marketApi.getTicker(symbol),
 		staleTime: 20_000,
+	});
+}
+
+export function marketCandlesQueryOptions(
+	symbol: string,
+	timeframe: Timeframe,
+	limit = 24,
+) {
+	return marketQuery({
+		queryKey: ["market", "candles", symbol, timeframe, limit] as const,
+		queryFn: () => marketApi.getCandles({ symbol, timeframe, limit }),
+		staleTime: 60_000,
 	});
 }
 

@@ -27,6 +27,7 @@ import { marketApi } from "@/api/endpoints/market";
 import { ordersApi } from "@/api/endpoints/orders";
 import {
 	marketAccountQueryOptions,
+	marketCandlesQueryOptions,
 	marketOverviewQueryOptions,
 	marketTickerQueryOptions,
 	userPreferencesQueryOptions,
@@ -36,6 +37,7 @@ import { PageTransition } from "@/components/common/PageTransition";
 import { SaveIndicator } from "@/components/common/SaveIndicator";
 import { SectionHeader } from "@/components/common/SectionHeader";
 import { ZoomAwareAutocomplete } from "@/components/common/ZoomAwareAutocomplete";
+import { Sparkline } from "@/components/effects/Sparkline";
 import {
 	HoldingsTab,
 	MarketOverviewPanel,
@@ -154,6 +156,12 @@ function TradingPage() {
 		retry: 1,
 	});
 
+	const sparklineQuery = useQuery({
+		...marketCandlesQueryOptions(selectedSymbol, "1h", 24),
+		refetchInterval: isPageVisible ? 120_000 : false,
+		retry: 1,
+	});
+
 	const overviewQuery = useQuery({
 		...marketOverviewQueryOptions(),
 		refetchInterval: isPageVisible ? 120_000 : false,
@@ -182,6 +190,37 @@ function TradingPage() {
 			? resolvedTicker.lastPrice
 			: 0;
 
+	const sparklineData = useMemo(
+		() => (sparklineQuery.data ?? []).map((candle) => candle.close),
+		[sparklineQuery.data],
+	);
+
+	const spread =
+		resolvedTicker && resolvedTicker.askPrice > 0 && resolvedTicker.bidPrice > 0
+			? resolvedTicker.askPrice - resolvedTicker.bidPrice
+			: null;
+
+	const rangePosition = useMemo(() => {
+		if (!resolvedTicker) return null;
+		const { high24h, low24h } = resolvedTicker;
+		if (!(high24h > low24h)) return null;
+		const pct = ((currentPrice - low24h) / (high24h - low24h)) * 100;
+		return Math.max(0, Math.min(100, pct));
+	}, [resolvedTicker, currentPrice]);
+
+	const spreadPct =
+		spread !== null && currentPrice > 0 ? (spread / currentPrice) * 100 : null;
+
+	const volumeActivityPct = useMemo(() => {
+		const candles = sparklineQuery.data;
+		if (!candles || candles.length < 2) return null;
+		const volumes = candles.map((c) => c.volume);
+		const max = Math.max(...volumes);
+		if (!(max > 0)) return null;
+		const last = volumes[volumes.length - 1];
+		return (last / max) * 100;
+	}, [sparklineQuery.data]);
+
 	const orderHistoryError =
 		orderHistoryQuery.data?.error ||
 		(orderHistoryQuery.isError
@@ -193,7 +232,16 @@ function TradingPage() {
 
 	return (
 		<PageTransition pageKey="trading" heavy>
-			<Box>
+			<Box
+				sx={{
+					flex: 1,
+					minHeight: 0,
+					minWidth: 0,
+					display: "flex",
+					flexDirection: "column",
+					overflow: "hidden",
+				}}
+			>
 				<SectionHeader
 					title="Market Monitor"
 					subtitle="Live market data — the agent uses this data for automated decisions"
@@ -201,20 +249,45 @@ function TradingPage() {
 
 				<Box
 					sx={{
+						flex: 1,
+						minHeight: 0,
 						display: "flex",
 						gap: 3,
 						flexDirection: { xs: "column", md: "row" },
+						overflow: { xs: "auto", md: "hidden" },
 					}}
 				>
 					{/* ====== LEFT SIDEBAR ====== */}
-					<Box sx={{ width: { xs: "100%", md: 300 }, flexShrink: 0 }}>
+					<Box
+						sx={{
+							width: { xs: "100%", md: 300 },
+							flexShrink: 0,
+							display: { xs: "block", md: "flex" },
+							minHeight: { md: 0 },
+						}}
+					>
 						<Card
 							component={motion.div}
 							initial={{ opacity: 0, x: -30 }}
 							animate={{ opacity: 1, x: 0 }}
 							transition={spring.snappy}
+							sx={{
+								width: "100%",
+								display: { xs: "block", md: "flex" },
+								flexDirection: "column",
+								minHeight: { md: 0 },
+								flex: { md: 1 },
+							}}
 						>
-							<CardContent sx={{ p: 2.5, "&:last-child": { pb: 2.5 } }}>
+							<CardContent
+								sx={{
+									p: 2.5,
+									"&:last-child": { pb: 2.5 },
+									flex: { md: 1 },
+									minHeight: { md: 0 },
+									overflowY: { md: "auto" },
+								}}
+							>
 								{/* Symbol selector */}
 								<Typography
 									variant="caption"
@@ -285,150 +358,451 @@ function TradingPage() {
 									sx={{ mb: 2 }}
 								/>
 
-								{/* Timeframe selector */}
-								<Typography
-									variant="caption"
-									color="text.secondary"
-									fontWeight={700}
-									sx={{ letterSpacing: "0.08em", mb: 0.5, display: "block" }}
-								>
-									TIMEFRAME
-								</Typography>
-								<ToggleButtonGroup
-									value={prefTimeframe}
-									exclusive
-									onChange={(_, value) => {
-										if (value) {
-											setPrefTimeframe(value);
-											setSelectedTimeframe(value);
-										}
-									}}
-									size="small"
-									sx={{ flexWrap: "wrap", mb: 0.5 }}
-								>
-									{TIMEFRAMES.map((tf) => (
-										<ToggleButton
-											key={tf.value}
-											value={tf.value}
-											sx={{ px: 1.5, py: 0.5, fontSize: "0.75rem" }}
-										>
-											{tf.label}
-										</ToggleButton>
-									))}
-								</ToggleButtonGroup>
+								{/* Coin-identity hero block */}
 								<Box
-									sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}
+									sx={{
+										mt: 1,
+										borderRadius: 2,
+										background: (theme) =>
+											`linear-gradient(135deg, rgba(${theme.trading.primaryRgb}, 0.10) 0%, rgba(${theme.trading.primaryRgb}, 0.02) 100%)`,
+										border: "1px solid",
+										borderColor: "divider",
+										overflow: "hidden",
+									}}
 								>
-									<SaveIndicator status={prefsStatus} />
+									<Box
+										sx={{
+											p: 1.5,
+											display: "flex",
+											alignItems: "center",
+											gap: 1.25,
+										}}
+									>
+										<CoinIcon
+											symbol={selectedOption?.base ?? selectedSymbol}
+											size={36}
+										/>
+										<Box sx={{ minWidth: 0, flex: 1 }}>
+											<Typography
+												variant="caption"
+												fontWeight={700}
+												noWrap
+												sx={{
+													display: "block",
+													letterSpacing: "0.04em",
+													lineHeight: 1.2,
+												}}
+											>
+												{selectedSymbol}
+											</Typography>
+											<Typography
+												variant="caption"
+												color="text.secondary"
+												noWrap
+												sx={{ display: "block", fontSize: "0.7rem" }}
+											>
+												{selectedOption?.base ?? selectedSymbol} /{" "}
+												{selectedOption?.quote ?? "USDT"}
+											</Typography>
+										</Box>
+										<Box sx={{ textAlign: "right", minWidth: 0 }}>
+											{resolvedTicker ? (
+												<>
+													<Typography
+														fontWeight={700}
+														noWrap
+														sx={{
+															fontFamily: (theme) => theme.trading.mono,
+															lineHeight: 1.05,
+															fontSize: "1.35rem",
+														}}
+													>
+														${formatPrice(currentPrice)}
+													</Typography>
+													<Typography
+														fontWeight={700}
+														sx={{
+															color: isPositive ? "success.main" : "error.main",
+															display: "block",
+															lineHeight: 1.2,
+															fontSize: "0.95rem",
+														}}
+													>
+														{formatPercent(resolvedTicker.priceChangePercent)}{" "}
+														<Typography
+															component="span"
+															sx={{
+																fontSize: "0.7rem",
+																color: "text.secondary",
+																fontWeight: 500,
+															}}
+														>
+															24h
+														</Typography>
+													</Typography>
+												</>
+											) : (
+												<Typography variant="h5" color="text.secondary">
+													{tickerQuery.isLoading ? "..." : "-"}
+												</Typography>
+											)}
+										</Box>
+									</Box>
+
+									{/* Full-width sparkline strip */}
+									{sparklineData.length >= 2 && (
+										<Box
+											sx={{
+												display: "block",
+												lineHeight: 0,
+												"& svg": { display: "block", width: "100%" },
+											}}
+										>
+											<Sparkline
+												data={sparklineData}
+												width={300}
+												height={40}
+												strokeColor={
+													isPositive ? "rgb(38, 166, 154)" : "rgb(239, 83, 80)"
+												}
+												fillColor={
+													isPositive
+														? "rgba(38, 166, 154, 0.25)"
+														: "rgba(239, 83, 80, 0.25)"
+												}
+											/>
+										</Box>
+									)}
 								</Box>
 
 								<Divider sx={{ my: 1.5 }} />
 
-								{/* Price display */}
-								<Typography
-									variant="caption"
-									color="text.secondary"
-									fontWeight={700}
-									sx={{ letterSpacing: "0.08em", display: "block" }}
+								{/* Timeframe selector */}
+								<Box
+									sx={{
+										display: "flex",
+										justifyContent: "space-between",
+										alignItems: "center",
+										mb: 0.5,
+									}}
 								>
-									LAST PRICE
-								</Typography>
-								{resolvedTicker ? (
-									<>
-										<Typography
-											variant="h4"
-											fontWeight={700}
-											sx={{
-												fontFamily: (theme) => theme.trading.mono,
-												lineHeight: 1.2,
-											}}
-										>
-											${formatPrice(currentPrice)}
-										</Typography>
-										<Typography
-											variant="body2"
-											fontWeight={600}
-											sx={{
-												color: isPositive ? "success.main" : "error.main",
-												mb: 0.5,
-											}}
-										>
-											{formatPercent(resolvedTicker.priceChangePercent)}{" "}
-											<Typography
-												component="span"
-												variant="caption"
-												color="text.secondary"
-											>
-												24h
-											</Typography>
-										</Typography>
-									</>
-								) : (
-									<Typography variant="h5" color="text.secondary">
-										{tickerQuery.isLoading ? "..." : "-"}
+									<Typography
+										variant="caption"
+										color="text.secondary"
+										fontWeight={700}
+										sx={{ letterSpacing: "0.08em" }}
+									>
+										TIMEFRAME
 									</Typography>
+									<SaveIndicator status={prefsStatus} />
+								</Box>
+								{[TIMEFRAMES.slice(0, 5), TIMEFRAMES.slice(5)].map(
+									(row, rowIdx) => (
+										<ToggleButtonGroup
+											// biome-ignore lint/suspicious/noArrayIndexKey: fixed 2-row split
+											key={rowIdx}
+											value={prefTimeframe}
+											exclusive
+											onChange={(_, value) => {
+												if (value) {
+													setPrefTimeframe(value);
+													setSelectedTimeframe(value);
+												}
+											}}
+											size="small"
+											fullWidth
+											sx={{
+												mt: rowIdx === 1 ? "-1px" : 0,
+												"& .MuiToggleButton-root:first-of-type": {
+													borderTopLeftRadius: rowIdx === 0 ? undefined : 0,
+													borderBottomLeftRadius: rowIdx === 1 ? undefined : 0,
+												},
+												"& .MuiToggleButton-root:last-of-type": {
+													borderTopRightRadius: rowIdx === 0 ? undefined : 0,
+													borderBottomRightRadius: rowIdx === 1 ? undefined : 0,
+												},
+											}}
+										>
+											{row.map((tf) => (
+												<ToggleButton
+													key={tf.value}
+													value={tf.value}
+													sx={{ py: 0.5, fontSize: "0.75rem" }}
+												>
+													{tf.label}
+												</ToggleButton>
+											))}
+										</ToggleButtonGroup>
+									),
 								)}
 
 								<Divider sx={{ my: 1.5 }} />
 
-								{/* Quick stats */}
+								{/* Market stats: range bar + volume + spread */}
 								{resolvedTicker && (
-									<Box
+									<Card
+										variant="outlined"
 										sx={{
-											display: "flex",
-											flexDirection: "column",
-											gap: 1,
-											mb: 1.5,
+											mb: 0.5,
+											overflow: "hidden",
+											bgcolor: "action.hover",
+											borderColor: "divider",
 										}}
 									>
-										{[
-											{
-												label: "24h High",
-												value: `$${formatPrice(resolvedTicker.high24h)}`,
-											},
-											{
-												label: "24h Low",
-												value: `$${formatPrice(resolvedTicker.low24h)}`,
-											},
-											{
-												label: "24h Volume",
-												value: `$${formatVolume(resolvedTicker.volume24h)}`,
-											},
-											{
-												label: "Bid",
-												value: `$${formatPrice(resolvedTicker.bidPrice)}`,
-												color: "success.main" as const,
-											},
-											{
-												label: "Ask",
-												value: `$${formatPrice(resolvedTicker.askPrice)}`,
-												color: "error.main" as const,
-											},
-										].map((stat) => (
+										{/* 24h range bar */}
+										<Box sx={{ p: 1.5 }}>
 											<Box
-												key={stat.label}
 												sx={{
 													display: "flex",
 													justifyContent: "space-between",
 													alignItems: "center",
+													mb: 1,
 												}}
 											>
-												<Typography variant="body2" color="text.secondary">
-													{stat.label}
-												</Typography>
 												<Typography
-													variant="body2"
-													fontWeight={500}
+													variant="caption"
+													color="text.secondary"
+													fontWeight={700}
 													sx={{
-														fontFamily: (theme) => theme.trading.mono,
-														color: stat.color,
+														letterSpacing: "0.08em",
+														fontSize: "0.65rem",
+														textTransform: "uppercase",
 													}}
 												>
-													{stat.value}
+													24h Range
 												</Typography>
+												{rangePosition !== null && (
+													<Typography
+														variant="caption"
+														fontWeight={700}
+														sx={{
+															color:
+																rangePosition >= 50
+																	? "success.main"
+																	: "error.main",
+															fontSize: "0.7rem",
+															fontFamily: (theme) => theme.trading.mono,
+														}}
+													>
+														{rangePosition.toFixed(0)}%
+													</Typography>
+												)}
 											</Box>
-										))}
-									</Box>
+
+											<Box
+												sx={{
+													position: "relative",
+													height: 6,
+													borderRadius: 3,
+													background: (theme) =>
+														`linear-gradient(90deg, ${theme.trading.colors.bearish} 0%, rgba(${theme.trading.primaryRgb}, 0.25) 50%, ${theme.trading.colors.bullish} 100%)`,
+													mb: 1,
+												}}
+											>
+												{rangePosition !== null && (
+													<Box
+														component={motion.div}
+														animate={{ left: `${rangePosition}%` }}
+														transition={{
+															type: "spring",
+															stiffness: 260,
+															damping: 22,
+														}}
+														sx={{
+															position: "absolute",
+															top: "50%",
+															transform: "translate(-50%, -50%)",
+															width: 14,
+															height: 14,
+															borderRadius: "50%",
+															bgcolor: "background.paper",
+															border: "2px solid",
+															borderColor: isPositive
+																? "success.main"
+																: "error.main",
+															boxShadow:
+																"0 0 0 2px rgba(0,0,0,0.35), 0 0 8px rgba(0,0,0,0.4)",
+														}}
+													/>
+												)}
+											</Box>
+
+											<Box
+												sx={{
+													display: "flex",
+													justifyContent: "space-between",
+													alignItems: "flex-end",
+												}}
+											>
+												<Box>
+													<Typography
+														variant="caption"
+														color="text.secondary"
+														sx={{
+															fontSize: "0.6rem",
+															display: "block",
+															letterSpacing: "0.1em",
+															lineHeight: 1,
+														}}
+													>
+														LOW
+													</Typography>
+													<Typography
+														variant="caption"
+														fontWeight={600}
+														sx={{
+															fontFamily: (theme) => theme.trading.mono,
+															fontSize: "0.75rem",
+															lineHeight: 1.3,
+														}}
+													>
+														${formatPrice(resolvedTicker.low24h)}
+													</Typography>
+												</Box>
+												<Box sx={{ textAlign: "right" }}>
+													<Typography
+														variant="caption"
+														color="text.secondary"
+														sx={{
+															fontSize: "0.6rem",
+															display: "block",
+															letterSpacing: "0.1em",
+															lineHeight: 1,
+														}}
+													>
+														HIGH
+													</Typography>
+													<Typography
+														variant="caption"
+														fontWeight={600}
+														sx={{
+															fontFamily: (theme) => theme.trading.mono,
+															fontSize: "0.75rem",
+															lineHeight: 1.3,
+														}}
+													>
+														${formatPrice(resolvedTicker.high24h)}
+													</Typography>
+												</Box>
+											</Box>
+										</Box>
+
+										<Divider />
+
+										{/* Volume | Spread split row */}
+										<Box
+											sx={{
+												display: "grid",
+												gridTemplateColumns: "1fr 1fr",
+											}}
+										>
+											<Box
+												sx={{
+													p: 1.25,
+													borderRight: 1,
+													borderColor: "divider",
+												}}
+											>
+												<Typography
+													variant="caption"
+													color="text.secondary"
+													fontWeight={700}
+													sx={{
+														letterSpacing: "0.08em",
+														fontSize: "0.6rem",
+														textTransform: "uppercase",
+														display: "block",
+														mb: 0.25,
+													}}
+												>
+													24h Volume
+												</Typography>
+												<Typography
+													fontWeight={700}
+													sx={{
+														fontFamily: (theme) => theme.trading.mono,
+														lineHeight: 1.2,
+														fontSize: "0.9rem",
+													}}
+													noWrap
+												>
+													${formatVolume(resolvedTicker.quoteVolume24h)}
+												</Typography>
+												{volumeActivityPct !== null && (
+													<Box
+														sx={{
+															mt: 0.75,
+															height: 3,
+															borderRadius: 1.5,
+															bgcolor: "rgba(255,255,255,0.05)",
+															overflow: "hidden",
+														}}
+													>
+														<Box
+															component={motion.div}
+															initial={{ width: 0 }}
+															animate={{ width: `${volumeActivityPct}%` }}
+															transition={{ duration: 0.8, ease: "easeOut" }}
+															sx={{
+																height: "100%",
+																bgcolor: "primary.main",
+																borderRadius: 1.5,
+															}}
+														/>
+													</Box>
+												)}
+											</Box>
+											<Box sx={{ p: 1.25 }}>
+												<Typography
+													variant="caption"
+													color="text.secondary"
+													fontWeight={700}
+													sx={{
+														letterSpacing: "0.08em",
+														fontSize: "0.6rem",
+														textTransform: "uppercase",
+														display: "block",
+														mb: 0.25,
+													}}
+												>
+													Spread
+												</Typography>
+												<Box
+													sx={{
+														display: "flex",
+														alignItems: "baseline",
+														gap: 0.5,
+													}}
+												>
+													<Typography
+														fontWeight={700}
+														sx={{
+															fontFamily: (theme) => theme.trading.mono,
+															lineHeight: 1.2,
+															fontSize: "0.9rem",
+														}}
+														noWrap
+													>
+														{spread !== null ? `$${formatPrice(spread)}` : "-"}
+													</Typography>
+												</Box>
+												{spreadPct !== null && (
+													<Typography
+														variant="caption"
+														color="text.secondary"
+														sx={{
+															fontSize: "0.65rem",
+															fontFamily: (theme) => theme.trading.mono,
+															display: "block",
+															mt: 0.5,
+														}}
+													>
+														{spreadPct.toFixed(3)}%
+													</Typography>
+												)}
+											</Box>
+										</Box>
+									</Card>
 								)}
 
 								<Divider sx={{ my: 1.5 }} />
@@ -595,25 +969,57 @@ function TradingPage() {
 					</Box>
 
 					{/* ====== MAIN CONTENT ====== */}
-					<Box sx={{ flex: 1, minWidth: 0 }}>
+					<Box
+						sx={{
+							flex: 1,
+							minWidth: 0,
+							display: { xs: "block", md: "flex" },
+							flexDirection: "column",
+							minHeight: { md: 0 },
+							gap: { md: 3 },
+						}}
+					>
 						{/* Market Overview (Gainers / Losers) */}
-						<MarketOverviewPanel
-							overview={overviewQuery.data ?? null}
-							isLoading={overviewQuery.isLoading}
-						/>
+						<Box sx={{ flexShrink: 0 }}>
+							<MarketOverviewPanel
+								overview={overviewQuery.data ?? null}
+								isLoading={overviewQuery.isLoading}
+							/>
+						</Box>
 
 						{/* Tabbed content: Holdings / Positions / Orders */}
-						<Card sx={{ mt: 3 }}>
+						<Card
+							sx={{
+								mt: { xs: 3, md: 0 },
+								flex: { md: 1 },
+								minHeight: { md: 0 },
+								display: { md: "flex" },
+								flexDirection: { md: "column" },
+								overflow: { md: "hidden" },
+							}}
+						>
 							<Tabs
 								value={bottomTab}
 								onChange={(_, v) => setBottomTab(v)}
-								sx={{ borderBottom: 1, borderColor: "divider", px: 2 }}
+								sx={{
+									borderBottom: 1,
+									borderColor: "divider",
+									px: 2,
+									flexShrink: 0,
+								}}
 							>
 								<Tab label="Holdings" />
 								<Tab label="Positions" />
 								<Tab label="Orders" />
 							</Tabs>
-							<CardContent>
+							<CardContent
+								sx={{
+									flex: { md: 1 },
+									minHeight: { md: 0 },
+									overflowY: { md: "auto" },
+									"&:last-child": { pb: 2 },
+								}}
+							>
 								<AnimatePresence mode="wait">
 									<motion.div
 										key={bottomTab}
