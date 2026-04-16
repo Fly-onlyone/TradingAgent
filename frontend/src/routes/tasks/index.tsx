@@ -1,97 +1,48 @@
 /**
  * Task Configuration Page — single-task auto-save design.
  * Auto-creates a default task on first visit, debounces all changes.
+ *
+ * Layout: sticky action bar → stat strip → two-column (config | status).
  */
 
-import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
-import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
-import AutoModeIcon from "@mui/icons-material/AutoMode";
-import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
-import HistoryIcon from "@mui/icons-material/History";
-import NotificationsIcon from "@mui/icons-material/Notifications";
-import PauseIcon from "@mui/icons-material/Pause";
-import PlayArrowIcon from "@mui/icons-material/PlayArrow";
-import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
-import RepeatIcon from "@mui/icons-material/Repeat";
-import ScheduleIcon from "@mui/icons-material/Schedule";
-import {
-	Alert,
-	Box,
-	Button,
-	Card,
-	CardContent,
-	Chip,
-	CircularProgress,
-	FormControl,
-	FormControlLabel,
-	IconButton,
-	InputLabel,
-	Menu,
-	MenuItem,
-	Slider,
-	Stack,
-	Switch,
-	TextField,
-	ToggleButton,
-	ToggleButtonGroup,
-	Tooltip,
-	Typography,
-} from "@mui/material";
-import { LocalizationProvider, TimePicker } from "@mui/x-date-pickers";
+import { Alert, Box, CircularProgress } from "@mui/material";
+import Grid from "@mui/material/Grid2";
+import { LocalizationProvider } from "@mui/x-date-pickers";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { format, parse } from "date-fns";
 import { motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { decisionsApi } from "@/api/endpoints/decisions";
-import type { SymbolOption } from "@/api/endpoints/market";
 import { tasksApi } from "@/api/endpoints/tasks";
-import { CoinIcon } from "@/components/common/CoinIcon";
 import { PageTransition } from "@/components/common/PageTransition";
-import { SaveIndicator } from "@/components/common/SaveIndicator";
 import { SectionHeader } from "@/components/common/SectionHeader";
-import { ZoomAwareAutocomplete } from "@/components/common/ZoomAwareAutocomplete";
-import { ZoomAwareSelect } from "@/components/common/ZoomAwareSelect";
 import { StrategyDiscoveryCard } from "@/components/strategies/StrategyDiscoveryCard";
+import {
+	DuplicateTasksBanner,
+	GeneralSection,
+	MonitoringSection,
+	RecentRunsPanel,
+	ScheduleSection,
+	TaskActionBar,
+	TaskConfigProvider,
+	TaskRunningProgress,
+	TaskStatStrip,
+	TradingSection,
+} from "@/components/tasks";
 import { useDebouncedSave } from "@/hooks/useDebouncedSave";
 import { useSymbolOptions } from "@/hooks/useSymbolOptions";
-import { useZoomAwareMenu } from "@/hooks/useZoomAwareMenu";
 import { useAgentStore } from "@/store/agentStore";
 import { useAuthStore } from "@/store/authStore";
 import { notify, useUIStore } from "@/store/uiStore";
-import type {
-	AgentMode,
-	HoldingTerm,
-	MonitoringCondition,
-	MonitoringConditionType,
-	RiskLevel,
-	TaskCreate,
-	TaskFrequency,
-	TaskSchedule,
-	TaskUpdate,
-} from "@/types/task";
-import { HOLDING_TERM_CONFIG, MONITORING_CONDITION_CONFIG } from "@/types/task";
+import type { TaskCreate, TaskUpdate } from "@/types/task";
 import { staggerCascade } from "@/utils/animations/variants";
-import { formatDateTime } from "@/utils/formatters";
 import { requireAuth } from "../-guards";
 
 export const Route = createFileRoute("/tasks/")({
 	beforeLoad: requireAuth,
 	component: TaskConfigPage,
 });
-
-const DAYS_OF_WEEK = [
-	{ value: 0, label: "Monday" },
-	{ value: 1, label: "Tuesday" },
-	{ value: 2, label: "Wednesday" },
-	{ value: 3, label: "Thursday" },
-	{ value: 4, label: "Friday" },
-	{ value: 5, label: "Saturday" },
-	{ value: 6, label: "Sunday" },
-];
 
 const DEFAULT_FORM: TaskCreate = {
 	name: "Trading Task",
@@ -161,24 +112,14 @@ function TaskConfigPage() {
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
 	const backendStatus = useUIStore((s) => s.backendStatus);
-	const isSuperuser = useAuthStore((s) => s.user?.isSuperuser);
+	const isSuperuser = useAuthStore((s) => s.user?.isSuperuser) ?? false;
 	const { symbolOptions, isLoading: symbolsLoading } = useSymbolOptions();
-	const createUiKey = useCallback(() => crypto.randomUUID(), []);
-
 	const [taskId, setTaskId] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
-	const [scheduleKeys, setScheduleKeys] = useState<string[]>(() => [
-		createUiKey(),
-	]);
-	const [monitoringConditionKeys, setMonitoringConditionKeys] = useState<
-		string[]
-	>([]);
 	const [formData, setFormData] = useState<TaskCreate>({ ...DEFAULT_FORM });
 	const [manualRunning, setManualRunning] = useState(false);
 
-	/** Tracks whether the form was populated from the backend at least once. */
 	const initRef = useRef(false);
-	/** Guards against double auto-create. */
 	const autoCreatingRef = useRef(false);
 	const lastSyncedPayloadRef = useRef<string | null>(null);
 	const currentPayloadRef = useRef(
@@ -204,7 +145,6 @@ function TaskConfigPage() {
 	const allTasks = tasksQuery.data?.tasks ?? [];
 	const task = allTasks[0] ?? null;
 	const isTaskRunning = task?.isRunning || manualRunning;
-	const runningTasks = allTasks.filter((t) => t.isRunning);
 
 	// ── Mutations ────────────────────────────────────────────────────────
 
@@ -264,7 +204,6 @@ function TaskConfigPage() {
 			setError(null);
 			void queryClient.invalidateQueries({ queryKey: ["tasks"] });
 			if (result.sessionId) {
-				// Jump straight to the merge chat session
 				sessionStorage.setItem("agent:pendingSession", result.sessionId);
 				void navigate({ to: "/agent" });
 			} else {
@@ -279,13 +218,11 @@ function TaskConfigPage() {
 	const { triggerSave, saveStatus } = useDebouncedSave<TaskUpdate>({
 		mutationFn: async (update) => {
 			if (!taskId) return;
-			console.debug("[task-save] saving to backend…", {
+			console.debug("[task-save] saving to backend\u2026", {
 				taskId,
 				schedules: update.schedules,
 			});
 			await tasksApi.updateTask(taskId, update);
-			// Mark the payload we just saved so the hydration effect
-			// recognises the refetched data as "ours" and skips overwriting form state.
 			lastSyncedPayloadRef.current = serializeEditableTaskUpdate(update);
 			console.debug("[task-save] saved, invalidating query cache");
 			void queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -337,30 +274,25 @@ function TaskConfigPage() {
 		}
 
 		if (!shouldHydrateForm) {
-			console.debug("[task-hydrate] skipped — local edits pending");
+			console.debug("[task-hydrate] skipped \u2014 local edits pending");
 			return;
 		}
 
 		console.debug("[task-hydrate] applying backend data to form");
 		lastSyncedPayloadRef.current = backendPayload;
 		initRef.current = false;
-		setScheduleKeys(backendFormData.schedules.map(() => createUiKey()));
-		setMonitoringConditionKeys(
-			backendFormData.monitoringConditions.map(() => createUiKey()),
-		);
 		setFormData(backendFormData);
-		// Mark initialised after a tick so the auto-save effect skips this batch.
 		const t = setTimeout(() => {
 			initRef.current = true;
 		}, 0);
 		return () => clearTimeout(t);
-	}, [createUiKey, task, taskId]);
+	}, [task, taskId]);
 
 	// ── Auto-create when no task exists ──────────────────────────────────
 
 	useEffect(() => {
 		if (tasksQuery.isLoading || tasksQuery.isError) return;
-		if (task) return; // task already exists
+		if (task) return;
 		if (autoCreatingRef.current || createTaskMutation.isPending) return;
 		autoCreatingRef.current = true;
 		createTaskMutation.mutate({ ...DEFAULT_FORM });
@@ -405,31 +337,19 @@ function TaskConfigPage() {
 		prevIsRunningRef.current = isTaskRunning;
 
 		if (wasRunning && !isTaskRunning && task) {
+			// Refresh recent runs panel now that the decision is persisted
+			void queryClient.invalidateQueries({
+				queryKey: ["tasks", "decisions"],
+			});
 			if (task.lastError) {
 				notify.error("Task Failed", `${task.name}: ${task.lastError}`);
 			} else {
 				notify.success("Task Completed", `${task.name} finished successfully`);
 			}
 		}
-	}, [isTaskRunning, task]);
+	}, [isTaskRunning, task, queryClient]);
 
 	// ── Derived ──────────────────────────────────────────────────────────
-
-	const selectedSymbolOptions = useMemo<SymbolOption[]>(() => {
-		return formData.symbols.map((sym) => {
-			const found =
-				symbolOptions.find((o) => o.symbol === sym && o.group === "Popular") ??
-				symbolOptions.find((o) => o.symbol === sym);
-			if (found) return found;
-			const [base, quote] = sym.split("-");
-			return {
-				symbol: sym,
-				base: base ?? sym,
-				quote: quote ?? "USDT",
-				group: "Popular",
-			};
-		});
-	}, [formData.symbols, symbolOptions]);
 
 	const isWaitingForBackend =
 		backendStatus === "connecting" && tasksQuery.isError && !tasksQuery.data;
@@ -464,55 +384,6 @@ function TaskConfigPage() {
 		}
 	};
 
-	// Schedule helpers
-	const updateSchedule = (idx: number, patch: Partial<TaskSchedule>) => {
-		const updated = [...formData.schedules];
-		updated[idx] = { ...updated[idx], ...patch };
-		setFormData({ ...formData, schedules: updated });
-	};
-
-	const removeSchedule = (idx: number) => {
-		setScheduleKeys((prev) => prev.filter((_, i) => i !== idx));
-		setFormData({
-			...formData,
-			schedules: formData.schedules.filter((_, i) => i !== idx),
-		});
-	};
-
-	const addSchedule = () => {
-		setScheduleKeys((prev) => [...prev, createUiKey()]);
-		setFormData({
-			...formData,
-			schedules: [
-				...formData.schedules,
-				{ frequency: "daily", scheduledTime: "09:00", enabled: true },
-			],
-		});
-	};
-
-	const riskMarks = [
-		{ value: 0, label: "Conservative" },
-		{ value: 1, label: "Moderate" },
-		{ value: 2, label: "Aggressive" },
-	];
-	const riskValues: RiskLevel[] = ["conservative", "moderate", "aggressive"];
-
-	const getStatusChip = (status: string) => {
-		const config: Record<
-			string,
-			{ color: "success" | "warning" | "error" | "default"; label: string }
-		> = {
-			active: { color: "success", label: "Active" },
-			paused: { color: "warning", label: "Paused" },
-			completed: { color: "default", label: "Completed" },
-			failed: { color: "error", label: "Failed" },
-		};
-		const c = config[status] || { color: "default", label: status };
-		return <Chip label={c.label} size="small" color={c.color} />;
-	};
-
-	const liveChatMenu = useZoomAwareMenu();
-
 	const navigateToSession = useCallback(
 		(sessionId: string) => {
 			sessionStorage.setItem("agent:pendingSession", sessionId);
@@ -530,14 +401,13 @@ function TaskConfigPage() {
 	const handleViewLastChat = useCallback(async () => {
 		if (!taskId) return;
 
-		// Prefer lastSessionId; otherwise fall back to latest decision's sessionId
 		let sessionId = task?.lastSessionId;
 		if (!sessionId) {
 			try {
 				const res = await decisionsApi.getDecisions({ taskId, pageSize: 1 });
 				sessionId = res.decisions?.[0]?.sessionId;
 			} catch {
-				// ignore — will use task-filter fallback below
+				// ignore
 			}
 		}
 
@@ -551,1410 +421,149 @@ function TaskConfigPage() {
 
 	// ── Render ────────────────────────────────────────────────────────────
 
+	const contextValue = useMemo(
+		() => ({
+			task,
+			taskId,
+			formData,
+			setFormData,
+			saveStatus,
+			isTaskRunning,
+			isSuperuser,
+			symbolOptions,
+			symbolsLoading,
+		}),
+		[
+			task,
+			taskId,
+			formData,
+			saveStatus,
+			isTaskRunning,
+			isSuperuser,
+			symbolOptions,
+			symbolsLoading,
+		],
+	);
+
 	return (
 		<LocalizationProvider dateAdapter={AdapterDateFns}>
-			<PageTransition pageKey="tasks">
-				<Box>
-					{/* ── Header ───────────────────────────────────────── */}
-					<SectionHeader
-						title="Task Configuration"
-						subtitle="Configure your automated trading task"
-						action={
-							<Box
-								sx={{
-									display: "flex",
-									alignItems: "center",
-									gap: 1.5,
-								}}
+			<TaskConfigProvider value={contextValue}>
+				<PageTransition pageKey="tasks">
+					<Box>
+						<SectionHeader
+							title="Task Configuration"
+							subtitle="Configure your automated trading task"
+						/>
+
+						<TaskActionBar
+							task={task}
+							taskId={taskId}
+							isTaskRunning={isTaskRunning}
+							saveStatus={saveStatus}
+							onRunNow={handleRunNow}
+							onPause={handlePause}
+							onResume={handleResume}
+							onViewLastChat={handleViewLastChat}
+							onViewHistory={handleViewExecutionHistory}
+							onNavigateToSession={navigateToSession}
+							isRunPending={runTaskMutation.isPending}
+							isPausePending={pauseTaskMutation.isPending}
+							isResumePending={resumeTaskMutation.isPending}
+						/>
+
+						{allTasks.length > 1 && (
+							<DuplicateTasksBanner
+								taskCount={allTasks.length}
+								onMerge={() => mergeDuplicatesMutation.mutate()}
+								isPending={mergeDuplicatesMutation.isPending}
+							/>
+						)}
+
+						{(error || (tasksQuery.isError && !isWaitingForBackend)) && (
+							<Alert
+								severity="error"
+								onClose={() => setError(null)}
+								sx={{ mb: 2 }}
 							>
-								<SaveIndicator status={saveStatus} />
-								{isTaskRunning && (
-									<Chip
-										icon={<CircularProgress size={14} />}
-										label="Running"
-										size="small"
-										color="info"
-										variant="outlined"
-									/>
-								)}
-								{task && getStatusChip(task.status)}
+								{error ?? "Failed to load tasks"}
+							</Alert>
+						)}
+
+						{task && <TaskStatStrip task={task} />}
+
+						{isLoadingTasks ? (
+							<Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+								<CircularProgress />
 							</Box>
-						}
-					/>
-
-					{/* ── Duplicate Tasks Cleanup Banner ─────────────── */}
-					{allTasks.length > 1 && (
-						<Alert
-							severity="warning"
-							sx={{ mb: 2 }}
-							action={
-								<Button
-									color="inherit"
-									size="small"
-									startIcon={
-										mergeDuplicatesMutation.isPending ? (
-											<CircularProgress size={14} color="inherit" />
-										) : (
-											<AutoModeIcon />
-										)
-									}
-									onClick={() => mergeDuplicatesMutation.mutate()}
-									disabled={mergeDuplicatesMutation.isPending}
-								>
-									{mergeDuplicatesMutation.isPending
-										? "Merging…"
-										: "Merge with AI"}
-								</Button>
-							}
-						>
-							<Typography variant="body2">
-								You have <strong>{allTasks.length}</strong> tasks. Only one task
-								is supported — click <em>Merge with AI</em> to consolidate them
-								into a single task. The merge runs in a chat session you can
-								watch live.
-							</Typography>
-						</Alert>
-					)}
-
-					{/* ── Running Tasks Bar ─────────────────────────── */}
-					{runningTasks.length > 0 && (
-						<Alert
-							severity="info"
-							icon={<CircularProgress size={16} />}
-							sx={{ mb: 2 }}
-						>
-							<Box
-								sx={{
-									display: "flex",
-									alignItems: "center",
-									gap: 1,
-									flexWrap: "wrap",
-								}}
-							>
-								<Typography variant="body2" fontWeight={600}>
-									Running:
-								</Typography>
-								{runningTasks.map((rt) => (
-									<Chip
-										key={rt.id}
-										label={`${rt.name}${rt.runningProgress?.currentSymbol ? ` — ${rt.runningProgress.currentSymbol}` : ""}`}
-										size="small"
-										color="info"
-										variant="outlined"
-										onClick={() => {
-											const sid = rt.runningProgress?.activeSessionId;
-											if (sid) navigateToSession(sid);
-										}}
-										sx={{ cursor: "pointer" }}
-									/>
-								))}
-							</Box>
-						</Alert>
-					)}
-
-					{taskId && task && (
-						<Box
-							sx={{
-								display: "flex",
-								alignItems: "center",
-								gap: 1.5,
-								mb: 2,
-								flexWrap: "wrap",
-							}}
-						>
-							{task.status === "active" && (
-								<>
-									<Button
-										variant="outlined"
-										size="small"
-										startIcon={
-											isTaskRunning ? (
-												<CircularProgress size={16} />
-											) : (
-												<PlayArrowIcon />
-											)
-										}
-										onClick={handleRunNow}
-										disabled={isTaskRunning}
-									>
-										{isTaskRunning ? "Running..." : "Run Now"}
-									</Button>
-									{isTaskRunning &&
-										task.runningProgress?.sessionIds &&
-										task.runningProgress.sessionIds.length > 0 && (
-											<div ref={liveChatMenu.anchorRef}>
-												<Button
-													variant="contained"
-													size="small"
-													color="info"
-													startIcon={<ChatBubbleOutlineIcon />}
-													endIcon={
-														task.runningProgress.sessionIds.length > 1 ? (
-															<ArrowDropDownIcon />
-														) : undefined
-													}
-													onClick={
-														task.runningProgress.sessionIds.length === 1
-															? () =>
-																	navigateToSession(
-																		task.runningProgress?.sessionIds?.[0] ?? "",
-																	)
-															: liveChatMenu.handleOpen
-													}
-												>
-													Live Chat ({task.runningProgress.sessionIds.length})
-												</Button>
-												{task.runningProgress.sessionIds.length > 1 && (
-													<Menu
-														open={liveChatMenu.open}
-														onClose={liveChatMenu.handleClose}
-														{...liveChatMenu.menuProps}
-													>
-														{task.runningProgress.sessionIds.map((sid, idx) => {
-															const isActive =
-																sid === task.runningProgress?.activeSessionId;
-															return (
-																<MenuItem
-																	key={sid}
-																	onClick={() => {
-																		liveChatMenu.handleClose();
-																		navigateToSession(sid);
-																	}}
-																	sx={{ fontWeight: isActive ? 700 : 400 }}
-																>
-																	{task.symbols[idx] ?? `Session ${idx + 1}`}
-																	{isActive && " (active)"}
-																</MenuItem>
-															);
-														})}
-													</Menu>
-												)}
-											</div>
-										)}
-									<Button
-										variant="outlined"
-										size="small"
-										color="warning"
-										startIcon={<PauseIcon />}
-										onClick={handlePause}
-										disabled={pauseTaskMutation.isPending}
-									>
-										Pause
-									</Button>
-								</>
-							)}
-							{task.status === "paused" && (
-								<Button
-									variant="outlined"
-									size="small"
-									color="success"
-									startIcon={<PlayArrowIcon />}
-									onClick={handleResume}
-									disabled={resumeTaskMutation.isPending}
-								>
-									Resume
-								</Button>
-							)}
-
-							{task.runCount > 0 && (
-								<>
-									<Button
-										variant="outlined"
-										size="small"
-										startIcon={<ChatBubbleOutlineIcon />}
-										onClick={handleViewLastChat}
-									>
-										View Last Chat
-									</Button>
-									<Button
-										variant="outlined"
-										size="small"
-										startIcon={<HistoryIcon />}
-										onClick={handleViewExecutionHistory}
-									>
-										View History
-									</Button>
-								</>
-							)}
-
-							<Box sx={{ display: "flex", gap: 1.5, ml: "auto" }}>
-								<Box
-									sx={{
-										display: "flex",
-										alignItems: "center",
-										gap: 1.5,
-										px: 2,
-										py: 1,
-										borderRadius: 3,
-										background: "rgba(16, 185, 129, 0.08)",
-										border: "1.5px solid rgba(16, 185, 129, 0.5)",
-									}}
-								>
-									<ScheduleIcon
-										sx={{
-											color: "#10B981",
-											fontSize: 20,
-										}}
-									/>
-									<Box>
-										<Typography
-											variant="caption"
-											sx={{
-												display: "block",
-												lineHeight: 1.2,
-												letterSpacing: 0.5,
-												color: "#34D399",
-											}}
-										>
-											Next Run
-										</Typography>
-										<Typography variant="body2" fontWeight={500}>
-											{task.nextRunAt
-												? formatDateTime(task.nextRunAt)
-												: "Not scheduled"}
-										</Typography>
-									</Box>
-								</Box>
-								<Box
-									sx={{
-										display: "flex",
-										alignItems: "center",
-										gap: 1.5,
-										px: 2,
-										py: 1,
-										borderRadius: 3,
-										background: "rgba(167, 139, 250, 0.1)",
-										border: "1.5px solid rgba(167, 139, 250, 0.55)",
-									}}
-								>
-									<HistoryIcon
-										sx={{
-											color: "#A78BFA",
-											fontSize: 20,
-										}}
-									/>
-									<Box>
-										<Typography
-											variant="caption"
-											sx={{
-												display: "block",
-												lineHeight: 1.2,
-												letterSpacing: 0.5,
-												color: "#A78BFA",
-											}}
-										>
-											Last Run
-										</Typography>
-										<Typography variant="body2" fontWeight={500}>
-											{task.lastRunAt
-												? formatDateTime(task.lastRunAt)
-												: "Never"}
-										</Typography>
-									</Box>
-								</Box>
-							</Box>
-						</Box>
-					)}
-
-					{(error || (tasksQuery.isError && !isWaitingForBackend)) && (
-						<Alert
-							severity="error"
-							onClose={() => setError(null)}
-							sx={{ mb: 2 }}
-						>
-							{error ?? "Failed to load tasks"}
-						</Alert>
-					)}
-
-					{/* ── Running Progress Card ──────────────────── */}
-					{isTaskRunning && task && (
-						<Card
-							sx={{
-								mb: 2,
-								background: "rgba(59, 130, 246, 0.08)",
-								border: "1px solid rgba(59, 130, 246, 0.3)",
-							}}
-						>
-							<CardContent sx={{ py: 1.5, "&:last-child": { pb: 1.5 } }}>
-								<Box
-									sx={{
-										display: "flex",
-										alignItems: "center",
-										justifyContent: "space-between",
-										mb: 1,
-									}}
-								>
-									<Box
-										sx={{
+						) : (
+							<Grid container spacing={3}>
+								{/* LEFT COLUMN — Configuration */}
+								<Grid size={{ xs: 12, md: 5 }}>
+									<motion.div
+										variants={staggerCascade.container}
+										initial="hidden"
+										animate="visible"
+										style={{
 											display: "flex",
-											alignItems: "center",
-											gap: 1,
+											flexDirection: "column",
+											gap: 16,
 										}}
 									>
-										<CircularProgress size={18} sx={{ color: "#3B82F6" }} />
-										<Typography
-											variant="body2"
-											fontWeight={600}
-											sx={{ color: "#60A5FA" }}
-										>
-											{task.runningProgress?.currentSymbol
-												? `Analyzing ${task.runningProgress.currentSymbol}...`
-												: "Starting analysis..."}
-										</Typography>
-									</Box>
-									{task.runningProgress && task.runningProgress.total > 0 && (
-										<Typography variant="body2" color="text.secondary">
-											{task.runningProgress.completed} /{" "}
-											{task.runningProgress.total} symbols
-										</Typography>
-									)}
-								</Box>
-								{task.runningProgress && task.runningProgress.total > 0 && (
-									<Box
-										sx={{
+										<motion.div variants={staggerCascade.item}>
+											<GeneralSection />
+										</motion.div>
+										<motion.div variants={staggerCascade.item}>
+											<ScheduleSection />
+										</motion.div>
+										<motion.div variants={staggerCascade.item}>
+											<TradingSection />
+										</motion.div>
+										<motion.div variants={staggerCascade.item}>
+											<MonitoringSection />
+										</motion.div>
+									</motion.div>
+								</Grid>
+
+								{/* RIGHT COLUMN — Status & Activity */}
+								<Grid size={{ xs: 12, md: 7 }}>
+									<motion.div
+										variants={staggerCascade.container}
+										initial="hidden"
+										animate="visible"
+										style={{
 											display: "flex",
-											alignItems: "center",
-											gap: 1,
-											flexWrap: "wrap",
+											flexDirection: "column",
+											gap: 16,
 										}}
 									>
-										{task.symbols.map((symbol, idx) => {
-											const completed = task.runningProgress?.completed ?? 0;
-											const currentSymbol = task.runningProgress?.currentSymbol;
-											const isDone =
-												idx < completed ||
-												(idx === completed &&
-													currentSymbol !== symbol &&
-													completed > 0);
-											const isActive = symbol === currentSymbol;
-
-											return (
-												<Box
-													key={symbol}
-													sx={{
-														display: "flex",
-														alignItems: "center",
-														gap: 0.5,
-													}}
-												>
-													{idx > 0 && (
-														<Typography
-															variant="caption"
-															sx={{
-																color: "rgba(255,255,255,0.2)",
-																mx: 0.5,
-															}}
-														>
-															→
-														</Typography>
-													)}
-													{isDone ? (
-														<CheckCircleIcon
-															sx={{
-																fontSize: 14,
-																color: "#10B981",
-															}}
-														/>
-													) : (
-														<FiberManualRecordIcon
-															sx={{
-																fontSize: 10,
-																color: isActive
-																	? "#3B82F6"
-																	: "rgba(255,255,255,0.2)",
-															}}
-														/>
-													)}
-													<Typography
-														variant="caption"
-														fontWeight={isActive ? 600 : 400}
-														sx={{
-															color: isDone
-																? "#10B981"
-																: isActive
-																	? "#60A5FA"
-																	: "text.secondary",
-														}}
-													>
-														{symbol}
-													</Typography>
-												</Box>
-											);
-										})}
-									</Box>
-								)}
-							</CardContent>
-						</Card>
-					)}
-
-					{isLoadingTasks ? (
-						<Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-							<CircularProgress />
-						</Box>
-					) : (
-						<motion.div
-							variants={staggerCascade.container}
-							initial="hidden"
-							animate="visible"
-							style={{ display: "flex", flexDirection: "column", gap: 24 }}
-						>
-							{/* ── Card 1: General ─────────────────────── */}
-							<motion.div variants={staggerCascade.item}>
-								<Card>
-									<CardContent>
-										<Typography variant="h6" sx={{ mb: 2 }}>
-											General
-										</Typography>
-										<Box
-											sx={{
-												display: "flex",
-												flexDirection: "column",
-												gap: 2,
-											}}
-										>
-											<TextField
-												label="Description"
-												value={formData.description || ""}
-												onChange={(e) =>
-													setFormData({
-														...formData,
-														description: e.target.value,
-													})
-												}
-												fullWidth
-												multiline
-												rows={2}
-												placeholder="What should this task do?"
-											/>
-
-											<ZoomAwareAutocomplete<SymbolOption, true, false, false>
-												multiple
-												filterSelectedOptions
-												value={selectedSymbolOptions}
-												onChange={(_, newValue) => {
-													const uniqueSymbols = [
-														...new Set(newValue.map((opt) => opt.symbol)),
-													];
-													setFormData({
-														...formData,
-														symbols: uniqueSymbols,
-													});
-												}}
-												options={symbolOptions}
-												groupBy={(option) => option.group}
-												getOptionLabel={(option) => option.symbol}
-												renderOption={(props, option) => (
-													<li
-														{...props}
-														key={`${option.group}-${option.symbol}`}
-													>
-														<Box
-															sx={{
-																display: "flex",
-																alignItems: "center",
-																gap: 1.5,
-															}}
-														>
-															<CoinIcon symbol={option.base} size={28} />
-															<Box>
-																<Typography variant="body2" fontWeight={600}>
-																	{option.symbol}
-																</Typography>
-																<Typography
-																	variant="caption"
-																	color="text.secondary"
-																>
-																	{option.base} / {option.quote}
-																</Typography>
-															</Box>
-														</Box>
-													</li>
-												)}
-												renderTags={(value, getTagProps) =>
-													value.map((option, index) => {
-														const { key, ...tagProps } = getTagProps({ index });
-														return (
-															<Chip
-																key={key}
-																label={option.symbol}
-																size="small"
-																icon={
-																	<CoinIcon symbol={option.base} size={18} />
-																}
-																{...tagProps}
-															/>
-														);
-													})
-												}
-												isOptionEqualToValue={(option, value) =>
-													option.symbol === value.symbol &&
-													option.group === value.group
-												}
-												loading={symbolsLoading}
-												renderInput={(params) => (
-													<TextField
-														{...params}
-														label="Symbols"
-														placeholder={
-															formData.symbols.length === 0
-																? "Search instruments..."
-																: ""
-														}
-														slotProps={{
-															input: {
-																...params.InputProps,
-																endAdornment: (
-																	<>
-																		{symbolsLoading ? (
-																			<CircularProgress size={18} />
-																		) : null}
-																		{params.InputProps.endAdornment}
-																	</>
-																),
-															},
-														}}
-													/>
-												)}
-											/>
-
-											<TextField
-												label="Custom Instructions"
-												value={formData.customInstructions || ""}
-												onChange={(e) =>
-													setFormData({
-														...formData,
-														customInstructions: e.target.value,
-													})
-												}
-												fullWidth
-												multiline
-												rows={3}
-												placeholder="Additional instructions for the agent..."
-											/>
-										</Box>
-									</CardContent>
-								</Card>
-							</motion.div>
-
-							{/* ── Card 2: Schedule ────────────────────── */}
-							<motion.div variants={staggerCascade.item}>
-								<Card>
-									<CardContent>
-										<Typography variant="h6" sx={{ mb: 2 }}>
-											Schedule
-										</Typography>
-										<Box
-											sx={{
-												display: "flex",
-												flexDirection: "column",
-												gap: 1.5,
-											}}
-										>
-											{formData.schedules.map((schedule, idx) => (
-												<Box
-													key={scheduleKeys[idx] as string}
-													sx={{
-														display: "flex",
-														gap: 1,
-														alignItems: "center",
-														flexWrap: "wrap",
-														p: 1.5,
-														border: 1,
-														borderColor: "divider",
-														borderRadius: 1,
-														opacity: schedule.enabled === false ? 0.5 : 1,
-													}}
-												>
-													<Switch
-														checked={schedule.enabled !== false}
-														onChange={(e) =>
-															updateSchedule(idx, {
-																enabled: e.target.checked,
-															})
-														}
-														size="small"
-													/>
-
-													<FormControl sx={{ minWidth: 130 }}>
-														<InputLabel>Frequency</InputLabel>
-														<ZoomAwareSelect
-															value={schedule.frequency}
-															label="Frequency"
-															size="small"
-															onChange={(e) => {
-																const freq = e.target.value as TaskFrequency;
-																const patch: Partial<TaskSchedule> = {
-																	frequency: freq,
-																};
-																// Clear fields irrelevant to new frequency
-																if (
-																	freq !== "interval" &&
-																	freq !== "daily" &&
-																	freq !== "weekly"
-																) {
-																	patch.intervalValue = undefined;
-																	patch.intervalUnit = undefined;
-																}
-																if (freq !== "daily" && freq !== "weekly") {
-																	patch.scheduledTime = undefined;
-																}
-																if (freq !== "weekly") {
-																	patch.dayOfWeek = undefined;
-																}
-																if (freq !== "custom") {
-																	patch.cronExpression = undefined;
-																}
-																updateSchedule(idx, patch);
-															}}
-														>
-															<MenuItem value="once">Once</MenuItem>
-															<MenuItem value="interval">Every</MenuItem>
-															<MenuItem value="daily">Daily</MenuItem>
-															<MenuItem value="weekly">Weekly</MenuItem>
-															<MenuItem value="custom">Custom</MenuItem>
-														</ZoomAwareSelect>
-													</FormControl>
-
-													{/* Interval frequency: value + unit */}
-													{schedule.frequency === "interval" && (
-														<>
-															<TextField
-																label="Value"
-																type="number"
-																size="small"
-																value={schedule.intervalValue ?? ""}
-																onChange={(e) =>
-																	updateSchedule(idx, {
-																		intervalValue: e.target.value
-																			? Number(e.target.value)
-																			: undefined,
-																	})
-																}
-																slotProps={{
-																	htmlInput: {
-																		min: 1,
-																		onFocus: (
-																			e: React.FocusEvent<HTMLInputElement>,
-																		) => e.target.select(),
-																	},
-																}}
-																sx={{ width: 90 }}
-															/>
-															<FormControl size="small" sx={{ minWidth: 110 }}>
-																<InputLabel>Unit</InputLabel>
-																<ZoomAwareSelect
-																	value={schedule.intervalUnit ?? "hours"}
-																	label="Unit"
-																	onChange={(e) =>
-																		updateSchedule(idx, {
-																			intervalUnit: e.target
-																				.value as TaskSchedule["intervalUnit"],
-																		})
-																	}
-																>
-																	<MenuItem value="minutes">Minutes</MenuItem>
-																	<MenuItem value="hours">Hours</MenuItem>
-																</ZoomAwareSelect>
-															</FormControl>
-														</>
-													)}
-
-													{/* Daily / Weekly: time picker */}
-													{(schedule.frequency === "daily" ||
-														schedule.frequency === "weekly") && (
-														<TimePicker
-															label="Time"
-															value={parse(
-																schedule.scheduledTime || "09:00",
-																"HH:mm",
-																new Date(),
-															)}
-															onChange={(val) => {
-																if (val) {
-																	updateSchedule(idx, {
-																		scheduledTime: format(val, "HH:mm"),
-																	});
-																}
-															}}
-															slotProps={{
-																textField: { size: "small" },
-															}}
-															slots={{
-																openPickerButton: (props) => (
-																	<Tooltip title="Pick time">
-																		<IconButton {...props} />
-																	</Tooltip>
-																),
-															}}
-															sx={{ width: 170 }}
-														/>
-													)}
-
-													{/* Weekly: day selector */}
-													{schedule.frequency === "weekly" && (
-														<FormControl size="small" sx={{ minWidth: 120 }}>
-															<InputLabel>Day</InputLabel>
-															<ZoomAwareSelect
-																value={schedule.dayOfWeek ?? 0}
-																label="Day"
-																onChange={(e) =>
-																	updateSchedule(idx, {
-																		dayOfWeek: e.target.value as number,
-																	})
-																}
-															>
-																{DAYS_OF_WEEK.map((day) => (
-																	<MenuItem key={day.value} value={day.value}>
-																		{day.label}
-																	</MenuItem>
-																))}
-															</ZoomAwareSelect>
-														</FormControl>
-													)}
-
-													{/* Custom: cron expression */}
-													{schedule.frequency === "custom" && (
-														<TextField
-															label="Cron"
-															size="small"
-															value={schedule.cronExpression || ""}
-															onChange={(e) =>
-																updateSchedule(idx, {
-																	cronExpression: e.target.value,
-																})
-															}
-															placeholder="0 9 * * *"
-															sx={{ flex: 1 }}
-														/>
-													)}
-
-													{/* Repeat toggle for daily/weekly */}
-													{(schedule.frequency === "daily" ||
-														schedule.frequency === "weekly") && (
-														<Box
-															sx={{
-																display: "flex",
-																gap: 1,
-																alignItems: "center",
-																bgcolor:
-																	schedule.intervalValue != null
-																		? "rgba(255, 255, 255, 0.04)"
-																		: "transparent",
-																borderRadius: 2,
-																px: 1,
-																py: 0.5,
-																transition: "background-color 0.2s",
-															}}
-														>
-															<Tooltip
-																title={
-																	schedule.intervalValue != null
-																		? "Disable repeat"
-																		: "Enable repeat"
-																}
-															>
-																<IconButton
-																	size="small"
-																	onClick={() => {
-																		const enabling =
-																			schedule.intervalValue == null;
-																		const patch = enabling
-																			? {
-																					intervalValue: 1,
-																					intervalUnit: "hours" as const,
-																				}
-																			: {
-																					intervalValue: undefined,
-																					intervalUnit: undefined,
-																				};
-																		console.debug("[repeat-toggle] clicked", {
-																			action: enabling ? "enable" : "disable",
-																			scheduleIdx: idx,
-																			before: {
-																				intervalValue: schedule.intervalValue,
-																				intervalUnit: schedule.intervalUnit,
-																			},
-																			patch,
-																		});
-																		updateSchedule(idx, patch);
-																	}}
-																	sx={{
-																		color:
-																			schedule.intervalValue != null
-																				? "primary.main"
-																				: "text.disabled",
-																	}}
-																>
-																	<RepeatIcon fontSize="small" />
-																</IconButton>
-															</Tooltip>
-															{schedule.intervalValue != null && (
-																<>
-																	<Typography
-																		variant="body2"
-																		color="text.secondary"
-																	>
-																		every
-																	</Typography>
-																	<TextField
-																		type="number"
-																		size="small"
-																		value={schedule.intervalValue ?? ""}
-																		onChange={(e) =>
-																			updateSchedule(idx, {
-																				intervalValue: e.target.value
-																					? Number(e.target.value)
-																					: undefined,
-																			})
-																		}
-																		slotProps={{
-																			htmlInput: {
-																				min: 1,
-																				onFocus: (
-																					e: React.FocusEvent<HTMLInputElement>,
-																				) => e.target.select(),
-																			},
-																		}}
-																		sx={{ width: 70 }}
-																	/>
-																	<FormControl
-																		size="small"
-																		sx={{ minWidth: 100 }}
-																	>
-																		<InputLabel>Unit</InputLabel>
-																		<ZoomAwareSelect
-																			value={schedule.intervalUnit ?? "hours"}
-																			label="Unit"
-																			onChange={(e) =>
-																				updateSchedule(idx, {
-																					intervalUnit: e.target
-																						.value as TaskSchedule["intervalUnit"],
-																				})
-																			}
-																		>
-																			<MenuItem value="minutes">Min</MenuItem>
-																			<MenuItem value="hours">Hrs</MenuItem>
-																		</ZoomAwareSelect>
-																	</FormControl>
-																</>
-															)}
-														</Box>
-													)}
-
-													{formData.schedules.length > 1 && (
-														<Tooltip title="Remove schedule">
-															<IconButton
-																size="small"
-																color="error"
-																onClick={() => removeSchedule(idx)}
-																sx={{ ml: "auto" }}
-															>
-																<RemoveCircleOutlineIcon />
-															</IconButton>
-														</Tooltip>
-													)}
-												</Box>
-											))}
-
-											<Button
-												size="small"
-												startIcon={<AddCircleOutlineIcon />}
-												onClick={addSchedule}
-												sx={{ alignSelf: "flex-start" }}
-											>
-												Add Schedule
-											</Button>
-										</Box>
-									</CardContent>
-								</Card>
-							</motion.div>
-
-							{/* ── Card 3: Trading ─────────────────────── */}
-							<motion.div variants={staggerCascade.item}>
-								<Card>
-									<CardContent>
-										<Box
-											sx={{
-												display: "flex",
-												alignItems: "center",
-												justifyContent: "space-between",
-												mb: 1,
-											}}
-										>
-											<Typography variant="h6">Trading</Typography>
-											<Switch
-												checked={formData.tradingEnabled}
-												onChange={(e) =>
-													setFormData({
-														...formData,
-														tradingEnabled: e.target.checked,
-													})
-												}
-											/>
-										</Box>
-
-										{formData.tradingEnabled && (
-											<Box
-												sx={{
-													display: "flex",
-													flexDirection: "column",
-													gap: 2,
-													mt: 1,
-												}}
-											>
-												<FormControl fullWidth>
-													<InputLabel>Agent Mode</InputLabel>
-													<ZoomAwareSelect
-														value={formData.agentMode}
-														label="Agent Mode"
-														onChange={(e) =>
-															setFormData({
-																...formData,
-																agentMode: e.target.value as AgentMode,
-															})
-														}
-													>
-														<MenuItem value="ask">
-															<Box
-																sx={{
-																	display: "flex",
-																	alignItems: "center",
-																	gap: 1,
-																}}
-															>
-																<NotificationsIcon fontSize="small" />
-																Ask - Notify for confirmation
-															</Box>
-														</MenuItem>
-														<MenuItem value="auto">
-															<Box
-																sx={{
-																	display: "flex",
-																	alignItems: "center",
-																	gap: 1,
-																}}
-															>
-																<AutoModeIcon fontSize="small" />
-																Auto - Execute automatically
-															</Box>
-														</MenuItem>
-													</ZoomAwareSelect>
-												</FormControl>
-
-												<Box>
-													<Typography gutterBottom>Holding Term</Typography>
-													<Typography
-														variant="caption"
-														color="text.secondary"
-														sx={{ display: "block", mb: 1 }}
-													>
-														How long the agent should hold positions before
-														considering exit
-													</Typography>
-													<ToggleButtonGroup
-														value={formData.holdingTerm ?? "medium"}
-														exclusive
-														onChange={(_, value) => {
-															if (value !== null) {
-																setFormData({
-																	...formData,
-																	holdingTerm: value as HoldingTerm,
-																});
-															}
-														}}
-														fullWidth
-														size="small"
-													>
-														{(
-															Object.keys(HOLDING_TERM_CONFIG) as HoldingTerm[]
-														).map((term) => (
-															<ToggleButton
-																key={term}
-																value={term}
-																sx={{
-																	display: "flex",
-																	flexDirection: "column",
-																	gap: 0.25,
-																	py: 1,
-																	textTransform: "none",
-																}}
-															>
-																<Typography variant="body2" fontWeight={600}>
-																	{HOLDING_TERM_CONFIG[term].label}
-																</Typography>
-																<Typography
-																	variant="caption"
-																	color="text.secondary"
-																>
-																	{HOLDING_TERM_CONFIG[term].description}
-																</Typography>
-															</ToggleButton>
-														))}
-													</ToggleButtonGroup>
-												</Box>
-
-												<Box sx={{ px: 4 }}>
-													<Typography gutterBottom>Risk Level</Typography>
-													<Slider
-														value={riskValues.indexOf(formData.riskLevel)}
-														onChange={(_, value) =>
-															setFormData({
-																...formData,
-																riskLevel: riskValues[value as number],
-															})
-														}
-														step={1}
-														marks={riskMarks}
-														min={0}
-														max={2}
-														sx={{
-															"& .MuiSlider-markLabel": {
-																fontSize: "0.75rem",
-															},
-														}}
-													/>
-												</Box>
-
-												<Tooltip title="Run specialized subagents (Technical, Fundamental, News) before main analysis. More thorough but uses more API credits.">
-													<FormControlLabel
-														control={
-															<Switch
-																checked={formData.useSubagents ?? false}
-																onChange={(e) =>
-																	setFormData({
-																		...formData,
-																		useSubagents: e.target.checked,
-																	})
-																}
-															/>
-														}
-														label="Deep Analysis (Subagents)"
-													/>
-												</Tooltip>
-
-												<TextField
-													label="Max Position Size (USDT)"
-													type="number"
-													value={formData.maxPositionSize || ""}
-													onChange={(e) =>
-														setFormData({
-															...formData,
-															maxPositionSize: e.target.value
-																? Number(e.target.value)
-																: undefined,
-														})
-													}
-													fullWidth
-												/>
-
-												<TextField
-													label="Max Daily Trades"
-													type="number"
-													value={formData.maxDailyTrades || ""}
-													onChange={(e) =>
-														setFormData({
-															...formData,
-															maxDailyTrades: e.target.value
-																? Number(e.target.value)
-																: undefined,
-														})
-													}
-													fullWidth
-													helperText="Limit how many trades the agent can execute per day"
-													slotProps={{
-														htmlInput: { min: 1, step: 1 },
-													}}
-												/>
-											</Box>
+										{isTaskRunning && task && (
+											<motion.div variants={staggerCascade.item}>
+												<TaskRunningProgress task={task} />
+											</motion.div>
 										)}
-									</CardContent>
-								</Card>
-							</motion.div>
 
-							{/* ── Card 4: Monitoring ──────────────────── */}
-							<motion.div variants={staggerCascade.item}>
-								<Card>
-									<CardContent>
-										<Box
-											sx={{
-												display: "flex",
-												alignItems: "center",
-												justifyContent: "space-between",
-												mb: 1,
-											}}
-										>
-											<Typography variant="h6">Monitoring</Typography>
-											<Switch
-												checked={formData.monitoringEnabled}
-												onChange={(e) =>
-													setFormData({
-														...formData,
-														monitoringEnabled: e.target.checked,
-													})
-												}
+										<motion.div variants={staggerCascade.item}>
+											<RecentRunsPanel
+												taskId={taskId}
+												onViewHistory={handleViewExecutionHistory}
+												onViewLastChat={handleViewLastChat}
+												hasRuns={(task?.runCount ?? 0) > 0}
+												hasLastSession={!!task?.lastSessionId}
 											/>
-										</Box>
+										</motion.div>
 
-										{formData.monitoringEnabled && (
-											<Box
-												sx={{
-													display: "flex",
-													flexDirection: "column",
-													gap: 1.5,
-													mt: 1,
-												}}
-											>
-												{(formData.monitoringConditions ?? []).map(
-													(condition, index) => (
-														<Box
-															key={monitoringConditionKeys[index] as string}
-															sx={{
-																display: "flex",
-																gap: 1,
-																alignItems: "flex-start",
-															}}
-														>
-															<FormControl sx={{ minWidth: 160 }}>
-																<InputLabel>Condition</InputLabel>
-																<ZoomAwareSelect
-																	value={condition.conditionType}
-																	label="Condition"
-																	size="small"
-																	onChange={(e) => {
-																		const updated = [
-																			...(formData.monitoringConditions ?? []),
-																		];
-																		updated[index] = {
-																			...updated[index],
-																			conditionType: e.target
-																				.value as MonitoringConditionType,
-																		};
-																		setFormData({
-																			...formData,
-																			monitoringConditions: updated,
-																		});
-																	}}
-																>
-																	{(
-																		Object.keys(
-																			MONITORING_CONDITION_CONFIG,
-																		) as MonitoringConditionType[]
-																	).map((type) => (
-																		<MenuItem key={type} value={type}>
-																			{MONITORING_CONDITION_CONFIG[type].label}
-																		</MenuItem>
-																	))}
-																</ZoomAwareSelect>
-															</FormControl>
-
-															<TextField
-																label={`Threshold (${MONITORING_CONDITION_CONFIG[condition.conditionType]?.unit || ""})`}
-																type="number"
-																size="small"
-																value={condition.threshold}
-																onChange={(e) => {
-																	const updated = [
-																		...(formData.monitoringConditions ?? []),
-																	];
-																	updated[index] = {
-																		...updated[index],
-																		threshold: Number(e.target.value),
-																	};
-																	setFormData({
-																		...formData,
-																		monitoringConditions: updated,
-																	});
-																}}
-																sx={{ width: 140 }}
-															/>
-
-															{condition.conditionType === "custom" ? (
-																<TextField
-																	label="Description"
-																	size="small"
-																	value={condition.description ?? ""}
-																	onChange={(e) => {
-																		const updated = [
-																			...(formData.monitoringConditions ?? []),
-																		];
-																		updated[index] = {
-																			...updated[index],
-																			description: e.target.value,
-																		};
-																		setFormData({
-																			...formData,
-																			monitoringConditions: updated,
-																		});
-																	}}
-																	sx={{ flex: 1 }}
-																/>
-															) : (
-																<FormControl size="small" sx={{ minWidth: 90 }}>
-																	<InputLabel>Timeframe</InputLabel>
-																	<ZoomAwareSelect
-																		value={condition.timeframe ?? ""}
-																		label="Timeframe"
-																		onChange={(e) => {
-																			const updated = [
-																				...(formData.monitoringConditions ??
-																					[]),
-																			];
-																			updated[index] = {
-																				...updated[index],
-																				timeframe: e.target.value || undefined,
-																			};
-																			setFormData({
-																				...formData,
-																				monitoringConditions: updated,
-																			});
-																		}}
-																	>
-																		<MenuItem value="">-</MenuItem>
-																		<MenuItem value="1H">1H</MenuItem>
-																		<MenuItem value="4H">4H</MenuItem>
-																		<MenuItem value="1D">1D</MenuItem>
-																	</ZoomAwareSelect>
-																</FormControl>
-															)}
-
-															<IconButton
-																size="small"
-																color="error"
-																onClick={() => {
-																	setMonitoringConditionKeys((prev) =>
-																		prev.filter((_, i) => i !== index),
-																	);
-																	const updated = (
-																		formData.monitoringConditions ?? []
-																	).filter((_, i) => i !== index);
-																	setFormData({
-																		...formData,
-																		monitoringConditions: updated,
-																	});
-																}}
-															>
-																<RemoveCircleOutlineIcon />
-															</IconButton>
-														</Box>
-													),
-												)}
-
-												<Button
-													size="small"
-													startIcon={<AddCircleOutlineIcon />}
-													onClick={() => {
-														const newCondition: MonitoringCondition = {
-															conditionType: "price_above",
-															threshold: 0,
-														};
-														setMonitoringConditionKeys((prev) => [
-															...prev,
-															createUiKey(),
-														]);
-														setFormData({
-															...formData,
-															monitoringConditions: [
-																...(formData.monitoringConditions ?? []),
-																newCondition,
-															],
-														});
-													}}
-													sx={{ alignSelf: "flex-start" }}
-												>
-													Add Condition
-												</Button>
-
-												<Box sx={{ px: 1, mt: 1 }}>
-													<Typography gutterBottom variant="body2">
-														Alert Cooldown:{" "}
-														{formData.alertCooldownMinutes ?? 60} minutes
-													</Typography>
-													<Slider
-														value={formData.alertCooldownMinutes ?? 60}
-														onChange={(_, value) =>
-															setFormData({
-																...formData,
-																alertCooldownMinutes: value as number,
-															})
-														}
-														min={5}
-														max={1440}
-														step={5}
-														marks={[
-															{ value: 15, label: "15m" },
-															{ value: 60, label: "1h" },
-															{ value: 360, label: "6h" },
-															{ value: 1440, label: "24h" },
-														]}
-														valueLabelDisplay="auto"
-														valueLabelFormat={(v) =>
-															v >= 60
-																? `${Math.floor(v / 60)}h${v % 60 ? ` ${v % 60}m` : ""}`
-																: `${v}m`
-														}
-														sx={{
-															"& .MuiSlider-markLabel": {
-																fontSize: "0.7rem",
-															},
-														}}
-													/>
-												</Box>
-											</Box>
+										{isSuperuser && (
+											<motion.div variants={staggerCascade.item}>
+												<StrategyDiscoveryCard />
+											</motion.div>
 										)}
-									</CardContent>
-								</Card>
-							</motion.div>
-
-							{/* ── Card 5: Auto-Discovery ────────────── */}
-							{isSuperuser && (
-								<motion.div variants={staggerCascade.item}>
-									<StrategyDiscoveryCard />
-								</motion.div>
-							)}
-
-							{/* ── Card 6: View Execution History ──────── */}
-							{taskId && (
-								<motion.div variants={staggerCascade.item}>
-									<Card>
-										<CardContent
-											sx={{
-												display: "flex",
-												alignItems: "center",
-												justifyContent: "space-between",
-											}}
-										>
-											<Box>
-												<Typography variant="h6">Execution History</Typography>
-												<Typography variant="body2" color="text.secondary">
-													View decisions and analysis from task runs
-												</Typography>
-											</Box>
-											<Stack direction="row" spacing={1}>
-												{task?.lastSessionId && (
-													<Button
-														variant="outlined"
-														startIcon={<ChatBubbleOutlineIcon />}
-														onClick={handleViewLastChat}
-													>
-														View Last Chat
-													</Button>
-												)}
-												<Button
-													variant="outlined"
-													startIcon={<HistoryIcon />}
-													onClick={handleViewExecutionHistory}
-												>
-													View History
-												</Button>
-											</Stack>
-										</CardContent>
-									</Card>
-								</motion.div>
-							)}
-						</motion.div>
-					)}
-				</Box>
-			</PageTransition>
+									</motion.div>
+								</Grid>
+							</Grid>
+						)}
+					</Box>
+				</PageTransition>
+			</TaskConfigProvider>
 		</LocalizationProvider>
 	);
 }
