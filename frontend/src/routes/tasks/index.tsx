@@ -2,11 +2,10 @@
  * Task Configuration Page — single-task auto-save design.
  * Auto-creates a default task on first visit, debounces all changes.
  *
- * Layout: sticky action bar → stat strip → two-column (config | status).
+ * Layout: stacked single-column — action bar → stats → unified tabs (config + activity).
  */
 
 import { Alert, Box, CircularProgress } from "@mui/material";
-import Grid from "@mui/material/Grid2";
 import { LocalizationProvider } from "@mui/x-date-pickers";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -17,18 +16,12 @@ import { decisionsApi } from "@/api/endpoints/decisions";
 import { tasksApi } from "@/api/endpoints/tasks";
 import { PageTransition } from "@/components/common/PageTransition";
 import { SectionHeader } from "@/components/common/SectionHeader";
-import { StrategyDiscoveryCard } from "@/components/strategies/StrategyDiscoveryCard";
 import {
 	DuplicateTasksBanner,
-	GeneralSection,
-	MonitoringSection,
-	RecentRunsPanel,
-	ScheduleSection,
 	TaskActionBar,
 	TaskConfigProvider,
-	TaskRunningProgress,
+	TaskSectionTabs,
 	TaskStatStrip,
-	TradingSection,
 } from "@/components/tasks";
 import { useDebouncedSave } from "@/hooks/useDebouncedSave";
 import { useSymbolOptions } from "@/hooks/useSymbolOptions";
@@ -432,6 +425,7 @@ function TaskConfigPage() {
 			isSuperuser,
 			symbolOptions,
 			symbolsLoading,
+			sectionLayout: "panel" as const,
 		}),
 		[
 			task,
@@ -489,77 +483,38 @@ function TaskConfigPage() {
 							</Alert>
 						)}
 
-						{task && <TaskStatStrip task={task} />}
-
 						{isLoadingTasks ? (
 							<Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
 								<CircularProgress />
 							</Box>
 						) : (
-							<Grid container spacing={3}>
-								{/* LEFT COLUMN — Configuration */}
-								<Grid size={{ xs: 12, md: 5 }}>
-									<motion.div
-										variants={staggerCascade.container}
-										initial="hidden"
-										animate="visible"
-										style={{
-											display: "flex",
-											flexDirection: "column",
-											gap: 16,
-										}}
-									>
-										<motion.div variants={staggerCascade.item}>
-											<GeneralSection />
-										</motion.div>
-										<motion.div variants={staggerCascade.item}>
-											<ScheduleSection />
-										</motion.div>
-										<motion.div variants={staggerCascade.item}>
-											<TradingSection />
-										</motion.div>
-										<motion.div variants={staggerCascade.item}>
-											<MonitoringSection />
-										</motion.div>
+							<motion.div
+								variants={staggerCascade.container}
+								initial="hidden"
+								animate="visible"
+								style={{
+									display: "flex",
+									flexDirection: "column",
+									gap: 16,
+								}}
+							>
+								{task && (
+									<motion.div variants={staggerCascade.item}>
+										<TaskStatStrip task={task} />
 									</motion.div>
-								</Grid>
+								)}
 
-								{/* RIGHT COLUMN — Status & Activity */}
-								<Grid size={{ xs: 12, md: 7 }}>
-									<motion.div
-										variants={staggerCascade.container}
-										initial="hidden"
-										animate="visible"
-										style={{
-											display: "flex",
-											flexDirection: "column",
-											gap: 16,
-										}}
-									>
-										{isTaskRunning && task && (
-											<motion.div variants={staggerCascade.item}>
-												<TaskRunningProgress task={task} />
-											</motion.div>
-										)}
-
-										<motion.div variants={staggerCascade.item}>
-											<RecentRunsPanel
-												taskId={taskId}
-												onViewHistory={handleViewExecutionHistory}
-												onViewLastChat={handleViewLastChat}
-												hasRuns={(task?.runCount ?? 0) > 0}
-												hasLastSession={!!task?.lastSessionId}
-											/>
-										</motion.div>
-
-										{isSuperuser && (
-											<motion.div variants={staggerCascade.item}>
-												<StrategyDiscoveryCard />
-											</motion.div>
-										)}
-									</motion.div>
-								</Grid>
-							</Grid>
+								<motion.div variants={staggerCascade.item}>
+									<TaskSectionTabs
+										task={task}
+										taskId={taskId}
+										isTaskRunning={isTaskRunning}
+										isSuperuser={isSuperuser}
+										onViewHistory={handleViewExecutionHistory}
+										onViewLastChat={handleViewLastChat}
+									/>
+								</motion.div>
+							</motion.div>
 						)}
 					</Box>
 				</PageTransition>

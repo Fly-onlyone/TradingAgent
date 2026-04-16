@@ -1,6 +1,7 @@
 /**
- * Shared glass-styled Accordion for task config sections.
- * Eliminates repeated sx/layout across GeneralSection, ScheduleSection, etc.
+ * Shared glass-styled container for task config sections.
+ * Renders as accordion (collapsible header) or panel (no chrome — header is
+ * owned by the enclosing tab strip). Resolved from TaskConfigContext.
  */
 
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -12,6 +13,7 @@ import {
 	Typography,
 } from "@mui/material";
 import type { ReactNode } from "react";
+import { useTaskSectionLayout } from "@/components/tasks/TaskConfigContext";
 
 interface GlassAccordionProps {
 	icon: ReactNode;
@@ -30,6 +32,28 @@ export function GlassAccordion({
 	defaultExpanded,
 	children,
 }: GlassAccordionProps) {
+	const layout = useTaskSectionLayout();
+
+	if (layout === "panel") {
+		return (
+			<Box
+				sx={{
+					background: (t) => t.trading.glass.card.background,
+					backdropFilter: (t) => t.trading.glass.card.backdropFilter,
+					border: (t) => t.trading.glass.card.border,
+					borderRadius: (t) => t.trading.glass.card.borderRadius,
+					px: 3,
+					py: 2.5,
+					display: "flex",
+					flexDirection: "column",
+					gap: 2,
+				}}
+			>
+				{children}
+			</Box>
+		);
+	}
+
 	return (
 		<Accordion
 			defaultExpanded={defaultExpanded}

@@ -13,13 +13,16 @@ import { staggerCascade } from "@/utils/animations/variants";
 
 interface TaskStatStripProps {
 	task: AgentTask;
+	compact?: boolean;
 }
 
-export function TaskStatStrip({ task }: TaskStatStripProps) {
+export function TaskStatStrip({ task, compact = false }: TaskStatStripProps) {
 	const successRate =
 		task.runCount > 0
 			? Math.round((task.successCount / task.runCount) * 100)
 			: 0;
+
+	const itemSize = compact ? 6 : { xs: 6, sm: 3 };
 
 	return (
 		<motion.div
@@ -27,8 +30,8 @@ export function TaskStatStrip({ task }: TaskStatStripProps) {
 			initial="hidden"
 			animate="visible"
 		>
-			<Grid container spacing={2} sx={{ mb: 2 }}>
-				<Grid size={{ xs: 6, sm: 3 }}>
+			<Grid container spacing={compact ? 1.5 : 2} sx={{ mb: compact ? 0 : 2 }}>
+				<Grid size={itemSize}>
 					<motion.div variants={staggerCascade.item}>
 						<KpiMetric
 							label="Total Runs"
@@ -38,7 +41,7 @@ export function TaskStatStrip({ task }: TaskStatStripProps) {
 						/>
 					</motion.div>
 				</Grid>
-				<Grid size={{ xs: 6, sm: 3 }}>
+				<Grid size={itemSize}>
 					<motion.div variants={staggerCascade.item}>
 						<TrendIconMetric
 							label="Success Rate"
@@ -61,12 +64,12 @@ export function TaskStatStrip({ task }: TaskStatStripProps) {
 						/>
 					</motion.div>
 				</Grid>
-				<Grid size={{ xs: 6, sm: 3 }}>
+				<Grid size={itemSize}>
 					<motion.div variants={staggerCascade.item}>
 						<CountdownMetric label="Next Run" targetAt={task.nextRunAt} />
 					</motion.div>
 				</Grid>
-				<Grid size={{ xs: 6, sm: 3 }}>
+				<Grid size={itemSize}>
 					<motion.div variants={staggerCascade.item}>
 						<TimeAgoMetric
 							label="Last Run"

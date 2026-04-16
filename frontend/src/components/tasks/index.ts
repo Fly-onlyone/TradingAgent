@@ -7,4 +7,5 @@ export { TradingSection } from "./sections/TradingSection";
 export { TaskActionBar } from "./TaskActionBar";
 export { TaskConfigProvider, useTaskConfig } from "./TaskConfigContext";
 export { TaskRunningProgress } from "./TaskRunningProgress";
+export { TaskSectionTabs } from "./TaskSectionTabs";
 export { TaskStatStrip } from "./TaskStatStrip";

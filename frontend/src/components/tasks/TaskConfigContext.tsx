@@ -4,6 +4,8 @@ import type { SymbolOption } from "@/api/endpoints/market";
 import type { SaveStatus } from "@/hooks/useDebouncedSave";
 import type { AgentTask, TaskCreate } from "@/types/task";
 
+export type TaskSectionLayout = "accordion" | "panel";
+
 export interface TaskConfigContextValue {
 	task: AgentTask | null;
 	taskId: string | null;
@@ -14,6 +16,7 @@ export interface TaskConfigContextValue {
 	isSuperuser: boolean;
 	symbolOptions: SymbolOption[];
 	symbolsLoading: boolean;
+	sectionLayout: TaskSectionLayout;
 }
 
 const TaskConfigContext = createContext<TaskConfigContextValue | null>(null);
@@ -26,4 +29,9 @@ export function useTaskConfig(): TaskConfigContextValue {
 		throw new Error("useTaskConfig must be used within TaskConfigProvider");
 	}
 	return ctx;
+}
+
+export function useTaskSectionLayout(): TaskSectionLayout {
+	const ctx = useContext(TaskConfigContext);
+	return ctx?.sectionLayout ?? "accordion";
 }

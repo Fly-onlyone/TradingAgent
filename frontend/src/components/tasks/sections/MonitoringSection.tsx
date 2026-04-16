@@ -5,16 +5,15 @@ import {
 	Box,
 	Button,
 	Chip,
-	FormControl,
+	Divider,
 	IconButton,
-	InputLabel,
 	MenuItem,
 	Slider,
 	Switch,
 	TextField,
 	Typography,
 } from "@mui/material";
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { ZoomAwareSelect } from "@/components/common/ZoomAwareSelect";
 import { GlassAccordion } from "@/components/tasks/sections/GlassAccordion";
 import { useTaskConfig } from "@/components/tasks/TaskConfigContext";
@@ -23,6 +22,11 @@ import type {
 	MonitoringConditionType,
 } from "@/types/task";
 import { MONITORING_CONDITION_CONFIG } from "@/types/task";
+
+const GRID_COLUMNS =
+	"minmax(160px, 1.4fr) minmax(100px, 0.8fr) minmax(120px, 1.1fr) 36px";
+
+const HEADER_LABELS = ["Condition", "Threshold", "Timeframe"] as const;
 
 export function MonitoringSection() {
 	const { formData, setFormData } = useTaskConfig();
@@ -125,100 +129,118 @@ export function MonitoringSection() {
 			</Box>
 
 			{formData.monitoringEnabled && (
-				<Box
-					sx={{
-						display: "flex",
-						flexDirection: "column",
-						gap: 1.5,
-					}}
-				>
-					{(formData.monitoringConditions ?? []).map((condition, index) => (
+				<>
+					<Divider flexItem />
+
+					{conditionCount > 0 && (
 						<Box
-							key={conditionKeys[index] as string}
 							sx={{
-								display: "flex",
-								gap: 1,
-								alignItems: "flex-start",
+								display: "grid",
+								gridTemplateColumns: GRID_COLUMNS,
+								columnGap: 1,
+								rowGap: 1,
+								alignItems: "center",
 							}}
 						>
-							<FormControl sx={{ minWidth: 160 }}>
-								<InputLabel>Condition</InputLabel>
-								<ZoomAwareSelect
-									value={condition.conditionType}
-									label="Condition"
-									size="small"
-									onChange={(e) =>
-										updateCondition(index, {
-											conditionType: e.target.value as MonitoringConditionType,
-										})
-									}
+							{HEADER_LABELS.map((label) => (
+								<Typography
+									key={label}
+									variant="caption"
+									color="text.secondary"
+									sx={{
+										textTransform: "uppercase",
+										letterSpacing: "0.06em",
+										fontWeight: 600,
+										px: 0.5,
+									}}
 								>
-									{(
-										Object.keys(
-											MONITORING_CONDITION_CONFIG,
-										) as MonitoringConditionType[]
-									).map((type) => (
-										<MenuItem key={type} value={type}>
-											{MONITORING_CONDITION_CONFIG[type].label}
-										</MenuItem>
-									))}
-								</ZoomAwareSelect>
-							</FormControl>
+									{label}
+								</Typography>
+							))}
+							<Box />
 
-							<TextField
-								label={`Threshold (${MONITORING_CONDITION_CONFIG[condition.conditionType]?.unit || ""})`}
-								type="number"
-								size="small"
-								value={condition.threshold}
-								onChange={(e) =>
-									updateCondition(index, {
-										threshold: Number(e.target.value),
-									})
-								}
-								sx={{ width: 140 }}
-							/>
+							{(formData.monitoringConditions ?? []).map((condition, index) => {
+								const unit =
+									MONITORING_CONDITION_CONFIG[condition.conditionType]?.unit ||
+									"";
+								const isCustom = condition.conditionType === "custom";
+								return (
+									<Fragment key={conditionKeys[index] as string}>
+										<ZoomAwareSelect
+											value={condition.conditionType}
+											size="small"
+											onChange={(e) =>
+												updateCondition(index, {
+													conditionType: e.target
+														.value as MonitoringConditionType,
+												})
+											}
+										>
+											{(
+												Object.keys(
+													MONITORING_CONDITION_CONFIG,
+												) as MonitoringConditionType[]
+											).map((type) => (
+												<MenuItem key={type} value={type}>
+													{MONITORING_CONDITION_CONFIG[type].label}
+												</MenuItem>
+											))}
+										</ZoomAwareSelect>
 
-							{condition.conditionType === "custom" ? (
-								<TextField
-									label="Description"
-									size="small"
-									value={condition.description ?? ""}
-									onChange={(e) =>
-										updateCondition(index, {
-											description: e.target.value,
-										})
-									}
-									sx={{ flex: 1 }}
-								/>
-							) : (
-								<FormControl size="small" sx={{ minWidth: 90 }}>
-									<InputLabel>Timeframe</InputLabel>
-									<ZoomAwareSelect
-										value={condition.timeframe ?? ""}
-										label="Timeframe"
-										onChange={(e) =>
-											updateCondition(index, {
-												timeframe: e.target.value || undefined,
-											})
-										}
-									>
-										<MenuItem value="">-</MenuItem>
-										<MenuItem value="1H">1H</MenuItem>
-										<MenuItem value="4H">4H</MenuItem>
-										<MenuItem value="1D">1D</MenuItem>
-									</ZoomAwareSelect>
-								</FormControl>
-							)}
+										<TextField
+											type="number"
+											size="small"
+											value={condition.threshold}
+											placeholder={unit || "value"}
+											onChange={(e) =>
+												updateCondition(index, {
+													threshold: Number(e.target.value),
+												})
+											}
+										/>
 
-							<IconButton
-								size="small"
-								color="error"
-								onClick={() => removeCondition(index)}
-							>
-								<RemoveCircleOutlineIcon />
-							</IconButton>
+										{isCustom ? (
+											<TextField
+												size="small"
+												placeholder="Describe the signal"
+												value={condition.description ?? ""}
+												onChange={(e) =>
+													updateCondition(index, {
+														description: e.target.value,
+													})
+												}
+											/>
+										) : (
+											<ZoomAwareSelect
+												value={condition.timeframe ?? ""}
+												size="small"
+												displayEmpty
+												onChange={(e) =>
+													updateCondition(index, {
+														timeframe: e.target.value || undefined,
+													})
+												}
+											>
+												<MenuItem value="">Any</MenuItem>
+												<MenuItem value="1H">1H</MenuItem>
+												<MenuItem value="4H">4H</MenuItem>
+												<MenuItem value="1D">1D</MenuItem>
+											</ZoomAwareSelect>
+										)}
+
+										<IconButton
+											size="small"
+											color="error"
+											onClick={() => removeCondition(index)}
+											sx={{ justifySelf: "center" }}
+										>
+											<RemoveCircleOutlineIcon fontSize="small" />
+										</IconButton>
+									</Fragment>
+								);
+							})}
 						</Box>
-					))}
+					)}
 
 					<Button
 						size="small"
@@ -229,7 +251,9 @@ export function MonitoringSection() {
 						Add Condition
 					</Button>
 
-					<Box sx={{ px: 1 }}>
+					<Divider flexItem />
+
+					<Box sx={{ px: 0.5 }}>
 						<Typography gutterBottom variant="body2">
 							Alert Cooldown: {formData.alertCooldownMinutes ?? 60} minutes
 						</Typography>
@@ -261,7 +285,7 @@ export function MonitoringSection() {
 							}}
 						/>
 					</Box>
-				</Box>
+				</>
 			)}
 		</GlassAccordion>
 	);
