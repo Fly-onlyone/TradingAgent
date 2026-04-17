@@ -1,5 +1,6 @@
 /**
  * Icon-led metric — large tone-colored icon block on the left + value + subtitle.
+ * Optional `endSlot` renders on the right for richer secondary data.
  */
 
 import { Box, Typography, useTheme } from "@mui/material";
@@ -15,6 +16,7 @@ interface TrendIconMetricProps {
 	subtitle?: string;
 	kicker?: string;
 	loading?: boolean;
+	endSlot?: ReactNode;
 }
 
 export function TrendIconMetric({
@@ -25,6 +27,7 @@ export function TrendIconMetric({
 	subtitle,
 	kicker,
 	loading,
+	endSlot,
 }: TrendIconMetricProps) {
 	const theme = useTheme();
 	const { main: toneMain, rgb: toneRgb } = getToneTokens(theme, tone);
@@ -36,7 +39,15 @@ export function TrendIconMetric({
 			loading={loading}
 			flashKey={typeof value === "number" ? value : String(value)}
 		>
-			<Box sx={{ display: "flex", gap: 1.75, alignItems: "center", flex: 1 }}>
+			<Box
+				sx={{
+					display: "flex",
+					gap: 1.5,
+					alignItems: "center",
+					flex: 1,
+					minWidth: 0,
+				}}
+			>
 				<Box
 					sx={{
 						flexShrink: 0,
@@ -86,7 +97,7 @@ export function TrendIconMetric({
 					>
 						{value}
 					</Typography>
-					{subtitle && (
+					{subtitle && !endSlot && (
 						<Typography
 							variant="caption"
 							color="text.secondary"
@@ -96,6 +107,20 @@ export function TrendIconMetric({
 						</Typography>
 					)}
 				</Box>
+				{endSlot && (
+					<Box
+						sx={{
+							flexShrink: 0,
+							display: "flex",
+							flexDirection: "column",
+							alignItems: "flex-end",
+							justifyContent: "center",
+							gap: 0.25,
+						}}
+					>
+						{endSlot}
+					</Box>
+				)}
 			</Box>
 		</MetricShell>
 	);

@@ -74,7 +74,6 @@ export function KpiMetric({
 					fontWeight: 700,
 					lineHeight: 1.15,
 					color: "text.primary",
-					mb: "auto",
 				}}
 			>
 				{rolling && typeof value === "string" ? (
@@ -98,8 +97,8 @@ export function KpiMetric({
 						display: "flex",
 						alignItems: "center",
 						gap: 1,
-						mt: 1,
-						minHeight: 20,
+						mt: 1.25,
+						minHeight: change !== undefined || changeCaption ? 20 : 4,
 					}}
 				>
 					{change !== undefined && ChangeArrow && (

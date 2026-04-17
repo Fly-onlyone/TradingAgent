@@ -1,17 +1,18 @@
 /**
- * Relative time value — coarse "4 days" / "3 hours" / "just now" with freshness-tinted
- * subtitle. Renders through TrendIconMetric for visual parity with the KPI row.
+ * Relative time value — coarse "4 days" / "3 hours" / "just now" as the hero,
+ * with a compact subtitle combining freshness state + absolute timestamp.
  */
 
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import HistoryIcon from "@mui/icons-material/History";
 import ScheduleIcon from "@mui/icons-material/Schedule";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import { Box, Tooltip, Typography, useTheme } from "@mui/material";
 import { formatDistanceToNowStrict } from "date-fns";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { safeParseDate } from "@/utils/formatters";
-import { TrendIconMetric } from "./TrendIconMetric";
-import type { MetricTone } from "./types";
+import { MetricShell } from "./MetricShell";
+import { getToneTokens, type MetricTone } from "./types";
 
 type Freshness = "fresh" | "recent" | "stale";
 
@@ -41,6 +42,12 @@ const FRESHNESS_ICON: Record<Freshness, ReactNode> = {
 	stale: <WarningAmberIcon />,
 };
 
+const FRESHNESS_LABEL: Record<Freshness, string> = {
+	fresh: "fresh",
+	recent: "recent",
+	stale: "stale",
+};
+
 function classify(
 	ageMs: number,
 	thresholds: typeof DEFAULT_THRESHOLDS,
@@ -50,19 +57,9 @@ function classify(
 	return "stale";
 }
 
-/** Keep only the first {number} {unit} pair from date-fns output (e.g. "3 hours"). */
 function coarsen(raw: string): string {
 	const parts = raw.split(" ");
 	return parts.length < 2 ? raw : `${parts[0]} ${parts[1]}`;
-}
-
-function formatAbsolute(date: Date): string {
-	return date.toLocaleString(undefined, {
-		month: "short",
-		day: "numeric",
-		hour: "2-digit",
-		minute: "2-digit",
-	});
 }
 
 export function TimeAgoMetric({
@@ -73,6 +70,7 @@ export function TimeAgoMetric({
 	emptyLabel = "Never",
 	errorHint,
 }: TimeAgoMetricProps) {
+	const theme = useTheme();
 	const date = useMemo(() => safeParseDate(at), [at]);
 	const dateMs = date?.getTime() ?? null;
 
@@ -83,46 +81,132 @@ export function TimeAgoMetric({
 		return () => window.clearInterval(id);
 	}, [dateMs]);
 
-	const display = useMemo(() => {
-		if (!date) {
-			return {
-				value: emptyLabel,
-				subtitle: undefined,
-				tone: "neutral" as MetricTone,
-				icon: <HistoryIcon />,
-			};
-		}
-		const ageMs = now - date.getTime();
-		const freshness = classify(ageMs, thresholds);
-		const value =
-			ageMs < 60_000 ? "just now" : coarsen(formatDistanceToNowStrict(date));
-		const absolute = formatAbsolute(date);
+	if (!date) {
+		return (
+			<MetricShell label={label} tone="neutral" icon={<HistoryIcon />}>
+				<Box sx={{ flex: 1, display: "flex", alignItems: "center" }}>
+					<Typography
+						sx={{
+							fontFamily: (t) => t.trading.mono,
+							fontSize: "1.5rem",
+							fontWeight: 700,
+							color: "text.disabled",
+						}}
+					>
+						{emptyLabel}
+					</Typography>
+				</Box>
+			</MetricShell>
+		);
+	}
 
-		if (hasError) {
-			const hintPart = errorHint ? ` · ${errorHint}` : "";
-			return {
-				value,
-				subtitle: `${absolute} · failed${hintPart}`,
-				tone: "error" as MetricTone,
-				icon: <WarningAmberIcon />,
-			};
-		}
-		return {
-			value,
-			subtitle: `${absolute} · ${freshness}`,
-			tone: FRESHNESS_TONE[freshness],
-			icon: FRESHNESS_ICON[freshness],
-		};
-	}, [date, now, thresholds, hasError, emptyLabel, errorHint]);
+	const ageMs = now - date.getTime();
+	const freshness = classify(ageMs, thresholds);
+	const hero =
+		ageMs < 60_000 ? "just now" : coarsen(formatDistanceToNowStrict(date));
+
+	const tone: MetricTone = hasError ? "error" : FRESHNESS_TONE[freshness];
+	const icon: ReactNode = hasError ? (
+		<WarningAmberIcon />
+	) : (
+		FRESHNESS_ICON[freshness]
+	);
+	const stateWord = hasError ? "failed" : FRESHNESS_LABEL[freshness];
+	const dateStr = date.toLocaleDateString([], {
+		month: "short",
+		day: "numeric",
+	});
+	const timeStr = date.toLocaleTimeString([], {
+		hour: "2-digit",
+		minute: "2-digit",
+	});
+	const { main: toneMain, rgb: toneRgb } = getToneTokens(theme, tone);
 
 	return (
-		<TrendIconMetric
+		<MetricShell
 			label={label}
-			value={display.value}
-			subtitle={display.subtitle}
-			icon={display.icon}
-			tone={display.tone}
-		/>
+			tone={tone}
+			flashKey={`${date.toISOString()}-${hasError}`}
+		>
+			<Box
+				sx={{
+					flex: 1,
+					display: "flex",
+					alignItems: "center",
+					gap: 1.5,
+					minWidth: 0,
+				}}
+			>
+				<Box
+					sx={{
+						flexShrink: 0,
+						width: 44,
+						height: 44,
+						borderRadius: 2,
+						display: "flex",
+						alignItems: "center",
+						justifyContent: "center",
+						color: toneMain,
+						bgcolor: `rgba(${toneRgb}, 0.14)`,
+						border: `1px solid rgba(${toneRgb}, 0.3)`,
+						"& svg": { fontSize: 22 },
+					}}
+				>
+					{icon}
+				</Box>
+				<Box
+					sx={{
+						flex: 1,
+						display: "flex",
+						flexDirection: "column",
+						minWidth: 0,
+						gap: 0.375,
+					}}
+				>
+					<Typography
+						component="div"
+						sx={{
+							fontFamily: (t) => t.trading.mono,
+							fontSize: "1.75rem",
+							fontWeight: 700,
+							lineHeight: 1,
+							color: toneMain,
+							overflow: "hidden",
+							textOverflow: "ellipsis",
+							whiteSpace: "nowrap",
+						}}
+					>
+						{hero}
+					</Typography>
+					<Tooltip
+						title={hasError && errorHint ? errorHint : ""}
+						arrow
+						disableHoverListener={!hasError || !errorHint}
+					>
+						<Typography
+							sx={{
+								fontSize: "0.8125rem",
+								fontWeight: 500,
+								color: "text.secondary",
+								overflow: "hidden",
+								textOverflow: "ellipsis",
+								whiteSpace: "nowrap",
+								cursor: hasError && errorHint ? "help" : "default",
+								"& .state": {
+									color: toneMain,
+									fontWeight: 700,
+									textTransform: "uppercase",
+									letterSpacing: "0.04em",
+								},
+							}}
+						>
+							<span className="state">{stateWord}</span>
+							{` · ${dateStr}, ${timeStr}`}
+						</Typography>
+					</Tooltip>
+				</Box>
+			</Box>
+		</MetricShell>
 	);
 }
 

@@ -5,9 +5,11 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import TimelineIcon from "@mui/icons-material/Timeline";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import { Box, Chip, Stack, Tab, Tabs } from "@mui/material";
+import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import type { ReactElement } from "react";
 import { useState } from "react";
+import { settingsApi } from "@/api/endpoints/settings";
 import { StrategyDiscoveryCard } from "@/components/strategies/StrategyDiscoveryCard";
 import { RecentRunsPanel } from "@/components/tasks/RecentRunsPanel";
 import { GeneralSection } from "@/components/tasks/sections/GeneralSection";
@@ -113,6 +115,13 @@ export function TaskSectionTabs({
 	const { formData } = useTaskConfig();
 	const [active, setActive] = useState(0);
 
+	const discoveryConfigQuery = useQuery({
+		queryKey: ["strategy-discovery-config"],
+		queryFn: () => settingsApi.getStrategyDiscoveryConfig(),
+		enabled: isSuperuser,
+	});
+	const discoveryEnabled = discoveryConfigQuery.data?.enabled ?? false;
+
 	const tabs = isSuperuser ? [...BASE_TABS, DISCOVERY_TAB] : BASE_TABS;
 	const safeActive = Math.min(active, tabs.length - 1);
 	const activeKey = tabs[safeActive].key;
@@ -125,6 +134,9 @@ export function TaskSectionTabs({
 			return (
 				<StatusTabLabel label={tab.label} on={formData.monitoringEnabled} />
 			);
+		}
+		if (tab.key === "discovery") {
+			return <StatusTabLabel label={tab.label} on={discoveryEnabled} />;
 		}
 		return tab.label;
 	};

@@ -1,16 +1,18 @@
-import { Box, Chip, keyframes, Typography } from "@mui/material";
+import { Box, Chip, keyframes, Tooltip, Typography } from "@mui/material";
 import {
 	addDays,
 	addHours,
 	addMinutes,
 	format,
-	formatDistanceToNowStrict,
+	isSameDay,
+	isToday,
+	isTomorrow,
 	setDay,
 	setHours,
 	setMinutes,
 	setSeconds,
 } from "date-fns";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
 	DAYS_OF_WEEK,
 	formatScheduleSummary,
@@ -26,6 +28,14 @@ const MAX_UPCOMING = 5;
 interface UpcomingRun {
 	time: Date;
 	label: string;
+}
+
+interface DayGroup {
+	key: number;
+	headerLabel: string;
+	isToday: boolean;
+	isTomorrow: boolean;
+	runs: UpcomingRun[];
 }
 
 function parseHHMM(time?: string): { h: number; m: number } {
@@ -135,6 +145,44 @@ function buildFrequencySummary(schedules: TaskSchedule[]): string[] {
 		.map(formatScheduleSummary);
 }
 
+function formatCompactDelta(ms: number): string {
+	const s = Math.max(0, Math.floor(ms / 1000));
+	if (s < 60) return `${s}s`;
+	const m = Math.floor(s / 60);
+	if (m < 60) return `${m}m`;
+	const h = Math.floor(m / 60);
+	const remMin = m % 60;
+	if (h < 24) return remMin ? `${h}h ${remMin}m` : `${h}h`;
+	const d = Math.floor(h / 24);
+	const remH = h % 24;
+	return remH ? `${d}d ${remH}h` : `${d}d`;
+}
+
+function groupRunsByDay(runs: UpcomingRun[]): DayGroup[] {
+	const groups: DayGroup[] = [];
+	for (const run of runs) {
+		const last = groups[groups.length - 1];
+		if (last && isSameDay(last.runs[0].time, run.time)) {
+			last.runs.push(run);
+			continue;
+		}
+		const today = isToday(run.time);
+		const tomorrow = !today && isTomorrow(run.time);
+		groups.push({
+			key: run.time.getTime(),
+			headerLabel: today
+				? "Today"
+				: tomorrow
+					? "Tomorrow"
+					: format(run.time, "EEE d MMM"),
+			isToday: today,
+			isTomorrow: tomorrow,
+			runs: [run],
+		});
+	}
+	return groups;
+}
+
 const pulse = keyframes`
 	0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
 	50% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
@@ -149,6 +197,17 @@ export function ScheduleTimeline({ schedules }: ScheduleTimelineProps) {
 		() => buildFrequencySummary(schedules),
 		[schedules],
 	);
+	const dayGroups = useMemo(() => groupRunsByDay(upcomingRuns), [upcomingRuns]);
+
+	const [now, setNow] = useState(() => Date.now());
+	useEffect(() => {
+		if (upcomingRuns.length === 0) return;
+		const nextMs = upcomingRuns[0].time.getTime();
+		const gap = nextMs - Date.now();
+		const intervalMs = gap < 60_000 ? 1000 : 15_000;
+		const id = window.setInterval(() => setNow(Date.now()), intervalMs);
+		return () => window.clearInterval(id);
+	}, [upcomingRuns]);
 
 	const enabledSchedules = schedules.filter((s) => s.enabled !== false);
 	if (enabledSchedules.length === 0) {
@@ -158,6 +217,10 @@ export function ScheduleTimeline({ schedules }: ScheduleTimelineProps) {
 			</Box>
 		);
 	}
+
+	// Flat index over all runs so first-run ("next") styling stays stable
+	// across day boundaries, and opacity fade matches the original behaviour.
+	let flatIndex = 0;
 
 	return (
 		<Box
@@ -203,98 +266,122 @@ export function ScheduleTimeline({ schedules }: ScheduleTimelineProps) {
 							}}
 						/>
 
-						{upcomingRuns.map((run, i) => {
-							const isNext = i === 0;
-							const opacity = Math.max(0.4, 1 - i * 0.15);
-
-							return (
-								<Box
-									key={`run-${run.time.getTime()}`}
+						{dayGroups.map((group, groupIdx) => (
+							<Box
+								key={`group-${group.key}`}
+								sx={{ mt: groupIdx === 0 ? 0 : 1 }}
+							>
+								{/* Day header */}
+								<Typography
 									sx={{
-										display: "flex",
-										alignItems: "center",
-										gap: 1.5,
-										py: 0.75,
-										position: "relative",
-										opacity,
+										fontFamily: "JetBrains Mono, monospace",
+										fontSize: "0.625rem",
+										fontWeight: 700,
+										letterSpacing: "0.1em",
+										textTransform: "uppercase",
+										color: group.isToday
+											? "rgba(16, 185, 129, 0.85)"
+											: group.isTomorrow
+												? "text.secondary"
+												: "text.disabled",
+										lineHeight: 1,
+										mb: 0.75,
 									}}
 								>
-									{/* Timeline dot */}
-									<Box
-										sx={{
-											position: "absolute",
-											left: -16,
-											width: isNext ? 12 : 8,
-											height: isNext ? 12 : 8,
-											borderRadius: "50%",
-											background: isNext
-												? "#10B981"
-												: "rgba(148, 163, 184, 0.3)",
-											border: isNext
-												? "2px solid rgba(16, 185, 129, 0.3)"
-												: "none",
-											animation: isNext
-												? `${pulse} 2s ease-in-out infinite`
-												: "none",
-											zIndex: 1,
-										}}
-									/>
+									{group.headerLabel}
+								</Typography>
 
-									{/* Relative time badge */}
-									<Box
-										sx={{
-											minWidth: 84,
-											px: 1,
-											py: 0.25,
-											borderRadius: 1,
-											background: isNext
-												? "rgba(16, 185, 129, 0.12)"
-												: "rgba(255, 255, 255, 0.03)",
-											border: isNext
-												? "1px solid rgba(16, 185, 129, 0.25)"
-												: "1px solid transparent",
-											textAlign: "center",
-										}}
-									>
-										<Typography
-											fontFamily="JetBrains Mono, monospace"
-											fontWeight={isNext ? 700 : 400}
-											sx={{
-												fontSize: "0.75rem",
-												color: isNext ? "#10B981" : "text.secondary",
-												lineHeight: 1.4,
-											}}
+								{group.runs.map((run) => {
+									const isNext = flatIndex === 0;
+									const opacity = Math.max(0.4, 1 - flatIndex * 0.15);
+									const delta = formatCompactDelta(run.time.getTime() - now);
+									flatIndex += 1;
+
+									return (
+										<Tooltip
+											key={`run-${run.time.getTime()}`}
+											title={format(run.time, "EEE d MMM yyyy · HH:mm")}
+											arrow
+											placement="right"
+											enterDelay={400}
 										>
-											{formatDistanceToNowStrict(run.time, {
-												addSuffix: false,
-											})}
-										</Typography>
-									</Box>
+											<Box
+												sx={{
+													display: "flex",
+													alignItems: "center",
+													gap: 1.5,
+													py: 0.75,
+													position: "relative",
+													opacity,
+												}}
+											>
+												{/* Timeline dot */}
+												<Box
+													sx={{
+														position: "absolute",
+														left: -16,
+														width: isNext ? 12 : 8,
+														height: isNext ? 12 : 8,
+														borderRadius: "50%",
+														background: isNext
+															? "#10B981"
+															: "rgba(148, 163, 184, 0.3)",
+														border: isNext
+															? "2px solid rgba(16, 185, 129, 0.3)"
+															: "none",
+														animation: isNext
+															? `${pulse} 2s ease-in-out infinite`
+															: "none",
+														zIndex: 1,
+													}}
+												/>
 
-									{/* Date + time */}
-									<Typography
-										fontFamily="JetBrains Mono, monospace"
-										sx={{
-											fontSize: "0.8rem",
-											color: isNext ? "text.primary" : "text.secondary",
-											fontWeight: isNext ? 600 : 400,
-										}}
-									>
-										{format(run.time, "EEE d MMM")}
-									</Typography>
-									<Typography
-										fontFamily="JetBrains Mono, monospace"
-										sx={{
-											fontSize: "0.8rem",
-											color: isNext ? "primary.main" : "text.disabled",
-											fontWeight: isNext ? 700 : 400,
-										}}
-									>
-										{format(run.time, "HH:mm")}
-									</Typography>
-								</Box>
-							);
-						})}
+												{/* Relative time badge (live-ticking on first row) */}
+												<Box
+													sx={{
+														minWidth: 84,
+														px: 1,
+														py: 0.25,
+														borderRadius: 1,
+														background: isNext
+															? "rgba(16, 185, 129, 0.12)"
+															: "rgba(255, 255, 255, 0.03)",
+														border: isNext
+															? "1px solid rgba(16, 185, 129, 0.25)"
+															: "1px solid transparent",
+														textAlign: "center",
+													}}
+												>
+													<Typography
+														fontFamily="JetBrains Mono, monospace"
+														fontWeight={isNext ? 700 : 400}
+														sx={{
+															fontSize: "0.75rem",
+															color: isNext ? "#10B981" : "text.secondary",
+															lineHeight: 1.4,
+														}}
+													>
+														{delta}
+													</Typography>
+												</Box>
+
+												{/* Time */}
+												<Typography
+													fontFamily="JetBrains Mono, monospace"
+													sx={{
+														fontSize: "0.8rem",
+														color: isNext ? "primary.main" : "text.disabled",
+														fontWeight: isNext ? 700 : 400,
+													}}
+												>
+													{format(run.time, "HH:mm")}
+												</Typography>
+											</Box>
+										</Tooltip>
+									);
+								})}
+							</Box>
+						))}
 					</Box>
 				</Box>
 			)}

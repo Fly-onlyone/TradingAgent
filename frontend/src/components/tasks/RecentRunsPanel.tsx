@@ -44,7 +44,7 @@ export function RecentRunsPanel({
 	const { data, isLoading } = useQuery({
 		queryKey: ["tasks", "decisions", taskId],
 		queryFn: () =>
-			decisionsApi.getDecisions({ taskId: taskId as string, pageSize: 5 }),
+			decisionsApi.getDecisions({ taskId: taskId as string, pageSize: 10 }),
 		enabled: !!taskId,
 		staleTime: 30_000,
 	});
@@ -165,7 +165,7 @@ export function RecentRunsPanel({
 												fontFamily="JetBrains Mono, monospace"
 											>
 												{d.confidence != null
-													? `${Math.round(d.confidence * 100)}%`
+													? `${Math.round(d.confidence)}%`
 													: "\u2014"}
 											</Typography>
 										</TableCell>

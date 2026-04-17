@@ -207,7 +207,14 @@ export function TaskActionBar({
 				)}
 			</Stack>
 
-			<Box sx={{ display: "flex", alignItems: "center", gap: 1, mx: "auto" }}>
+			<Box
+				sx={{
+					display: "flex",
+					alignItems: "center",
+					gap: 1,
+					ml: "auto",
+				}}
+			>
 				{isTaskRunning && (
 					<Chip
 						icon={<CircularProgress size={14} />}

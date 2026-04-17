@@ -141,7 +141,7 @@ export function GeneralSection() {
 				}
 				fullWidth
 				multiline
-				rows={3}
+				minRows={3}
 				placeholder="Additional instructions for the agent..."
 			/>
 		</GlassAccordion>
