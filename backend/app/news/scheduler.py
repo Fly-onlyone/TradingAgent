@@ -1,6 +1,5 @@
 """News crawling scheduler using APScheduler."""
 
-import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -9,12 +8,16 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from beanie import PydanticObjectId
 
+from app.agent.scheduling import PeriodicJob, PeriodicJobManager
 from app.db.models.news import NewsSource
 from app.news.crawler import NewsCrawler
 from app.news.credibility import CredibilityScorer
 from app.news.summarizer import NewsSummarizer
 
 logger = logging.getLogger(__name__)
+
+_CRAWL_INTERVAL = timedelta(minutes=15)
+_CREDIBILITY_INTERVAL_HOURS = 6
 
 
 class NewsScheduler:
@@ -26,6 +29,7 @@ class NewsScheduler:
         self._summarizer: NewsSummarizer | None = None
         self.credibility = CredibilityScorer()
         self._running = False
+        self._periodic_jobs = PeriodicJobManager(self.scheduler)
 
     async def _get_summarizer(self) -> NewsSummarizer:
         if self._summarizer is None:
@@ -38,28 +42,35 @@ class NewsScheduler:
             return
 
         self._running = True
+        self.scheduler.start()
 
-        self.scheduler.add_job(
-            self._crawl_all_sources,
-            IntervalTrigger(minutes=15),
-            id="crawl_all",
-            name="Crawl all news sources",
-            replace_existing=True,
-        )
-
+        # Credibility-score refresh is simple (always-on, no last-run tracking),
+        # so it stays a direct add_job — not worth a PeriodicJob descriptor.
         self.scheduler.add_job(
             self._update_credibility_scores,
-            IntervalTrigger(hours=6),
+            IntervalTrigger(hours=_CREDIBILITY_INTERVAL_HOURS),
             id="update_credibility",
             name="Update source credibility scores",
             replace_existing=True,
         )
 
-        self.scheduler.start()
+        await self._periodic_jobs.register(self._crawl_job())
         logger.info("News scheduler started")
 
-        # Catch up on missed crawls (or run initial crawl if never run)
-        await self._maybe_run_missed_crawl()
+    def _crawl_job(self) -> PeriodicJob:
+        """Build the crawl-all PeriodicJob descriptor."""
+        return PeriodicJob(
+            job_id="crawl_all",
+            name="Crawl all news sources",
+            log_label="News crawl",
+            last_run_field="news_crawl_last_run_at",
+            enabled=lambda _s: True,
+            interval=lambda _s: _CRAWL_INTERVAL,
+            runner=self._crawl_all_sources,
+            # Preserve historical behavior: if the DB/AppSettings is
+            # unreachable on startup, still attempt one crawl.
+            fire_when_settings_unavailable=True,
+        )
 
     async def stop(self) -> None:
         """Stop the scheduler."""
@@ -69,7 +80,7 @@ class NewsScheduler:
         logger.info("News scheduler stopped")
 
     async def _crawl_all_sources(self) -> None:
-        """Crawl all enabled news sources."""
+        """Crawl every source whose per-source interval has elapsed."""
         logger.info("Starting news crawl...")
 
         sources = await NewsSource.find({"crawl_enabled": True}).to_list()
@@ -92,52 +103,6 @@ class NewsScheduler:
                 await source.save()
 
         logger.info("News crawl completed")
-
-        # Persist last-run timestamp for missed-run detection on restart
-        try:
-            from app.db.models.app_settings import AppSettings
-
-            app_settings = await AppSettings.get_instance()
-            app_settings.news_crawl_last_run_at = datetime.now(UTC)
-            await app_settings.save_with_timestamp()
-        except Exception:
-            logger.debug("Could not persist news crawl timestamp", exc_info=True)
-
-    async def _run_initial_crawl(self) -> None:
-        """Run the startup crawl without leaking task exceptions to asyncio."""
-        try:
-            await self._crawl_all_sources()
-        except Exception:
-            logger.exception("Initial news crawl failed")
-
-    async def _maybe_run_missed_crawl(self) -> None:
-        """Fire a catch-up news crawl if overdue (e.g. after sleep/shutdown)."""
-        try:
-            from app.db.models.app_settings import AppSettings
-
-            app_settings = await AppSettings.get_instance()
-        except Exception:
-            logger.debug("Could not load AppSettings for news crawl catch-up", exc_info=True)
-            asyncio.create_task(self._run_initial_crawl())  # noqa: RUF006
-            return
-
-        last_run = app_settings.news_crawl_last_run_at
-        if last_run is None:
-            logger.info("News crawl has never run — triggering initial crawl")
-            asyncio.create_task(self._run_initial_crawl())  # noqa: RUF006
-            return
-
-        if last_run.tzinfo is None:
-            last_run = last_run.replace(tzinfo=UTC)
-
-        elapsed = datetime.now(UTC) - last_run
-        interval = timedelta(minutes=15)
-        if elapsed > interval:
-            logger.info(
-                "News crawl overdue by %s — triggering catch-up crawl",
-                elapsed - interval,
-            )
-            asyncio.create_task(self._run_initial_crawl())  # noqa: RUF006
 
     async def _crawl_source(self, source: NewsSource) -> int:
         """Crawl a single source and store new articles."""

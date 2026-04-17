@@ -14,6 +14,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret")
 os.environ.setdefault("SENTRY_DSN", "")
 
 from app import main as app_main
+from app.agent.scheduling import periodic_job as periodic_job_module
 from app.db import session as db_session
 from app.news import scheduler as scheduler_module
 
@@ -82,14 +83,14 @@ async def test_start_wraps_initial_crawl_exceptions_in_application_logging(
         return task
 
     monkeypatch.setattr(scheduler, "_crawl_all_sources", fail_crawl)
-    monkeypatch.setattr(scheduler_module.asyncio, "create_task", capture_create_task)
+    monkeypatch.setattr(periodic_job_module.asyncio, "create_task", capture_create_task)
 
     with caplog.at_level(logging.ERROR):
         await scheduler.start()
         await asyncio.gather(*created_tasks)
 
     assert created_tasks
-    assert "Initial news crawl failed" in caplog.text
+    assert "News crawl cycle failed" in caplog.text
     assert "Task exception was never retrieved" not in caplog.text
 
 

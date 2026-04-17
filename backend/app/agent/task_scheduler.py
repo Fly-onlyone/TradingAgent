@@ -14,6 +14,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from beanie import PydanticObjectId
 
 from app.agent.constants import agent_channel_user_id
+from app.agent.scheduling import PeriodicJob, PeriodicJobManager, StartupReconciler
 from app.db.models.agent_decision import (
     AgentDecision,
     DecisionAction,
@@ -90,6 +91,7 @@ class AgentTaskScheduler:
         self._trading_agent = None  # Lazy load to avoid circular imports
         self._running_tasks: dict[str, dict] = {}  # task_id -> progress dict (JSON-safe)
         self._task_runners: dict[str, asyncio.Task] = {}  # task_id -> asyncio.Task handle
+        self._periodic_jobs = PeriodicJobManager(self.scheduler)
 
     def _get_trading_agent(self):
         """Lazy load trading agent to avoid circular imports."""
@@ -202,11 +204,8 @@ class AgentTaskScheduler:
         # Load tasks and schedule periodic jobs in parallel
         await asyncio.gather(
             self._load_active_tasks(),
-            self._schedule_session_cleanup(),
-            self._schedule_auto_discovery(),
-            self._schedule_pattern_mining(),
-            self._mark_orphaned_discovery_cycles_failed(),
-            self._backfill_strategy_shadows(),
+            self._register_periodic_jobs(),
+            StartupReconciler().reconcile(),
         )
 
     async def stop(self) -> None:
@@ -222,186 +221,84 @@ class AgentTaskScheduler:
 
         logger.info("Agent task scheduler stopped")
 
-    async def _mark_orphaned_discovery_cycles_failed(self) -> None:
-        """Flip stale `running` cycles + active subagent sessions to closed state.
+    def _build_periodic_jobs(self) -> list[PeriodicJob]:
+        """Return the set of interval-triggered background jobs.
 
-        A prior process crash leaves cycles stuck in `running` AND their
-        Explorer/Extractor `AgentSession` rows stuck with `is_active=True`.
-        The latter pollutes the chat sidebar with "live" rows that will
-        never emit another message.
+        Each descriptor captures what changes between jobs. Shared
+        concerns (sentry wrapping, try/except, last-run persistence,
+        catch-up on startup) live in `PeriodicJobManager`.
         """
-        try:
-            from app.db.models.agent_session import AgentSession
-            from app.db.models.strategy_discovery_cycle import (
-                DiscoveryCycleStatus,
-                StrategyDiscoveryCycle,
-            )
+        return [
+            PeriodicJob(
+                job_id="auto_discover_strategies",
+                name="Strategy auto-discovery",
+                log_label="Strategy auto-discovery",
+                last_run_field="auto_discover_last_run_at",
+                enabled=lambda s: s.auto_discover_enabled,
+                interval=lambda s: timedelta(hours=max(1, s.auto_discover_interval_hours)),
+                runner=self._run_strategy_discovery,
+                sentry_op="task",
+            ),
+            PeriodicJob(
+                job_id="mine_trading_patterns",
+                name="Trading pattern mining",
+                log_label="Pattern mining",
+                last_run_field="pattern_mining_last_run_at",
+                enabled=lambda s: s.pattern_mining_enabled,
+                interval=lambda s: timedelta(hours=max(1, s.pattern_mining_interval_hours)),
+                runner=self._run_pattern_mining,
+                sentry_op="task",
+            ),
+            PeriodicJob(
+                job_id="cleanup_old_sessions",
+                name="Cleanup old chat sessions",
+                log_label="Session cleanup",
+                last_run_field="session_cleanup_last_run_at",
+                enabled=lambda s: s.session_retention_days > 0,
+                interval=lambda _s: timedelta(hours=_SESSION_CLEANUP_INTERVAL_HOURS),
+                runner=self._cleanup_old_sessions,
+                sentry_op="task",
+            ),
+        ]
 
-            now = datetime.now(UTC)
+    async def _register_periodic_jobs(self) -> None:
+        """Register every periodic background job with the manager."""
+        for job in self._build_periodic_jobs():
+            await self._periodic_jobs.register(job)
 
-            cycles_collection = StrategyDiscoveryCycle.get_pymongo_collection()
-            cycle_result = await cycles_collection.update_many(
-                {"status": DiscoveryCycleStatus.RUNNING.value},
-                {
-                    "$set": {
-                        "status": DiscoveryCycleStatus.FAILED.value,
-                        "error": "Process restarted while cycle was running",
-                        "ended_at": now,
-                    }
-                },
-            )
-
-            sessions_collection = AgentSession.get_pymongo_collection()
-            messages_collection = sessions_collection.database["agent_session_messages"]
-
-            # Per-Extractor AgentSessions are no longer created (extractors
-            # are pure compute and feed back into the Explorer's session).
-            # Delete any historical "Strategy Extract — *" sessions left
-            # over from the older design so the sidebar doesn't show them.
-            extract_docs = await sessions_collection.find(
-                {"title": {"$regex": "^Strategy Extract"}},
-                {"_id": 1},
-            ).to_list(length=None)
-            extract_ids = [doc["_id"] for doc in extract_docs]
-            extract_msgs_deleted = 0
-            extract_sessions_deleted = 0
-            if extract_ids:
-                msg_result = await messages_collection.delete_many(
-                    {"session_id": {"$in": extract_ids}}
-                )
-                extract_msgs_deleted = msg_result.deleted_count
-                sess_result = await sessions_collection.delete_many({"_id": {"$in": extract_ids}})
-                extract_sessions_deleted = sess_result.deleted_count
-
-            # Active Explorer sessions whose process is gone — flip closed.
-            session_result = await sessions_collection.update_many(
-                {
-                    "is_active": True,
-                    "title": {"$regex": "^Strategy Explorer"},
-                },
-                {"$set": {"is_active": False, "ended_at": now}},
-            )
-
-            if (
-                cycle_result.modified_count
-                or session_result.modified_count
-                or extract_sessions_deleted
-            ):
-                logger.info(
-                    "Startup cleanup: %d orphan cycle(s), %d orphan explorer session(s), "
-                    "deleted %d legacy extractor session(s) (%d messages)",
-                    cycle_result.modified_count,
-                    session_result.modified_count,
-                    extract_sessions_deleted,
-                    extract_msgs_deleted,
-                )
-        except Exception:
-            logger.debug("Orphaned-cycle cleanup failed", exc_info=True)
-
-    async def _backfill_strategy_shadows(self) -> None:
-        """Create Strategy shadow docs for any StrategyKnowledge missing one.
-
-        Older scheduler runs were invoked without a `user_id`, so they
-        populated `StrategyKnowledge` but skipped the `Strategy` branch.
-        The Strategies UI reads `Strategy`, so those auto-discovered rows
-        were invisible. Create the missing shadows on startup.
-        """
-        try:
-            from app.db.models.knowledge import StrategyKnowledge
-            from app.db.models.strategy import Strategy
-            from app.db.models.user import User
-
-            superuser = await User.find_one(User.is_superuser == True)  # noqa: E712
-            if superuser is None:
+    async def _reschedule_job(self, job_id: str) -> None:
+        """Re-register a single periodic job after a settings change."""
+        if not self._running:
+            return
+        for job in self._build_periodic_jobs():
+            if job.job_id == job_id:
+                await self._periodic_jobs.register(job)
                 return
-
-            existing_names = {
-                s.name
-                async for s in Strategy.find_all().project(Strategy)  # type: ignore[attr-defined]
-            }
-            # Fallback — Beanie's project may not be usable here; fetch names directly.
-            if not existing_names:
-                coll = Strategy.get_pymongo_collection()
-                existing_names = {
-                    doc["name"] async for doc in coll.find({}, {"name": 1}) if "name" in doc
-                }
-
-            created = 0
-            async for knowledge in StrategyKnowledge.find_all():
-                if knowledge.name in existing_names:
-                    continue
-                if not knowledge.entry_rules:
-                    # Same validation legacy code used — skip malformed entries.
-                    continue
-                try:
-                    strategy_doc = Strategy(
-                        user_id=superuser.id,
-                        name=knowledge.name,
-                        description=knowledge.description,
-                        entry_rules=knowledge.entry_rules,
-                        exit_rules=knowledge.exit_rules,
-                        risk_params=knowledge.risk_params,
-                        symbols=[],
-                        timeframes=knowledge.timeframes or [],
-                        is_active=False,
-                        auto_discovered=True,
-                        source_url=knowledge.source_url,
-                        knowledge_id=knowledge.id,
-                    )
-                    await strategy_doc.insert()
-                    existing_names.add(knowledge.name)
-                    created += 1
-                except Exception:
-                    logger.debug("Backfill failed for strategy %s", knowledge.name, exc_info=True)
-            if created:
-                logger.info(
-                    "Backfilled %d Strategy shadow doc(s) from orphaned StrategyKnowledge",
-                    created,
-                )
-        except Exception:
-            logger.debug("Strategy shadow backfill failed", exc_info=True)
-
-    async def _schedule_auto_discovery(self) -> None:
-        """Schedule or remove the strategy auto-discovery job based on settings."""
-        from app.db.models.app_settings import AppSettings
-
-        job_id = "auto_discover_strategies"
-
-        try:
-            app_settings = await AppSettings.get_instance()
-        except Exception:
-            logger.debug("Could not load AppSettings for auto-discovery", exc_info=True)
-            return
-
-        # Remove existing job if present
-        if self.scheduler.get_job(job_id):
-            self.scheduler.remove_job(job_id)
-
-        if not app_settings.auto_discover_enabled:
-            return
-
-        hours = max(1, app_settings.auto_discover_interval_hours)
-        self.scheduler.add_job(
-            self._run_strategy_discovery,
-            IntervalTrigger(hours=hours),
-            id=job_id,
-            name="Strategy auto-discovery",
-            replace_existing=True,
-        )
-        logger.info("Strategy auto-discovery scheduled every %d hours", hours)
-
-        await self._maybe_run_missed_discovery(app_settings, hours)
 
     @property
     def discovery_next_run_at(self) -> datetime | None:
         """Next scheduled fire time for auto-discovery, or None if not scheduled."""
-        job = self.scheduler.get_job("auto_discover_strategies")
-        if job is None:
-            return None
-        return job.next_run_time
+        return self._periodic_jobs.next_run_at("auto_discover_strategies")
+
+    @property
+    def pattern_mining_next_run_at(self) -> datetime | None:
+        """Next scheduled fire time for pattern mining, or None if not scheduled."""
+        return self._periodic_jobs.next_run_at("mine_trading_patterns")
+
+    async def reschedule_auto_discovery(self) -> None:
+        """Public method to reschedule after settings change."""
+        await self._reschedule_job("auto_discover_strategies")
+
+    async def reschedule_pattern_mining(self) -> None:
+        """Public method to reschedule after settings change."""
+        await self._reschedule_job("mine_trading_patterns")
+
+    async def reschedule_session_cleanup(self) -> None:
+        """Public method to reschedule after settings change."""
+        await self._reschedule_job("cleanup_old_sessions")
 
     async def _run_strategy_discovery(self) -> None:
-        """Execute one strategy discovery cycle."""
+        """Run one strategy discovery cycle. Wrapping is the manager's job."""
         from app.db.models.user import User
         from app.services.strategy_discovery import StrategyDiscoveryService
 
@@ -416,214 +313,48 @@ class AgentTaskScheduler:
         except Exception:
             logger.debug("Could not resolve superuser for scheduler run", exc_info=True)
 
-        with sentry_sdk.start_transaction(op="task", name="strategy-discovery"):
-            try:
-                service = StrategyDiscoveryService()
-                stats = await service.run_discovery_cycle(user_id=owner_user_id)
-                logger.info("Strategy discovery stats: %s", stats)
-
-                # Persist last-run timestamp for missed-run detection on restart
-                from app.db.models.app_settings import AppSettings
-
-                app_settings = await AppSettings.get_instance()
-                app_settings.auto_discover_last_run_at = datetime.now(UTC)
-                await app_settings.save_with_timestamp()
-            except Exception:
-                logger.exception("Strategy auto-discovery cycle failed")
-
-    async def _maybe_run_missed_discovery(self, app_settings: Any, interval_hours: int) -> None:
-        """Fire a catch-up discovery run if overdue (e.g. after sleep/shutdown)."""
-        last_run = app_settings.auto_discover_last_run_at
-        if last_run is None:
-            logger.info("Strategy auto-discovery has never run — triggering initial run")
-            asyncio.create_task(self._run_strategy_discovery())  # noqa: RUF006
-            return
-
-        # Handle naive datetimes from DB
-        if last_run.tzinfo is None:
-            last_run = last_run.replace(tzinfo=UTC)
-
-        elapsed = datetime.now(UTC) - last_run
-        if elapsed > timedelta(hours=interval_hours):
-            logger.info(
-                "Strategy auto-discovery overdue by %s — triggering catch-up run",
-                elapsed - timedelta(hours=interval_hours),
-            )
-            asyncio.create_task(self._run_strategy_discovery())  # noqa: RUF006
-
-    async def reschedule_auto_discovery(self) -> None:
-        """Public method to reschedule after settings change."""
-        if self._running:
-            await self._schedule_auto_discovery()
-
-    async def _schedule_pattern_mining(self) -> None:
-        """Schedule or remove the pattern mining job based on settings."""
-        from app.db.models.app_settings import AppSettings
-
-        job_id = "mine_trading_patterns"
-
-        try:
-            app_settings = await AppSettings.get_instance()
-        except Exception:
-            logger.debug("Could not load AppSettings for pattern mining", exc_info=True)
-            return
-
-        if self.scheduler.get_job(job_id):
-            self.scheduler.remove_job(job_id)
-
-        if not app_settings.pattern_mining_enabled:
-            return
-
-        hours = max(1, app_settings.pattern_mining_interval_hours)
-        self.scheduler.add_job(
-            self._run_pattern_mining,
-            IntervalTrigger(hours=hours),
-            id=job_id,
-            name="Trading pattern mining",
-            replace_existing=True,
-        )
-        logger.info("Pattern mining scheduled every %d hours", hours)
-
-        await self._maybe_run_missed_pattern_mining(app_settings, hours)
+        service = StrategyDiscoveryService()
+        stats = await service.run_discovery_cycle(user_id=owner_user_id)
+        logger.info("Strategy discovery stats: %s", stats)
 
     async def _run_pattern_mining(self) -> None:
-        """Execute one pattern mining cycle."""
+        """Run one pattern mining cycle. Wrapping is the manager's job."""
+        from app.db.models.app_settings import AppSettings
         from app.services.pattern_miner import PatternMiner
 
-        with sentry_sdk.start_transaction(op="task", name="pattern-mining"):
-            try:
-                from app.db.models.app_settings import AppSettings
+        app_settings = await AppSettings.get_instance()
+        symbols = app_settings.pattern_mining_symbols or None
 
-                app_settings = await AppSettings.get_instance()
-                symbols = app_settings.pattern_mining_symbols or None
-
-                miner = PatternMiner()
-                stats = await miner.run_mining_cycle(symbols)
-                logger.info("Pattern mining stats: %s", stats)
-
-                app_settings.pattern_mining_last_run_at = datetime.now(UTC)
-                await app_settings.save_with_timestamp()
-            except Exception:
-                logger.exception("Pattern mining cycle failed")
-
-    async def _maybe_run_missed_pattern_mining(
-        self, app_settings: Any, interval_hours: int
-    ) -> None:
-        """Fire a catch-up pattern mining run if overdue (e.g. after sleep/shutdown)."""
-        last_run = app_settings.pattern_mining_last_run_at
-        if last_run is None:
-            logger.info("Pattern mining has never run — triggering initial run")
-            asyncio.create_task(self._run_pattern_mining())  # noqa: RUF006
-            return
-
-        if last_run.tzinfo is None:
-            last_run = last_run.replace(tzinfo=UTC)
-
-        elapsed = datetime.now(UTC) - last_run
-        if elapsed > timedelta(hours=interval_hours):
-            logger.info(
-                "Pattern mining overdue by %s — triggering catch-up run",
-                elapsed - timedelta(hours=interval_hours),
-            )
-            asyncio.create_task(self._run_pattern_mining())  # noqa: RUF006
-
-    async def reschedule_pattern_mining(self) -> None:
-        """Public method to reschedule after settings change."""
-        if self._running:
-            await self._schedule_pattern_mining()
-
-    async def _schedule_session_cleanup(self) -> None:
-        """Schedule or remove the session retention cleanup job based on settings."""
-        from app.db.models.app_settings import AppSettings
-
-        job_id = "cleanup_old_sessions"
-
-        try:
-            app_settings = await AppSettings.get_instance()
-        except Exception:
-            logger.debug("Could not load AppSettings for session cleanup", exc_info=True)
-            return
-
-        if self.scheduler.get_job(job_id):
-            self.scheduler.remove_job(job_id)
-
-        if app_settings.session_retention_days <= 0:
-            return
-
-        self.scheduler.add_job(
-            self._cleanup_old_sessions,
-            IntervalTrigger(hours=_SESSION_CLEANUP_INTERVAL_HOURS),
-            id=job_id,
-            name="Cleanup old chat sessions",
-            replace_existing=True,
-        )
-        logger.info(
-            "Session cleanup scheduled (retention=%d days)",
-            app_settings.session_retention_days,
-        )
-
-        await self._maybe_run_missed_session_cleanup(app_settings)
-
-    async def _maybe_run_missed_session_cleanup(self, app_settings: Any) -> None:
-        """Fire a catch-up session cleanup run after missed intervals (sleep/shutdown)."""
-        last_run = app_settings.session_cleanup_last_run_at
-        if last_run is None:
-            logger.info("Session cleanup has never run — triggering initial cleanup")
-            asyncio.create_task(self._cleanup_old_sessions())  # noqa: RUF006
-            return
-
-        if last_run.tzinfo is None:
-            last_run = last_run.replace(tzinfo=UTC)
-
-        elapsed = datetime.now(UTC) - last_run
-        cleanup_interval = timedelta(hours=_SESSION_CLEANUP_INTERVAL_HOURS)
-        if elapsed > cleanup_interval:
-            logger.info(
-                "Session cleanup overdue by %s — triggering catch-up run",
-                elapsed - cleanup_interval,
-            )
-            asyncio.create_task(self._cleanup_old_sessions())  # noqa: RUF006
+        miner = PatternMiner()
+        stats = await miner.run_mining_cycle(symbols)
+        logger.info("Pattern mining stats: %s", stats)
 
     async def _cleanup_old_sessions(self) -> None:
         """Delete chat sessions older than the configured retention period."""
         from app.db.models.app_settings import AppSettings
 
-        with sentry_sdk.start_transaction(op="task", name="session-cleanup"):
-            try:
-                app_settings = await AppSettings.get_instance()
-                days = app_settings.session_retention_days
-                if days <= 0:
-                    return
+        app_settings = await AppSettings.get_instance()
+        days = app_settings.session_retention_days
+        if days <= 0:
+            # Settings may have flipped between scheduling and firing — bail cleanly.
+            return
 
-                cutoff = datetime.now(UTC) - timedelta(days=days)
+        cutoff = datetime.now(UTC) - timedelta(days=days)
 
-                # Delete sessions whose last activity is before the cutoff
-                old_sessions = await AgentSession.find(
-                    {
-                        "$or": [
-                            {"last_message_at": {"$lt": cutoff}},
-                            {"last_message_at": None, "started_at": {"$lt": cutoff}},
-                        ]
-                    }
-                ).to_list()
+        old_sessions = await AgentSession.find(
+            {
+                "$or": [
+                    {"last_message_at": {"$lt": cutoff}},
+                    {"last_message_at": None, "started_at": {"$lt": cutoff}},
+                ]
+            }
+        ).to_list()
 
-                if old_sessions:
-                    for session in old_sessions:
-                        await delete_session_message_history(session.id)
-                        await session.delete()
-                    logger.info(
-                        "Cleaned up %d old sessions (retention=%d days)", len(old_sessions), days
-                    )
-
-                app_settings.session_cleanup_last_run_at = datetime.now(UTC)
-                await app_settings.save_with_timestamp()
-            except Exception:
-                logger.exception("Session cleanup failed")
-
-    async def reschedule_session_cleanup(self) -> None:
-        """Public method to reschedule after settings change."""
-        if self._running:
-            await self._schedule_session_cleanup()
+        if old_sessions:
+            for session in old_sessions:
+                await delete_session_message_history(session.id)
+                await session.delete()
+            logger.info("Cleaned up %d old sessions (retention=%d days)", len(old_sessions), days)
 
     async def _load_active_tasks(self) -> None:
         """Load all active tasks from database and schedule them.

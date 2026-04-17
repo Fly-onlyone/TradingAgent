@@ -17,6 +17,10 @@ import {
 import { TimePicker } from "@mui/x-date-pickers";
 import { format, parse } from "date-fns";
 import { useCallback, useEffect, useState } from "react";
+import {
+	IntervalPicker,
+	type IntervalUnit,
+} from "@/components/common/IntervalPicker";
 import { ZoomAwareSelect } from "@/components/common/ZoomAwareSelect";
 import { GlassAccordion } from "@/components/tasks/sections/GlassAccordion";
 import { ScheduleTimeline } from "@/components/tasks/sections/ScheduleTimeline";
@@ -162,45 +166,17 @@ export function ScheduleSection() {
 						</FormControl>
 
 						{schedule.frequency === "interval" && (
-							<>
-								<TextField
-									label="Value"
-									type="number"
-									size="small"
-									value={schedule.intervalValue ?? ""}
-									onChange={(e) =>
-										updateSchedule(idx, {
-											intervalValue: e.target.value
-												? Number(e.target.value)
-												: undefined,
-										})
-									}
-									slotProps={{
-										htmlInput: {
-											min: 1,
-											onFocus: (e: React.FocusEvent<HTMLInputElement>) =>
-												e.target.select(),
-										},
-									}}
-									sx={{ width: 90 }}
-								/>
-								<FormControl size="small" sx={{ minWidth: 110 }}>
-									<InputLabel>Unit</InputLabel>
-									<ZoomAwareSelect
-										value={schedule.intervalUnit ?? "hours"}
-										label="Unit"
-										onChange={(e) =>
-											updateSchedule(idx, {
-												intervalUnit: e.target
-													.value as TaskSchedule["intervalUnit"],
-											})
-										}
-									>
-										<MenuItem value="minutes">Minutes</MenuItem>
-										<MenuItem value="hours">Hours</MenuItem>
-									</ZoomAwareSelect>
-								</FormControl>
-							</>
+							<IntervalPicker
+								value={schedule.intervalValue}
+								unit={schedule.intervalUnit as IntervalUnit | undefined}
+								onValueChange={(intervalValue) =>
+									updateSchedule(idx, { intervalValue })
+								}
+								onUnitChange={(intervalUnit) =>
+									updateSchedule(idx, { intervalUnit })
+								}
+								valueLabel="Value"
+							/>
 						)}
 
 						{(schedule.frequency === "daily" ||
@@ -325,42 +301,20 @@ export function ScheduleSection() {
 										<Typography variant="body2" color="text.secondary">
 											every
 										</Typography>
-										<TextField
-											type="number"
-											size="small"
-											value={schedule.intervalValue ?? ""}
-											onChange={(e) =>
-												updateSchedule(idx, {
-													intervalValue: e.target.value
-														? Number(e.target.value)
-														: undefined,
-												})
+										<IntervalPicker
+											value={schedule.intervalValue}
+											unit={schedule.intervalUnit as IntervalUnit | undefined}
+											onValueChange={(intervalValue) =>
+												updateSchedule(idx, { intervalValue })
 											}
-											slotProps={{
-												htmlInput: {
-													min: 1,
-													onFocus: (e: React.FocusEvent<HTMLInputElement>) =>
-														e.target.select(),
-												},
-											}}
-											sx={{ width: 70 }}
+											onUnitChange={(intervalUnit) =>
+												updateSchedule(idx, { intervalUnit })
+											}
+											valueWidth={70}
+											unitMinWidth={100}
+											minutesLabel="Min"
+											hoursLabel="Hrs"
 										/>
-										<FormControl size="small" sx={{ minWidth: 100 }}>
-											<InputLabel>Unit</InputLabel>
-											<ZoomAwareSelect
-												value={schedule.intervalUnit ?? "hours"}
-												label="Unit"
-												onChange={(e) =>
-													updateSchedule(idx, {
-														intervalUnit: e.target
-															.value as TaskSchedule["intervalUnit"],
-													})
-												}
-											>
-												<MenuItem value="minutes">Min</MenuItem>
-												<MenuItem value="hours">Hrs</MenuItem>
-											</ZoomAwareSelect>
-										</FormControl>
 									</>
 								)}
 							</Box>
