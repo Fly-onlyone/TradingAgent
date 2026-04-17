@@ -255,13 +255,33 @@ export const tasksApi = {
 	},
 
 	/**
-	 * Emergency stop: pause all active tasks
+	 * Emergency stop: pause all active tasks and halt strategy discovery.
 	 */
 	async emergencyStop(): Promise<{ pausedCount: number }> {
 		const response = await apiClient.post<Record<string, unknown>>(
 			"/agent/tasks/emergency-stop",
 		);
 		return { pausedCount: response.data.paused_count as number };
+	},
+
+	/**
+	 * Resume tasks that emergency-stop paused and re-enable strategy discovery.
+	 */
+	async resumeAll(): Promise<{ resumedCount: number }> {
+		const response = await apiClient.post<Record<string, unknown>>(
+			"/agent/tasks/resume-all",
+		);
+		return { resumedCount: response.data.resumed_count as number };
+	},
+
+	/**
+	 * Is the emergency-stop latch currently active?
+	 */
+	async emergencyStatus(): Promise<{ active: boolean }> {
+		const response = await apiClient.get<{ active: boolean }>(
+			"/agent/tasks/emergency-status",
+		);
+		return { active: Boolean(response.data.active) };
 	},
 
 	/**

@@ -4,6 +4,7 @@
 
 import LogoutIcon from "@mui/icons-material/Logout";
 import NotificationsIcon from "@mui/icons-material/Notifications";
+import PlayCircleIcon from "@mui/icons-material/PlayCircle";
 import SettingsIcon from "@mui/icons-material/Settings";
 import StopCircleIcon from "@mui/icons-material/StopCircle";
 import {
@@ -20,7 +21,7 @@ import {
 	Typography,
 } from "@mui/material";
 import type { PopoverPosition } from "@mui/material/Popover";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -32,6 +33,9 @@ import { NotificationPanel } from "@/components/layout/NotificationPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useAgentStore } from "@/store/agentStore";
 import { notify, useUIStore } from "@/store/uiStore";
+
+const QK_EMERGENCY_STATUS = ["agent-emergency-status"] as const;
+const QK_TASKS = ["tasks"] as const;
 
 export function Header() {
 	const { user, logout } = useAuth();
@@ -90,21 +94,48 @@ export function Header() {
 		logout();
 	};
 
-	// Emergency stop
+	// Emergency stop / resume
 	const [emergencyStopOpen, setEmergencyStopOpen] = useState(false);
+	const [resumeAllOpen, setResumeAllOpen] = useState(false);
 	const queryClient = useQueryClient();
+	const emergencyStatusQuery = useQuery({
+		queryKey: QK_EMERGENCY_STATUS,
+		queryFn: () => tasksApi.emergencyStatus(),
+		enabled: Boolean(user),
+		refetchInterval: 30_000,
+		staleTime: 10_000,
+	});
+	const emergencyActive = emergencyStatusQuery.data?.active ?? false;
+	const invalidateEmergencyRelated = useCallback(() => {
+		void queryClient.invalidateQueries({ queryKey: QK_TASKS });
+		void queryClient.invalidateQueries({ queryKey: QK_EMERGENCY_STATUS });
+	}, [queryClient]);
 	const emergencyStopMutation = useMutation({
 		mutationFn: () => tasksApi.emergencyStop(),
 		onSuccess: (data) => {
 			setEmergencyStopOpen(false);
 			notify.success(
 				"Emergency Stop",
-				`Paused ${data.pausedCount} active task${data.pausedCount === 1 ? "" : "s"}.`,
+				`Paused ${data.pausedCount} active task${data.pausedCount === 1 ? "" : "s"} and halted strategy discovery.`,
 			);
-			void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+			invalidateEmergencyRelated();
 		},
 		onError: () => {
 			notify.error("Emergency Stop Failed", "Could not pause tasks.");
+		},
+	});
+	const resumeAllMutation = useMutation({
+		mutationFn: () => tasksApi.resumeAll(),
+		onSuccess: (data) => {
+			setResumeAllOpen(false);
+			notify.success(
+				"Resumed",
+				`Resumed ${data.resumedCount} task${data.resumedCount === 1 ? "" : "s"} and re-enabled strategy discovery.`,
+			);
+			invalidateEmergencyRelated();
+		},
+		onError: () => {
+			notify.error("Resume Failed", "Could not resume tasks.");
 		},
 	});
 
@@ -259,34 +290,61 @@ export function Header() {
 					{/* Theme Selector */}
 					<ThemeSelector />
 
-					{/* Emergency Stop */}
-					{user && (
-						<Tooltip title="Emergency Stop — pause all tasks">
-							<IconButton
-								aria-label="Emergency stop"
-								color="error"
-								onClick={() => setEmergencyStopOpen(true)}
-								sx={{
-									"&:hover": {
-										bgcolor: "error.dark",
-										color: "error.contrastText",
-									},
-								}}
-							>
-								<StopCircleIcon />
-							</IconButton>
-						</Tooltip>
-					)}
+					{/* Emergency Stop / Resume */}
+					{user &&
+						(emergencyActive ? (
+							<Tooltip title="Resume — revive emergency-paused tasks & discovery">
+								<IconButton
+									aria-label="Resume all"
+									color="success"
+									onClick={() => setResumeAllOpen(true)}
+									sx={{
+										"&:hover": {
+											bgcolor: "success.dark",
+											color: "success.contrastText",
+										},
+									}}
+								>
+									<PlayCircleIcon />
+								</IconButton>
+							</Tooltip>
+						) : (
+							<Tooltip title="Emergency Stop — pause all tasks & discovery">
+								<IconButton
+									aria-label="Emergency stop"
+									color="error"
+									onClick={() => setEmergencyStopOpen(true)}
+									sx={{
+										"&:hover": {
+											bgcolor: "error.dark",
+											color: "error.contrastText",
+										},
+									}}
+								>
+									<StopCircleIcon />
+								</IconButton>
+							</Tooltip>
+						))}
 
 					<ConfirmDialog
 						open={emergencyStopOpen}
 						title="Emergency Stop"
-						message="Stop all trading? This will pause all active tasks."
+						message="Stop all trading? This pauses all active tasks AND halts strategy discovery until you resume."
 						confirmLabel="Stop All"
 						destructive
 						loading={emergencyStopMutation.isPending}
 						onConfirm={() => emergencyStopMutation.mutate()}
 						onCancel={() => setEmergencyStopOpen(false)}
+					/>
+
+					<ConfirmDialog
+						open={resumeAllOpen}
+						title="Resume"
+						message="Resume all emergency-paused tasks and re-enable strategy discovery?"
+						confirmLabel="Resume"
+						loading={resumeAllMutation.isPending}
+						onConfirm={() => resumeAllMutation.mutate()}
+						onCancel={() => setResumeAllOpen(false)}
 					/>
 
 					{/* Notifications */}

@@ -93,6 +93,11 @@ class AppSettings(Document):
     session_retention_days: int = 0  # 0 = keep forever
     session_cleanup_last_run_at: datetime | None = None
 
+    # Runtime latch — flipped by emergency-stop to halt tasks AND strategy
+    # discovery until the matching resume-all action clears it. Not a user
+    # preference; the admin UI should never expose it as a toggle.
+    emergency_stop_active: bool = False
+
     # Strategy auto-discovery from news sources
     auto_discover_enabled: bool = False
     auto_discover_interval_hours: int = 6

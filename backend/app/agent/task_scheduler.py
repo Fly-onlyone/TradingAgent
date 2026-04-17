@@ -234,7 +234,9 @@ class AgentTaskScheduler:
                 name="Strategy auto-discovery",
                 log_label="Strategy auto-discovery",
                 last_run_field="auto_discover_last_run_at",
-                enabled=lambda s: s.auto_discover_enabled,
+                # Also gated on emergency-stop — the red button must silence
+                # discovery, not just user-facing tasks.
+                enabled=lambda s: s.auto_discover_enabled and not s.emergency_stop_active,
                 interval=lambda s: timedelta(hours=max(1, s.auto_discover_interval_hours)),
                 runner=self._run_strategy_discovery,
                 sentry_op="task",
@@ -1586,20 +1588,34 @@ Provide:
         return action_map.get(action_str.lower())
 
     async def pause_all_tasks(self) -> int:
-        """Pause all active tasks, unschedule jobs, and cancel in-flight runs.
+        """Pause all active tasks, unschedule jobs, cancel in-flight runs, and
+        halt the strategy-discovery periodic job.
+
+        Flips the `AppSettings.emergency_stop_active` latch first so the
+        discovery predicate evaluates False on any concurrent re-register,
+        then yanks the job from the scheduler for immediate effect.
 
         Returns the number of tasks whose status was flipped to PAUSED.
         """
+        from app.db.models.app_settings import AppSettings
+
+        app_settings = await AppSettings.get_instance()
+        app_settings.emergency_stop_active = True
+        await app_settings.save_with_timestamp()
+
         tasks = await AgentTask.find(AgentTask.status == TaskStatus.ACTIVE).to_list()
         paused = 0
         for task in tasks:
             try:
-                task.pause()
+                task.pause(by_emergency=True)
                 await task.save()
                 self._remove_task_jobs(str(task.id))
                 paused += 1
             except Exception:
                 logger.exception("Failed to pause task %s during emergency stop", task.id)
+
+        # Drop the discovery tick now — don't wait for a settings-change reschedule.
+        self._periodic_jobs.unregister("auto_discover_strategies")
 
         # Hard-cancel any currently-executing task coroutines (interrupts mid-symbol,
         # including a live Claude streaming call).
@@ -1613,12 +1629,53 @@ Provide:
                 logger.info("Emergency stop: cancelled running task %s", task_id)
 
         logger.info(
-            "Emergency stop: paused %d of %d active tasks, cancelled %d in-flight run(s)",
+            "Emergency stop: paused %d of %d active tasks, cancelled %d in-flight run(s), "
+            "unregistered strategy discovery",
             paused,
             len(tasks),
             cancelled,
         )
         return paused
+
+    async def resume_all_tasks(self) -> int:
+        """Revive tasks that emergency-stop paused, clear the latch, and
+        re-register strategy discovery.
+
+        Only tasks flagged `paused_by_emergency_stop` are resumed — user- and
+        failure-paused tasks stay paused.
+        """
+        from app.db.models.app_settings import AppSettings
+
+        emergency_paused = await AgentTask.find(
+            AgentTask.status == TaskStatus.PAUSED,
+            AgentTask.paused_by_emergency_stop == True,  # noqa: E712
+        ).to_list()
+
+        resumed = 0
+        for task in emergency_paused:
+            try:
+                task.resume()  # clears paused_by_emergency_stop + sets ACTIVE
+                await task.save()
+                await self.schedule_task(task)
+                resumed += 1
+            except Exception:
+                logger.exception("Failed to resume task %s after emergency stop", task.id)
+
+        app_settings = await AppSettings.get_instance()
+        app_settings.emergency_stop_active = False
+        await app_settings.save_with_timestamp()
+
+        # Re-register discovery based on current settings (no-op if the user
+        # had auto_discover_enabled=False to begin with).
+        await self.reschedule_auto_discovery()
+
+        logger.info(
+            "Emergency stop lifted: resumed %d of %d paused-by-emergency task(s), "
+            "re-registered strategy discovery",
+            resumed,
+            len(emergency_paused),
+        )
+        return resumed
 
     async def unschedule_task(self, task_id: str) -> None:
         """Remove all jobs for a task from the scheduler."""

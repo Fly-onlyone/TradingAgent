@@ -723,12 +723,39 @@ async def list_tasks(
 async def emergency_stop(
     _: User = Depends(get_current_superuser),
 ) -> dict:
-    """Pause all active trading tasks (emergency stop)."""
+    """Pause all active trading tasks and halt strategy discovery."""
     from app.agent.task_scheduler import get_scheduler
 
     scheduler = get_scheduler()
     paused_count = await scheduler.pause_all_tasks()
-    return {"paused_count": paused_count}
+    return {"paused_count": paused_count, "discovery_paused": True}
+
+
+@router.post("/resume-all")
+async def resume_all(
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Resume tasks paused by emergency-stop and re-enable strategy discovery."""
+    from app.agent.task_scheduler import get_scheduler
+
+    scheduler = get_scheduler()
+    resumed_count = await scheduler.resume_all_tasks()
+    return {"resumed_count": resumed_count, "discovery_resumed": True}
+
+
+@router.get("/emergency-status")
+async def emergency_status(
+    _: User = Depends(get_current_superuser),
+) -> dict:
+    """Return whether the emergency-stop latch is currently active.
+
+    Drives the Header button state so the same icon can toggle between
+    Stop and Resume without relying on local React state.
+    """
+    from app.db.models.app_settings import AppSettings
+
+    app_settings = await AppSettings.get_instance()
+    return {"active": app_settings.emergency_stop_active}
 
 
 @router.post("/run-now-local", response_model=dict)

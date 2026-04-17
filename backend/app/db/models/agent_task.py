@@ -256,6 +256,7 @@ class AgentTask(Document):
 
     # Status and execution tracking
     status: TaskStatus = TaskStatus.ACTIVE
+    paused_by_emergency_stop: bool = False
     run_count: int = 0
     success_count: int = 0
     failure_count: int = 0
@@ -359,14 +360,19 @@ class AgentTask(Document):
         """Check if the task should be auto-paused due to consecutive failures."""
         return self.consecutive_failures >= self.max_consecutive_failures
 
-    def pause(self) -> None:
-        """Pause the task."""
+    def pause(self, *, by_emergency: bool = False) -> None:
+        """Pause the task; `by_emergency=True` tags it so `resume_all_tasks`
+        can revive only emergency-paused tasks.
+        """
         self.status = TaskStatus.PAUSED
+        if by_emergency:
+            self.paused_by_emergency_stop = True
         self.update_timestamp()
 
     def resume(self) -> None:
         """Resume the task."""
         self.status = TaskStatus.ACTIVE
+        self.paused_by_emergency_stop = False
         self.update_timestamp()
 
     def complete(self) -> None:
