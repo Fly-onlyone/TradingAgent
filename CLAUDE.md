@@ -6,6 +6,10 @@ This file provides guidance to Coding agent when working with this project.
 
 - **Notion task board**: See [`docs/NOTION.md`](docs/NOTION.md) for database schema, status values, and property
   definitions
+- **Rule files**: `.claude/rules/architecture.md` (data flow, RAG pipeline, knowledge graph),
+  `.claude/rules/code-guide.md` (CSS zoom handling, Framer Motion variants, AI auth pattern, chat-session checklist),
+  `.claude/rules/documentation-style.md` (docstring rules). Read these before designing frontend components,
+  chat-session features, or AI service integrations.
 
 ## Build Commands
 
@@ -62,25 +66,20 @@ Separate Sentry projects per layer (org: `fly-theonlyone`). Env vars live in `.e
 
 **Trading agent** is a full-stack application for automated cryptocurrency trading with AI-powered analysis.
 
-### Backend (Python)
-
-- **Language**: Python 3.11+
-- **Framework**: FastAPI
-- **Database**: MongoDB (Beanie ODM)
-- **Package Manager**: uv
-
-### Frontend (TypeScript)
-
-- **Language**: TypeScript 5.7
-- **Framework**: React 19 + Vite
-- **Routing**: TanStack Router
-- **State**: Zustand + TanStack Query
-- **UI**: Material UI 6
+- **Backend**: FastAPI + Beanie (MongoDB) on Python 3.11+, managed by `uv`
+- **Frontend**: React 19 + Vite + TanStack (Router/Query) + Zustand + MUI 6, managed by `bun`
+- **Desktop shell**: Tauri v2 wraps the frontend; backend runs as a sidecar binary
 
 ## Architecture Notes
 
-- **Backend port**: **7000**
-- **Dev entry**: `python run.py` starts both frontend + backend with watchfiles reload
+- **Backend port**: **7001** in dev (`uv run python run.py`), **7000** when launched with
+  `--serve` (Tauri production sidecar). See `run.py:32`.
+- **Dev entry**: `uv run python run.py` starts both frontend + backend. Reload uses
+  `watchfiles.watch()` + `subprocess.Popen` — NOT uvicorn `--reload` (its `multiprocessing.spawn`
+  children create `SelectorEventLoop` before app code runs, breaking subprocess tools).
+- **Windows event loop**: `run.py` and `backend/app/main.py` set `WindowsProactorEventLoopPolicy()`
+  at module level because `SelectorEventLoop` can't spawn subprocesses, which the Claude Agent SDK
+  needs. Keep that policy set before any `asyncio.run()` in new entry points.
 - **Auth**: JWT-based with configurable token expiry and transparent refresh. Superuser check via
   `get_current_superuser`
   dependency (defined in auth dependency files)
@@ -102,14 +101,12 @@ Separate Sentry projects per layer (org: `fly-theonlyone`). Env vars live in `.e
 - **DB session**: All models must be registered in `backend/app/db/session.py` `document_models` list
 - **API router registration**: In `backend/app/api/v1/__init__.py` — order matters (specific prefixes before generic
   `/admin`). Sub-prefixes (e.g. `/strategies/import`) must be registered before their parent (`/strategies`)
-- **Strategy import**: Two-step flow — extract (URL or file upload → AI extraction → preview) then confirm (save both
-  `Strategy` + `StrategyKnowledge` with embedding). Endpoints at `/api/v1/strategies/import/`. AI extraction uses
-  Claude tool_use with forced `save_strategy` tool for structured output. Pattern:
-  `backend/app/services/strategy_extractor.py`
-- **Strategy auto-discovery**: Scheduled crawling of news sources (where `strategy_extraction=True`) → AI extraction →
-  deduplicate by name → save to StrategyKnowledge (RAG only, not executable). Config in `AppSettings` singleton
-  (`auto_discover_enabled/interval_hours/min_confidence`). APScheduler integration in `task_scheduler.py`.
-  Service: `backend/app/services/strategy_discovery.py`. UI card on Tasks page.
+- **Strategy import** (`backend/app/services/strategy_extractor.py`): Two-step extract-then-confirm
+  flow at `/api/v1/strategies/import/`. Saves both `Strategy` + `StrategyKnowledge` with embedding.
+- **Strategy auto-discovery** (`backend/app/services/strategy_discovery.py`): Scheduled crawl of
+  news sources flagged `strategy_extraction=True` → AI extraction → dedupe → `StrategyKnowledge`
+  (RAG only, not executable). Config lives in `AppSettings` (`auto_discover_*`); scheduler in
+  `backend/app/agent/task_scheduler.py`.
 - **Frontend types**: snake_case from API → camelCase in TS via transform functions in endpoint files
 - **Frontend state**: Zustand stores with devtools middleware. Pattern: `store/xxxStore.ts`
 - **Query options**: Centralized in `frontend/src/api/queryOptions/admin.ts` with shared `ADMIN_STALE_TIME`/
