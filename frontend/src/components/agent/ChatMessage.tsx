@@ -322,8 +322,6 @@ export function ChatMessage({
 								sx={{
 									mb: 1.5,
 									p: 1.5,
-									maxHeight: 200,
-									overflow: "auto",
 									bgcolor: "action.hover",
 									borderRadius: 1,
 								}}

@@ -14,7 +14,7 @@ import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import SubdirectoryArrowRightIcon from "@mui/icons-material/SubdirectoryArrowRight";
 import { Box, Chip, Collapse, Divider, Typography } from "@mui/material";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ToolCall } from "@/api/websocket/useAgentSocket";
 import { StatusChip } from "@/components/common/StatusChip";
 
@@ -148,8 +148,13 @@ interface ToolCallBlockProps {
 }
 
 export function ToolCallBlock({ toolCall, forceExpanded }: ToolCallBlockProps) {
-	const [localExpanded, setLocalExpanded] = useState(false);
-	const expanded = forceExpanded ?? localExpanded;
+	const [expanded, setExpanded] = useState(forceExpanded ?? false);
+
+	// Global toggle re-seeds local state; per-tool clicks stay authoritative
+	// between global toggle flips.
+	useEffect(() => {
+		if (forceExpanded !== undefined) setExpanded(forceExpanded);
+	}, [forceExpanded]);
 
 	if (isDelegationTool(toolCall.name)) {
 		return <DelegationCard toolCall={toolCall} />;
@@ -171,7 +176,7 @@ export function ToolCallBlock({ toolCall, forceExpanded }: ToolCallBlockProps) {
 		>
 			{/* Collapsed header row */}
 			<Box
-				onClick={() => setLocalExpanded((prev) => !prev)}
+				onClick={() => setExpanded((prev) => !prev)}
 				sx={{
 					display: "flex",
 					alignItems: "center",
@@ -261,8 +266,6 @@ export function ToolCallBlock({ toolCall, forceExpanded }: ToolCallBlockProps) {
 									bgcolor: "action.hover",
 									p: 1,
 									borderRadius: 1,
-									overflow: "auto",
-									maxHeight: 200,
 									m: 0,
 									whiteSpace: "pre-wrap",
 									wordBreak: "break-word",

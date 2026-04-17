@@ -132,8 +132,6 @@ export function ThinkingIndicator({
 								sx={{
 									mb: toolCalls.length > 0 ? 1.5 : 0,
 									p: 1.5,
-									maxHeight: 200,
-									overflow: "auto",
 									bgcolor: "action.hover",
 									borderRadius: 1,
 								}}
