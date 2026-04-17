@@ -18,6 +18,7 @@ import {
 	Button,
 	Card,
 	CardContent,
+	Checkbox,
 	Chip,
 	Grid2 as Grid,
 	Paper,
@@ -114,9 +115,8 @@ function DataManagementPage() {
 	);
 
 	const queryClient = useQueryClient();
-	const [confirmGroup, setConfirmGroup] = useState<CollectionGroup | null>(
-		null,
-	);
+	const [selected, setSelected] = useState<Set<string>>(new Set());
+	const [confirmOpen, setConfirmOpen] = useState(false);
 
 	const collectionsQuery = useQuery(adminCollectionsQueryOptions());
 
@@ -124,11 +124,31 @@ function DataManagementPage() {
 		collectionsQuery.data?.map((c) => [c.name, c.documentCount]) ?? [],
 	);
 
+	const getGroupTotal = useCallback(
+		(group: CollectionGroup) =>
+			group.collections.reduce(
+				(sum, name) => sum + (countsByCollection.get(name) ?? 0),
+				0,
+			),
+		[countsByCollection],
+	);
+
+	const selectedGroups = useMemo(
+		() => COLLECTION_GROUPS.filter((g) => selected.has(g.id)),
+		[selected],
+	);
+
+	const nonEmptyGroups = useMemo(
+		() => COLLECTION_GROUPS.filter((g) => getGroupTotal(g) > 0),
+		[getGroupTotal],
+	);
+
 	const clearMutation = useMutation({
 		mutationFn: (collections: string[]) =>
 			adminApi.bulkClearCollections(collections),
 		onSuccess: async (_data, collections) => {
-			setConfirmGroup(null);
+			setConfirmOpen(false);
+			setSelected(new Set());
 			notify.success(
 				`Cleared ${collections.length} collection${collections.length > 1 ? "s" : ""}`,
 			);
@@ -141,23 +161,51 @@ function DataManagementPage() {
 			void queryClient.refetchQueries({ queryKey: ["admin-db-info"] });
 		},
 		onError: () => {
-			setConfirmGroup(null);
+			setConfirmOpen(false);
 			notify.error("Failed to clear collections");
 		},
 	});
 
-	const handleClearGroup = useCallback(
-		(group: CollectionGroup) => {
-			clearMutation.mutate(group.collections);
-		},
-		[clearMutation],
-	);
+	const toggleGroup = useCallback((groupId: string) => {
+		setSelected((prev) => {
+			const next = new Set(prev);
+			if (next.has(groupId)) {
+				next.delete(groupId);
+			} else {
+				next.add(groupId);
+			}
+			return next;
+		});
+	}, []);
 
-	const getGroupTotal = (group: CollectionGroup) =>
-		group.collections.reduce(
-			(sum, name) => sum + (countsByCollection.get(name) ?? 0),
-			0,
-		);
+	const allNonEmptySelected =
+		nonEmptyGroups.length > 0 &&
+		nonEmptyGroups.every((g) => selected.has(g.id));
+	const someSelected = selected.size > 0 && !allNonEmptySelected;
+
+	const toggleSelectAll = useCallback(() => {
+		if (allNonEmptySelected) {
+			setSelected(new Set());
+		} else {
+			setSelected(new Set(nonEmptyGroups.map((g) => g.id)));
+		}
+	}, [allNonEmptySelected, nonEmptyGroups]);
+
+	const openConfirmForGroup = useCallback((group: CollectionGroup) => {
+		setSelected(new Set([group.id]));
+		setConfirmOpen(true);
+	}, []);
+
+	const openConfirmForSelected = useCallback(() => {
+		if (selected.size > 0) setConfirmOpen(true);
+	}, [selected.size]);
+
+	const handleConfirm = useCallback(() => {
+		const collections = selectedGroups.flatMap((g) => g.collections);
+		if (collections.length > 0) {
+			clearMutation.mutate(collections);
+		}
+	}, [selectedGroups, clearMutation]);
 
 	const totalDocuments = [...countsByCollection.values()].reduce(
 		(a, b) => a + b,
@@ -166,6 +214,15 @@ function DataManagementPage() {
 	const emptyGroups = COLLECTION_GROUPS.filter(
 		(g) => getGroupTotal(g) === 0,
 	).length;
+
+	const confirmTotal = selectedGroups.reduce(
+		(sum, g) => sum + getGroupTotal(g),
+		0,
+	);
+	const isSingleGroup = selectedGroups.length === 1;
+	const confirmTitle = isSingleGroup
+		? `Clear All ${selectedGroups[0]?.name ?? ""} Data`
+		: "Clear Selected Data";
 
 	return (
 		<PageTransition pageKey="admin-data-management">
@@ -182,7 +239,7 @@ function DataManagementPage() {
 						flexWrap: "wrap",
 						gap: 2,
 						mt: 2,
-						mb: 3,
+						mb: 2,
 					}}
 				>
 					<Paper
@@ -271,6 +328,56 @@ function DataManagementPage() {
 				</Box>
 			</motion.div>
 
+			{/* Bulk action bar */}
+			<motion.div variants={fadeInUp} initial="hidden" animate="visible">
+				<Paper
+					elevation={0}
+					sx={{
+						display: "flex",
+						alignItems: "center",
+						gap: 1,
+						px: 1.5,
+						py: 0.5,
+						mb: 3,
+						bgcolor: (t) => `rgba(${t.trading.primaryRgb}, 0.04)`,
+						border: 1,
+						borderColor: "divider",
+						borderRadius: 2,
+					}}
+				>
+					<Checkbox
+						checked={allNonEmptySelected}
+						indeterminate={someSelected}
+						onChange={toggleSelectAll}
+						disabled={
+							collectionsQuery.isLoading ||
+							nonEmptyGroups.length === 0 ||
+							clearMutation.isPending
+						}
+						aria-label="Select all non-empty groups"
+					/>
+					<Typography
+						variant="body2"
+						color={selected.size > 0 ? "text.primary" : "text.secondary"}
+						sx={{ fontWeight: 500, flex: 1 }}
+					>
+						{selected.size > 0
+							? `${selected.size} selected`
+							: "Select all non-empty groups"}
+					</Typography>
+					<Button
+						variant="contained"
+						color="error"
+						startIcon={<DeleteSweepIcon />}
+						disabled={selected.size === 0 || clearMutation.isPending}
+						onClick={openConfirmForSelected}
+						sx={{ fontWeight: 600 }}
+					>
+						Clear Selected
+					</Button>
+				</Paper>
+			</motion.div>
+
 			{/* Card grid */}
 			<motion.div
 				variants={staggerCascade.container}
@@ -282,12 +389,16 @@ function DataManagementPage() {
 						const GroupIcon = group.icon;
 						const total = getGroupTotal(group);
 						const isEmpty = total === 0;
+						const isSelected = selected.has(group.id);
 						const isClearing =
-							clearMutation.isPending && confirmGroup?.id === group.id;
+							clearMutation.isPending && isSelected && confirmOpen === false;
 
 						return (
 							<Grid key={group.id} size={{ xs: 12, sm: 6, md: 4 }}>
-								<motion.div variants={staggerCascade.item}>
+								<motion.div
+									variants={staggerCascade.item}
+									style={{ height: "100%" }}
+								>
 									<motion.div
 										variants={cardHover}
 										initial="rest"
@@ -300,6 +411,9 @@ function DataManagementPage() {
 												height: "100%",
 												display: "flex",
 												flexDirection: "column",
+												borderColor: isSelected ? "error.main" : undefined,
+												borderWidth: isSelected ? 1 : undefined,
+												borderStyle: isSelected ? "solid" : undefined,
 											}}
 										>
 											<CardContent
@@ -317,9 +431,21 @@ function DataManagementPage() {
 													sx={{
 														display: "flex",
 														alignItems: "center",
-														gap: 1.5,
+														gap: 1,
 													}}
 												>
+													<Checkbox
+														checked={isSelected}
+														onChange={() => toggleGroup(group.id)}
+														disabled={
+															isEmpty ||
+															collectionsQuery.isLoading ||
+															clearMutation.isPending
+														}
+														size="small"
+														sx={{ p: 0.5, ml: -0.5 }}
+														aria-label={`Select ${group.name}`}
+													/>
 													<Box
 														sx={{
 															width: 48,
@@ -453,7 +579,7 @@ function DataManagementPage() {
 															collectionsQuery.isLoading ||
 															clearMutation.isPending
 														}
-														onClick={() => setConfirmGroup(group)}
+														onClick={() => openConfirmForGroup(group)}
 														sx={{
 															py: 1,
 															fontWeight: 600,
@@ -482,8 +608,8 @@ function DataManagementPage() {
 
 			{/* Destructive confirm dialog */}
 			<DestructiveConfirmDialog
-				open={!!confirmGroup}
-				title={`Clear All ${confirmGroup?.name ?? ""} Data`}
+				open={confirmOpen}
+				title={confirmTitle}
 				message={
 					<Box
 						component="span"
@@ -498,31 +624,32 @@ function DataManagementPage() {
 							permanently cleared:
 						</Typography>
 						<Box component="ul" sx={{ m: 0, pl: 2 }}>
-							{confirmGroup?.collections.map((name) => (
-								<Typography
-									key={name}
-									component="li"
-									variant="body2"
-									sx={{ fontFamily: "monospace" }}
-								>
-									{name} — {countsByCollection.get(name) ?? 0} documents
-								</Typography>
-							))}
+							{selectedGroups.flatMap((group) =>
+								group.collections.map((name) => (
+									<Typography
+										key={name}
+										component="li"
+										variant="body2"
+										sx={{ fontFamily: "monospace" }}
+									>
+										{name} — {countsByCollection.get(name) ?? 0} documents
+									</Typography>
+								)),
+							)}
 						</Box>
 						<Typography
 							variant="body2"
 							component="span"
 							sx={{ fontWeight: 600 }}
 						>
-							Total: {confirmGroup ? getGroupTotal(confirmGroup) : 0} documents
-							will be deleted
+							Total: {confirmTotal} documents will be deleted
 						</Typography>
 					</Box>
 				}
 				confirmLabel="Delete All"
 				loading={clearMutation.isPending}
-				onConfirm={() => confirmGroup && handleClearGroup(confirmGroup)}
-				onCancel={() => setConfirmGroup(null)}
+				onConfirm={handleConfirm}
+				onCancel={() => setConfirmOpen(false)}
 			/>
 		</PageTransition>
 	);
