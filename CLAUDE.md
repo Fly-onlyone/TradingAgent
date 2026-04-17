@@ -13,6 +13,7 @@ This file provides guidance to Coding agent when working with this project.
 |---------------------------|---------------------------------|
 | Install backend deps      | `uv sync`                       |
 | Install frontend deps     | `cd frontend && bun install`    |
+| Install git hooks         | `uv run pre-commit install`     |
 | Run dev server (backend)  | `uv run python run.py`          |
 | Run dev server (frontend) | `cd frontend && bun run dev`    |
 | Test backend              | `uv run pytest`                 |
@@ -34,6 +35,21 @@ This file provides guidance to Coding agent when working with this project.
     - Do not use `plugins.shell.scope` in `tauri.conf.json`
     - Keep `plugins.shell` minimal (e.g. `open`)
     - Put shell command permissions in `src-tauri/capabilities/default.json`
+
+## Releases
+
+- Automated via **Release Please** (`.github/workflows/release-please.yml`). Pushing conventional
+  commits to `master` opens a `chore(release): vX.Y.Z` PR that bumps versions in `pyproject.toml`,
+  `frontend/package.json`, `frontend/src-tauri/Cargo.toml`, and `frontend/src-tauri/tauri.conf.json`,
+  and updates `CHANGELOG.md`. Merge that PR to ship — the tag push triggers `tauri-build.yml`,
+  which attaches MSI/DMG/AppImage/deb bundles to the GitHub Release.
+- **Don't hand-edit `CHANGELOG.md` or version strings** — Release Please owns them. Source of truth
+  for the last-released version is `.release-please-manifest.json`.
+- **Conventional commits are required.** PR titles are linted by `.github/workflows/commitlint.yml`
+  (squash-merge → PR title becomes the commit message). Per-commit format is enforced locally via
+  `conventional-pre-commit`. Accepted types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`,
+  `build`, `ci`, `chore`, `revert`, `style`, `deps`. Only `feat`/`fix`/`perf`/`revert`/`deps`/
+  `refactor` appear in the changelog; the rest are `hidden: true` in `release-please-config.json`.
 
 ## Sentry
 

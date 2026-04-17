@@ -13,7 +13,7 @@ concurrency:
 jobs:
   backend:
     name: Backend — Lint & Test
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: .
@@ -37,6 +37,10 @@ jobs:
       - name: Ruff format check
         run: uv run ruff format --check backend/
 
+      - name: mypy
+        run: uv run mypy backend/app
+        continue-on-error: true
+
       - name: Run tests
         run: uv run pytest --tb=short -q
         env:
@@ -44,7 +48,7 @@ jobs:
 
   frontend:
     name: Frontend — Lint, Test & Build
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: frontend

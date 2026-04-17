@@ -1,0 +1,51 @@
+{
+	"$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+	"release-type": "simple",
+	"bump-minor-pre-major": true,
+	"bump-patch-for-minor-pre-major": false,
+	"include-v-in-tag": true,
+	"include-component-in-tag": false,
+	"packages": {
+		".": {
+			"release-type": "simple",
+			"package-name": "trading-agent",
+			"changelog-path": "CHANGELOG.md",
+			"changelog-sections": [
+				{ "type": "feat", "section": "Features" },
+				{ "type": "fix", "section": "Bug Fixes" },
+				{ "type": "perf", "section": "Performance Improvements" },
+				{ "type": "revert", "section": "Reverts" },
+				{ "type": "deps", "section": "Dependencies" },
+				{ "type": "refactor", "section": "Code Refactoring" },
+				{ "type": "docs", "section": "Documentation", "hidden": true },
+				{ "type": "test", "section": "Tests", "hidden": true },
+				{ "type": "build", "section": "Build System", "hidden": true },
+				{ "type": "ci", "section": "Continuous Integration", "hidden": true },
+				{ "type": "chore", "section": "Miscellaneous Chores", "hidden": true },
+				{ "type": "style", "section": "Styles", "hidden": true }
+			],
+			"extra-files": [
+				{
+					"type": "toml",
+					"path": "pyproject.toml",
+					"jsonpath": "$.project.version"
+				},
+				{
+					"type": "json",
+					"path": "frontend/package.json",
+					"jsonpath": "$.version"
+				},
+				{
+					"type": "json",
+					"path": "frontend/src-tauri/tauri.conf.json",
+					"jsonpath": "$.version"
+				},
+				{
+					"type": "toml",
+					"path": "frontend/src-tauri/Cargo.toml",
+					"jsonpath": "$.package.version"
+				}
+			]
+		}
+	}
+}
