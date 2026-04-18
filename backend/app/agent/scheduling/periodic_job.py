@@ -49,7 +49,7 @@ class PeriodicJob:
     job_id: str
     name: str
     last_run_field: str
-    enabled: Callable[[AppSettings], bool]
+    enabled: Callable[[AppSettings], Awaitable[bool]]
     interval: Callable[[AppSettings], timedelta]
     runner: Callable[[], Awaitable[None]]
     sentry_op: str | None = None
@@ -93,7 +93,7 @@ class PeriodicJobManager:
         if self._scheduler.get_job(job.job_id) is not None:
             self._scheduler.remove_job(job.job_id)
 
-        if not job.enabled(settings):
+        if not await job.enabled(settings):
             return
 
         interval = job.interval(settings)

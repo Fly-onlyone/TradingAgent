@@ -16,7 +16,11 @@ from app.db.models.strategy_discovery_cycle import (
     StrategyDiscoveryCycle,
 )
 from app.db.models.user import User
-from app.services.strategy_discovery import StrategyDiscoveryService
+from app.services.strategy_discovery import (
+    DISCOVERY_BLOCK_MESSAGES,
+    StrategyDiscoveryService,
+    check_discovery_blocked,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +85,10 @@ async def run_cycle(
     current_user: User = Depends(get_current_superuser),
 ) -> CycleRunResponse:
     """Manually trigger one auto-discovery cycle (blocks until complete)."""
+    block = await check_discovery_blocked()
+    if block is not None:
+        raise HTTPException(status_code=409, detail=DISCOVERY_BLOCK_MESSAGES[block])
+
     service = StrategyDiscoveryService()
     try:
         stats = await asyncio.wait_for(

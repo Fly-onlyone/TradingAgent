@@ -5,6 +5,7 @@
 
 import HistoryIcon from "@mui/icons-material/History";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import ScheduleIcon from "@mui/icons-material/Schedule";
 import {
@@ -30,6 +31,7 @@ import {
 	type StrategyDiscoveryConfig,
 	settingsApi,
 } from "@/api/endpoints/settings";
+import { tasksApi } from "@/api/endpoints/tasks";
 import { strategyDiscoveryCyclesQueryOptions } from "@/api/queryOptions/admin";
 import { SaveIndicator } from "@/components/common/SaveIndicator";
 import { StatusChip } from "@/components/common/StatusChip";
@@ -111,6 +113,26 @@ export function StrategyDiscoveryCard() {
 		enabled: !!isSuperuser,
 	});
 
+	// Matches the queryKey used by Header.tsx so Emergency Stop / Resume
+	// invalidations flow through without a second network request.
+	const emergencyStatusQuery = useQuery({
+		queryKey: ["agent-emergency-status"],
+		queryFn: () => tasksApi.emergencyStatus(),
+		enabled: !!isSuperuser,
+		staleTime: 10_000,
+		refetchInterval: 30_000,
+	});
+	const emergencyActive = emergencyStatusQuery.data?.active ?? false;
+	// Default true during initial load to avoid a flash of the paused chip.
+	// If the API ever omits has_active_task the UI stays in the permissive
+	// state — the backend still fail-closes via the service-layer gate.
+	const hasActiveTask = configQuery.data?.hasActiveTask ?? true;
+	const pausedReason: string | null = emergencyActive
+		? "Paused by Emergency Stop"
+		: !hasActiveTask
+			? "Paused — no active task"
+			: null;
+
 	const updateMutation = useMutation({
 		mutationFn: (update: Partial<StrategyDiscoveryConfig>) =>
 			settingsApi.updateStrategyDiscoveryConfig(update),
@@ -187,8 +209,18 @@ export function StrategyDiscoveryCard() {
 						<SaveIndicator status={saveStatus} />
 					</Box>
 					<Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+						{/* Paused-reason chip (emergency stop or no active task) */}
+						{pausedReason && config?.enabled && (
+							<Chip
+								size="small"
+								icon={<PauseCircleOutlineIcon />}
+								color="warning"
+								variant="outlined"
+								label={pausedReason}
+							/>
+						)}
 						{/* Next Run / Last Run badges in header */}
-						{config?.enabled && (
+						{config?.enabled && !pausedReason && (
 							<>
 								<Box
 									sx={{
@@ -447,12 +479,22 @@ export function StrategyDiscoveryCard() {
 								variant="outlined"
 								size="small"
 								startIcon={
-									isRunning ? <CircularProgress size={14} /> : <PlayArrowIcon />
+									isRunning ? (
+										<CircularProgress size={14} />
+									) : pausedReason ? (
+										<PauseCircleOutlineIcon />
+									) : (
+										<PlayArrowIcon />
+									)
 								}
 								onClick={() => startRun(token ?? "")}
-								disabled={isRunning}
+								disabled={isRunning || !!pausedReason}
 							>
-								{isRunning ? "Running..." : "Run Now"}
+								{isRunning
+									? "Running..."
+									: pausedReason
+										? pausedReason
+										: "Run Now"}
 							</Button>
 							{isRunning && currentExplorerSessionId && (
 								<Button

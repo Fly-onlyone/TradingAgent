@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from app.agent.task_scheduler import has_active_trading_task
 from app.api.deps import get_current_superuser
 from app.config import get_settings
 from app.db.models.app_settings import AgentAuthMode, AppSettings
@@ -676,6 +677,10 @@ class StrategyDiscoveryConfigResponse(BaseModel):
     last_run_at: str | None = None
     next_run_at: str | None = None
     sources: list[DiscoverySourceResponse]
+    # Reflects whether any AgentTask is currently in the ACTIVE state.
+    # The UI uses it to show a "Paused — no active task" chip and to
+    # disable the Run Now button in sync with the backend gate.
+    has_active_task: bool = False
 
 
 class StrategyDiscoveryConfigUpdate(BaseModel):
@@ -713,6 +718,8 @@ async def get_strategy_discovery_config(
     except Exception:
         next_run = None
 
+    has_active_task = await has_active_trading_task()
+
     return {
         "enabled": app_settings.auto_discover_enabled,
         "interval_hours": app_settings.auto_discover_interval_hours,
@@ -732,6 +739,7 @@ async def get_strategy_discovery_config(
             }
             for s in sources
         ],
+        "has_active_task": has_active_task,
     }
 
 
@@ -762,7 +770,9 @@ async def update_strategy_discovery_config(
 
     await app_settings.save_with_timestamp()
 
-    if reschedule_required:
+    # Emergency-stop already blocks the scheduler's `enabled` gate; skip
+    # the redundant reschedule hop when the latch is set.
+    if reschedule_required and not app_settings.emergency_stop_active:
         try:
             from app.agent.task_scheduler import get_scheduler
 
@@ -781,6 +791,8 @@ async def update_strategy_discovery_config(
         next_run = get_scheduler().discovery_next_run_at
     except Exception:
         next_run = None
+
+    has_active_task = await has_active_trading_task()
 
     return {
         "enabled": app_settings.auto_discover_enabled,
@@ -801,6 +813,7 @@ async def update_strategy_discovery_config(
             }
             for s in sources
         ],
+        "has_active_task": has_active_task,
     }
 
 
@@ -812,7 +825,15 @@ async def run_strategy_discovery_now(
     import asyncio
     import json
 
-    from app.services.strategy_discovery import StrategyDiscoveryService
+    from app.services.strategy_discovery import (
+        DISCOVERY_BLOCK_MESSAGES,
+        StrategyDiscoveryService,
+        check_discovery_blocked,
+    )
+
+    block = await check_discovery_blocked()
+    if block is not None:
+        raise HTTPException(status_code=409, detail=DISCOVERY_BLOCK_MESSAGES[block])
 
     user_id = current_user.id
 

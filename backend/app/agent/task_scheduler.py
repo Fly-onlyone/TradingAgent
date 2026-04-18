@@ -46,6 +46,48 @@ logger = logging.getLogger(__name__)
 _SESSION_CLEANUP_INTERVAL_HOURS = 6
 
 
+async def has_active_trading_task() -> bool:
+    """True when at least one AgentTask is in the ACTIVE state.
+
+    Discovery is gated on this so pausing the last active task also halts
+    strategy discovery — matches the user's mental model that discovery
+    is downstream work for the live trading agent.
+
+    Fails closed: on a Mongo error we return False so discovery pauses
+    (safer than running unsupervised). The warning ensures the miss is
+    visible in the `logs` collection rather than swallowed at debug level.
+    """
+    try:
+        count = await AgentTask.find(AgentTask.status == TaskStatus.ACTIVE).count()
+    except Exception:
+        logger.warning("has_active_trading_task failed; fail-closed to False", exc_info=True)
+        return False
+    return count > 0
+
+
+async def _discovery_enabled(settings) -> bool:
+    """Async predicate for the auto-discovery periodic job.
+
+    Returns False when the toggle is off, the emergency-stop latch is
+    set, OR no trading task is currently active.
+    """
+    if not settings.auto_discover_enabled:
+        return False
+    if settings.emergency_stop_active:
+        return False
+    return await has_active_trading_task()
+
+
+async def _pattern_mining_enabled(settings) -> bool:
+    """Async predicate for the pattern-mining periodic job."""
+    return bool(settings.pattern_mining_enabled)
+
+
+async def _session_cleanup_enabled(settings) -> bool:
+    """Async predicate for the stale-session cleanup job."""
+    return settings.session_retention_days > 0
+
+
 async def _persist_and_broadcast_assistant(
     *,
     session: AgentSession,
@@ -234,9 +276,11 @@ class AgentTaskScheduler:
                 name="Strategy auto-discovery",
                 log_label="Strategy auto-discovery",
                 last_run_field="auto_discover_last_run_at",
-                # Also gated on emergency-stop — the red button must silence
-                # discovery, not just user-facing tasks.
-                enabled=lambda s: s.auto_discover_enabled and not s.emergency_stop_active,
+                # Gated on (1) toggle, (2) emergency-stop latch, and
+                # (3) at least one ACTIVE trading task. Discovery is
+                # downstream of live trading — if nothing is trading,
+                # don't burn tokens extracting strategies.
+                enabled=_discovery_enabled,
                 interval=lambda s: timedelta(hours=max(1, s.auto_discover_interval_hours)),
                 runner=self._run_strategy_discovery,
                 sentry_op="task",
@@ -246,7 +290,7 @@ class AgentTaskScheduler:
                 name="Trading pattern mining",
                 log_label="Pattern mining",
                 last_run_field="pattern_mining_last_run_at",
-                enabled=lambda s: s.pattern_mining_enabled,
+                enabled=_pattern_mining_enabled,
                 interval=lambda s: timedelta(hours=max(1, s.pattern_mining_interval_hours)),
                 runner=self._run_pattern_mining,
                 sentry_op="task",
@@ -256,7 +300,7 @@ class AgentTaskScheduler:
                 name="Cleanup old chat sessions",
                 log_label="Session cleanup",
                 last_run_field="session_cleanup_last_run_at",
-                enabled=lambda s: s.session_retention_days > 0,
+                enabled=_session_cleanup_enabled,
                 interval=lambda _s: timedelta(hours=_SESSION_CLEANUP_INTERVAL_HOURS),
                 runner=self._cleanup_old_sessions,
                 sentry_op="task",
@@ -1210,6 +1254,9 @@ class AgentTaskScheduler:
         )
         task.pause()
         await self.unschedule_task(str(task.id))
+        # Re-evaluate discovery gate — if this was the last ACTIVE task,
+        # discovery should stop alongside it.
+        await self.reschedule_auto_discovery()
 
         # Create failure notification
         notification = Notification(

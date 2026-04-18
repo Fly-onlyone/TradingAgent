@@ -23,6 +23,7 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
+from enum import Enum
 
 from beanie import PydanticObjectId
 
@@ -59,6 +60,49 @@ logger = logging.getLogger(__name__)
 ProgressCallback = Callable[[dict], Awaitable[None]]
 
 
+class DiscoveryBlockReason(str, Enum):
+    """Reasons discovery is temporarily blocked.
+
+    The enum value doubles as the progress-event step name so the UI can
+    distinguish why a run was skipped.
+    """
+
+    EMERGENCY_STOP = "halted_emergency_stop"
+    NO_ACTIVE_TASK = "halted_no_active_task"
+
+
+DISCOVERY_BLOCK_MESSAGES: dict[DiscoveryBlockReason, str] = {
+    DiscoveryBlockReason.EMERGENCY_STOP: (
+        "Discovery is halted by Emergency Stop — resume all tasks to run"
+    ),
+    DiscoveryBlockReason.NO_ACTIVE_TASK: (
+        "No active trading task — activate a task to run discovery"
+    ),
+}
+
+
+async def check_discovery_blocked(
+    app_settings: AppSettings | None = None,
+) -> DiscoveryBlockReason | None:
+    """Return a reason code if discovery must be blocked right now, else None.
+
+    Shared by the periodic-scheduler gate, the `/run-now` SSE endpoint,
+    the admin `/run` endpoint, and the belt-and-suspenders check inside
+    `run_discovery_cycle` — so every entry point halts with the same
+    semantics and the same message.
+    """
+    # Import here (not module-level) to avoid a cycle through task_scheduler.
+    from app.agent.task_scheduler import has_active_trading_task
+
+    if app_settings is None:
+        app_settings = await AppSettings.get_instance()
+    if app_settings.emergency_stop_active:
+        return DiscoveryBlockReason.EMERGENCY_STOP
+    if not await has_active_trading_task():
+        return DiscoveryBlockReason.NO_ACTIVE_TASK
+    return None
+
+
 class StrategyDiscoveryService:
     """Orchestrates one end-to-end auto-discovery cycle."""
 
@@ -86,6 +130,22 @@ class StrategyDiscoveryService:
         async def emit(event: dict) -> None:
             if on_progress:
                 await on_progress(event)
+
+        # Belt-and-suspenders gate. The scheduler's async `enabled`
+        # predicate already blocks the periodic path, but manual triggers
+        # (Run Now, admin /run) reach here directly — re-check so nothing
+        # slips through. The returned `error` is a skip-sentinel; callers
+        # that log stats must not treat it as a failed cycle.
+        block = await check_discovery_blocked(app_settings)
+        if block is not None:
+            await emit({"step": block.value})
+            return {
+                "candidates_found": 0,
+                "strategies_saved": 0,
+                "strategies_skipped_low_confidence": 0,
+                "strategies_failed": 0,
+                "error": DISCOVERY_BLOCK_MESSAGES[block],
+            }
 
         session_user_id = await self._resolve_session_user_id(user_id)
         if session_user_id is None:

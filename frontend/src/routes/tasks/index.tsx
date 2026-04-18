@@ -154,6 +154,10 @@ function TaskConfigPage() {
 			setError(null);
 			autoCreatingRef.current = false;
 			void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+			// A fresh ACTIVE task re-arms discovery; refresh the card.
+			void queryClient.invalidateQueries({
+				queryKey: ["strategy-discovery-config"],
+			});
 		},
 		onError: (mutationError) => {
 			autoCreatingRef.current = false;
@@ -171,6 +175,10 @@ function TaskConfigPage() {
 		onSuccess: () => {
 			setError(null);
 			void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+			// Discovery gate depends on active-task count — refresh the card.
+			void queryClient.invalidateQueries({
+				queryKey: ["strategy-discovery-config"],
+			});
 		},
 		onError: () => setError("Failed to pause task"),
 	});
@@ -180,6 +188,9 @@ function TaskConfigPage() {
 		onSuccess: () => {
 			setError(null);
 			void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+			void queryClient.invalidateQueries({
+				queryKey: ["strategy-discovery-config"],
+			});
 		},
 		onError: () => setError("Failed to resume task"),
 	});

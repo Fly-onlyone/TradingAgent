@@ -344,6 +344,8 @@ async def create_task(
 
     scheduler = get_scheduler()
     await scheduler.schedule_task(task)
+    # A new ACTIVE task may re-arm discovery if the toggle is on.
+    await scheduler.reschedule_auto_discovery()
 
     return task_to_response(task)
 
@@ -877,6 +879,8 @@ async def delete_task(
 
     # Delete from database
     await task.delete()
+    # Deleting the last ACTIVE task should also halt discovery.
+    await scheduler.reschedule_auto_discovery()
 
     return {"message": "Task deleted successfully"}
 
@@ -905,6 +909,9 @@ async def pause_task(
 
     scheduler = get_scheduler()
     await scheduler.unschedule_task(task_id)
+    # Re-evaluate discovery gate — pausing the last active task halts
+    # discovery until another task goes ACTIVE again.
+    await scheduler.reschedule_auto_discovery()
 
     return task_to_response(task)
 
@@ -933,6 +940,9 @@ async def resume_task(
 
     scheduler = get_scheduler()
     await scheduler.schedule_task(task)
+    # Re-evaluate discovery gate — resuming an ACTIVE task may now
+    # allow discovery to re-arm if the toggle is on.
+    await scheduler.reschedule_auto_discovery()
 
     return task_to_response(task)
 

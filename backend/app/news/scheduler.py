@@ -20,6 +20,11 @@ _CRAWL_INTERVAL = timedelta(minutes=15)
 _CREDIBILITY_INTERVAL_HOURS = 6
 
 
+async def _crawl_always_enabled(_settings) -> bool:
+    """News crawl has no toggle — always on."""
+    return True
+
+
 class NewsScheduler:
     """Schedules and manages news crawling tasks."""
 
@@ -64,7 +69,7 @@ class NewsScheduler:
             name="Crawl all news sources",
             log_label="News crawl",
             last_run_field="news_crawl_last_run_at",
-            enabled=lambda _s: True,
+            enabled=_crawl_always_enabled,
             interval=lambda _s: _CRAWL_INTERVAL,
             runner=self._crawl_all_sources,
             # Preserve historical behavior: if the DB/AppSettings is
