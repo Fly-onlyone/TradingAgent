@@ -57,7 +57,7 @@ jobs:
         with:
           enable-cache: true
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         if: runner.os == 'Windows'
         with:
           python-version: "3.11"
