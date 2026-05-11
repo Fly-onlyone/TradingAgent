@@ -381,6 +381,18 @@ function EmbeddingModelCard() {
 	);
 }
 
+type ChangePasswordField =
+	| "currentPassword"
+	| "newPassword"
+	| "confirmNewPassword";
+type ChangePasswordVisibility = Record<ChangePasswordField, boolean>;
+
+const HIDDEN_CHANGE_PASSWORD_FIELDS: ChangePasswordVisibility = {
+	currentPassword: false,
+	newPassword: false,
+	confirmNewPassword: false,
+};
+
 function ChangePasswordCard() {
 	const {
 		control,
@@ -395,6 +407,9 @@ function ChangePasswordCard() {
 			confirmNewPassword: "",
 		},
 	});
+	const [visibleFields, setVisibleFields] = useState<ChangePasswordVisibility>(
+		HIDDEN_CHANGE_PASSWORD_FIELDS,
+	);
 
 	const mutation = useMutation({
 		mutationFn: (data: ChangePasswordInput) =>
@@ -403,11 +418,41 @@ function ChangePasswordCard() {
 			useAuthStore.getState().updateToken(tokens.access_token);
 			notify.success("Password changed successfully");
 			reset();
+			setVisibleFields(HIDDEN_CHANGE_PASSWORD_FIELDS);
 		},
 		onError: (error) => {
 			notify.error("Failed to change password", getErrorMessage(error));
 		},
 	});
+
+	const renderVisibilityAdornment = (
+		field: ChangePasswordField,
+		label: string,
+	) => {
+		const isVisible = visibleFields[field];
+
+		return (
+			<InputAdornment position="end">
+				<IconButton
+					aria-label={isVisible ? `Hide ${label}` : `Show ${label}`}
+					onClick={() =>
+						setVisibleFields((current) => ({
+							...current,
+							[field]: !current[field],
+						}))
+					}
+					edge="end"
+					size="small"
+				>
+					{isVisible ? (
+						<VisibilityOffIcon fontSize="small" />
+					) : (
+						<VisibilityIcon fontSize="small" />
+					)}
+				</IconButton>
+			</InputAdornment>
+		);
+	};
 
 	return (
 		<Card sx={{ mb: 3 }}>
@@ -423,12 +468,25 @@ function ChangePasswordCard() {
 						render={({ field }) => (
 							<TextField
 								{...field}
-								type="password"
+								type={visibleFields.currentPassword ? "text" : "password"}
 								label="Current Password"
+								placeholder="Enter your current password"
 								fullWidth
 								size="small"
 								error={!!errors.currentPassword}
-								helperText={errors.currentPassword?.message}
+								helperText={
+									errors.currentPassword?.message ??
+									"Required to confirm the password change."
+								}
+								slotProps={{
+									htmlInput: { autoComplete: "current-password" },
+									input: {
+										endAdornment: renderVisibilityAdornment(
+											"currentPassword",
+											"current password",
+										),
+									},
+								}}
 							/>
 						)}
 					/>
@@ -438,12 +496,21 @@ function ChangePasswordCard() {
 						render={({ field }) => (
 							<TextField
 								{...field}
-								type="password"
+								type={visibleFields.newPassword ? "text" : "password"}
 								label="New Password"
 								fullWidth
 								size="small"
 								error={!!errors.newPassword}
 								helperText={errors.newPassword?.message}
+								slotProps={{
+									htmlInput: { autoComplete: "new-password" },
+									input: {
+										endAdornment: renderVisibilityAdornment(
+											"newPassword",
+											"new password",
+										),
+									},
+								}}
 							/>
 						)}
 					/>
@@ -453,12 +520,21 @@ function ChangePasswordCard() {
 						render={({ field }) => (
 							<TextField
 								{...field}
-								type="password"
+								type={visibleFields.confirmNewPassword ? "text" : "password"}
 								label="Confirm New Password"
 								fullWidth
 								size="small"
 								error={!!errors.confirmNewPassword}
 								helperText={errors.confirmNewPassword?.message}
+								slotProps={{
+									htmlInput: { autoComplete: "new-password" },
+									input: {
+										endAdornment: renderVisibilityAdornment(
+											"confirmNewPassword",
+											"password confirmation",
+										),
+									},
+								}}
 							/>
 						)}
 					/>
@@ -934,6 +1010,17 @@ function SessionRetentionCard() {
 	);
 }
 
+type ExchangeCredentialField = "apiKey" | "secretKey" | "passphrase";
+type ExchangeCredentialVisibility = Record<ExchangeCredentialField, boolean>;
+
+const HIDDEN_EXCHANGE_CREDENTIALS: ExchangeCredentialVisibility = {
+	apiKey: false,
+	secretKey: false,
+	passphrase: false,
+};
+const MASKED_CREDENTIAL_VALUE = "••••••••";
+const MASKED_CREDENTIAL_DOT = "•";
+
 function ExchangeConfigCard() {
 	const { user } = useAuthStore();
 	const isSuperuser = user?.isSuperuser ?? false;
@@ -941,7 +1028,8 @@ function ExchangeConfigCard() {
 	const [apiKeyInput, setApiKeyInput] = useState("");
 	const [secretKeyInput, setSecretKeyInput] = useState("");
 	const [passphraseInput, setPassphraseInput] = useState("");
-	const [showCredentials, setShowCredentials] = useState(false);
+	const [visibleCredentials, setVisibleCredentials] =
+		useState<ExchangeCredentialVisibility>(HIDDEN_EXCHANGE_CREDENTIALS);
 	const [credentialsLoaded, setCredentialsLoaded] = useState(false);
 	const [testResult, setTestResult] = useState<{
 		success: boolean;
@@ -974,7 +1062,7 @@ function ExchangeConfigCard() {
 				variables.passphrase !== undefined
 			) {
 				setCredentialsLoaded(false);
-				setShowCredentials(false);
+				setVisibleCredentials(HIDDEN_EXCHANGE_CREDENTIALS);
 				setApiKeyInput("");
 				setSecretKeyInput("");
 				setPassphraseInput("");
@@ -989,31 +1077,35 @@ function ExchangeConfigCard() {
 	});
 
 	const revealMutation = useMutation({
-		mutationFn: () => settingsApi.revealExchangeCredentials(),
-		onSuccess: (data) => {
+		mutationFn: (_field: ExchangeCredentialField) =>
+			settingsApi.revealExchangeCredentials(),
+		onSuccess: (data, field) => {
 			setApiKeyInput(data.apiKey);
 			setSecretKeyInput(data.secretKey);
 			setPassphraseInput(data.passphrase);
 			setCredentialsLoaded(true);
-			setShowCredentials(true);
+			setVisibleCredentials((current) => ({ ...current, [field]: true }));
 		},
 		onError: (error) => {
 			notify.error("Failed to reveal credentials", getErrorMessage(error));
 		},
 	});
 
-	const handleToggleVisibility = () => {
-		if (showCredentials) {
-			setShowCredentials(false);
-			setCredentialsLoaded(false);
-			setApiKeyInput("");
-			setSecretKeyInput("");
-			setPassphraseInput("");
-		} else if (!credentialsLoaded && config?.hasApiKey) {
-			revealMutation.mutate();
-		} else {
-			setShowCredentials(true);
+	const handleToggleCredentialVisibility = (
+		field: ExchangeCredentialField,
+		hasCredential: boolean,
+	) => {
+		if (visibleCredentials[field]) {
+			setVisibleCredentials((current) => ({ ...current, [field]: false }));
+			return;
 		}
+
+		if (!credentialsLoaded && hasCredential) {
+			revealMutation.mutate(field);
+			return;
+		}
+
+		setVisibleCredentials((current) => ({ ...current, [field]: true }));
 	};
 
 	const testMutation = useMutation({
@@ -1050,8 +1142,10 @@ function ExchangeConfigCard() {
 
 	// Auto-save credentials when user edits them
 	const handleCredentialChange = useCallback(
-		(setter: (v: string) => void, value: string) => {
-			setter(value);
+		(setter: (v: string) => void, value: string, stripMaskedValue: boolean) => {
+			setter(
+				stripMaskedValue ? value.replaceAll(MASKED_CREDENTIAL_DOT, "") : value,
+			);
 			credentialsUserEditedRef.current = true;
 		},
 		[],
@@ -1078,7 +1172,7 @@ function ExchangeConfigCard() {
 		setSecretKeyInput("");
 		setPassphraseInput("");
 		setCredentialsLoaded(false);
-		setShowCredentials(false);
+		setVisibleCredentials(HIDDEN_EXCHANGE_CREDENTIALS);
 	};
 
 	const handleSandboxChange = (
@@ -1086,6 +1180,36 @@ function ExchangeConfigCard() {
 		checked: boolean,
 	) => {
 		updateMutation.mutate({ sandbox: checked });
+	};
+
+	const renderCredentialVisibilityAdornment = (
+		field: ExchangeCredentialField,
+		hasCredential: boolean,
+		label: string,
+	) => {
+		const isVisible = visibleCredentials[field];
+		const isPending =
+			revealMutation.isPending && revealMutation.variables === field;
+
+		return (
+			<InputAdornment position="end">
+				<IconButton
+					aria-label={isVisible ? `Hide ${label}` : `Show ${label}`}
+					onClick={() => handleToggleCredentialVisibility(field, hasCredential)}
+					edge="end"
+					size="small"
+					disabled={revealMutation.isPending}
+				>
+					{isPending ? (
+						<CircularProgress size={16} />
+					) : isVisible ? (
+						<VisibilityOffIcon fontSize="small" />
+					) : (
+						<VisibilityIcon fontSize="small" />
+					)}
+				</IconButton>
+			</InputAdornment>
+		);
 	};
 
 	return (
@@ -1143,101 +1267,90 @@ function ExchangeConfigCard() {
 							<Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
 								<TextField
 									size="small"
-									type="text"
+									type={visibleCredentials.apiKey ? "text" : "password"}
 									label="API Key"
 									placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 									value={
 										apiKeyInput ||
 										(!credentialsLoaded && config.hasApiKey
-											? config.maskedApiKey
+											? MASKED_CREDENTIAL_VALUE
 											: "")
 									}
 									onChange={(e) =>
-										handleCredentialChange(setApiKeyInput, e.target.value)
+										handleCredentialChange(
+											setApiKeyInput,
+											e.target.value,
+											!credentialsLoaded && config.hasApiKey,
+										)
 									}
-									onFocus={() => {
-										if (
-											!credentialsLoaded &&
-											config.hasApiKey &&
-											!apiKeyInput
-										) {
-											revealMutation.mutate();
-										}
-									}}
 									fullWidth
 									slotProps={{
 										input: {
-											endAdornment: (
-												<InputAdornment position="end">
-													<IconButton
-														aria-label="Toggle credential visibility"
-														onClick={handleToggleVisibility}
-														edge="end"
-														size="small"
-														disabled={revealMutation.isPending}
-													>
-														{revealMutation.isPending ? (
-															<CircularProgress size={16} />
-														) : showCredentials ? (
-															<VisibilityOffIcon fontSize="small" />
-														) : (
-															<VisibilityIcon fontSize="small" />
-														)}
-													</IconButton>
-												</InputAdornment>
+											endAdornment: renderCredentialVisibilityAdornment(
+												"apiKey",
+												config.hasApiKey,
+												"API key",
 											),
 										},
 									}}
 								/>
 								<TextField
 									size="small"
-									type="text"
+									type={visibleCredentials.secretKey ? "text" : "password"}
 									label="Secret Key"
 									placeholder="Your OKX secret key"
 									value={
 										secretKeyInput ||
 										(!credentialsLoaded && config.hasSecretKey
-											? config.maskedSecretKey
+											? MASKED_CREDENTIAL_VALUE
 											: "")
 									}
 									onChange={(e) =>
-										handleCredentialChange(setSecretKeyInput, e.target.value)
+										handleCredentialChange(
+											setSecretKeyInput,
+											e.target.value,
+											!credentialsLoaded && config.hasSecretKey,
+										)
 									}
-									onFocus={() => {
-										if (
-											!credentialsLoaded &&
-											config.hasSecretKey &&
-											!secretKeyInput
-										) {
-											revealMutation.mutate();
-										}
-									}}
 									fullWidth
+									slotProps={{
+										input: {
+											endAdornment: renderCredentialVisibilityAdornment(
+												"secretKey",
+												config.hasSecretKey,
+												"secret key",
+											),
+										},
+									}}
 								/>
 								<TextField
 									size="small"
-									type="text"
+									type={visibleCredentials.passphrase ? "text" : "password"}
 									label="Passphrase"
 									placeholder="Your OKX passphrase"
 									value={
 										passphraseInput ||
 										(!credentialsLoaded && config.hasPassphrase
-											? "••••••••"
+											? MASKED_CREDENTIAL_VALUE
 											: "")
 									}
 									onChange={(e) =>
-										handleCredentialChange(setPassphraseInput, e.target.value)
+										handleCredentialChange(
+											setPassphraseInput,
+											e.target.value,
+											!credentialsLoaded && config.hasPassphrase,
+										)
 									}
-									onFocus={() => {
-										if (
-											!credentialsLoaded &&
-											config.hasPassphrase &&
-											!passphraseInput
-										) {
-											revealMutation.mutate();
-										}
-									}}
 									fullWidth
+									slotProps={{
+										input: {
+											endAdornment: renderCredentialVisibilityAdornment(
+												"passphrase",
+												config.hasPassphrase,
+												"passphrase",
+											),
+										},
+									}}
 								/>
 								<Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
 									<SaveIndicator status={credentialsStatus} />
@@ -1362,8 +1475,6 @@ function BraveSearchConfigCard() {
 	const handleToggleVisibility = () => {
 		if (showKey) {
 			setShowKey(false);
-			setKeyLoaded(false);
-			setApiKeyInput("");
 		} else if (!keyLoaded && config?.hasApiKey) {
 			revealMutation.mutate();
 		} else {
@@ -1457,21 +1568,22 @@ function BraveSearchConfigCard() {
 							<Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
 								<TextField
 									size="small"
-									type="text"
+									type={showKey ? "text" : "password"}
 									label="Brave Search API Key"
 									placeholder="BSA..."
 									value={
 										apiKeyInput ||
-										(!keyLoaded && config.hasApiKey ? config.maskedApiKey : "")
+										(!keyLoaded && config.hasApiKey
+											? MASKED_CREDENTIAL_VALUE
+											: "")
 									}
 									onChange={(e) => {
-										setApiKeyInput(e.target.value);
+										setApiKeyInput(
+											!keyLoaded && config.hasApiKey
+												? e.target.value.replaceAll(MASKED_CREDENTIAL_DOT, "")
+												: e.target.value,
+										);
 										braveUserEditedRef.current = true;
-									}}
-									onFocus={() => {
-										if (!keyLoaded && config.hasApiKey && !apiKeyInput) {
-											revealMutation.mutate();
-										}
 									}}
 									fullWidth
 									slotProps={{

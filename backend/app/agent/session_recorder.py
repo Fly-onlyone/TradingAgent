@@ -25,6 +25,7 @@ from app.agent.constants import agent_channel_user_id
 from app.db.models.agent_session import (
     AgentSession,
     AgentSessionMessage,
+    SessionKind,
     persist_session_message,
     persist_session_message_doc,
 )
@@ -173,6 +174,7 @@ async def create_subagent_session(
     """Create a fresh AgentSession for a subagent run and insert it."""
     session = AgentSession(
         user_id=user_id,
+        session_kind=SessionKind.SUBAGENT,
         title=title,
         description=description,
         is_active=True,

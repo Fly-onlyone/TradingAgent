@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from starlette.requests import Request
 
-from app.api.deps import get_current_superuser
+from app.api.deps import get_current_superuser, require_emergency_stop_off
 from app.api.v1.auth import get_current_active_user
 from app.db.models.agent_decision import AgentDecision
 from app.db.models.agent_task import (
@@ -264,6 +264,7 @@ def task_to_response(task: AgentTask) -> TaskResponse:
 async def create_task(
     task_data: TaskCreate,
     current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_emergency_stop_off),
 ) -> TaskResponse:
     """Create a new scheduled task."""
     # Enforce single-task cap: edit the existing task instead of creating another
@@ -769,10 +770,12 @@ async def run_task_now_local(request: Request) -> dict:
     task = await AgentTask.find_one(AgentTask.status == TaskStatus.ACTIVE)
     if not task:
         raise HTTPException(status_code=404, detail="No active task")
+
+    await require_emergency_stop_off()
+
     from app.agent.task_scheduler import get_scheduler
 
-    scheduler = get_scheduler()
-    await scheduler.run_task_now(str(task.id))
+    await get_scheduler().run_task_now(str(task.id))
     return {"message": f"Task '{task.name}' started", "is_running": True}
 
 
@@ -920,6 +923,7 @@ async def pause_task(
 async def resume_task(
     task_id: str,
     current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_emergency_stop_off),
 ) -> TaskResponse:
     """Resume a paused task."""
     task = await AgentTask.find_one(
@@ -951,6 +955,7 @@ async def resume_task(
 async def run_task_now(
     task_id: str,
     current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_emergency_stop_off),
 ) -> dict:
     """Execute a task immediately."""
     task = await AgentTask.find_one(
@@ -962,9 +967,7 @@ async def run_task_now(
 
     from app.agent.task_scheduler import get_scheduler
 
-    scheduler = get_scheduler()
-    await scheduler.run_task_now(task_id)
-
+    await get_scheduler().run_task_now(task_id)
     return {"message": "Task execution started", "is_running": True}
 
 

@@ -35,7 +35,7 @@ class StartupReconciler:
     async def _mark_orphaned_discovery_cycles_failed(self) -> None:
         """Flip stale `running` cycles + active subagent sessions to closed state."""
         try:
-            from app.db.models.agent_session import AgentSession
+            from app.db.models.agent_session import AgentSession, SessionKind
             from app.db.models.strategy_discovery_cycle import (
                 DiscoveryCycleStatus,
                 StrategyDiscoveryCycle,
@@ -86,16 +86,31 @@ class StartupReconciler:
                 {"$set": {"is_active": False, "ended_at": now}},
             )
 
+            # Task-run sessions left is_active=true from a prior dead process.
+            # Every watchfiles reload during dev creates one of these — without
+            # closing them, the chat sidebar keeps accruing "live" task rows
+            # that will never emit another message.
+            task_run_result = await sessions_collection.update_many(
+                {
+                    "is_active": True,
+                    "session_kind": SessionKind.TASK_RUN.value,
+                },
+                {"$set": {"is_active": False, "ended_at": now}},
+            )
+
             if (
                 cycle_result.modified_count
                 or session_result.modified_count
+                or task_run_result.modified_count
                 or extract_sessions_deleted
             ):
                 logger.info(
                     "Startup cleanup: %d orphan cycle(s), %d orphan explorer session(s), "
+                    "%d orphan task_run session(s), "
                     "deleted %d legacy extractor session(s) (%d messages)",
                     cycle_result.modified_count,
                     session_result.modified_count,
+                    task_run_result.modified_count,
                     extract_sessions_deleted,
                     extract_msgs_deleted,
                 )

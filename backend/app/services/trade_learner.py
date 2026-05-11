@@ -210,7 +210,11 @@ class TradeLearner:
 
     async def _extract_via_sdk(self, order: Order) -> TradeLesson:
         """Extract using the Agent SDK (works with subscription/CLI credentials)."""
-        from app.agent.sdk_client import build_sdk_client, collect_text_response
+        from app.agent.sdk_client import (
+            build_sdk_client,
+            claude_sdk_workload_slot,
+            collect_text_response,
+        )
         from app.db.models.app_settings import AppSettings
 
         trade_summary = _format_order_for_analysis(order)
@@ -220,14 +224,16 @@ class TradeLearner:
         client = await build_sdk_client(
             system_prompt=SYSTEM_PROMPT_JSON,
             model=app_settings.agent_model or "claude-sonnet-4-6",
+            stderr_source="TradeLearner",
         )
         await client.connect()
 
         try:
-            await client.query(
-                f"Analyze this completed trade and extract a lesson:\n\n{trade_summary}"
-            )
-            raw_text = (await collect_text_response(client, source="TradeLearner")).strip()
+            async with claude_sdk_workload_slot("TradeLearner._extract_via_sdk"):
+                await client.query(
+                    f"Analyze this completed trade and extract a lesson:\n\n{trade_summary}"
+                )
+                raw_text = (await collect_text_response(client, source="TradeLearner")).strip()
 
             if "```json" in raw_text:
                 raw_text = raw_text.split("```json")[1].split("```")[0].strip()

@@ -124,8 +124,6 @@ export interface StrategyDiscoveryConfig {
 	lastRunAt: string | null;
 	nextRunAt: string | null;
 	sources: StrategyDiscoverySource[];
-	/** True when at least one AgentTask is currently ACTIVE. */
-	hasActiveTask: boolean;
 }
 
 export interface SessionRetentionConfig {
@@ -577,7 +575,6 @@ function transformStrategyDiscoveryConfig(
 			rssUrl: s.rss_url as string | null,
 			strategyExtraction: s.strategy_extraction as boolean,
 		})),
-		hasActiveTask: Boolean(data.has_active_task),
 	};
 }
 

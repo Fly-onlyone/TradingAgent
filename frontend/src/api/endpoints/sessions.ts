@@ -28,6 +28,8 @@ export interface SessionsFilter extends PaginationParams {
 function transformSession(data: Record<string, unknown>): AgentSession {
 	return {
 		id: data.id as string,
+		sessionKind: (data.session_kind as AgentSession["sessionKind"]) ?? "chat",
+		canResume: (data.can_resume as boolean | undefined) ?? true,
 		title: data.title as string | undefined,
 		description: data.description as string | undefined,
 		isActive: data.is_active as boolean,

@@ -123,15 +123,9 @@ export function StrategyDiscoveryCard() {
 		refetchInterval: 30_000,
 	});
 	const emergencyActive = emergencyStatusQuery.data?.active ?? false;
-	// Default true during initial load to avoid a flash of the paused chip.
-	// If the API ever omits has_active_task the UI stays in the permissive
-	// state — the backend still fail-closes via the service-layer gate.
-	const hasActiveTask = configQuery.data?.hasActiveTask ?? true;
 	const pausedReason: string | null = emergencyActive
 		? "Paused by Emergency Stop"
-		: !hasActiveTask
-			? "Paused — no active task"
-			: null;
+		: null;
 
 	const updateMutation = useMutation({
 		mutationFn: (update: Partial<StrategyDiscoveryConfig>) =>

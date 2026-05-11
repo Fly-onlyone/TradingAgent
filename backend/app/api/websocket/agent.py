@@ -16,13 +16,15 @@ from claude_agent_sdk._errors import (
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from jose import JWTError, jwt
 
+from app.agent.memory_telemetry import log_memory_checkpoint
 from app.agent.trading_agent import create_agent_with_tools
 from app.api.v1.auth import _DEV_USER_ID, is_token_revoked_by_password_change
 from app.api.websocket.connection_manager import manager
 from app.config import get_settings
 from app.db.models.agent_session import (
     AgentSession,
-    fetch_session_messages,
+    SessionKind,
+    fetch_session_message_window,
     persist_session_message,
     persist_session_message_doc,
 )
@@ -146,7 +148,10 @@ def _build_user_message(message: dict) -> str:
 
 async def _build_resume_history(session: AgentSession) -> str | None:
     """Format recent persisted messages so legacy sessions can resume cleanly."""
-    history, _ = await fetch_session_messages(session)
+    history, total, has_more, _ = await fetch_session_message_window(
+        session,
+        limit=_RESUME_HISTORY_MESSAGE_LIMIT + 1,
+    )
     history = history[:-1]
     if not history:
         return None
@@ -163,7 +168,7 @@ async def _build_resume_history(session: AgentSession) -> str | None:
         return None
 
     transcript = "\n".join(rendered_messages)
-    excerpted = len(history) > len(recent_history)
+    excerpted = has_more or (total - 1) > len(recent_history)
     if len(transcript) > _RESUME_HISTORY_CHAR_LIMIT:
         excerpted = True
         transcript = transcript[-_RESUME_HISTORY_CHAR_LIMIT:]
@@ -277,12 +282,25 @@ async def agent_chat_websocket(
                 op="ws.agent.initialize",
                 description="create trading agent (lazy)",
             ):
+                baseline_mb = log_memory_checkpoint(
+                    logger,
+                    phase="ws_agent_create_start",
+                    session_id=str(session.id) if session else None,
+                    session_kind=session.session_kind.value if session else SessionKind.CHAT.value,
+                )
                 resume_session_id = (
                     session.sdk_session_id if session and resume_existing_session else None
                 )
                 agent = await create_agent_with_tools(
                     session_id=session.sdk_session_id if session else None,
                     resume_session_id=resume_session_id,
+                )
+                log_memory_checkpoint(
+                    logger,
+                    phase="ws_agent_create_done",
+                    session_id=str(session.id) if session else None,
+                    session_kind=session.session_kind.value if session else SessionKind.CHAT.value,
+                    baseline_mb=baseline_mb,
                 )
             await manager.send_personal(
                 websocket,
@@ -391,6 +409,7 @@ async def agent_chat_websocket(
         if target_session is None and create_session:
             target_session = AgentSession(
                 user_id=user.id,
+                session_kind=SessionKind.CHAT,
                 sdk_session_id=str(uuid.uuid4()),
             )
             await target_session.insert()
@@ -411,6 +430,30 @@ async def agent_chat_websocket(
                 },
             )
             return
+
+        if target_session.session_kind != SessionKind.CHAT:
+            if not create_session:
+                await manager.send_personal(
+                    websocket,
+                    {
+                        "type": "error",
+                        "data": {"error": "Only chat sessions can be resumed interactively."},
+                    },
+                )
+                return
+            target_session = AgentSession(
+                user_id=user.id,
+                session_kind=SessionKind.CHAT,
+                sdk_session_id=str(uuid.uuid4()),
+            )
+            await target_session.insert()
+            await manager.send_personal(
+                websocket,
+                {
+                    "type": "session_created",
+                    "data": {"sessionId": str(target_session.id)},
+                },
+            )
 
         prior_message_count = target_session.total_messages
         has_persisted_sdk_session = bool(target_session.sdk_session_id)
@@ -594,6 +637,15 @@ async def agent_chat_websocket(
                     response = await asyncio.wait_for(
                         agent.chat(user_message, on_event=send_event),
                         timeout=_AGENT_TURN_TIMEOUT_SECONDS,
+                    )
+                    log_memory_checkpoint(
+                        logger,
+                        phase="ws_agent_turn_done",
+                        session_id=str(session.id) if session else None,
+                        session_kind=session.session_kind.value
+                        if session
+                        else SessionKind.CHAT.value,
+                        extra={"response_length": len(response)},
                     )
 
                     # Get tool calls, thinking content, and token usage
@@ -818,6 +870,12 @@ async def agent_chat_websocket(
             except (asyncio.CancelledError, Exception):
                 pass
         if agent:
+            baseline_mb = log_memory_checkpoint(
+                logger,
+                phase="ws_agent_disconnect_start",
+                session_id=str(session.id) if session else None,
+                session_kind=session.session_kind.value if session else SessionKind.CHAT.value,
+            )
             try:
                 await agent.disconnect()
             except Exception:
@@ -829,6 +887,14 @@ async def agent_chat_websocket(
                         "user_id": str(user.id),
                     },
                     exc_info=True,
+                )
+            finally:
+                log_memory_checkpoint(
+                    logger,
+                    phase="ws_agent_disconnect_done",
+                    session_id=str(session.id) if session else None,
+                    session_kind=session.session_kind.value if session else SessionKind.CHAT.value,
+                    baseline_mb=baseline_mb,
                 )
         if session:
             try:

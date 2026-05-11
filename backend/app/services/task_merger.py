@@ -239,7 +239,11 @@ class TaskMerger:
         raise RuntimeError("Claude did not call save_merged_task tool")
 
     async def _merge_via_sdk(self, user_message: str) -> MergedTask:
-        from app.agent.sdk_client import build_sdk_client, collect_text_response
+        from app.agent.sdk_client import (
+            build_sdk_client,
+            claude_sdk_workload_slot,
+            collect_text_response,
+        )
         from app.api.v1.settings import DEFAULT_MODEL_BY_FAMILY
         from app.db.models.app_settings import AppSettings
 
@@ -257,11 +261,13 @@ class TaskMerger:
         client = await build_sdk_client(
             system_prompt=SYSTEM_PROMPT_JSON,
             model=resolved_model,
+            stderr_source="TaskMerger",
         )
         await client.connect()
         try:
-            await client.query(user_message)
-            raw = (await collect_text_response(client, source="TaskMerger")).strip()
+            async with claude_sdk_workload_slot("TaskMerger._merge_via_sdk"):
+                await client.query(user_message)
+                raw = (await collect_text_response(client, source="TaskMerger")).strip()
             if not raw:
                 raise RuntimeError(f"SDK returned empty response (model={resolved_model})")
 

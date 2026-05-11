@@ -11,6 +11,7 @@ from app.api.v1.auth import get_current_active_user
 from app.db.models.agent_session import (
     AgentSession,
     PendingQuestionState,
+    SessionKind,
     SessionMessage,
     delete_session_message_history,
     fetch_session_message_window,
@@ -61,6 +62,8 @@ class PendingQuestionResponse(BaseModel):
 
 class SessionResponse(BaseModel):
     id: str
+    session_kind: str
+    can_resume: bool
     title: str | None
     description: str | None
     is_active: bool
@@ -151,6 +154,8 @@ def pending_question_to_response(
 def session_to_response(session: AgentSession) -> SessionResponse:
     return SessionResponse(
         id=str(session.id),
+        session_kind=session.session_kind.value,
+        can_resume=session.session_kind == SessionKind.CHAT,
         title=session.title or session.generate_title(),
         description=session.description,
         is_active=session.is_active,
@@ -174,9 +179,12 @@ def session_to_response(session: AgentSession) -> SessionResponse:
 def session_summary_to_response(session: dict[str, Any]) -> SessionResponse:
     started_at = session["started_at"]
     generated_title = f"Session {started_at.strftime('%Y-%m-%d %H:%M')}"
+    session_kind = SessionKind(session.get("session_kind", SessionKind.CHAT.value))
 
     return SessionResponse(
         id=str(session["_id"]),
+        session_kind=session_kind.value,
+        can_resume=session_kind == SessionKind.CHAT,
         title=session.get("title") or generated_title,
         description=session.get("description"),
         is_active=session.get("is_active", True),
@@ -259,6 +267,7 @@ async def create_session(
     """Create a new chat session."""
     session = AgentSession(
         user_id=current_user.id,
+        session_kind=SessionKind.CHAT,
         title=session_data.title,
         description=session_data.description,
     )
@@ -314,6 +323,7 @@ async def list_sessions_grouped(
             {
                 "$project": {
                     "title": 1,
+                    "session_kind": 1,
                     "description": 1,
                     "is_active": 1,
                     "total_messages": 1,

@@ -2,9 +2,10 @@
 
 import asyncio
 import logging
+import uuid
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, TypeVar
 
 import sentry_sdk
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -14,6 +15,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from beanie import PydanticObjectId
 
 from app.agent.constants import agent_channel_user_id
+from app.agent.memory_telemetry import log_memory_checkpoint
 from app.agent.scheduling import PeriodicJob, PeriodicJobManager, StartupReconciler
 from app.db.models.agent_decision import (
     AgentDecision,
@@ -24,6 +26,7 @@ from app.db.models.agent_decision import (
 )
 from app.db.models.agent_session import (
     AgentSession,
+    SessionKind,
     delete_session_message_history,
     persist_session_message,
     persist_session_message_doc,
@@ -44,43 +47,53 @@ from app.db.models.notification import Notification, NotificationType
 logger = logging.getLogger(__name__)
 
 _SESSION_CLEANUP_INTERVAL_HOURS = 6
+_TASK_INSTRUCTION_GENERIC_HEADINGS = {"portfolio context"}
+
+_T = TypeVar("_T")
+
+AUTO_DISCOVER_JOB_ID = "auto_discover_strategies"
+PATTERN_MINING_JOB_ID = "mine_trading_patterns"
+
+EMERGENCY_STOP_MESSAGE = "Emergency stop is active — lift it before running this action"
 
 
-async def has_active_trading_task() -> bool:
-    """True when at least one AgentTask is in the ACTIVE state.
-
-    Discovery is gated on this so pausing the last active task also halts
-    strategy discovery — matches the user's mental model that discovery
-    is downstream work for the live trading agent.
-
-    Fails closed: on a Mongo error we return False so discovery pauses
-    (safer than running unsupervised). The warning ensures the miss is
-    visible in the `logs` collection rather than swallowed at debug level.
-    """
+async def is_emergency_stopped() -> bool:
+    """True when the global emergency-stop latch is set. Fails closed on DB error."""
     try:
-        count = await AgentTask.find(AgentTask.status == TaskStatus.ACTIVE).count()
+        from app.db.models.app_settings import AppSettings
+
+        app_settings = await AppSettings.get_instance()
     except Exception:
-        logger.warning("has_active_trading_task failed; fail-closed to False", exc_info=True)
-        return False
-    return count > 0
+        logger.warning("Emergency-stop check failed; fail-closed to True", exc_info=True)
+        return True
+    return bool(app_settings.emergency_stop_active)
 
 
 async def _discovery_enabled(settings) -> bool:
     """Async predicate for the auto-discovery periodic job.
 
-    Returns False when the toggle is off, the emergency-stop latch is
-    set, OR no trading task is currently active.
+    Returns False when the toggle is off or the emergency-stop latch is set.
+    Discovery is intentionally NOT gated on active-task count — users can run
+    discovery independently of whether any trading task happens to be ACTIVE.
     """
     if not settings.auto_discover_enabled:
         return False
     if settings.emergency_stop_active:
         return False
-    return await has_active_trading_task()
+    return True
 
 
 async def _pattern_mining_enabled(settings) -> bool:
-    """Async predicate for the pattern-mining periodic job."""
-    return bool(settings.pattern_mining_enabled)
+    """Async predicate for the pattern-mining periodic job.
+
+    Honors the emergency-stop latch so one kill-switch halts every recurring
+    agent-adjacent job, not just trading tasks and discovery.
+    """
+    if not settings.pattern_mining_enabled:
+        return False
+    if settings.emergency_stop_active:
+        return False
+    return True
 
 
 async def _session_cleanup_enabled(settings) -> bool:
@@ -130,18 +143,9 @@ class AgentTaskScheduler:
     def __init__(self) -> None:
         self.scheduler = AsyncIOScheduler()
         self._running = False
-        self._trading_agent = None  # Lazy load to avoid circular imports
         self._running_tasks: dict[str, dict] = {}  # task_id -> progress dict (JSON-safe)
         self._task_runners: dict[str, asyncio.Task] = {}  # task_id -> asyncio.Task handle
         self._periodic_jobs = PeriodicJobManager(self.scheduler)
-
-    def _get_trading_agent(self):
-        """Lazy load trading agent to avoid circular imports."""
-        if self._trading_agent is None:
-            from app.agent.trading_agent import TradingAgent
-
-            self._trading_agent = TradingAgent()
-        return self._trading_agent
 
     def _set_modification_context(self, request_id: str, task: AgentTask) -> None:
         """Set task execution context for the modify_task tool."""
@@ -177,29 +181,60 @@ class AgentTaskScheduler:
         msg = str(exc)
         return any(p in msg for p in AgentTaskScheduler._AUTH_ERROR_PATTERNS)
 
-    async def _reset_trading_agent(self) -> None:
-        """Disconnect and discard the cached agent so the next call gets a fresh one."""
-        if self._trading_agent is not None:
-            try:
-                await self._trading_agent.disconnect()
-            except Exception:
-                logger.debug("Error disconnecting stale trading agent", exc_info=True)
-            self._trading_agent = None
-            logger.info("Trading agent reset after authentication failure")
-
-    async def _execute_with_retry(
+    async def _run_with_fresh_agent(
         self,
-        fn: Callable[[], Awaitable[Any]],
-        max_retries: int = 2,
-    ) -> Any:
-        """Execute an async callable with exponential backoff on transient errors."""
+        runner: Callable[[Any], Awaitable[_T]],
+        *,
+        max_retries: int = 0,
+        session_id: str | None = None,
+        task_id: str | None = None,
+        symbol: str | None = None,
+        session_kind: SessionKind = SessionKind.TASK_RUN,
+    ) -> _T:
+        """Run one operation inside a fresh TradingAgent instance with retries."""
+        from app.agent.trading_agent import create_agent_with_tools
+
         for attempt in range(max_retries + 1):
+            agent = None
+            create_baseline_mb = log_memory_checkpoint(
+                logger,
+                phase="task_agent_create_start",
+                session_id=session_id,
+                task_id=task_id,
+                symbol=symbol,
+                session_kind=session_kind.value,
+                extra={"attempt": attempt + 1},
+            )
+            agent_created_mb: float | None = None
+
             try:
-                return await fn()
+                agent = await create_agent_with_tools(session_id=str(uuid.uuid4()))
+                agent_created_mb = log_memory_checkpoint(
+                    logger,
+                    phase="task_agent_create_done",
+                    session_id=session_id,
+                    task_id=task_id,
+                    symbol=symbol,
+                    session_kind=session_kind.value,
+                    baseline_mb=create_baseline_mb,
+                    extra={"attempt": attempt + 1},
+                )
+                result = await runner(agent)
+                log_memory_checkpoint(
+                    logger,
+                    phase="task_agent_turn_done",
+                    session_id=session_id,
+                    task_id=task_id,
+                    symbol=symbol,
+                    session_kind=session_kind.value,
+                    baseline_mb=agent_created_mb,
+                    extra={"attempt": attempt + 1},
+                )
+                return result
             except self._RETRYABLE_ERRORS as e:
                 if attempt == max_retries:
                     raise
-                wait = 2**attempt * 5  # 5s, 10s, 20s …
+                wait = 2**attempt * 5
                 logger.warning(
                     "Retry %d/%d after transient error: %s (waiting %ds)",
                     attempt + 1,
@@ -209,11 +244,7 @@ class AgentTaskScheduler:
                 )
                 await asyncio.sleep(wait)
             except Exception as e:
-                if not self._is_auth_error(e):
-                    raise
-                # Auth token expired — kill the CLI subprocess and retry with fresh creds
-                await self._reset_trading_agent()
-                if attempt == max_retries:
+                if not self._is_auth_error(e) or attempt == max_retries:
                     raise
                 wait = 2**attempt * 5
                 logger.warning(
@@ -224,6 +255,33 @@ class AgentTaskScheduler:
                     wait,
                 )
                 await asyncio.sleep(wait)
+            finally:
+                if agent is not None:
+                    disconnect_baseline_mb = log_memory_checkpoint(
+                        logger,
+                        phase="task_agent_disconnect_start",
+                        session_id=session_id,
+                        task_id=task_id,
+                        symbol=symbol,
+                        session_kind=session_kind.value,
+                        baseline_mb=agent_created_mb,
+                        extra={"attempt": attempt + 1},
+                    )
+                    try:
+                        await agent.disconnect()
+                    except Exception:
+                        logger.debug("Error disconnecting task trading agent", exc_info=True)
+                    finally:
+                        log_memory_checkpoint(
+                            logger,
+                            phase="task_agent_disconnect_done",
+                            session_id=session_id,
+                            task_id=task_id,
+                            symbol=symbol,
+                            session_kind=session_kind.value,
+                            baseline_mb=disconnect_baseline_mb,
+                            extra={"attempt": attempt + 1},
+                        )
 
     async def start(self) -> None:
         """Start the scheduler and load active tasks."""
@@ -255,12 +313,6 @@ class AgentTaskScheduler:
         self._running = False
         self.scheduler.shutdown(wait=False)
 
-        if self._trading_agent:
-            try:
-                await self._trading_agent.disconnect()
-            except Exception as exc:
-                logger.warning("Error disconnecting scheduler trading agent: %s", exc)
-
         logger.info("Agent task scheduler stopped")
 
     def _build_periodic_jobs(self) -> list[PeriodicJob]:
@@ -272,7 +324,7 @@ class AgentTaskScheduler:
         """
         return [
             PeriodicJob(
-                job_id="auto_discover_strategies",
+                job_id=AUTO_DISCOVER_JOB_ID,
                 name="Strategy auto-discovery",
                 log_label="Strategy auto-discovery",
                 last_run_field="auto_discover_last_run_at",
@@ -286,7 +338,7 @@ class AgentTaskScheduler:
                 sentry_op="task",
             ),
             PeriodicJob(
-                job_id="mine_trading_patterns",
+                job_id=PATTERN_MINING_JOB_ID,
                 name="Trading pattern mining",
                 log_label="Pattern mining",
                 last_run_field="pattern_mining_last_run_at",
@@ -324,20 +376,20 @@ class AgentTaskScheduler:
     @property
     def discovery_next_run_at(self) -> datetime | None:
         """Next scheduled fire time for auto-discovery, or None if not scheduled."""
-        return self._periodic_jobs.next_run_at("auto_discover_strategies")
+        return self._periodic_jobs.next_run_at(AUTO_DISCOVER_JOB_ID)
 
     @property
     def pattern_mining_next_run_at(self) -> datetime | None:
         """Next scheduled fire time for pattern mining, or None if not scheduled."""
-        return self._periodic_jobs.next_run_at("mine_trading_patterns")
+        return self._periodic_jobs.next_run_at(PATTERN_MINING_JOB_ID)
 
     async def reschedule_auto_discovery(self) -> None:
         """Public method to reschedule after settings change."""
-        await self._reschedule_job("auto_discover_strategies")
+        await self._reschedule_job(AUTO_DISCOVER_JOB_ID)
 
     async def reschedule_pattern_mining(self) -> None:
         """Public method to reschedule after settings change."""
-        await self._reschedule_job("mine_trading_patterns")
+        await self._reschedule_job(PATTERN_MINING_JOB_ID)
 
     async def reschedule_session_cleanup(self) -> None:
         """Public method to reschedule after settings change."""
@@ -616,6 +668,11 @@ class AgentTaskScheduler:
             logger.warning("Task %s is already running, skipping duplicate execution", task_id)
             return
 
+        # Defense in depth: refuse any execution path while the latch is set.
+        if await is_emergency_stopped():
+            logger.info("Task %s skipped: emergency stop active", task_id)
+            return
+
         logger.info(f"Executing task {task_id}")
         self._running_tasks[task_id] = {
             "current_symbol": None,
@@ -729,7 +786,6 @@ class AgentTaskScheduler:
         so the session viewer shows one chat per scheduled execution instead of
         one per coin.
         """
-        agent = self._get_trading_agent()
         task_id = str(task.id)
 
         if not task.symbols:
@@ -739,6 +795,7 @@ class AgentTaskScheduler:
         now = datetime.now(UTC)
         session = AgentSession(
             user_id=task.user_id,
+            session_kind=SessionKind.TASK_RUN,
             title=task.name,
             symbols_discussed=list(task.symbols),
             is_active=True,
@@ -789,6 +846,7 @@ class AgentTaskScheduler:
                         content=prompt,
                         timestamp=now,
                     )
+                    await session.save()
 
                     # Set task context for modify_task tool
                     request_id = f"task-{task.id}-{symbol}"
@@ -796,13 +854,16 @@ class AgentTaskScheduler:
 
                     # Run agent analysis with retry on transient errors
                     try:
-                        result = await self._execute_with_retry(
-                            lambda: agent.analyze(
+                        result = await self._run_with_fresh_agent(
+                            lambda current_agent: current_agent.analyze(
                                 user_message=prompt,
                                 user_id=str(task.user_id),
                                 on_event=on_event,
                             ),
                             max_retries=task.max_retries,
+                            session_id=session_id_str,
+                            task_id=task_id,
+                            symbol=symbol,
                         )
                     finally:
                         self._clear_modification_context(request_id)
@@ -862,7 +923,6 @@ class AgentTaskScheduler:
         All symbols in this run share a single ``AgentSession`` — one chat per
         scheduled execution, not one per coin.
         """
-        agent = self._get_trading_agent()
         risk_config = self._get_risk_config(task.risk_level)
         min_confidence = float(risk_config["min_confidence"])
         task_id = str(task.id)
@@ -874,6 +934,7 @@ class AgentTaskScheduler:
         now = datetime.now(UTC)
         session = AgentSession(
             user_id=task.user_id,
+            session_kind=SessionKind.TASK_RUN,
             title=task.name,
             symbols_discussed=list(task.symbols),
             is_active=True,
@@ -940,6 +1001,7 @@ class AgentTaskScheduler:
                         content=prompt,
                         timestamp=now,
                     )
+                    await session.save()
 
                     # Set task context for modify_task tool
                     request_id = f"task-{task.id}-{symbol}"
@@ -947,13 +1009,16 @@ class AgentTaskScheduler:
 
                     # Run agent analysis with retry on transient errors
                     try:
-                        result = await self._execute_with_retry(
-                            lambda: agent.analyze(
+                        result = await self._run_with_fresh_agent(
+                            lambda current_agent: current_agent.analyze(
                                 user_message=prompt,
                                 user_id=str(task.user_id),
                                 on_event=on_event,
                             ),
                             max_retries=task.max_retries,
+                            session_id=session_id_str,
+                            task_id=task_id,
+                            symbol=symbol,
                         )
                     finally:
                         self._clear_modification_context(request_id)
@@ -1177,7 +1242,6 @@ class AgentTaskScheduler:
                             )
                     elif ct == MonitoringConditionType.CUSTOM:
                         # Delegate to AI for custom condition evaluation
-                        agent = self._get_trading_agent()
                         prompt = (
                             f"Evaluate this condition for {symbol}: "
                             f"{condition.description or 'No description'}. "
@@ -1185,7 +1249,11 @@ class AgentTaskScheduler:
                             "Reply with TRIGGERED or NOT_TRIGGERED and a brief reason."
                         )
                         try:
-                            ai_response = await agent.chat(prompt)
+                            ai_response = await self._run_with_fresh_agent(
+                                lambda current_agent: current_agent.chat(prompt),
+                                task_id=str(task.id),
+                                symbol=symbol,
+                            )
                             if "triggered" in ai_response.lower().split("not_triggered")[0]:
                                 triggered.append(
                                     {
@@ -1283,7 +1351,6 @@ class AgentTaskScheduler:
         execution_source: str = "task",
     ) -> None:
         """Execute a trade based on a confirmed decision."""
-        agent = self._get_trading_agent()
         risk_config = self._get_risk_config(task.risk_level)
 
         try:
@@ -1297,17 +1364,21 @@ class AgentTaskScheduler:
 
             idempotency_key = f"task-{task.id}-decision-{decision.id}"
 
-            trade_result = await agent.execute_trade(
-                user_id=str(task.user_id),
+            trade_result = await self._run_with_fresh_agent(
+                lambda current_agent: current_agent.execute_trade(
+                    user_id=str(task.user_id),
+                    symbol=decision.symbol,
+                    action=decision.action.value,
+                    position_size=decision.suggested_position_size,
+                    stop_loss=decision.suggested_stop_loss,
+                    take_profit=decision.suggested_take_profit,
+                    reasoning=decision.reasoning,
+                    idempotency_key=idempotency_key,
+                    max_position_size=task.max_position_size,
+                    risk_pct=float(risk_config["max_risk_percent"]),
+                ),
+                task_id=str(task.id),
                 symbol=decision.symbol,
-                action=decision.action.value,
-                position_size=decision.suggested_position_size,
-                stop_loss=decision.suggested_stop_loss,
-                take_profit=decision.suggested_take_profit,
-                reasoning=decision.reasoning,
-                idempotency_key=idempotency_key,
-                max_position_size=task.max_position_size,
-                risk_pct=float(risk_config["max_risk_percent"]),
             )
 
             if trade_result.get("success"):
@@ -1532,8 +1603,8 @@ class AgentTaskScheduler:
             "\nBased on all specialist analyses above, provide your final recommendation."
         )
 
-        if task.custom_instructions:
-            sections.append(f"\nAdditional instructions: {task.custom_instructions}")
+        if custom_instructions := self._get_symbol_scoped_custom_instructions(task, symbol):
+            sections.append(f"\nAdditional instructions: {custom_instructions}")
 
         return "\n".join(sections)
 
@@ -1545,8 +1616,8 @@ class AgentTaskScheduler:
             f"Holding Term: {task.holding_term.value} — {holding_instruction}"
         )
 
-        if task.custom_instructions:
-            prompt += f"\n\nAdditional context: {task.custom_instructions}"
+        if custom_instructions := self._get_symbol_scoped_custom_instructions(task, symbol):
+            prompt += f"\n\nAdditional context: {custom_instructions}"
 
         prompt += self._modification_hint(task)
         return prompt
@@ -1572,8 +1643,8 @@ Provide:
 4. Confidence level (0-100%)
 5. Key factors for the decision"""
 
-        if task.custom_instructions:
-            prompt += f"\n\nAdditional instructions: {task.custom_instructions}"
+        if custom_instructions := self._get_symbol_scoped_custom_instructions(task, symbol):
+            prompt += f"\n\nAdditional instructions: {custom_instructions}"
 
         prompt += self._modification_hint(task)
         return prompt
@@ -1593,6 +1664,95 @@ Provide:
             f"max_position_size={task.max_position_size}, "
             f"max_daily_trades={task.max_daily_trades}."
         )
+
+    def _get_symbol_scoped_custom_instructions(
+        self,
+        task: AgentTask,
+        symbol: str,
+    ) -> str:
+        """Return only the task instructions relevant to the active symbol."""
+        instructions = (task.custom_instructions or "").strip()
+        if not instructions:
+            return ""
+
+        symbol_aliases = self._build_symbol_aliases(task.symbols)
+        current_aliases = symbol_aliases.get(symbol, {symbol.upper()})
+
+        scoped_sections: list[str] = []
+        for section in self._split_instruction_sections(instructions):
+            heading = section["heading"]
+            normalized_heading = heading.lower()
+            section_text = section["text"]
+            referenced_symbols = {
+                candidate
+                for candidate, aliases in symbol_aliases.items()
+                if any(alias in normalized_heading for alias in aliases)
+            }
+
+            if not referenced_symbols:
+                if normalized_heading in _TASK_INSTRUCTION_GENERIC_HEADINGS:
+                    scoped_sections.append(section_text)
+                    continue
+
+                if "watchlist" in normalized_heading:
+                    scoped_sections.append(section_text)
+                    continue
+
+                if any(alias in normalized_heading for alias in current_aliases):
+                    scoped_sections.append(section_text)
+                    continue
+
+                if "position monitoring" not in normalized_heading:
+                    scoped_sections.append(section_text)
+                continue
+
+            if symbol in referenced_symbols:
+                scoped_sections.append(section_text)
+
+        return "\n\n".join(scoped_sections).strip()
+
+    @staticmethod
+    def _split_instruction_sections(instructions: str) -> list[dict[str, str]]:
+        """Split markdown task instructions into heading-based sections."""
+        sections: list[dict[str, str]] = []
+        current_heading = ""
+        current_lines: list[str] = []
+
+        for line in instructions.splitlines():
+            if line.startswith("## "):
+                if current_lines:
+                    sections.append(
+                        {
+                            "heading": current_heading,
+                            "text": "\n".join(current_lines).strip(),
+                        }
+                    )
+                current_heading = line[3:].strip()
+                current_lines = [line]
+                continue
+            current_lines.append(line)
+
+        if current_lines:
+            sections.append(
+                {
+                    "heading": current_heading,
+                    "text": "\n".join(current_lines).strip(),
+                }
+            )
+        return sections
+
+    @staticmethod
+    def _build_symbol_aliases(symbols: list[str]) -> dict[str, set[str]]:
+        """Build a lowercase alias set per task symbol for prompt scoping."""
+        aliases: dict[str, set[str]] = {}
+        for symbol in symbols:
+            normalized = symbol.upper()
+            base_asset = normalized.split("-")[0]
+            aliases[symbol] = {
+                normalized.lower(),
+                base_asset.lower(),
+            }
+        return aliases
 
     def _get_risk_config(self, risk_level: RiskLevel) -> dict:
         """Get risk configuration based on risk level."""
@@ -1661,8 +1821,9 @@ Provide:
             except Exception:
                 logger.exception("Failed to pause task %s during emergency stop", task.id)
 
-        # Drop the discovery tick now — don't wait for a settings-change reschedule.
-        self._periodic_jobs.unregister("auto_discover_strategies")
+        # Drop agent-adjacent periodics now; session cleanup is DB maintenance, keep it.
+        self._periodic_jobs.unregister(AUTO_DISCOVER_JOB_ID)
+        self._periodic_jobs.unregister(PATTERN_MINING_JOB_ID)
 
         # Hard-cancel any currently-executing task coroutines (interrupts mid-symbol,
         # including a live Claude streaming call).
@@ -1712,13 +1873,14 @@ Provide:
         app_settings.emergency_stop_active = False
         await app_settings.save_with_timestamp()
 
-        # Re-register discovery based on current settings (no-op if the user
-        # had auto_discover_enabled=False to begin with).
+        # Re-register discovery + pattern mining based on current settings
+        # (no-op if the user had either toggle off to begin with).
         await self.reschedule_auto_discovery()
+        await self.reschedule_pattern_mining()
 
         logger.info(
             "Emergency stop lifted: resumed %d of %d paused-by-emergency task(s), "
-            "re-registered strategy discovery",
+            "re-registered strategy discovery and pattern mining",
             resumed,
             len(emergency_paused),
         )
@@ -1730,7 +1892,14 @@ Provide:
         logger.info(f"Unscheduled task {task_id}")
 
     async def run_task_now(self, task_id: str) -> None:
-        """Fire-and-forget: schedule immediate execution as a background task."""
+        """Fire-and-forget: schedule immediate execution as a background task.
+
+        Raises RuntimeError when the emergency-stop latch is set so non-HTTP
+        callers (tray menu, internal reruns) get a clear signal. HTTP callers
+        use `require_emergency_stop_off` dep and never hit this guard.
+        """
+        if await is_emergency_stopped():
+            raise RuntimeError(EMERGENCY_STOP_MESSAGE)
         asyncio.create_task(self._execute_task(task_id))
 
     @staticmethod

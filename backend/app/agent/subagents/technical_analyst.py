@@ -5,7 +5,11 @@ from typing import Any
 
 from claude_agent_sdk import ClaudeSDKClient
 
-from app.agent.sdk_client import build_sdk_client, collect_text_response
+from app.agent.sdk_client import (
+    build_sdk_client,
+    claude_sdk_workload_slot,
+    collect_text_response,
+)
 from app.agent.tools.knowledge_tools import search_lessons, search_patterns
 from app.agent.tools.technical_tools import (
     detect_chart_patterns,
@@ -53,7 +57,10 @@ class TechnicalAnalyst:
 
     async def connect(self) -> None:
         """Initialize the SDK client."""
-        self._client = await build_sdk_client(system_prompt=TECHNICAL_ANALYST_PROMPT)
+        self._client = await build_sdk_client(
+            system_prompt=TECHNICAL_ANALYST_PROMPT,
+            stderr_source="TechnicalAnalyst",
+        )
         await self._client.connect()
         logger.info("TechnicalAnalyst connected")
 
@@ -109,9 +116,10 @@ Timeframe: {timeframe}
 Based on this technical data, provide your analysis and trading signal.
 """
 
-        # Get Claude's analysis via SDK
-        await self._client.query(context)
-        analysis_text = await self._collect_response()
+        # Serialize SDK-backed analyst calls; concurrent CLI workloads are unstable on Windows.
+        async with claude_sdk_workload_slot("TechnicalAnalyst.analyze"):
+            await self._client.query(context)
+            analysis_text = await self._collect_response()
 
         # Extract signal from analysis
         signal = self._extract_signal(analysis_text)

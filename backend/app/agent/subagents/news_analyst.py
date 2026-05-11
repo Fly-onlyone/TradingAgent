@@ -5,7 +5,11 @@ from typing import Any
 
 from claude_agent_sdk import ClaudeSDKClient
 
-from app.agent.sdk_client import build_sdk_client, collect_text_response
+from app.agent.sdk_client import (
+    build_sdk_client,
+    claude_sdk_workload_slot,
+    collect_text_response,
+)
 from app.agent.tools.news_tools import get_latest_news, get_news_sentiment, search_news
 from app.config import get_settings
 
@@ -50,7 +54,10 @@ class NewsAnalyst:
 
     async def connect(self) -> None:
         """Initialize the SDK client."""
-        self._client = await build_sdk_client(system_prompt=NEWS_ANALYST_PROMPT)
+        self._client = await build_sdk_client(
+            system_prompt=NEWS_ANALYST_PROMPT,
+            stderr_source="NewsAnalyst",
+        )
         await self._client.connect()
         logger.info("NewsAnalyst connected")
 
@@ -106,9 +113,10 @@ Time Window: Last {hours} hours
 Based on this news data, provide your analysis and trading implications.
 """
 
-        # Get Claude's analysis via SDK
-        await self._client.query(context)
-        analysis_text = await self._collect_response()
+        # Serialize SDK-backed analyst calls; concurrent CLI workloads are unstable on Windows.
+        async with claude_sdk_workload_slot("NewsAnalyst.analyze"):
+            await self._client.query(context)
+            analysis_text = await self._collect_response()
 
         # Extract trading signal from analysis
         signal = self._extract_signal(analysis_text, sentiment)
@@ -181,9 +189,10 @@ Analyze this news and provide:
 5. Immediate trading implications
 """
 
-        # Get Claude's analysis via SDK
-        await self._client.query(context)
-        analysis_text = await self._collect_response()
+        # Serialize SDK-backed analyst calls; concurrent CLI workloads are unstable on Windows.
+        async with claude_sdk_workload_slot("NewsAnalyst.analyze_breaking_news"):
+            await self._client.query(context)
+            analysis_text = await self._collect_response()
 
         signal = self._extract_signal(analysis_text, {"weighted_sentiment": 0})
 

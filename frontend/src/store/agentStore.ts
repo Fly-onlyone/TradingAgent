@@ -103,6 +103,7 @@ interface AgentState {
 const MAX_MESSAGES = 500;
 const MAX_TOOL_CALLS = 200;
 const MAX_DECISIONS = 100;
+const MAX_BUFFERED_SESSIONS = 6;
 
 function createEmptySessionState(): SessionRuntimeState {
 	return {
@@ -139,6 +140,69 @@ function mergeSessionState(
 	};
 }
 
+function sessionStateActivityScore(sessionState: SessionRuntimeState): number {
+	const lastMessageAt = sessionState.messages.at(-1)?.timestamp ?? 0;
+	const pendingQuestionAt = sessionState.pendingQuestion?.createdAt
+		? Date.parse(sessionState.pendingQuestion.createdAt)
+		: 0;
+	return Math.max(lastMessageAt, pendingQuestionAt);
+}
+
+function pruneSessionStates(
+	sessionStates: Record<string, SessionRuntimeState>,
+	options: {
+		selectedSessionId: string | null;
+		activeRunSessionId: string | null;
+		keepSessionId?: string | null;
+	},
+): Record<string, SessionRuntimeState> {
+	const entries = Object.entries(sessionStates);
+	if (entries.length <= MAX_BUFFERED_SESSIONS) {
+		return sessionStates;
+	}
+
+	const protectedIds = new Set<string>();
+	for (const sessionId of [
+		options.selectedSessionId,
+		options.activeRunSessionId,
+		options.keepSessionId,
+	]) {
+		if (sessionId) {
+			protectedIds.add(sessionId);
+		}
+	}
+
+	for (const [sessionId, sessionState] of entries) {
+		if (
+			sessionState.isThinking ||
+			sessionState.isCancelling ||
+			Boolean(sessionState.pendingQuestion)
+		) {
+			protectedIds.add(sessionId);
+		}
+	}
+
+	const rankedIds = entries
+		.filter(([sessionId]) => !protectedIds.has(sessionId))
+		.sort(
+			([, leftState], [, rightState]) =>
+				sessionStateActivityScore(rightState) -
+				sessionStateActivityScore(leftState),
+		)
+		.map(([sessionId]) => sessionId);
+
+	for (const sessionId of rankedIds) {
+		if (protectedIds.size >= MAX_BUFFERED_SESSIONS) {
+			break;
+		}
+		protectedIds.add(sessionId);
+	}
+
+	return Object.fromEntries(
+		entries.filter(([sessionId]) => protectedIds.has(sessionId)),
+	);
+}
+
 export const useAgentStore = create<AgentState>()(
 	persist(
 		(set) => ({
@@ -171,10 +235,17 @@ export const useAgentStore = create<AgentState>()(
 				set((state) => ({
 					selectedSessionId: sessionId,
 					activeRunSessionId: sessionId,
-					sessionStates: {
-						...state.sessionStates,
-						[sessionId]: createEmptySessionState(),
-					},
+					sessionStates: pruneSessionStates(
+						{
+							...state.sessionStates,
+							[sessionId]: createEmptySessionState(),
+						},
+						{
+							selectedSessionId: sessionId,
+							activeRunSessionId: sessionId,
+							keepSessionId: sessionId,
+						},
+					),
 				}));
 				return sessionId;
 			},
@@ -194,16 +265,23 @@ export const useAgentStore = create<AgentState>()(
 					delete sessionStates[oldSessionId];
 					sessionStates[newSessionId] = nextState;
 
+					const selectedSessionId =
+						state.selectedSessionId === oldSessionId
+							? newSessionId
+							: state.selectedSessionId;
+					const activeRunSessionId =
+						state.activeRunSessionId === oldSessionId
+							? newSessionId
+							: state.activeRunSessionId;
+
 					return {
-						sessionStates,
-						selectedSessionId:
-							state.selectedSessionId === oldSessionId
-								? newSessionId
-								: state.selectedSessionId,
-						activeRunSessionId:
-							state.activeRunSessionId === oldSessionId
-								? newSessionId
-								: state.activeRunSessionId,
+						sessionStates: pruneSessionStates(sessionStates, {
+							selectedSessionId,
+							activeRunSessionId,
+							keepSessionId: newSessionId,
+						}),
+						selectedSessionId,
+						activeRunSessionId,
 					};
 				}),
 
@@ -267,16 +345,23 @@ export const useAgentStore = create<AgentState>()(
 						(a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0),
 					);
 
-					return {
-						sessionStates: {
-							...state.sessionStates,
-							[sessionId]: {
-								...(existingState ?? createEmptySessionState()),
-								messages: merged,
-								pendingQuestion: existingState?.pendingQuestion ?? null,
-								hasLocalUpdates: false,
-							},
+					const sessionStates = {
+						...state.sessionStates,
+						[sessionId]: createEmptySessionState(),
+						[sessionId]: {
+							...(existingState ?? createEmptySessionState()),
+							messages: merged,
+							pendingQuestion: existingState?.pendingQuestion ?? null,
+							hasLocalUpdates: false,
 						},
+					};
+
+					return {
+						sessionStates: pruneSessionStates(sessionStates, {
+							selectedSessionId: state.selectedSessionId,
+							activeRunSessionId: state.activeRunSessionId,
+							keepSessionId: sessionId,
+						}),
 					};
 				}),
 
@@ -284,15 +369,20 @@ export const useAgentStore = create<AgentState>()(
 				set((state) => {
 					const sessionState =
 						state.sessionStates[sessionId] ?? createEmptySessionState();
+					const sessionStates = {
+						...state.sessionStates,
+						[sessionId]: {
+							...sessionState,
+							totalTokens,
+						},
+					};
 
 					return {
-						sessionStates: {
-							...state.sessionStates,
-							[sessionId]: {
-								...sessionState,
-								totalTokens,
-							},
-						},
+						sessionStates: pruneSessionStates(sessionStates, {
+							selectedSessionId: state.selectedSessionId,
+							activeRunSessionId: state.activeRunSessionId,
+							keepSessionId: sessionId,
+						}),
 					};
 				}),
 
@@ -300,15 +390,20 @@ export const useAgentStore = create<AgentState>()(
 				set((state) => {
 					const sessionState =
 						state.sessionStates[sessionId] ?? createEmptySessionState();
+					const sessionStates = {
+						...state.sessionStates,
+						[sessionId]: {
+							...sessionState,
+							sessionModel: model,
+						},
+					};
 
 					return {
-						sessionStates: {
-							...state.sessionStates,
-							[sessionId]: {
-								...sessionState,
-								sessionModel: model,
-							},
-						},
+						sessionStates: pruneSessionStates(sessionStates, {
+							selectedSessionId: state.selectedSessionId,
+							activeRunSessionId: state.activeRunSessionId,
+							keepSessionId: sessionId,
+						}),
 					};
 				}),
 
@@ -342,27 +437,33 @@ export const useAgentStore = create<AgentState>()(
 						});
 					}
 
-					return {
-						sessionStates: {
-							...state.sessionStates,
-							[sessionId]: {
-								...sessionState,
-								messages: [...sessionState.messages, message].slice(
-									-MAX_MESSAGES,
-								),
-								lastDecision: message.decision ?? sessionState.lastDecision,
-								isThinking: preserveInFlightTurn
-									? sessionState.isThinking
-									: false,
-								isCancelling: preserveInFlightTurn
-									? sessionState.isCancelling
-									: false,
-								streamingText: preserveInFlightTurn
-									? sessionState.streamingText
-									: "",
-								hasLocalUpdates: true,
-							},
+					const sessionStates = {
+						...state.sessionStates,
+						[sessionId]: {
+							...sessionState,
+							messages: [...sessionState.messages, message].slice(
+								-MAX_MESSAGES,
+							),
+							lastDecision: message.decision ?? sessionState.lastDecision,
+							isThinking: preserveInFlightTurn
+								? sessionState.isThinking
+								: false,
+							isCancelling: preserveInFlightTurn
+								? sessionState.isCancelling
+								: false,
+							streamingText: preserveInFlightTurn
+								? sessionState.streamingText
+								: "",
+							hasLocalUpdates: true,
 						},
+					};
+
+					return {
+						sessionStates: pruneSessionStates(sessionStates, {
+							selectedSessionId: state.selectedSessionId,
+							activeRunSessionId: state.activeRunSessionId,
+							keepSessionId: sessionId,
+						}),
 						status:
 							!preserveInFlightTurn &&
 							state.activeRunSessionId === sessionId &&
@@ -430,22 +531,27 @@ export const useAgentStore = create<AgentState>()(
 					if (!sessionState) {
 						return {};
 					}
+					const sessionStates = {
+						...state.sessionStates,
+						[sessionId]: {
+							...sessionState,
+							toolCalls: sessionState.toolCalls.map((toolCall) =>
+								toolCall.id === toolCallId
+									? {
+											...toolCall,
+											result,
+										}
+									: toolCall,
+							),
+						},
+					};
 
 					return {
-						sessionStates: {
-							...state.sessionStates,
-							[sessionId]: {
-								...sessionState,
-								toolCalls: sessionState.toolCalls.map((toolCall) =>
-									toolCall.id === toolCallId
-										? {
-												...toolCall,
-												result,
-											}
-										: toolCall,
-								),
-							},
-						},
+						sessionStates: pruneSessionStates(sessionStates, {
+							selectedSessionId: state.selectedSessionId,
+							activeRunSessionId: state.activeRunSessionId,
+							keepSessionId: sessionId,
+						}),
 					};
 				}),
 
@@ -453,16 +559,21 @@ export const useAgentStore = create<AgentState>()(
 				set((state) => {
 					const sessionState =
 						state.sessionStates[sessionId] ?? createEmptySessionState();
+					const sessionStates = {
+						...state.sessionStates,
+						[sessionId]: {
+							...sessionState,
+							thinkingContent: `${sessionState.thinkingContent}${delta}`,
+							hasLocalUpdates: true,
+						},
+					};
 
 					return {
-						sessionStates: {
-							...state.sessionStates,
-							[sessionId]: {
-								...sessionState,
-								thinkingContent: `${sessionState.thinkingContent}${delta}`,
-								hasLocalUpdates: true,
-							},
-						},
+						sessionStates: pruneSessionStates(sessionStates, {
+							selectedSessionId: state.selectedSessionId,
+							activeRunSessionId: state.activeRunSessionId,
+							keepSessionId: sessionId,
+						}),
 					};
 				}),
 
@@ -470,16 +581,21 @@ export const useAgentStore = create<AgentState>()(
 				set((state) => {
 					const sessionState =
 						state.sessionStates[sessionId] ?? createEmptySessionState();
+					const sessionStates = {
+						...state.sessionStates,
+						[sessionId]: {
+							...sessionState,
+							streamingText: `${sessionState.streamingText}${delta}`,
+							hasLocalUpdates: true,
+						},
+					};
 
 					return {
-						sessionStates: {
-							...state.sessionStates,
-							[sessionId]: {
-								...sessionState,
-								streamingText: `${sessionState.streamingText}${delta}`,
-								hasLocalUpdates: true,
-							},
-						},
+						sessionStates: pruneSessionStates(sessionStates, {
+							selectedSessionId: state.selectedSessionId,
+							activeRunSessionId: state.activeRunSessionId,
+							keepSessionId: sessionId,
+						}),
 					};
 				}),
 
@@ -489,25 +605,34 @@ export const useAgentStore = create<AgentState>()(
 						state.sessionStates[sessionId] ?? createEmptySessionState();
 					const shouldResetTurn = isThinking && !sessionState.isThinking;
 
-					return {
-						sessionStates: {
-							...state.sessionStates,
-							[sessionId]: {
-								...sessionState,
-								isThinking,
-								isCancelling: !isThinking ? false : sessionState.isCancelling,
-								currentTurnToolCalls: shouldResetTurn
-									? []
-									: sessionState.currentTurnToolCalls,
-								thinkingContent: shouldResetTurn
-									? ""
-									: sessionState.thinkingContent,
-								streamingText: shouldResetTurn
-									? ""
-									: sessionState.streamingText,
-								hasLocalUpdates: sessionState.hasLocalUpdates || isThinking,
-							},
+					const sessionStates = {
+						...state.sessionStates,
+						[sessionId]: {
+							...sessionState,
+							isThinking,
+							isCancelling: !isThinking ? false : sessionState.isCancelling,
+							currentTurnToolCalls: shouldResetTurn
+								? []
+								: sessionState.currentTurnToolCalls,
+							thinkingContent: shouldResetTurn
+								? ""
+								: sessionState.thinkingContent,
+							streamingText: shouldResetTurn ? "" : sessionState.streamingText,
+							hasLocalUpdates: sessionState.hasLocalUpdates || isThinking,
 						},
+					};
+					const activeRunSessionId = isThinking
+						? sessionId
+						: state.activeRunSessionId === sessionId
+							? null
+							: state.activeRunSessionId;
+
+					return {
+						sessionStates: pruneSessionStates(sessionStates, {
+							selectedSessionId: state.selectedSessionId,
+							activeRunSessionId,
+							keepSessionId: sessionId,
+						}),
 						activeRunSessionId: isThinking
 							? sessionId
 							: state.activeRunSessionId === sessionId
@@ -525,15 +650,20 @@ export const useAgentStore = create<AgentState>()(
 				set((state) => {
 					const sessionState =
 						state.sessionStates[sessionId] ?? createEmptySessionState();
+					const sessionStates = {
+						...state.sessionStates,
+						[sessionId]: {
+							...sessionState,
+							isCancelling,
+						},
+					};
 
 					return {
-						sessionStates: {
-							...state.sessionStates,
-							[sessionId]: {
-								...sessionState,
-								isCancelling,
-							},
-						},
+						sessionStates: pruneSessionStates(sessionStates, {
+							selectedSessionId: state.selectedSessionId,
+							activeRunSessionId: state.activeRunSessionId,
+							keepSessionId: sessionId,
+						}),
 					};
 				}),
 
@@ -597,15 +727,20 @@ export const useAgentStore = create<AgentState>()(
 				set((state) => {
 					const sessionState =
 						state.sessionStates[sessionId] ?? createEmptySessionState();
+					const sessionStates = {
+						...state.sessionStates,
+						[sessionId]: {
+							...sessionState,
+							pendingQuestion: question,
+						},
+					};
 
 					return {
-						sessionStates: {
-							...state.sessionStates,
-							[sessionId]: {
-								...sessionState,
-								pendingQuestion: question,
-							},
-						},
+						sessionStates: pruneSessionStates(sessionStates, {
+							selectedSessionId: state.selectedSessionId,
+							activeRunSessionId: state.activeRunSessionId,
+							keepSessionId: sessionId,
+						}),
 					};
 				}),
 			clearSessionPendingQuestion: (sessionId) =>
@@ -614,15 +749,20 @@ export const useAgentStore = create<AgentState>()(
 					if (!sessionState) {
 						return {};
 					}
+					const sessionStates = {
+						...state.sessionStates,
+						[sessionId]: {
+							...sessionState,
+							pendingQuestion: null,
+						},
+					};
 
 					return {
-						sessionStates: {
-							...state.sessionStates,
-							[sessionId]: {
-								...sessionState,
-								pendingQuestion: null,
-							},
-						},
+						sessionStates: pruneSessionStates(sessionStates, {
+							selectedSessionId: state.selectedSessionId,
+							activeRunSessionId: state.activeRunSessionId,
+							keepSessionId: sessionId,
+						}),
 					};
 				}),
 			finalizeInterruptedTurns: () =>
@@ -684,7 +824,10 @@ export const useAgentStore = create<AgentState>()(
 					) as Record<string, SessionRuntimeState>;
 
 					return {
-						sessionStates,
+						sessionStates: pruneSessionStates(sessionStates, {
+							selectedSessionId: state.selectedSessionId,
+							activeRunSessionId: null,
+						}),
 						activeRunSessionId: null,
 						status: (state.status === "auth_required" ||
 						state.status === "error"

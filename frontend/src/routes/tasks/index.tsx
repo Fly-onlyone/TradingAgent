@@ -121,6 +121,7 @@ function TaskConfigPage() {
 		serializeEditableTaskUpdate(buildEditableTaskUpdate(DEFAULT_FORM)),
 	);
 	const prevIsRunningRef = useRef(false);
+	const prevLastRunAtRef = useRef<string | null>(null);
 
 	// ── Queries ──────────────────────────────────────────────────────────
 
@@ -347,18 +348,27 @@ function TaskConfigPage() {
 
 	useEffect(() => {
 		const wasRunning = prevIsRunningRef.current;
+		const prevLastRunAt = prevLastRunAtRef.current;
 		prevIsRunningRef.current = isTaskRunning;
+		prevLastRunAtRef.current = task?.lastRunAt ?? null;
 
-		if (wasRunning && !isTaskRunning && task) {
-			// Refresh recent runs panel now that the decision is persisted
-			void queryClient.invalidateQueries({
-				queryKey: ["tasks", "decisions"],
-			});
-			if (task.lastError) {
-				notify.error("Task Failed", `${task.name}: ${task.lastError}`);
-			} else {
-				notify.success("Task Completed", `${task.name} finished successfully`);
-			}
+		if (!task) return;
+
+		// Only toast when the run actually produced a result. A backend
+		// restart / kill flips `isRunning` to false WITHOUT advancing
+		// `lastRunAt`, so it must not fire a spurious "Task Failed" from
+		// whatever stale `lastError` happens to still be on the task.
+		const runTransitioned = wasRunning && !isTaskRunning;
+		const resultLanded = Boolean(
+			task.lastRunAt && task.lastRunAt !== prevLastRunAt,
+		);
+		if (!runTransitioned || !resultLanded) return;
+
+		void queryClient.invalidateQueries({ queryKey: ["tasks", "decisions"] });
+		if (task.lastError) {
+			notify.error("Task Failed", `${task.name}: ${task.lastError}`);
+		} else {
+			notify.success("Task Completed", `${task.name} finished successfully`);
 		}
 	}, [isTaskRunning, task, queryClient]);
 

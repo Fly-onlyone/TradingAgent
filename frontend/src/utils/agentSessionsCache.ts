@@ -18,6 +18,8 @@ export function createOptimisticSession(
 
 	return {
 		id: sessionId,
+		sessionKind: "chat",
+		canResume: true,
 		title: "New Chat",
 		isActive: true,
 		totalMessages: hasUserMessage ? 1 : 0,

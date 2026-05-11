@@ -5,7 +5,11 @@ from typing import Any
 
 from claude_agent_sdk import ClaudeSDKClient
 
-from app.agent.sdk_client import build_sdk_client, collect_text_response
+from app.agent.sdk_client import (
+    build_sdk_client,
+    claude_sdk_workload_slot,
+    collect_text_response,
+)
 from app.agent.tools.fundamental_tools import (
     get_macro_indicators,
     get_onchain_metrics,
@@ -50,7 +54,10 @@ class FundamentalAnalyst:
 
     async def connect(self) -> None:
         """Initialize the SDK client."""
-        self._client = await build_sdk_client(system_prompt=FUNDAMENTAL_ANALYST_PROMPT)
+        self._client = await build_sdk_client(
+            system_prompt=FUNDAMENTAL_ANALYST_PROMPT,
+            stderr_source="FundamentalAnalyst",
+        )
         await self._client.connect()
         logger.info("FundamentalAnalyst connected")
 
@@ -101,9 +108,10 @@ Asset: {symbol}
 Based on this fundamental data, provide your analysis and valuation assessment.
 """
 
-        # Get Claude's analysis via SDK
-        await self._client.query(context)
-        analysis_text = await self._collect_response()
+        # Serialize SDK-backed analyst calls; concurrent CLI workloads are unstable on Windows.
+        async with claude_sdk_workload_slot("FundamentalAnalyst.analyze"):
+            await self._client.query(context)
+            analysis_text = await self._collect_response()
 
         # Extract valuation from analysis
         valuation = self._extract_valuation(analysis_text)

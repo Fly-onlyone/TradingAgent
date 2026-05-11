@@ -208,6 +208,7 @@ class StrategyExtractor:
         )
 
         from app.agent.auth import resolve_anthropic_api_key
+        from app.agent.sdk_client import build_sdk_stderr_logger, claude_sdk_workload_slot
         from app.db.models.app_settings import AppSettings
 
         truncated = content[:MAX_CONTENT_LENGTH]
@@ -245,6 +246,7 @@ class StrategyExtractor:
             permission_mode="bypassPermissions",
             disallowed_tools=DISALLOWED_BUILTIN_TOOLS,
             extra_args=SUPPRESS_CLI_HOOKS,
+            stderr=build_sdk_stderr_logger("StrategyExtractor"),
         )
         if api_key:
             options.env["ANTHROPIC_API_KEY"] = api_key
@@ -256,11 +258,12 @@ class StrategyExtractor:
             text_parts: list[str] = []
             user_message = f"Extract the trading strategy from this content:{hint}\n\n{truncated}"
 
-            await client.query(user_message)
-            async for message in client.receive_response():
-                for block in getattr(message, "content", []):
-                    if isinstance(block, TextBlock):
-                        text_parts.append(block.text)
+            async with claude_sdk_workload_slot("StrategyExtractor._extract_via_sdk"):
+                await client.query(user_message)
+                async for message in client.receive_response():
+                    for block in getattr(message, "content", []):
+                        if isinstance(block, TextBlock):
+                            text_parts.append(block.text)
 
             raw_text = "".join(text_parts).strip()
 

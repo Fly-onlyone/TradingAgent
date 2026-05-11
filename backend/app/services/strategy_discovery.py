@@ -68,15 +68,11 @@ class DiscoveryBlockReason(str, Enum):
     """
 
     EMERGENCY_STOP = "halted_emergency_stop"
-    NO_ACTIVE_TASK = "halted_no_active_task"
 
 
 DISCOVERY_BLOCK_MESSAGES: dict[DiscoveryBlockReason, str] = {
     DiscoveryBlockReason.EMERGENCY_STOP: (
         "Discovery is halted by Emergency Stop — resume all tasks to run"
-    ),
-    DiscoveryBlockReason.NO_ACTIVE_TASK: (
-        "No active trading task — activate a task to run discovery"
     ),
 }
 
@@ -89,17 +85,13 @@ async def check_discovery_blocked(
     Shared by the periodic-scheduler gate, the `/run-now` SSE endpoint,
     the admin `/run` endpoint, and the belt-and-suspenders check inside
     `run_discovery_cycle` — so every entry point halts with the same
-    semantics and the same message.
+    semantics and the same message. Only the emergency-stop latch blocks
+    discovery; active-task count is intentionally NOT a gate.
     """
-    # Import here (not module-level) to avoid a cycle through task_scheduler.
-    from app.agent.task_scheduler import has_active_trading_task
-
     if app_settings is None:
         app_settings = await AppSettings.get_instance()
     if app_settings.emergency_stop_active:
         return DiscoveryBlockReason.EMERGENCY_STOP
-    if not await has_active_trading_task():
-        return DiscoveryBlockReason.NO_ACTIVE_TASK
     return None
 
 

@@ -370,9 +370,17 @@ class AgentTask(Document):
         self.update_timestamp()
 
     def resume(self) -> None:
-        """Resume the task."""
+        """Resume the task.
+
+        Clears `last_error` and `consecutive_failures` so the next run starts
+        fresh — carrying them forward re-poisons the Task Failed toast (the
+        frontend can't tell stale errors from new ones) and makes a single
+        future failure immediately re-auto-pause.
+        """
         self.status = TaskStatus.ACTIVE
         self.paused_by_emergency_stop = False
+        self.last_error = None
+        self.consecutive_failures = 0
         self.update_timestamp()
 
     def complete(self) -> None:

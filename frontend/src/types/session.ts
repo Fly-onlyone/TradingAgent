@@ -38,6 +38,7 @@ export type DecisionStatus =
 	| "executed"
 	| "expired";
 export type MessageRole = "user" | "assistant" | "system";
+export type SessionKind = "chat" | "task_run" | "subagent";
 
 export interface PendingQuestion {
 	id: string;
@@ -70,6 +71,8 @@ export interface ToolCall {
 // Agent Session
 export interface AgentSession {
 	id: string;
+	sessionKind: SessionKind;
+	canResume: boolean;
 	title?: string;
 	description?: string;
 	isActive: boolean;

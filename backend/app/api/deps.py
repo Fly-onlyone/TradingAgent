@@ -16,3 +16,11 @@ async def get_current_superuser(
             detail="Superuser privileges required",
         )
     return current_user
+
+
+async def require_emergency_stop_off() -> None:
+    """Refuse the request while the global emergency-stop latch is set."""
+    from app.agent.task_scheduler import EMERGENCY_STOP_MESSAGE, is_emergency_stopped
+
+    if await is_emergency_stopped():
+        raise HTTPException(status_code=409, detail=EMERGENCY_STOP_MESSAGE)

@@ -535,20 +535,22 @@ function AgentPage() {
 		(sessionId: string) => {
 			prepareForAutoScroll();
 			setSelectedSessionId(sessionId);
+			setMainTab("chat");
 			if (isMobile) {
 				setMobileDrawerOpen(false);
 			}
 		},
-		[prepareForAutoScroll, setSelectedSessionId, isMobile],
+		[prepareForAutoScroll, setSelectedSessionId, setMainTab, isMobile],
 	);
 
 	const handleNewSession = useCallback(() => {
 		prepareForAutoScroll();
 		setSelectedSessionId(null);
+		setMainTab("chat");
 		if (isMobile) {
 			setMobileDrawerOpen(false);
 		}
-	}, [prepareForAutoScroll, setSelectedSessionId, isMobile]);
+	}, [prepareForAutoScroll, setSelectedSessionId, setMainTab, isMobile]);
 
 	const handleDeleteSession = useCallback(
 		(sessionId: string) => {
@@ -623,6 +625,10 @@ function AgentPage() {
 	const selectedSessionSummary = displayGroups
 		.flatMap((group) => group.sessions)
 		.find((session) => session.id === selectedSessionId);
+	const selectedSessionKind =
+		sessionData?.sessionKind ?? selectedSessionSummary?.sessionKind ?? "chat";
+	const selectedSessionCanResume =
+		sessionData?.canResume ?? selectedSessionSummary?.canResume ?? true;
 	const selectedSessionTitle =
 		sessionData?.title || selectedSessionSummary?.title || "New Chat";
 	const selectedSessionTokens =
@@ -1050,6 +1056,38 @@ function AgentPage() {
 
 							{/* Input */}
 							<Box sx={{ p: 2, flexShrink: 0 }}>
+								{selectedSessionId && !selectedSessionCanResume && (
+									<Box
+										sx={{
+											display: "flex",
+											alignItems: "center",
+											justifyContent: "space-between",
+											gap: 1.5,
+											mb: 1.5,
+											p: 1.5,
+											borderRadius: 2,
+											bgcolor: "action.hover",
+										}}
+									>
+										<Box>
+											<Typography variant="body2" fontWeight={600}>
+												{selectedSessionKind === "task_run"
+													? "Read-only task transcript"
+													: "Read-only subagent transcript"}
+											</Typography>
+											<Typography variant="caption" color="text.secondary">
+												Start a new chat to continue with fresh AI context.
+											</Typography>
+										</Box>
+										<Button
+											variant="outlined"
+											size="small"
+											onClick={handleNewSession}
+										>
+											New Chat
+										</Button>
+									</Box>
+								)}
 								<ChatInput
 									onSendMessage={handleSendMessage}
 									onRequestAnalysis={handleRequestAnalysis}
@@ -1058,7 +1096,7 @@ function AgentPage() {
 									onCancel={sendCancel}
 									isThinking={hasActiveRun}
 									isCancelling={activeRunIsCancelling}
-									disabled={!isConnected}
+									disabled={!isConnected || !selectedSessionCanResume}
 									totalTokens={selectedSessionTokens}
 									sessionModel={selectedSessionModel}
 								/>

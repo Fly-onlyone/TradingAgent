@@ -34,6 +34,7 @@ from app.agent.explorer_tools import (
     create_explorer_mcp_server,
     explorer_allowed_tool_names,
 )
+from app.agent.sdk_client import claude_sdk_workload_slot
 from app.agent.session_recorder import (
     AgentSessionRecorder,
     create_subagent_session,
@@ -156,9 +157,9 @@ class StrategyExplorerAgent:
                 f"final list via submit_candidates. Do not extract strategies yourself."
             )
             await recorder.record_user_message(user_prompt)
-            await self._client.query(user_prompt)
-
-            candidates = await self._collect_turns(recorder)
+            async with claude_sdk_workload_slot("StrategyExplorer.run"):
+                await self._client.query(user_prompt)
+                candidates = await self._collect_turns(recorder)
         except Exception as exc:
             logger.exception("Explorer run failed")
             await recorder.record_system_note(f"Explorer error: {exc}")

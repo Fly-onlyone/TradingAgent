@@ -56,6 +56,7 @@ from app.agent.mcp_tools import (
     pop_pending_chart_data,
     pop_tool_result,
 )
+from app.agent.sdk_client import build_sdk_stderr_logger, claude_sdk_workload_slot
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -227,6 +228,7 @@ class TradingAgent:
             include_partial_messages=True,
             resume=self._resume_session_id,
             session_id=None if self._resume_session_id else self._session_id,
+            stderr=build_sdk_stderr_logger("TradingAgent"),
         )
 
         if api_key:
@@ -289,119 +291,124 @@ class TradingAgent:
         self._saw_thinking_delta_this_turn = False
 
         with sentry_sdk.start_span(op="ai.agent.chat", description="claude.chat") as span:
-            await self._client.query(user_message, session_id=self._session_id or "default")
-
             final_text_parts: list[str] = []
+            async with claude_sdk_workload_slot("TradingAgent.chat"):
+                await self._client.query(
+                    user_message,
+                    session_id=self._session_id or "default",
+                )
 
-            async for message in self._client.receive_response():
-                if self._cancel_event.is_set():
-                    logger.info("Agent chat cancelled by user")
-                    break
+                async for message in self._client.receive_response():
+                    if self._cancel_event.is_set():
+                        logger.info("Agent chat cancelled by user")
+                        break
 
-                if isinstance(message, AssistantMessage):
-                    if message.session_id:
-                        self._session_id = message.session_id
-                    if message.model:
-                        self._model_this_turn = message.model
-                    for block in message.content:
-                        if isinstance(block, ThinkingBlock):
-                            if not self._saw_thinking_delta_this_turn:
-                                self._thinking_content_this_turn = _append_bounded_text(
-                                    self._thinking_content_this_turn,
-                                    f"{block.thinking}\n",
-                                    limit=_MAX_THINKING_CHARS_PER_TURN,
-                                )
-                            if on_event and not self._saw_thinking_delta_this_turn:
-                                await on_event(
-                                    {
-                                        "type": "thinking",
-                                        "data": {"content": block.thinking},
-                                    }
-                                )
-
-                        elif isinstance(block, ToolUseBlock):
-                            tool_info: dict[str, Any] = {
-                                "id": block.id,
-                                "name": block.name,
-                                "arguments": _truncate_tool_argument(block.input),
-                            }
-
-                            # Merge captured result from the MCP tool buffer
-                            tool_result = pop_tool_result(block.name)
-                            if tool_result:
-                                tool_info["result_summary"] = tool_result["result_summary"]
-                                tool_info["execution_time_ms"] = tool_result["execution_time_ms"]
-
-                            if len(self._tool_calls_this_turn) < _MAX_TOOL_CALLS_PER_TURN:
-                                self._tool_calls_this_turn.append(tool_info)
-
-                            if on_event:
-                                await on_event({"type": "tool_call", "data": tool_info})
-
-                            # Emit chart data if a candlestick tool just ran
-                            if block.name == "get_candlesticks" and on_event:
-                                chart_data = pop_pending_chart_data()
-                                if chart_data:
-                                    await on_event({"type": "chart_data", "data": chart_data})
-
-                            logger.info(f"Tool called: {block.name}")
-
-                        elif isinstance(block, TextBlock):
-                            if not self._saw_text_delta_this_turn:
-                                final_text_parts.append(block.text)
-
-                elif isinstance(message, StreamEvent):
-                    event = message.event
-                    event_type = event.get("type")
-
-                    if event_type == "content_block_delta":
-                        delta = event.get("delta", {})
-                        if delta.get("type") == "text_delta":
-                            text_chunk = delta.get("text", "")
-                            if text_chunk:
-                                self._saw_text_delta_this_turn = True
-                                self._partial_response_this_turn += text_chunk
-                            if text_chunk and on_event:
-                                await on_event(
-                                    {
-                                        "type": "text_delta",
-                                        "data": {"content": text_chunk},
-                                    }
-                                )
-                        elif delta.get("type") == "thinking_delta":
-                            thinking_chunk = delta.get("thinking", "")
-                            if thinking_chunk:
-                                self._saw_thinking_delta_this_turn = True
-                                self._thinking_content_this_turn = _append_bounded_text(
-                                    self._thinking_content_this_turn,
-                                    thinking_chunk,
-                                    limit=_MAX_THINKING_CHARS_PER_TURN,
-                                )
-                                if on_event:
+                    if isinstance(message, AssistantMessage):
+                        if message.session_id:
+                            self._session_id = message.session_id
+                        if message.model:
+                            self._model_this_turn = message.model
+                        for block in message.content:
+                            if isinstance(block, ThinkingBlock):
+                                if not self._saw_thinking_delta_this_turn:
+                                    self._thinking_content_this_turn = _append_bounded_text(
+                                        self._thinking_content_this_turn,
+                                        f"{block.thinking}\n",
+                                        limit=_MAX_THINKING_CHARS_PER_TURN,
+                                    )
+                                if on_event and not self._saw_thinking_delta_this_turn:
                                     await on_event(
                                         {
                                             "type": "thinking",
-                                            "data": {"content": thinking_chunk},
+                                            "data": {"content": block.thinking},
                                         }
                                     )
 
-                    # Capture token usage from API events
-                    elif event_type == "message_start":
-                        usage = event.get("message", {}).get("usage", {})
-                        self._input_tokens += usage.get("input_tokens", 0)
-                    elif event_type == "message_delta":
-                        usage = event.get("usage", {})
-                        self._output_tokens += usage.get("output_tokens", 0)
+                            elif isinstance(block, ToolUseBlock):
+                                tool_info: dict[str, Any] = {
+                                    "id": block.id,
+                                    "name": block.name,
+                                    "arguments": _truncate_tool_argument(block.input),
+                                }
 
-                elif isinstance(message, ResultMessage):
-                    if message.session_id:
-                        self._session_id = message.session_id
-                    if message.is_error:
-                        raise RuntimeError(message.result or "Agent SDK returned an error")
+                                # Merge captured result from the MCP tool buffer
+                                tool_result = pop_tool_result(block.name)
+                                if tool_result:
+                                    tool_info["result_summary"] = tool_result["result_summary"]
+                                    tool_info["execution_time_ms"] = tool_result[
+                                        "execution_time_ms"
+                                    ]
 
-                    # Use result text as fallback if no text blocks were collected
-                    if message.result and not final_text_parts:
-                        final_text_parts.append(message.result)
+                                if len(self._tool_calls_this_turn) < _MAX_TOOL_CALLS_PER_TURN:
+                                    self._tool_calls_this_turn.append(tool_info)
+
+                                if on_event:
+                                    await on_event({"type": "tool_call", "data": tool_info})
+
+                                # Emit chart data if a candlestick tool just ran
+                                if block.name == "get_candlesticks" and on_event:
+                                    chart_data = pop_pending_chart_data()
+                                    if chart_data:
+                                        await on_event({"type": "chart_data", "data": chart_data})
+
+                                logger.info(f"Tool called: {block.name}")
+
+                            elif isinstance(block, TextBlock):
+                                if not self._saw_text_delta_this_turn:
+                                    final_text_parts.append(block.text)
+
+                    elif isinstance(message, StreamEvent):
+                        event = message.event
+                        event_type = event.get("type")
+
+                        if event_type == "content_block_delta":
+                            delta = event.get("delta", {})
+                            if delta.get("type") == "text_delta":
+                                text_chunk = delta.get("text", "")
+                                if text_chunk:
+                                    self._saw_text_delta_this_turn = True
+                                    self._partial_response_this_turn += text_chunk
+                                if text_chunk and on_event:
+                                    await on_event(
+                                        {
+                                            "type": "text_delta",
+                                            "data": {"content": text_chunk},
+                                        }
+                                    )
+                            elif delta.get("type") == "thinking_delta":
+                                thinking_chunk = delta.get("thinking", "")
+                                if thinking_chunk:
+                                    self._saw_thinking_delta_this_turn = True
+                                    self._thinking_content_this_turn = _append_bounded_text(
+                                        self._thinking_content_this_turn,
+                                        thinking_chunk,
+                                        limit=_MAX_THINKING_CHARS_PER_TURN,
+                                    )
+                                    if on_event:
+                                        await on_event(
+                                            {
+                                                "type": "thinking",
+                                                "data": {"content": thinking_chunk},
+                                            }
+                                        )
+
+                        # Capture token usage from API events
+                        elif event_type == "message_start":
+                            usage = event.get("message", {}).get("usage", {})
+                            self._input_tokens += usage.get("input_tokens", 0)
+                        elif event_type == "message_delta":
+                            usage = event.get("usage", {})
+                            self._output_tokens += usage.get("output_tokens", 0)
+
+                    elif isinstance(message, ResultMessage):
+                        if message.session_id:
+                            self._session_id = message.session_id
+                        if message.is_error:
+                            raise RuntimeError(message.result or "Agent SDK returned an error")
+
+                        # Use result text as fallback if no text blocks were collected
+                        if message.result and not final_text_parts:
+                            final_text_parts.append(message.result)
 
             span.set_data("tool_calls_count", len(self._tool_calls_this_turn))
             span.set_data(

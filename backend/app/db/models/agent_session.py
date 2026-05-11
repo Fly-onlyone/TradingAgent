@@ -16,6 +16,14 @@ class MessageRole(str, Enum):
     SYSTEM = "system"
 
 
+class SessionKind(str, Enum):
+    """Session origin / lifecycle semantics."""
+
+    CHAT = "chat"
+    TASK_RUN = "task_run"
+    SUBAGENT = "subagent"
+
+
 class SessionMessage(BaseModel):
     """Individual message in a session (embedded, not a separate collection)."""
 
@@ -115,6 +123,7 @@ class AgentSession(Document):
     sdk_session_id: str | None = None
 
     # Session identification
+    session_kind: SessionKind = SessionKind.CHAT
     title: str | None = None  # Auto-generated or user-provided
     description: str | None = None
 
@@ -293,18 +302,24 @@ async def fetch_session_messages(
     if session.messages:
         persisted_docs = await query.to_list()
         combined = [*session.messages, *[doc.to_session_message() for doc in persisted_docs]]
+        combined = _normalize_delegation_messages(combined)
         combined.sort(key=lambda message: message.timestamp)
         total = len(combined)
         if limit is None:
             return combined[skip:], total
         return combined[skip : skip + limit], total
 
-    total = await AgentSessionMessage.find(AgentSessionMessage.session_id == session.id).count()
     if limit is None:
         docs = await query.to_list()
     else:
         docs = await query.skip(skip).limit(limit).to_list()
-    return [doc.to_session_message() for doc in docs], total
+    messages = _normalize_delegation_messages([doc.to_session_message() for doc in docs])
+    total = (
+        len(messages)
+        if limit is None
+        else await AgentSessionMessage.find(AgentSessionMessage.session_id == session.id).count()
+    )
+    return messages, total
 
 
 async def fetch_session_message_window(
@@ -324,6 +339,7 @@ async def fetch_session_message_window(
         has_more = len(combined) > limit
         window = combined[-limit:]
         next_before = window[0].timestamp if has_more and window else None
+        window = _normalize_delegation_messages(window)
         return window, total, has_more, next_before
 
     total = await AgentSessionMessage.find(AgentSessionMessage.session_id == session.id).count()
@@ -335,9 +351,82 @@ async def fetch_session_message_window(
     has_more = len(docs) > limit
     window_docs = docs[:limit]
     window_docs.reverse()
-    messages = [doc.to_session_message() for doc in window_docs]
+    messages = _normalize_delegation_messages([doc.to_session_message() for doc in window_docs])
     next_before = messages[0].timestamp if has_more and messages else None
     return messages, total, has_more, next_before
+
+
+def _normalize_delegation_messages(messages: list[SessionMessage]) -> list[SessionMessage]:
+    """Collapse duplicate extractor delegation cards into one latest-status message.
+
+    Older explorer runs persisted one initial `running` delegation card and then a
+    second terminal `ok/failed/skipped` card for the same extractor/article. When
+    those sessions are loaded, keep the original card position but replace its
+    content/tool state with the latest terminal update.
+    """
+
+    normalized: list[SessionMessage] = []
+    delegation_indexes: dict[tuple[str, str, str | None], int] = {}
+
+    for message in messages:
+        delegation_key, status = _extract_delegation_identity(message)
+        if delegation_key is None or status is None:
+            normalized.append(message)
+            continue
+
+        previous_index = delegation_indexes.get(delegation_key)
+        if previous_index is None:
+            delegation_indexes[delegation_key] = len(normalized)
+            normalized.append(message)
+            continue
+
+        previous_message = normalized[previous_index]
+        _, previous_status = _extract_delegation_identity(previous_message)
+
+        if status == "running" and previous_status != "running":
+            continue
+
+        replacement = SessionMessage(
+            id=previous_message.id,
+            role=message.role,
+            content=message.content,
+            timestamp=previous_message.timestamp,
+            decision_id=message.decision_id,
+            tool_calls=message.tool_calls,
+            thinking_content=message.thinking_content,
+            tokens_used=message.tokens_used,
+        )
+        normalized[previous_index] = replacement
+
+    return normalized
+
+
+def _extract_delegation_identity(
+    message: SessionMessage,
+) -> tuple[tuple[str, str, str | None] | None, str | None]:
+    """Return the explorer delegation identity and status when present."""
+
+    if len(message.tool_calls) != 1:
+        return None, None
+
+    tool_call = message.tool_calls[0]
+    if tool_call.get("name") != "delegate_to_extractor":
+        return None, None
+
+    arguments = tool_call.get("arguments") or {}
+    result = tool_call.get("result") or {}
+    article_url = str(arguments.get("article_url") or "").strip()
+    article_title = str(arguments.get("article_title") or "").strip()
+    if not article_url and not article_title:
+        return None, None
+
+    child_session_id = result.get("session_id")
+    delegation_key = (
+        article_url,
+        article_title,
+        str(child_session_id) if child_session_id is not None else None,
+    )
+    return delegation_key, str(result.get("status") or "").strip() or None
 
 
 async def persist_session_message_doc(

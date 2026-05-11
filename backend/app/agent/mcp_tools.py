@@ -1723,6 +1723,14 @@ async def mcp_create_task(args: dict[str, Any]) -> dict[str, Any]:
             _buffer_tool_result("create_task", args, response, start)
             return response
 
+        # Mirror the REST `POST /tasks` guard so chat and REST behave the same.
+        from app.agent.task_scheduler import EMERGENCY_STOP_MESSAGE, is_emergency_stopped
+
+        if await is_emergency_stopped():
+            response = _text_result({"status": "error", "message": EMERGENCY_STOP_MESSAGE})
+            _buffer_tool_result("create_task", args, response, start)
+            return response
+
         name = args.get("name", "").strip()
         if not name or len(name) > 100:
             response = _text_result(

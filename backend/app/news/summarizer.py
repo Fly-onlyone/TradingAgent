@@ -46,7 +46,11 @@ class NewsSummarizer:
 
     async def _call_via_sdk(self, prompt: str, max_tokens: int) -> str:
         """Call Claude via the Agent SDK (subscription mode)."""
-        from app.agent.sdk_client import build_sdk_client, collect_text_response
+        from app.agent.sdk_client import (
+            build_sdk_client,
+            claude_sdk_workload_slot,
+            collect_text_response,
+        )
         from app.db.models.app_settings import AppSettings
 
         app_settings = await AppSettings.get_instance()
@@ -54,11 +58,13 @@ class NewsSummarizer:
         client = await build_sdk_client(
             system_prompt="You are a concise financial news analyst. Respond only with what is asked.",
             model=app_settings.agent_model or "claude-sonnet-4-6",
+            stderr_source="NewsSummarizer",
         )
         await client.connect()
         try:
-            await client.query(prompt)
-            return (await collect_text_response(client, source="NewsSummarizer")).strip()
+            async with claude_sdk_workload_slot("NewsSummarizer._call_via_sdk"):
+                await client.query(prompt)
+                return (await collect_text_response(client, source="NewsSummarizer")).strip()
         finally:
             await client.disconnect()
 
