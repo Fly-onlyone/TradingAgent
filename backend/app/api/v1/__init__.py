@@ -9,6 +9,7 @@ from app.api.v1 import (
     agent_memories,
     agent_sessions,
     agent_tasks,
+    atk,
     auth,
     backup,
     client_logs,
@@ -47,6 +48,8 @@ router.include_router(agent_memories.router, prefix="/agent/memories", tags=["ag
 router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 router.include_router(settings.router, prefix="/settings", tags=["settings"])
 router.include_router(client_logs.router, prefix="/logs", tags=["logs"])
+# ATK health + proxy — registered BEFORE /admin per CLAUDE.md routing rule.
+router.include_router(atk.router, prefix="/atk", tags=["atk"])
 router.include_router(logs.router, prefix="/admin/logs", tags=["logs"])
 router.include_router(backup.router, prefix="/admin/backup", tags=["backup"])
 router.include_router(
