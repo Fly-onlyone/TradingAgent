@@ -31,6 +31,60 @@ class StartupReconciler:
         """Run all startup reconciliation steps. Errors are swallowed per-step."""
         await self._mark_orphaned_discovery_cycles_failed()
         await self._backfill_strategy_shadows()
+        await self._mark_orphaned_atk_tool_bubbles_failed()
+
+    async def _mark_orphaned_atk_tool_bubbles_failed(self) -> None:
+        """Flip stale ATK tool-call bubbles to a failed `result_summary` (Chat-Session leg 8).
+
+        When the backend crashes mid-turn, an ATK tool-call bubble can be left
+        without a `result_summary` and no future event to fill it. This sweep
+        runs at startup, scans `AgentSessionMessage` for tool_calls named
+        `mcp__okx__*` older than 5 minutes with no result, and sets a synthetic
+        error result so the chat bubble doesn't render as 'still running'.
+        """
+        try:
+            from datetime import timedelta
+
+            from app.db.models.agent_session import AgentSessionMessage
+
+            cutoff = datetime.now(UTC) - timedelta(minutes=5)
+            messages_collection = AgentSessionMessage.get_pymongo_collection()
+
+            # Find messages with at least one mcp__okx__* tool_call entry that
+            # lacks `result_summary` AND was created before the cutoff. Mongo's
+            # array filter does this in one update.
+            result = await messages_collection.update_many(
+                {
+                    "created_at": {"$lt": cutoff},
+                    "tool_calls": {
+                        "$elemMatch": {
+                            "name": {"$regex": "^mcp__okx__"},
+                            "result_summary": {"$exists": False},
+                        }
+                    },
+                },
+                {
+                    "$set": {
+                        "tool_calls.$[orphan].result_summary": {
+                            "error": "orphaned at startup (backend restarted mid-call)"
+                        }
+                    },
+                    "$currentDate": {"updated_at": True},
+                },
+                array_filters=[
+                    {
+                        "orphan.name": {"$regex": "^mcp__okx__"},
+                        "orphan.result_summary": {"$exists": False},
+                    }
+                ],
+            )
+            if result.modified_count:
+                logger.info(
+                    "startup_reconciler: flipped %d orphan ATK tool bubble(s) to failed",
+                    result.modified_count,
+                )
+        except Exception:
+            logger.exception("startup_reconciler: ATK orphan sweep failed")
 
     async def _mark_orphaned_discovery_cycles_failed(self) -> None:
         """Flip stale `running` cycles + active subagent sessions to closed state."""

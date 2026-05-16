@@ -198,6 +198,37 @@ class OKXClient:
             limit=str(limit),
         )
 
+    # Algo Orders (read-only — writes flow through ATK)
+    async def get_algo_orders(
+        self,
+        inst_type: str = "SPOT",
+        algo_type: str | None = None,
+    ) -> dict[str, Any]:
+        """List pending (active) algo orders. Used by order_mirror."""
+        params: dict[str, Any] = {"instType": inst_type}
+        if algo_type:
+            params["ordType"] = algo_type
+        return await self._traced("get_algo_orders", self._trade.order_algos_list, **params)
+
+    async def get_algo_order_history(
+        self,
+        state: str = "effective",
+        inst_type: str = "SPOT",
+        algo_type: str | None = None,
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        """List historical (closed) algo orders."""
+        params: dict[str, Any] = {
+            "state": state,
+            "instType": inst_type,
+            "limit": str(limit),
+        }
+        if algo_type:
+            params["ordType"] = algo_type
+        return await self._traced(
+            "get_algo_order_history", self._trade.order_algos_history, **params
+        )
+
     # Market Data Endpoints (Public - no auth needed)
     async def get_ticker(self, inst_id: str) -> dict[str, Any]:
         """Get ticker information for an instrument."""

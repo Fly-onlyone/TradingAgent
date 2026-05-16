@@ -147,6 +147,7 @@ async def init_db() -> None:
     from app.db.models.agent_session import AgentSession, AgentSessionMessage
     from app.db.models.agent_task import AgentTask
     from app.db.models.app_settings import AppSettings
+    from app.db.models.grid_bot import GridBot
     from app.db.models.knowledge import (
         KnowledgeChunk,
         StrategyKnowledge,
@@ -167,6 +168,7 @@ async def init_db() -> None:
     document_models = [
         User,
         Order,
+        GridBot,
         Strategy,
         StrategyDiscoveryCycle,
         StrategyKnowledge,

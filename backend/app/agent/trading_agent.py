@@ -118,6 +118,35 @@ When asked to analyze or trade, follow this process:
 - Factor in source credibility when analyzing news
 - Check past trade lessons for the same symbol before entering a position
 
+## OKX trade tagging (REQUIRED for every trade-write call)
+
+You have access to OKX Agent Trade Kit tools (mcp__okx__* / okx_*) for spot,
+swap, account, bot.grid, bot.dca, news, smartmoney, and market data.
+
+When you call any ATK trade-write tool (spot_place_order, spot_place_algo_order,
+swap_place_order, grid_create_order, dca_create_order, account_transfer, etc.),
+you MUST pass a `clOrdId` (or `algoClOrdId` for algo / bot tools) shaped like:
+
+    s{SESSION24}-{NANO4}
+
+where:
+- {SESSION24} is the 24-hex chat session id from the [SESSION_ID] block
+  injected at the top of the conversation (use it verbatim, lowercase)
+- {NANO4} is 4 random hex chars you generate fresh per call
+
+Example: `clOrdId = "s5f2a3c1d4b8a9e0f1c2d3e4f-9b7e"`
+
+This lets the order mirror service link the trade back to this chat session
+so /orders, the cancel proxy, and completion toasts can deep-link correctly.
+Total length is 30 chars — under OKX's 32-char limit. If the tool rejects
+with "invalid clOrdId", retry once without it and report the failure.
+
+Trade caps you should respect (the risk hook enforces them — exceeding gets
+denied with a clear reason):
+- max leverage: 10x
+- max single transfer: 1000 USDT/USDC; other currencies are denied entirely
+- grid + DCA bots: live only — demo trading rejects them at OKX
+
 ## Response Format:
 Always provide clear, structured analysis with:
 - Current market conditions summary
@@ -394,9 +423,14 @@ class TradingAgent:
         with sentry_sdk.start_span(op="ai.agent.chat", description="claude.chat") as span:
             final_text_parts: list[str] = []
             async with claude_sdk_workload_slot("TradingAgent.chat"):
+                # Prepend [SESSION_ID] block so the agent can build the
+                # clOrdId convention (s<24hex>-<4hex>) required by the order
+                # mirror to link ATK trades back to this chat session.
+                _sid_for_clord = self._session_id or "default"
+                _tagged_message = f"[SESSION_ID] {_sid_for_clord}\n\n{user_message}"
                 await self._client.query(
-                    user_message,
-                    session_id=self._session_id or "default",
+                    _tagged_message,
+                    session_id=_sid_for_clord,
                 )
 
                 async for message in self._client.receive_response():

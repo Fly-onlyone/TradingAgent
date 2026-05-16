@@ -217,9 +217,10 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     # ATK lifecycle: writes ~/.okx/config.toml, spawns the long-lived MCP child
     # for the OpenAI bridge. Best-effort — won't crash boot if ATK isn't
     # installed yet.
-    from app.services import atk_lifecycle
+    from app.services import atk_lifecycle, order_mirror
 
     await atk_lifecycle.startup()
+    order_mirror.start()
 
     logger.info("Application started")
     yield
@@ -230,6 +231,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
             task.cancel()
     if startup_tasks:
         await asyncio.gather(*startup_tasks, return_exceptions=True)
+    await order_mirror.stop()
     await atk_lifecycle.shutdown()
     await news_scheduler.stop()
     await scheduler.stop()
