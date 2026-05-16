@@ -20,6 +20,22 @@ effort, we still pass ``reasoning_effort`` so the model thinks, but the
 internal trace is not surfaced. This is acceptable for v1 — the user
 asked for an OpenAI swap, not for parity on the thinking UI.
 
+Thinking-config mapping (Anthropic AppSettings → OpenAI):
+- ``agent_thinking_mode = "adaptive"`` → omit ``reasoning_effort`` so the
+  model uses its own default (``medium`` for gpt-5/5.2, ``none`` for
+  gpt-5.1+).
+- ``agent_thinking_mode = "disabled"`` → ``reasoning_effort = "none"``
+  (supported on gpt-5.1 and later; on earlier models the call may error
+  and the caller should switch to ``adaptive`` or pick a newer model).
+- ``agent_thinking_mode = "enabled"`` → map ``agent_effort`` ("low",
+  "medium", "high") through verbatim; ``"max"`` maps to ``"xhigh"``
+  (supported on ``gpt-5.5`` and other post-``gpt-5.1-codex-max`` models).
+  If a future model in the catalogue does not support ``xhigh``, swap
+  the helper's ``"max"`` branch to ``"high"`` instead.
+- ``agent_thinking_budget`` (token budget) has no OpenAI analogue —
+  OpenAI uses effort levels, not budgets. It is silently ignored when
+  the provider is OpenAI.
+
 Chat-session 10-leg compliance:
 - Persistence + live stream + completion toast happen in the *caller*
   (``backend/app/api/websocket/agent.py``), exactly like the Anthropic
@@ -45,6 +61,37 @@ logger = logging.getLogger(__name__)
 
 class OpenAIAuthError(RuntimeError):
     """Raised when no OpenAI API key is configured."""
+
+
+_OPENAI_EFFORT_VALUES = frozenset({"none", "minimal", "low", "medium", "high", "xhigh"})
+
+
+def translate_thinking_to_openai_effort(
+    thinking_mode: str | None,
+    effort: str | None,
+) -> str | None:
+    """Map Anthropic-style ``(thinking_mode, effort)`` to OpenAI ``reasoning_effort``.
+
+    Returns ``None`` when the caller should omit the field so the model
+    can fall back to its own default. See the module docstring for the
+    full mapping table and per-model constraints.
+    """
+    mode = (thinking_mode or "").strip().lower()
+    if mode == "adaptive" or not mode:
+        return None
+    if mode == "disabled":
+        return "none"
+    # mode == "enabled" (or any unrecognised value — treat as explicit effort)
+    if not effort:
+        return None
+    level = effort.strip().lower()
+    if level == "max":
+        # gpt-5.5 supports "xhigh"; if a future model in the catalogue does
+        # not, switch this branch back to "high".
+        return "xhigh"
+    if level in _OPENAI_EFFORT_VALUES:
+        return level
+    return None
 
 
 def _import_openai_async_client():
@@ -227,6 +274,20 @@ class OpenAIAgentRunner:
         if self._client is None:
             self._client = await build_openai_async_client()
             self._history = [{"role": "system", "content": self._system_prompt}]
+            # Extend tool list with ATK tools via the MCP→OpenAI bridge.
+            # Best-effort: if ATK isn't installed / process isn't running,
+            # log + continue without ATK tools (native registry still works).
+            try:
+                from app.agent.okx_atk.openai_bridge import translate_mcp_tools_to_openai
+
+                atk_tools = await translate_mcp_tools_to_openai()
+                if atk_tools:
+                    self._tools = [*self._tools, *atk_tools]
+                    logger.info("OpenAI runner: loaded %d ATK tools via bridge", len(atk_tools))
+            except Exception:
+                logger.exception(
+                    "OpenAI runner: ATK bridge tool-loading failed — continuing without ATK"
+                )
             logger.info("OpenAI agent runner connected (model=%s)", self._model)
 
     async def disconnect(self) -> None:
@@ -459,7 +520,30 @@ class OpenAIAgentRunner:
                     await on_event({"type": "tool_call", "data": tool_info})
                 logger.info("OpenAI tool called: %s", bare_name)
 
-                tool_result = await self._invoke_mcp_tool(bare_name, arguments)
+                # Route by prefix — ATK tools go through the bridge (risk hook
+                # + idempotency + MCP stdio proxy), everything else stays on
+                # the in-process registry.
+                from app.agent.context import current_user_id_var
+                from app.agent.okx_atk.openai_bridge import (
+                    invoke_atk_tool,
+                    is_atk_tool,
+                )
+
+                if is_atk_tool(bare_name):
+                    atk_result = await invoke_atk_tool(
+                        bare_name,
+                        arguments,
+                        user_id=current_user_id_var.get(None),
+                    )
+                    # OpenAI's tool-result content must be a string.
+                    if "error" in atk_result:
+                        tool_result = (
+                            f"ATK error: {atk_result.get('error')} — {atk_result.get('reason', '')}"
+                        )
+                    else:
+                        tool_result = "\n".join(atk_result.get("content") or [])
+                else:
+                    tool_result = await self._invoke_mcp_tool(bare_name, arguments)
                 self._history.append(
                     {
                         "role": "tool",
