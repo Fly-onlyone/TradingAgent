@@ -45,6 +45,28 @@ class TradeStatus(str, Enum):
     CLOSED = "closed"
 
 
+class OrderSource(str, Enum):
+    """Where this order originated.
+
+    LEGACY: pre-ATK migration native OrderExecutor path (preserved for history).
+    ATK_MIRROR: written by services.order_mirror after observing it on OKX;
+                also covers pending stubs inserted by atk_pretool_hook for
+                idempotency.
+    """
+
+    LEGACY = "legacy"
+    ATK_MIRROR = "atk_mirror"
+
+
+class AlgoOrderType(str, Enum):
+    """ATK algo-order sub-types (matches OKX `ordType` for algo endpoint)."""
+
+    OCO = "oco"
+    CONDITIONAL = "conditional"
+    TRIGGER = "trigger"
+    TRAILING = "move_order_stop"
+
+
 class Order(Document):
     """Trading order document."""
 
@@ -89,6 +111,26 @@ class Order(Document):
     # Agent info
     agent_reasoning: dict | None = None
     strategy_id: PydanticObjectId | None = None
+
+    # ATK migration fields
+    # source: LEGACY for pre-migration rows (default keeps them valid), ATK_MIRROR for
+    # rows written by the order_mirror service or pre-inserted by atk_pretool_hook.
+    source: OrderSource = OrderSource.LEGACY
+    # Chat-session linkage carried by ContextVars at hook time so order_mirror can do
+    # an O(1) PK lookup of AgentSessionMessage + tool_use_id match for in-place updates
+    # (Chat-Session Checklist leg 4).
+    agent_session_id: PydanticObjectId | None = None
+    agent_session_message_id: PydanticObjectId | None = None
+    tool_use_id: str | None = None
+    # Algo-order tracking (OCO bracket, trailing stop, conditional, trigger).
+    is_algo: bool = False
+    algo_order_id: str | None = None
+    algo_type: AlgoOrderType | None = None
+    callback_ratio: float | None = None  # for TRAILING — e.g. 0.02 = 2%
+    # pending_until: set when risk_hook inserts a stub keyed on clOrdId; the
+    # mirror sweeps stubs whose pending_until has elapsed without ATK ever
+    # returning an exchange_order_id (hook denied after insert, or ATK errored).
+    pending_until: datetime | None = None
 
     # Timestamps
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
