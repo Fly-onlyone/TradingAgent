@@ -1,4 +1,23 @@
-"""Trading execution tools for the trading agent."""
+"""Trading execution tools for the trading agent.
+
+DEPRECATED — trade execution has migrated to OKX Agent Trade Kit (ATK).
+The agent should prefer `mcp__okx__spot_place_order`, `mcp__okx__account_get_balance`,
+`mcp__okx__account_get_positions`, etc. via the ATK MCP server (mounted in
+trading_agent.py's ClaudeAgentOptions and proxied to the OpenAI runtime via
+backend/app/agent/okx_atk/openai_bridge.py).
+
+These native functions remain importable so RiskManager and any pre-ATK
+callers don't break mid-transition. They will be deleted in a follow-up PR
+≥ 1 week after CI confirms no calls land on them. Do not add new callers.
+"""
+
+import warnings as _warnings
+
+_warnings.warn(
+    "app.agent.tools.trading_tools is deprecated; use ATK tools (mcp__okx__*) instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 from decimal import Decimal
 from typing import Any

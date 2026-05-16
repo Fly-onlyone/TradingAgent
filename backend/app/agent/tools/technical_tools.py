@@ -1,4 +1,17 @@
-"""Technical analysis tools for the trading agent."""
+"""Technical analysis tools for the trading agent.
+
+DEPRECATED — ATK's `market_get_indicator` exposes 70+ indicators server-side.
+Prefer `mcp__okx__market_get_indicator` / `mcp__okx__market_list_indicators`.
+Kept importable during the transition. Slated for deletion in a follow-up PR.
+"""
+
+import warnings as _warnings
+
+_warnings.warn(
+    "app.agent.tools.technical_tools is deprecated; use ATK tools (mcp__okx__market_*) instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 from typing import Any
 

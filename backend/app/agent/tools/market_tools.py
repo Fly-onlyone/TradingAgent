@@ -1,4 +1,19 @@
-"""Market data tools for the trading agent."""
+"""Market data tools for the trading agent.
+
+DEPRECATED — market reads have migrated to OKX Agent Trade Kit (ATK).
+Prefer `mcp__okx__market_get_ticker`, `mcp__okx__market_get_orderbook`,
+`mcp__okx__market_get_candles`. These native functions remain importable
+during the transition (chart endpoints / RiskManager still use them).
+Slated for deletion in a follow-up PR after CI confirms no callers remain.
+"""
+
+import warnings as _warnings
+
+_warnings.warn(
+    "app.agent.tools.market_tools is deprecated; use ATK tools (mcp__okx__market_*) instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 import asyncio
 from typing import Any
