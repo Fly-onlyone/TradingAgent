@@ -51,10 +51,24 @@ def _read_pinned_version() -> str:
         return "1.3.3"  # known-good fallback — bump only with security review
 
 
+def _tauri_sidecar_target() -> tuple[str, str]:
+    """Return (subdir_name, launcher_filename) for the current platform."""
+    system = platform.system()
+    machine = platform.machine().lower()
+    if system == "Windows":
+        return "okx-trade-mcp-win-x64", "launch.cmd"
+    if system == "Darwin":
+        arch = "arm64" if machine in {"arm64", "aarch64"} else "x64"
+        return f"okx-trade-mcp-darwin-{arch}", "launch.sh"
+    # Linux + everything else POSIX-y
+    return "okx-trade-mcp-linux-x64", "launch.sh"
+
+
 def _resolve_command_uncached() -> list[str]:
     tauri_dir = os.environ.get("TAURI_RESOURCE_DIR")
     if tauri_dir:
-        candidate = os.path.join(tauri_dir, "binaries", BIN_NAME)
+        subdir, launcher = _tauri_sidecar_target()
+        candidate = os.path.join(tauri_dir, "binaries", subdir, launcher)
         if os.path.exists(candidate):
             return [candidate]
         # Production MUST NOT fall through to PATH or npx — supply-chain risk.

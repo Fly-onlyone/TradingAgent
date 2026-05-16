@@ -12,6 +12,11 @@ docs/MONITORING.md
 .mcp.json
 opencode.json
 
+# ATK Tauri sidecar bundles + vendor cache (generated per-build, ~150MB each).
+# Lockfile under scripts/atk-lock/ IS committed for reproducibility.
+frontend/src-tauri/binaries/
+frontend/src-tauri/vendor/
+
 # Environment variables
 .env
 .env.*
@@ -46,6 +51,11 @@ logs/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Obsidian per-user state (vault content + shared config IS tracked)
+obsidian/.obsidian/workspace.json
+obsidian/.obsidian/workspace-mobile.json
+obsidian/.obsidian/workspaces.json
 
 # Frontend
 frontend/node_modules/

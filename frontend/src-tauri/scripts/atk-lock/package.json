@@ -1,0 +1,9 @@
+{
+  "name": "okx-trade-mcp-bundle-lock",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pinned lockfile for the Tauri ATK sidecar bundle. Edit only by bumping atk-version.txt and re-running `npm install`.",
+  "dependencies": {
+    "@okx_ai/okx-trade-mcp": "1.3.3"
+  }
+}

@@ -23,9 +23,30 @@ def _reset_singleton() -> None:
 
 def test_resolve_command_production_requires_sidecar(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("TAURI_RESOURCE_DIR", str(tmp_path))
-    # No sidecar in tmp_path/binaries — must raise, NOT fall through.
+    # No sidecar in tmp_path/binaries/okx-trade-mcp-<arch> — must raise.
     with pytest.raises(RuntimeError, match="ATK sidecar missing"):
         _resolve_command_uncached()
+
+
+def test_resolve_command_production_finds_bundled_sidecar(tmp_path, monkeypatch) -> None:
+    """When the bundle is present, return the launcher path — no npx fallthrough."""
+    import platform as _pl
+
+    monkeypatch.setenv("TAURI_RESOURCE_DIR", str(tmp_path))
+    system = _pl.system()
+    machine = _pl.machine().lower()
+    if system == "Windows":
+        subdir, launcher = "okx-trade-mcp-win-x64", "launch.cmd"
+    elif system == "Darwin":
+        arch = "arm64" if machine in {"arm64", "aarch64"} else "x64"
+        subdir, launcher = f"okx-trade-mcp-darwin-{arch}", "launch.sh"
+    else:
+        subdir, launcher = "okx-trade-mcp-linux-x64", "launch.sh"
+    bundle = tmp_path / "binaries" / subdir
+    bundle.mkdir(parents=True)
+    (bundle / launcher).write_text("#!/bin/sh\necho ok\n")
+    cmd = _resolve_command_uncached()
+    assert cmd == [str(bundle / launcher)]
 
 
 def test_resolve_command_dev_path_first(monkeypatch) -> None:
