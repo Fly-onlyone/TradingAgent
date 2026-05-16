@@ -213,6 +213,14 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
         )
 
     start_all_mongo_handlers()
+
+    # ATK lifecycle: writes ~/.okx/config.toml, spawns the long-lived MCP child
+    # for the OpenAI bridge. Best-effort — won't crash boot if ATK isn't
+    # installed yet.
+    from app.services import atk_lifecycle
+
+    await atk_lifecycle.startup()
+
     logger.info("Application started")
     yield
     # Shutdown
@@ -222,6 +230,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
             task.cancel()
     if startup_tasks:
         await asyncio.gather(*startup_tasks, return_exceptions=True)
+    await atk_lifecycle.shutdown()
     await news_scheduler.stop()
     await scheduler.stop()
     await stop_all_mongo_handlers()

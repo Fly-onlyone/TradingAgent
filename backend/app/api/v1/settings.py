@@ -1077,6 +1077,9 @@ async def update_exchange_config(
     if any(v is not None for v in (body.api_key, body.secret_key, body.passphrase)):
         _ensure_encryption_available()
 
+    sandbox_changed = body.sandbox is not None and body.sandbox != app_settings.okx_sandbox
+    keys_changed = any(v is not None for v in (body.api_key, body.secret_key, body.passphrase))
+
     if body.api_key is not None:
         app_settings.set_okx_api_key(body.api_key)
     if body.secret_key is not None:
@@ -1088,6 +1091,17 @@ async def update_exchange_config(
 
     await app_settings.save_with_timestamp()
     logger.info("Exchange config updated (sandbox=%s)", app_settings.okx_sandbox)
+
+    # When sandbox flips OR credentials change, rewrite ~/.okx/config.toml,
+    # restart the ATK child, reconnect the MCP bridge, force-disconnect active
+    # TradingAgent sessions. The hook denies writes during the drain.
+    if sandbox_changed or keys_changed:
+        from app.services import atk_lifecycle
+
+        try:
+            await atk_lifecycle.on_sandbox_toggle(app_settings.okx_sandbox)
+        except Exception:
+            logger.exception("ATK reload after exchange-config update failed")
 
     return _build_exchange_response(app_settings)
 
