@@ -168,17 +168,29 @@ def _task_to_summary(task: Any, idx: int) -> dict:
 
 
 class TaskMerger:
-    """Merge multiple AgentTasks into one using Claude.
+    """Merge multiple AgentTasks into one using the active provider.
 
-    Mirrors the dual-mode auth pattern used by StrategyExtractor
-    (api_key or ClaudeSDKClient subscription).
+    Three modes: Anthropic api_key, Anthropic subscription (SDK), OpenAI api_key.
     """
 
-    def __init__(self, api_key: str = "", use_sdk: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        provider: str = "anthropic",
+        api_key: str = "",
+        use_sdk: bool = False,
+    ) -> None:
+        self._provider = provider
         self._api_key = api_key
         self._use_sdk = use_sdk
         self._last_used_fallback = False
-        if api_key and not use_sdk:
+        self._openai_client = None
+        if provider == "openai" and api_key:
+            from openai import AsyncOpenAI
+
+            self._openai_client = AsyncOpenAI(api_key=api_key)
+            self._client = None
+        elif provider == "anthropic" and api_key and not use_sdk:
             from anthropic import Anthropic
 
             self._client = Anthropic(api_key=api_key)
@@ -187,14 +199,19 @@ class TaskMerger:
 
     @classmethod
     async def create(cls) -> "TaskMerger":
-        """Factory that picks api_key mode if available, else subscription."""
-        from app.agent.auth import resolve_anthropic_api_key
+        """Pick the right backend based on the configured provider."""
+        from app.agent.auth import resolve_active_provider_api_key
 
-        api_key = await resolve_anthropic_api_key()
+        provider, api_key = await resolve_active_provider_api_key()
+        if provider == "openai":
+            if not api_key:
+                raise RuntimeError("OpenAI provider selected but no API key configured.")
+            return cls(provider="openai", api_key=api_key)
+
         if api_key:
-            return cls(api_key=api_key)
+            return cls(provider="anthropic", api_key=api_key)
         logger.info("TaskMerger using Agent SDK (subscription mode)")
-        return cls(use_sdk=True)
+        return cls(provider="anthropic", use_sdk=True)
 
     async def merge(self, tasks: list[Any]) -> MergedTask:
         """Return a consolidated task payload for ``tasks``.
@@ -214,6 +231,8 @@ class TaskMerger:
         )
 
         try:
+            if self._provider == "openai":
+                return await self._merge_via_openai(user_message)
             if self._use_sdk:
                 return await self._merge_via_sdk(user_message)
             return await self._merge_via_api(user_message)
@@ -221,6 +240,46 @@ class TaskMerger:
             logger.warning("AI merge failed (%s); falling back to deterministic merge", exc)
             self._last_used_fallback = True
             return _deterministic_merge(tasks)
+
+    async def _merge_via_openai(self, user_message: str) -> MergedTask:
+        """Merge via OpenAI Chat Completions with a forced function-call."""
+        from app.api.v1.settings import FAMILY_TO_API_MODEL, _normalize_to_family
+        from app.db.models.app_settings import AppSettings
+
+        app_settings = await AppSettings.get_instance()
+        family = _normalize_to_family(app_settings.agent_model)
+        model = FAMILY_TO_API_MODEL.get(family, family) or "gpt-5.5"
+
+        openai_tool = {
+            "type": "function",
+            "function": {
+                "name": MERGE_TOOL["name"],
+                "description": MERGE_TOOL["description"],
+                "parameters": MERGE_TOOL["input_schema"],
+            },
+        }
+
+        completion = await self._openai_client.chat.completions.create(
+            model=model,
+            max_completion_tokens=4096,
+            tools=[openai_tool],
+            tool_choice={
+                "type": "function",
+                "function": {"name": MERGE_TOOL["name"]},
+            },
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ],
+        )
+        choice = completion.choices[0] if completion.choices else None
+        tool_calls = choice.message.tool_calls if choice and choice.message else None
+        if tool_calls:
+            for call in tool_calls:
+                if call.function.name == MERGE_TOOL["name"]:
+                    payload = json.loads(call.function.arguments or "{}")
+                    return MergedTask(**payload)
+        raise RuntimeError("OpenAI did not return a save_merged_task call")
 
     async def _merge_via_api(self, user_message: str) -> MergedTask:
         response = self._client.messages.create(

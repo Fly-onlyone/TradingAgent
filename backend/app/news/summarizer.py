@@ -1,8 +1,12 @@
-"""News summarizer using Claude for article summarization and sentiment analysis.
+"""News summarizer using Claude or OpenAI for article summarization and sentiment.
 
-Supports two auth modes:
-- api_key: Uses the raw Anthropic client (fast, direct)
-- subscription: Uses ClaudeSDKClient with CLI credentials
+Supports three modes:
+- Anthropic + api_key: Raw Anthropic client (fast, direct)
+- Anthropic + subscription: ClaudeSDKClient with CLI credentials
+- OpenAI: AsyncOpenAI Chat Completions
+
+The active model is read from ``AppSettings.agent_model`` so a provider
+switch in the UI flips this service without redeploy.
 """
 
 import logging
@@ -12,52 +16,115 @@ logger = logging.getLogger(__name__)
 
 
 class NewsSummarizer:
-    """Summarizes news articles and analyzes sentiment using Claude."""
+    """Summarizes news articles and analyzes sentiment using the configured provider."""
 
-    def __init__(self, api_key: str = "", use_sdk: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        provider: str = "anthropic",
+        api_key: str = "",
+        use_sdk: bool = False,
+    ) -> None:
+        self._provider = provider
         self._use_sdk = use_sdk
         self._client: Any | None = None
-        if api_key and not use_sdk:
+        if provider == "openai" and api_key:
+            from openai import AsyncOpenAI
+
+            self._client = AsyncOpenAI(api_key=api_key)
+        elif provider == "anthropic" and api_key and not use_sdk:
             from anthropic import Anthropic
 
             self._client = Anthropic(api_key=api_key)
 
     @classmethod
     async def create(cls) -> "NewsSummarizer":
-        """Create a summarizer with the correct auth mode."""
-        from app.agent.auth import resolve_anthropic_api_key
+        """Create a summarizer wired to the currently selected provider."""
+        from app.agent.auth import resolve_active_provider_api_key
 
-        api_key = await resolve_anthropic_api_key()
+        provider, api_key = await resolve_active_provider_api_key()
+        if provider == "openai":
+            if not api_key:
+                # OpenAI has no subscription fallback — raise the moment we know.
+                raise RuntimeError(
+                    "OpenAI provider selected but no API key configured. "
+                    "Set OPENAI_API_KEY or save a key via Settings → AI Agent."
+                )
+            return cls(provider="openai", api_key=api_key)
+
         if api_key:
-            return cls(api_key=api_key)
+            return cls(provider="anthropic", api_key=api_key)
         logger.info("NewsSummarizer using Agent SDK (subscription mode)")
-        return cls(use_sdk=True)
+        return cls(provider="anthropic", use_sdk=True)
+
+    async def _resolved_model(self) -> str:
+        """Map the selected family alias to a concrete API model id."""
+        from app.api.v1.settings import (
+            DEFAULT_MODEL_BY_FAMILY,
+            FAMILY_TO_API_MODEL,
+            _normalize_to_family,
+        )
+        from app.db.models.app_settings import AppSettings
+
+        app_settings = await AppSettings.get_instance()
+        family = _normalize_to_family(app_settings.agent_model)
+        return (
+            FAMILY_TO_API_MODEL.get(family)
+            or DEFAULT_MODEL_BY_FAMILY.get(family)
+            or app_settings.agent_model
+            or ("gpt-5.5" if self._provider == "openai" else "claude-sonnet-4-6")
+        )
 
     async def _call_claude(self, prompt: str, max_tokens: int = 500) -> str:
-        """Unified Claude call — uses raw API or SDK depending on mode."""
+        """Unified call — dispatches to Anthropic or OpenAI based on provider."""
+        if self._provider == "openai":
+            return await self._call_via_openai(prompt, max_tokens)
         if self._client:
+            model = await self._resolved_model()
             response = self._client.messages.create(
-                model="claude-sonnet-4-6",
+                model=model,
                 max_tokens=max_tokens,
                 messages=[{"role": "user", "content": prompt}],
             )
             return response.content[0].text.strip()
         return await self._call_via_sdk(prompt, max_tokens)
 
+    async def _call_via_openai(self, prompt: str, max_tokens: int) -> str:
+        """Call the OpenAI Chat Completions endpoint with the active model."""
+        if self._client is None:  # safety net — create() always builds the client
+            from app.agent.openai_client import build_openai_async_client
+
+            self._client = await build_openai_async_client()
+        model = await self._resolved_model()
+        completion = await self._client.chat.completions.create(
+            model=model,
+            max_completion_tokens=max_tokens,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a concise financial news analyst. Respond only with what is asked.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+        )
+        choice = completion.choices[0] if completion.choices else None
+        if not choice or not choice.message or not choice.message.content:
+            return ""
+        return choice.message.content.strip()
+
     async def _call_via_sdk(self, prompt: str, max_tokens: int) -> str:
         """Call Claude via the Agent SDK (subscription mode)."""
+        _ = max_tokens  # SDK does not expose per-call token caps
         from app.agent.sdk_client import (
             build_sdk_client,
             claude_sdk_workload_slot,
             collect_text_response,
         )
-        from app.db.models.app_settings import AppSettings
 
-        app_settings = await AppSettings.get_instance()
-
+        model = await self._resolved_model()
         client = await build_sdk_client(
             system_prompt="You are a concise financial news analyst. Respond only with what is asked.",
-            model=app_settings.agent_model or "claude-sonnet-4-6",
+            model=model,
             stderr_source="NewsSummarizer",
         )
         await client.connect()

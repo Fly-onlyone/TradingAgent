@@ -31,3 +31,47 @@ async def resolve_anthropic_api_key() -> str:
         logger.debug("Could not load AppSettings for API key resolution", exc_info=True)
 
     return settings.anthropic_api_key
+
+
+async def resolve_openai_api_key() -> str:
+    """Return the effective OpenAI API key.
+
+    Resolution order mirrors ``resolve_anthropic_api_key``:
+    1. Encrypted value from AppSettings in DB (``get_openai_api_key()``)
+    2. ``OPENAI_API_KEY`` environment variable (via Settings)
+    3. Empty string — caller is responsible for surfacing a friendly error
+    """
+    from app.db.models.app_settings import AppSettings
+
+    settings = get_settings()
+
+    try:
+        app_settings = await AppSettings.get_instance()
+        db_key = app_settings.get_openai_api_key()
+        if db_key:
+            return db_key
+    except Exception:
+        logger.debug("Could not load AppSettings for OpenAI key resolution", exc_info=True)
+
+    return getattr(settings, "openai_api_key", "") or ""
+
+
+async def resolve_active_provider_api_key() -> tuple[str, str]:
+    """Return ``(provider_value, api_key)`` for the currently selected provider.
+
+    Used by services that need to dispatch to either Anthropic or OpenAI based
+    on ``AppSettings.agent_provider``. Provider value matches
+    ``AgentProvider.value`` ("anthropic" or "openai").
+    """
+    from app.db.models.app_settings import AgentProvider, AppSettings
+
+    try:
+        app_settings = await AppSettings.get_instance()
+        provider = app_settings.agent_provider
+    except Exception:
+        logger.debug("Could not load AppSettings for provider resolution", exc_info=True)
+        provider = AgentProvider.ANTHROPIC
+
+    if provider == AgentProvider.OPENAI:
+        return provider.value, await resolve_openai_api_key()
+    return provider.value, await resolve_anthropic_api_key()

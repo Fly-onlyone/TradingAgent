@@ -56,11 +56,14 @@ _TEMPLATES: dict[str, str] = {
 async def generate_context_prefix(
     doc_type: str,
     doc_data: dict[str, Any],
-    model: str = "claude-haiku-4-5-20251001",
+    model: str | None = None,
 ) -> str | None:
-    """Generate a contextual prefix for a document using Claude.
+    """Generate a contextual prefix using the currently configured provider.
 
     Returns a 1-2 sentence prefix or None if generation fails.
+
+    ``model`` overrides the active provider's default. When omitted, uses
+    Claude Haiku for Anthropic and the active OpenAI family otherwise.
     """
     template = _TEMPLATES.get(doc_type)
     if not template:
@@ -95,30 +98,66 @@ async def generate_context_prefix(
         return None
 
     try:
-        from app.agent.auth import resolve_anthropic_api_key
+        from app.agent.auth import resolve_active_provider_api_key
 
-        api_key = await resolve_anthropic_api_key()
+        provider, api_key = await resolve_active_provider_api_key()
         if not api_key:
-            logger.debug("No API key available for context generation")
+            logger.debug("No API key available for context generation (provider=%s)", provider)
             return None
 
-        from anthropic import AsyncAnthropic
-
-        client = AsyncAnthropic(api_key=api_key)
-        response = await client.messages.create(
-            model=model,
-            max_tokens=150,
-            system=_SYSTEM,
-            messages=[{"role": "user", "content": prompt}],
-        )
-
-        if response.content and response.content[0].type == "text":
-            prefix = response.content[0].text.strip()
-            # Sanity check: prefix should be short
-            if len(prefix) > 500:
-                prefix = prefix[:500]
-            return prefix
+        if provider == "openai":
+            return await _generate_openai(prompt, api_key, model)
+        return await _generate_anthropic(prompt, api_key, model)
     except Exception:
         logger.warning("Context prefix generation failed", exc_info=True)
 
     return None
+
+
+async def _generate_anthropic(prompt: str, api_key: str, model: str | None) -> str | None:
+    """Run context generation against the Anthropic API."""
+    from anthropic import AsyncAnthropic
+
+    client = AsyncAnthropic(api_key=api_key)
+    response = await client.messages.create(
+        model=model or "claude-haiku-4-5-20251001",
+        max_tokens=150,
+        system=_SYSTEM,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    if response.content and response.content[0].type == "text":
+        prefix = response.content[0].text.strip()
+        if len(prefix) > 500:
+            prefix = prefix[:500]
+        return prefix
+    return None
+
+
+async def _generate_openai(prompt: str, api_key: str, model: str | None) -> str | None:
+    """Run context generation against the OpenAI Chat Completions API."""
+    from openai import AsyncOpenAI
+
+    from app.api.v1.settings import FAMILY_TO_API_MODEL, _normalize_to_family
+    from app.db.models.app_settings import AppSettings
+
+    app_settings = await AppSettings.get_instance()
+    family = _normalize_to_family(app_settings.agent_model)
+    resolved = model or FAMILY_TO_API_MODEL.get(family, family) or "gpt-5.5"
+
+    client = AsyncOpenAI(api_key=api_key)
+    completion = await client.chat.completions.create(
+        model=resolved,
+        max_completion_tokens=150,
+        messages=[
+            {"role": "system", "content": _SYSTEM},
+            {"role": "user", "content": prompt},
+        ],
+    )
+    choice = completion.choices[0] if completion.choices else None
+    if not choice or not choice.message or not choice.message.content:
+        return None
+    prefix = choice.message.content.strip()
+    if len(prefix) > 500:
+        prefix = prefix[:500]
+    return prefix

@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from app.api.deps import get_current_superuser
 from app.config import get_settings
-from app.db.models.app_settings import AgentAuthMode, AppSettings
+from app.db.models.app_settings import AgentAuthMode, AgentProvider, AppSettings
 from app.db.models.user import User
 from app.security.resolver import resolve_secret
 
@@ -28,9 +28,12 @@ settings = get_settings()
 
 
 class AgentConfigResponse(BaseModel):
+    provider: str
     auth_mode: str
     has_api_key: bool
     masked_api_key: str
+    has_openai_api_key: bool
+    masked_openai_api_key: str
     model: str
     thinking_mode: str
     thinking_budget: int
@@ -39,8 +42,10 @@ class AgentConfigResponse(BaseModel):
 
 
 class AgentConfigUpdate(BaseModel):
+    provider: str | None = None
     auth_mode: str | None = None
     api_key: str | None = None
+    openai_api_key: str | None = None
     model: str | None = None
     thinking_mode: str | None = None
     thinking_budget: int | None = None
@@ -48,6 +53,12 @@ class AgentConfigUpdate(BaseModel):
 
 
 class AgentModelOption(BaseModel):
+    provider: str
+    value: str
+    label: str
+
+
+class AgentProviderOption(BaseModel):
     value: str
     label: str
 
@@ -109,6 +120,32 @@ def _check_cli_login() -> bool:
 def _resolve_api_key(app_settings: AppSettings) -> str:
     """Return the effective Anthropic API key."""
     return resolve_secret(app_settings.get_agent_api_key, settings.anthropic_api_key)
+
+
+def _resolve_openai_key(app_settings: AppSettings) -> str:
+    """Return the effective OpenAI API key."""
+    return resolve_secret(app_settings.get_openai_api_key, settings.openai_api_key)
+
+
+def _build_agent_response(app_settings: AppSettings) -> dict:
+    """Assemble the public agent config payload."""
+    anthropic_key = _resolve_api_key(app_settings)
+    openai_key = _resolve_openai_key(app_settings)
+    cli_logged_in = _check_cli_login()
+    effective_model = _normalize_to_family(app_settings.agent_model)
+    return {
+        "provider": app_settings.agent_provider.value,
+        "auth_mode": app_settings.agent_auth_mode.value,
+        "has_api_key": bool(anthropic_key),
+        "masked_api_key": _mask_key(anthropic_key),
+        "has_openai_api_key": bool(openai_key),
+        "masked_openai_api_key": _mask_key(openai_key),
+        "model": effective_model,
+        "thinking_mode": app_settings.agent_thinking_mode,
+        "thinking_budget": app_settings.agent_thinking_budget,
+        "effort": app_settings.agent_effort,
+        "cli_logged_in": cli_logged_in,
+    }
 
 
 def _ensure_encryption_available() -> None:
@@ -183,6 +220,7 @@ DEFAULT_MODEL_BY_FAMILY = {
     "opus": "claude-opus-4-7",
     "sonnet-1m": "claude-sonnet-4-6",
     "opus-1m": "claude-opus-4-7[1m]",
+    "gpt-5-5": "gpt-5.5",
 }
 
 MODEL_ALIAS_TO_NAME = {
@@ -190,6 +228,7 @@ MODEL_ALIAS_TO_NAME = {
     "opus": "Claude Opus",
     "sonnet-1m": "Claude Sonnet 4 (1M)",
     "opus-1m": "Claude Opus 4 (1M)",
+    "gpt-5-5": "GPT 5.5",
 }
 
 MODEL_ALIAS_TO_FAMILY = {
@@ -202,6 +241,8 @@ MODEL_ALIAS_TO_FAMILY = {
     "claude-opus-4-5": "opus",
     "claude-opus-4-6": "opus",
     "claude-opus-4-7": "opus",
+    "gpt-5-5": "gpt-5-5",
+    "gpt-5.5": "gpt-5-5",
 }
 
 FAMILY_TO_API_MODEL = {
@@ -209,9 +250,29 @@ FAMILY_TO_API_MODEL = {
     "opus": "claude-opus-4-7",
     "sonnet-1m": "claude-sonnet-4-6[1m]",
     "opus-1m": "claude-opus-4-7[1m]",
+    "gpt-5-5": "gpt-5.5",
 }
 
-MODEL_FAMILY_ORDER = ("sonnet", "opus", "sonnet-1m", "opus-1m")
+MODEL_FAMILY_ORDER = ("sonnet", "opus", "sonnet-1m", "opus-1m", "gpt-5-5")
+
+# Per-provider catalogue. Used by the `/agent/models` endpoint and the
+# provider-switch validation in `update_agent_config`.
+OPENAI_MODELS_BY_FAMILY: dict[str, str] = {
+    "gpt-5-5": "gpt-5.5",
+}
+
+ANTHROPIC_FAMILIES: tuple[str, ...] = ("sonnet", "opus", "sonnet-1m", "opus-1m")
+OPENAI_FAMILIES: tuple[str, ...] = tuple(OPENAI_MODELS_BY_FAMILY.keys())
+
+PROVIDER_LABELS: dict[str, str] = {
+    AgentProvider.ANTHROPIC.value: "Anthropic (Claude)",
+    AgentProvider.OPENAI.value: "OpenAI (GPT)",
+}
+
+PROVIDER_DEFAULT_FAMILY: dict[str, str] = {
+    AgentProvider.ANTHROPIC.value: "sonnet",
+    AgentProvider.OPENAI.value: "gpt-5-5",
+}
 
 
 def _get_supported_model_families() -> tuple[str, ...]:
@@ -219,8 +280,8 @@ def _get_supported_model_families() -> tuple[str, ...]:
     if not aliases:
         return MODEL_FAMILY_ORDER
 
-    # If the SDK supports a base family, also include its 1M variant
-    expanded = set(aliases)
+    # Anthropic families come from the SDK; OpenAI families are static.
+    expanded = set(aliases) | set(OPENAI_FAMILIES)
     for alias in aliases:
         one_m = f"{alias}-1m"
         if one_m in DEFAULT_MODEL_BY_FAMILY:
@@ -228,6 +289,13 @@ def _get_supported_model_families() -> tuple[str, ...]:
 
     ordered = tuple(family for family in MODEL_FAMILY_ORDER if family in expanded)
     return ordered or MODEL_FAMILY_ORDER
+
+
+def _provider_for_family(family: str) -> str:
+    """Map a model family alias to its provider value."""
+    if family in OPENAI_FAMILIES:
+        return AgentProvider.OPENAI.value
+    return AgentProvider.ANTHROPIC.value
 
 
 def _get_model_family(model_id: str) -> str | None:
@@ -263,10 +331,14 @@ def _normalize_to_family(model: str) -> str:
 
 
 def _format_model_label(family: str, latest_exact_id: str | None = None) -> str:
-    """Build a clean display name like 'Claude Sonnet 4.5'."""
+    """Build a clean display name like 'Claude Sonnet 4.5' or 'GPT 5.5'."""
     base_name = MODEL_ALIAS_TO_NAME.get(family)
     if base_name is None:
         return family
+    # OpenAI labels already encode the version (e.g. "GPT 5.5"); skip the
+    # Claude-shaped version parser entirely for them.
+    if family.startswith("gpt-"):
+        return base_name
     if latest_exact_id:
         version = _extract_model_version(latest_exact_id)
         if version:
@@ -281,6 +353,7 @@ def _build_agent_model_options(
     families = _get_supported_model_families()
     options = [
         {
+            "provider": _provider_for_family(family),
             "value": family,
             "label": _format_model_label(family, latest_by_family.get(family)),
         }
@@ -291,11 +364,20 @@ def _build_agent_model_options(
     if not current_model:
         return options
 
-    current_family = _get_model_family(current_model)
+    current_family = MODEL_ALIAS_TO_FAMILY.get(current_model.strip().lower()) or _get_model_family(
+        current_model
+    )
     if current_family and current_family in {o["value"] for o in options}:
         return options
 
-    return [{"value": current_model, "label": f"{current_model} (current)"}, *options]
+    return [
+        {
+            "provider": _provider_for_family(current_model),
+            "value": current_model,
+            "label": f"{current_model} (current)",
+        },
+        *options,
+    ]
 
 
 # ── Endpoints ───────────────────────────────────────────────────
@@ -307,27 +389,25 @@ async def get_agent_config(
 ) -> dict:
     """Get current agent configuration."""
     app_settings = await AppSettings.get_instance()
-    effective_key = _resolve_api_key(app_settings)
-    cli_logged_in = _check_cli_login()
-    effective_model = _normalize_to_family(app_settings.agent_model)
+    return _build_agent_response(app_settings)
 
-    return {
-        "auth_mode": app_settings.agent_auth_mode.value,
-        "has_api_key": bool(effective_key),
-        "masked_api_key": _mask_key(effective_key),
-        "model": effective_model,
-        "thinking_mode": app_settings.agent_thinking_mode,
-        "thinking_budget": app_settings.agent_thinking_budget,
-        "effort": app_settings.agent_effort,
-        "cli_logged_in": cli_logged_in,
-    }
+
+@router.get("/agent/providers", response_model=list[AgentProviderOption])
+async def get_agent_providers(
+    _: User = Depends(get_current_superuser),
+) -> list[dict[str, str]]:
+    """Get the available agent providers for the UI dropdown."""
+    return [
+        {"value": provider.value, "label": PROVIDER_LABELS[provider.value]}
+        for provider in AgentProvider
+    ]
 
 
 @router.get("/agent/models", response_model=list[AgentModelOption])
 async def get_agent_models(
     _: User = Depends(get_current_superuser),
 ) -> list[dict[str, str]]:
-    """Get model options derived from installed Agent SDK."""
+    """Get model options across all providers (Anthropic + OpenAI)."""
     app_settings = await AppSettings.get_instance()
     return _build_agent_model_options(app_settings.agent_model, DEFAULT_MODEL_BY_FAMILY)
 
@@ -339,6 +419,18 @@ async def update_agent_config(
 ) -> dict:
     """Update agent configuration."""
     app_settings = await AppSettings.get_instance()
+
+    provider_changed = False
+    if body.provider is not None:
+        try:
+            new_provider = AgentProvider(body.provider)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid provider. Must be one of: {[p.value for p in AgentProvider]}",
+            )
+        provider_changed = app_settings.agent_provider != new_provider
+        app_settings.agent_provider = new_provider
 
     if body.auth_mode is not None:
         try:
@@ -353,8 +445,27 @@ async def update_agent_config(
         _ensure_encryption_available()
         app_settings.set_agent_api_key(body.api_key)
 
+    if body.openai_api_key is not None:
+        _ensure_encryption_available()
+        app_settings.set_openai_api_key(body.openai_api_key)
+
     if body.model is not None:
-        app_settings.agent_model = _normalize_to_family(body.model)
+        normalized = _normalize_to_family(body.model)
+        # When the new provider does not own the requested model, fall back
+        # to the provider's default family. Keeps the UI from being stuck
+        # in an invalid state right after a provider switch.
+        target_provider = app_settings.agent_provider.value
+        model_provider = _provider_for_family(normalized)
+        if model_provider != target_provider:
+            normalized = PROVIDER_DEFAULT_FAMILY[target_provider]
+        app_settings.agent_model = normalized
+    elif provider_changed:
+        # No explicit model in the request but the provider just changed —
+        # reset to the provider's default family so the OpenAI path doesn't
+        # silently keep a Claude model id (or vice versa).
+        current_provider = app_settings.agent_provider.value
+        if _provider_for_family(app_settings.agent_model) != current_provider:
+            app_settings.agent_model = PROVIDER_DEFAULT_FAMILY[current_provider]
 
     if body.thinking_mode is not None:
         if body.thinking_mode not in ("adaptive", "enabled", "disabled"):
@@ -376,22 +487,13 @@ async def update_agent_config(
         app_settings.agent_effort = body.effort
 
     await app_settings.save_with_timestamp()
-    logger.info("Agent config updated: auth_mode=%s", app_settings.agent_auth_mode.value)
+    logger.info(
+        "Agent config updated: provider=%s auth_mode=%s",
+        app_settings.agent_provider.value,
+        app_settings.agent_auth_mode.value,
+    )
 
-    effective_key = _resolve_api_key(app_settings)
-    cli_logged_in = _check_cli_login()
-    effective_model = _normalize_to_family(app_settings.agent_model)
-
-    return {
-        "auth_mode": app_settings.agent_auth_mode.value,
-        "has_api_key": bool(effective_key),
-        "masked_api_key": _mask_key(effective_key),
-        "model": effective_model,
-        "thinking_mode": app_settings.agent_thinking_mode,
-        "thinking_budget": app_settings.agent_thinking_budget,
-        "effort": app_settings.agent_effort,
-        "cli_logged_in": cli_logged_in,
-    }
+    return _build_agent_response(app_settings)
 
 
 @router.post("/agent/test", response_model=TestConnectionResponse)
@@ -400,6 +502,29 @@ async def test_agent_connection(
 ) -> dict:
     """Test the agent connection with current configuration."""
     app_settings = await AppSettings.get_instance()
+    family = _normalize_to_family(app_settings.agent_model)
+
+    if app_settings.agent_provider == AgentProvider.OPENAI:
+        effective_key = _resolve_openai_key(app_settings)
+        if not effective_key:
+            return {"success": False, "message": "No OpenAI API key configured"}
+        try:
+            from openai import AsyncOpenAI
+
+            client = AsyncOpenAI(api_key=effective_key)
+            api_model = FAMILY_TO_API_MODEL.get(family, family)
+            await client.chat.completions.create(
+                model=api_model,
+                max_completion_tokens=10,
+                messages=[{"role": "user", "content": "ping"}],
+            )
+            friendly_name = _format_model_label(family, DEFAULT_MODEL_BY_FAMILY.get(family))
+            return {
+                "success": True,
+                "message": f"Connected successfully (model: {friendly_name})",
+            }
+        except Exception as e:
+            return {"success": False, "message": f"Connection failed: {str(e)}"}
 
     if app_settings.agent_auth_mode == AgentAuthMode.API_KEY:
         effective_key = _resolve_api_key(app_settings)
@@ -410,7 +535,6 @@ async def test_agent_connection(
             import anthropic
 
             client = anthropic.AsyncAnthropic(api_key=effective_key)
-            family = _normalize_to_family(app_settings.agent_model)
             api_model = FAMILY_TO_API_MODEL.get(family, family)
             await client.messages.create(
                 model=api_model,

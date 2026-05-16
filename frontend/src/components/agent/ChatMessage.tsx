@@ -29,9 +29,21 @@ import { MdTable, MdTbody, MdTd, MdTh, MdThead, MdTr } from "./AgentTable";
 import { DecisionCard } from "./DecisionCard";
 import { ToolCallList } from "./ToolCallList";
 
-/** Format a full model ID like "claude-opus-4-6" → "Opus 4.6" */
+/** Format a full model ID like "claude-opus-4-6" → "Opus 4.6" or "gpt-5.5" → "GPT 5.5" */
 function formatModelName(modelId: string): string {
 	const normalized = modelId.toLowerCase();
+
+	// OpenAI / GPT family
+	if (normalized.startsWith("gpt-")) {
+		// Strip the gpt- prefix and try to extract a version number
+		const versionMatch = normalized.match(/^gpt-?(\d+(?:[.-]\d+)*)/);
+		if (versionMatch) {
+			const version = versionMatch[1].replace(/-/g, ".");
+			return `GPT ${version}`;
+		}
+		return modelId.toUpperCase();
+	}
+
 	const family = normalized.includes("opus")
 		? "Opus"
 		: normalized.includes("sonnet")
