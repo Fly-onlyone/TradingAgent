@@ -31,6 +31,13 @@ class AgentAuthMode(str, Enum):
     API_KEY = "api_key"  # Direct Anthropic API key
 
 
+class AgentProvider(str, Enum):
+    """LLM provider powering TradingAgent and side services."""
+
+    ANTHROPIC = "anthropic"
+    OPENAI = "openai"
+
+
 class AppSettings(Document):
     """Singleton document for runtime application settings.
 
@@ -41,6 +48,7 @@ class AppSettings(Document):
     _cached_instance: ClassVar[AppSettings | None] = None
     SECRET_FIELD_NAMES: ClassVar[tuple[str, ...]] = (
         "agent_api_key",
+        "openai_api_key",
         "okx_api_key",
         "okx_secret_key",
         "okx_passphrase",
@@ -52,8 +60,10 @@ class AppSettings(Document):
     singleton_key: str = SINGLETON_KEY
 
     # Agent configuration
+    agent_provider: AgentProvider = AgentProvider.ANTHROPIC
     agent_auth_mode: AgentAuthMode = AgentAuthMode.SUBSCRIPTION
-    agent_api_key: str = ""  # Encrypted/stored API key (empty = use env var)
+    agent_api_key: str = ""  # Encrypted/stored Anthropic API key (empty = use env var)
+    openai_api_key: str = ""  # Encrypted/stored OpenAI API key (empty = use env var)
     agent_model: str = "sonnet"
     agent_thinking_mode: str = "adaptive"  # "adaptive", "enabled", "disabled"
     agent_thinking_budget: int = 10000  # Token budget when mode is "enabled"
@@ -240,8 +250,16 @@ class AppSettings(Document):
         setattr(self, field_name, encrypt_secret_value(value))
 
     def get_agent_api_key(self) -> str:
-        """Get decrypted agent API key."""
+        """Get decrypted Anthropic API key."""
         return self._get_secret_value("agent_api_key")
+
+    def get_openai_api_key(self) -> str:
+        """Get decrypted OpenAI API key."""
+        return self._get_secret_value("openai_api_key")
+
+    def set_openai_api_key(self, value: str) -> None:
+        """Set OpenAI API key in encrypted storage format."""
+        self._set_secret_value("openai_api_key", value)
 
     def get_okx_api_key(self) -> str:
         """Get decrypted OKX API key."""

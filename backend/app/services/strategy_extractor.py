@@ -109,17 +109,31 @@ class ExtractedStrategy(BaseModel):
 
 
 class StrategyExtractor:
-    """Extract structured strategy data from unstructured content using Claude.
+    """Extract structured strategy data using the currently selected provider.
 
-    Supports two auth modes:
-    - api_key: Uses the raw Anthropic client with forced tool_use (fast, precise)
-    - subscription: Uses ClaudeSDKClient with JSON output (works with CLI credentials)
+    Supports three modes:
+    - Anthropic + api_key: Raw Anthropic client with forced tool_use
+    - Anthropic + subscription: ClaudeSDKClient with JSON output
+    - OpenAI: AsyncOpenAI Chat Completions with forced function-call
     """
 
-    def __init__(self, api_key: str = "", use_sdk: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        provider: str = "anthropic",
+        api_key: str = "",
+        use_sdk: bool = False,
+    ) -> None:
+        self._provider = provider
         self._api_key = api_key
         self._use_sdk = use_sdk
-        if api_key and not use_sdk:
+        self._openai_client = None
+        if provider == "openai" and api_key:
+            from openai import AsyncOpenAI
+
+            self._openai_client = AsyncOpenAI(api_key=api_key)
+            self._client = None
+        elif provider == "anthropic" and api_key and not use_sdk:
             from anthropic import Anthropic
 
             self._client = Anthropic(api_key=api_key)
@@ -128,21 +142,108 @@ class StrategyExtractor:
 
     @classmethod
     async def create(cls) -> "StrategyExtractor":
-        """Create an extractor with the correct auth mode."""
-        from app.agent.auth import resolve_anthropic_api_key
+        """Pick the right backend based on the configured agent provider."""
+        from app.agent.auth import resolve_active_provider_api_key
 
-        api_key = await resolve_anthropic_api_key()
+        provider, api_key = await resolve_active_provider_api_key()
+        if provider == "openai":
+            if not api_key:
+                raise RuntimeError("OpenAI provider selected but no API key configured.")
+            return cls(provider="openai", api_key=api_key)
+
         if api_key:
-            return cls(api_key=api_key)
-        # No API key — use Agent SDK (subscription mode)
+            return cls(provider="anthropic", api_key=api_key)
         logger.info("StrategyExtractor using Agent SDK (subscription mode)")
-        return cls(use_sdk=True)
+        return cls(provider="anthropic", use_sdk=True)
 
     async def extract_from_text(self, content: str, source_hint: str = "") -> ExtractedStrategy:
-        """Send content to Claude and extract structured strategy fields."""
+        """Send content to the configured provider and extract structured fields."""
+        if self._provider == "openai":
+            return await self._extract_via_openai(content, source_hint)
         if self._use_sdk:
             return await self._extract_via_sdk(content, source_hint)
         return await self._extract_via_api(content, source_hint)
+
+    async def _extract_via_openai(self, content: str, source_hint: str) -> ExtractedStrategy:
+        """Extract using OpenAI's Chat Completions with forced function-call."""
+        from app.api.v1.settings import FAMILY_TO_API_MODEL, _normalize_to_family
+        from app.db.models.app_settings import AppSettings
+
+        app_settings = await AppSettings.get_instance()
+        family = _normalize_to_family(app_settings.agent_model)
+        model = FAMILY_TO_API_MODEL.get(family, family) or "gpt-5.5"
+
+        truncated = content[:MAX_CONTENT_LENGTH]
+        hint = f"\n\nSource: {source_hint}" if source_hint else ""
+        word_count = len(truncated.split())
+
+        messages: list[dict] = []
+        if source_hint:
+            messages.append({"role": "system", "content": f"Fetching content from: {source_hint}"})
+        messages.append(
+            {
+                "role": "system",
+                "content": f"Content loaded ({word_count} words). Starting AI extraction (OpenAI)...",
+            }
+        )
+
+        openai_tool = {
+            "type": "function",
+            "function": {
+                "name": EXTRACTION_TOOL["name"],
+                "description": EXTRACTION_TOOL["description"],
+                "parameters": EXTRACTION_TOOL["input_schema"],
+            },
+        }
+
+        completion = await self._openai_client.chat.completions.create(
+            model=model,
+            max_completion_tokens=4096,
+            tools=[openai_tool],
+            tool_choice={
+                "type": "function",
+                "function": {"name": EXTRACTION_TOOL["name"]},
+            },
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": f"Extract the trading strategy from this content:{hint}\n\n{truncated}",
+                },
+            ],
+        )
+        choice = completion.choices[0] if completion.choices else None
+        tool_calls = choice.message.tool_calls if choice and choice.message else None
+        if tool_calls:
+            for call in tool_calls:
+                if call.function.name == EXTRACTION_TOOL["name"]:
+                    try:
+                        payload = json.loads(call.function.arguments or "{}")
+                    except json.JSONDecodeError:
+                        payload = {}
+                    result = ExtractedStrategy(**payload)
+                    messages.append(
+                        {
+                            "role": "assistant",
+                            "content": f"I found a trading strategy. Extracted: {result.name} — {result.description}",
+                        }
+                    )
+                    messages.append(
+                        {"role": "system", "content": "Strategy extracted successfully"}
+                    )
+                    result.extraction_messages = messages
+                    return result
+
+        logger.warning("OpenAI did not return a save_strategy call, using fallback")
+        messages.append(
+            {"role": "system", "content": "AI did not return structured data; using fallback"}
+        )
+        result = ExtractedStrategy(
+            name="Imported Strategy",
+            description="Strategy extracted from provided content (extraction incomplete)",
+        )
+        result.extraction_messages = messages
+        return result
 
     async def _extract_via_api(self, content: str, source_hint: str) -> ExtractedStrategy:
         """Extract using the raw Anthropic client with forced tool_use."""

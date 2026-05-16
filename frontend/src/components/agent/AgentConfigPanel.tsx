@@ -29,6 +29,7 @@ import { useCallback, useState } from "react";
 import type { AgentConfig, AgentConfigUpdate } from "@/api/endpoints/settings";
 import { settingsApi } from "@/api/endpoints/settings";
 import { agentConfigQueryOptions } from "@/api/queryOptions/agent";
+import { ZoomAwareSelect } from "@/components/common/ZoomAwareSelect";
 import { usePollingLogin } from "@/hooks/usePollingLogin";
 import { useRecoverableQueryState } from "@/hooks/useRecoverableQueryState";
 import { useZoomAwareMenu } from "@/hooks/useZoomAwareMenu";
@@ -47,6 +48,7 @@ export function AgentConfigPanel({
 }: AgentConfigPanelProps) {
 	const queryClient = useQueryClient();
 	const [apiKeyInput, setApiKeyInput] = useState("");
+	const [openaiKeyInput, setOpenaiKeyInput] = useState("");
 	const [testResult, setTestResult] = useState<{
 		success: boolean;
 		message: string;
@@ -79,6 +81,13 @@ export function AgentConfigPanel({
 		refetchOnMount: "always",
 	});
 
+	const providerOptionsQuery = useQuery({
+		queryKey: ["agent-provider-options"],
+		queryFn: () => settingsApi.getAgentProviders(),
+		enabled: configQuery.isSuccess,
+		staleTime: 5 * 60_000,
+	});
+
 	const updateMutation = useMutation({
 		mutationFn: (update: AgentConfigUpdate) =>
 			settingsApi.updateAgentConfig(update),
@@ -91,6 +100,9 @@ export function AgentConfigPanel({
 			if (previousConfig) {
 				queryClient.setQueryData<AgentConfig>(["agent-config"], {
 					...previousConfig,
+					...(update.provider !== undefined
+						? { provider: update.provider }
+						: {}),
 					...(update.authMode !== undefined
 						? { authMode: update.authMode }
 						: {}),
@@ -111,30 +123,36 @@ export function AgentConfigPanel({
 										: "",
 							}
 						: {}),
+					...(update.openaiApiKey !== undefined
+						? {
+								hasOpenaiApiKey: update.openaiApiKey.trim().length > 0,
+								maskedOpenaiApiKey:
+									update.openaiApiKey.trim().length > 0
+										? previousConfig.maskedOpenaiApiKey || "Configured"
+										: "",
+							}
+						: {}),
 				});
 			}
 
 			return { previousConfig };
 		},
 		onSuccess: (updatedConfig, variables) => {
-			queryClient.setQueryData<AgentConfig>(["agent-config"], {
-				...updatedConfig,
-				...(variables.authMode !== undefined
-					? { authMode: variables.authMode }
-					: {}),
-				...(variables.model !== undefined ? { model: variables.model } : {}),
-				...(variables.thinkingMode !== undefined
-					? { thinkingMode: variables.thinkingMode }
-					: {}),
-				...(variables.thinkingBudget !== undefined
-					? { thinkingBudget: variables.thinkingBudget }
-					: {}),
-				...(variables.effort !== undefined ? { effort: variables.effort } : {}),
-			});
+			queryClient.setQueryData<AgentConfig>(["agent-config"], updatedConfig);
+			// Provider switch may have reset the model server-side; refresh
+			// the model option list so the dropdown reflects the new family.
+			if (variables.provider !== undefined) {
+				void queryClient.invalidateQueries({
+					queryKey: ["agent-model-options"],
+				});
+			}
 			notify.success("Agent configuration updated");
 			setTestResult(null);
 			if (variables.apiKey !== undefined) {
 				setApiKeyInput("");
+			}
+			if (variables.openaiApiKey !== undefined) {
+				setOpenaiKeyInput("");
 			}
 		},
 		onError: (_, __, context) => {
@@ -204,18 +222,37 @@ export function AgentConfigPanel({
 	});
 
 	const config = configQuery.data;
+	const currentProvider = config?.provider ?? "anthropic";
 	const resolvedModelOptions = config
 		? (() => {
-				const fetched = modelOptionsQuery.data ?? [];
+				const fetched = (modelOptionsQuery.data ?? []).filter(
+					(opt) => opt.provider === currentProvider,
+				);
 				if (fetched.some((opt) => opt.value === config.model)) return fetched;
-				return [{ value: config.model, label: config.model }, ...fetched];
+				return [
+					{
+						provider: currentProvider,
+						value: config.model,
+						label: config.model,
+					},
+					...fetched,
+				];
 			})()
 		: [];
+	const providerOptions = providerOptionsQuery.data ?? [
+		{ value: "anthropic", label: "Anthropic (Claude)" },
+		{ value: "openai", label: "OpenAI (GPT)" },
+	];
+
 	const handleAuthModeChange = (
 		_: React.MouseEvent<HTMLElement>,
 		newMode: string | null,
 	) => {
 		if (newMode) updateMutation.mutate({ authMode: newMode });
+	};
+
+	const handleProviderChange = (value: string) => {
+		if (value) updateMutation.mutate({ provider: value });
 	};
 
 	const handleSaveApiKey = () => {
@@ -225,6 +262,15 @@ export function AgentConfigPanel({
 
 	const handleClearApiKey = () => {
 		updateMutation.mutate({ apiKey: "" });
+	};
+
+	const handleSaveOpenaiKey = () => {
+		if (openaiKeyInput.trim())
+			updateMutation.mutate({ openaiApiKey: openaiKeyInput.trim() });
+	};
+
+	const handleClearOpenaiKey = () => {
+		updateMutation.mutate({ openaiApiKey: "" });
 	};
 
 	const body = configQueryState.isLoading ? (
@@ -241,109 +287,194 @@ export function AgentConfigPanel({
 				gap: variant === "standalone" ? 2.5 : 3,
 			}}
 		>
-			{/* Auth Mode Toggle */}
+			{/* Provider Selector — Anthropic vs OpenAI */}
 			<Box>
 				<Typography variant="subtitle2" gutterBottom>
-					Authentication Mode
+					Provider
 				</Typography>
-				<ToggleButtonGroup
-					value={config.authMode}
-					exclusive
-					onChange={handleAuthModeChange}
+				<ZoomAwareSelect
+					value={currentProvider}
 					size="small"
-					fullWidth={variant === "standalone"}
+					onChange={(event) =>
+						handleProviderChange(event.target.value as string)
+					}
 					disabled={updateMutation.isPending}
 				>
-					<ToggleButton value="subscription">Claude Subscription</ToggleButton>
-					<ToggleButton value="api_key">API Key</ToggleButton>
-				</ToggleButtonGroup>
+					{providerOptions.map((opt) => (
+						<MenuItem key={opt.value} value={opt.value}>
+							{opt.label}
+						</MenuItem>
+					))}
+				</ZoomAwareSelect>
 				<Typography
 					variant={variant === "standalone" ? "caption" : "body2"}
 					color="text.secondary"
 					sx={{ mt: 0.5, display: "block" }}
 				>
-					{config.authMode === "subscription"
-						? "Uses Claude Pro/Max subscription via CLI login (free with plan)"
-						: "Uses a direct Anthropic API key (pay-per-use billing)"}
+					{currentProvider === "openai"
+						? "Routes the trading agent and side services through OpenAI."
+						: "Routes the trading agent and side services through Anthropic Claude."}
 				</Typography>
 			</Box>
 
-			{/* Subscription: CLI login */}
-			{config.authMode === "subscription" && (
+			{/* Auth Mode Toggle — Anthropic only */}
+			{currentProvider === "anthropic" && (
 				<Box>
-					<Box
-						sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1.5 }}
+					<Typography variant="subtitle2" gutterBottom>
+						Authentication Mode
+					</Typography>
+					<ToggleButtonGroup
+						value={config.authMode}
+						exclusive
+						onChange={handleAuthModeChange}
+						size="small"
+						fullWidth={variant === "standalone"}
+						disabled={updateMutation.isPending}
 					>
-						<Typography variant="subtitle2">CLI Login Status</Typography>
-						<Chip
-							icon={config.cliLoggedIn ? <CheckCircleIcon /> : <ErrorIcon />}
-							label={config.cliLoggedIn ? "Logged In" : "Not Logged In"}
-							color={config.cliLoggedIn ? "success" : "warning"}
-							size="small"
-							variant="outlined"
-						/>
-					</Box>
-					{config.cliLoggedIn ? (
-						<Button
-							variant="outlined"
-							color="error"
-							size="small"
-							startIcon={
-								logoutMutation.isPending ? (
-									<CircularProgress size={14} />
-								) : (
-									<LogoutIcon />
-								)
-							}
-							onClick={() => logoutMutation.mutate()}
-							disabled={logoutMutation.isPending}
-						>
-							Logout
-						</Button>
-					) : (
-						<Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-							<Button
-								variant="contained"
-								fullWidth={variant === "standalone"}
-								startIcon={
-									loginMutation.isPending || isPolling ? (
-										<CircularProgress size={16} color="inherit" />
-									) : (
-										<LoginIcon />
-									)
-								}
-								onClick={() => loginMutation.mutate()}
-								disabled={loginMutation.isPending || isPolling}
-							>
-								{isPolling
-									? "Waiting for login..."
-									: loginMutation.isPending
-										? "Opening browser..."
-										: "Login with Claude"}
-							</Button>
-							{isPolling && (
-								<Alert
-									severity="info"
-									sx={{
-										fontSize: variant === "standalone" ? "0.8rem" : undefined,
-									}}
-								>
-									Complete the login in your browser. This page will update
-									automatically.
-								</Alert>
-							)}
-							{loginResult && (
-								<Alert severity={loginResult.success ? "success" : "error"}>
-									{loginResult.message}
-								</Alert>
-							)}
-						</Box>
-					)}
+						<ToggleButton value="subscription">
+							Claude Subscription
+						</ToggleButton>
+						<ToggleButton value="api_key">API Key</ToggleButton>
+					</ToggleButtonGroup>
+					<Typography
+						variant={variant === "standalone" ? "caption" : "body2"}
+						color="text.secondary"
+						sx={{ mt: 0.5, display: "block" }}
+					>
+						{config.authMode === "subscription"
+							? "Uses Claude Pro/Max subscription via CLI login (free with plan)"
+							: "Uses a direct Anthropic API key (pay-per-use billing)"}
+					</Typography>
 				</Box>
 			)}
 
-			{/* API Key mode */}
-			{config.authMode === "api_key" && (
+			{/* OpenAI API key — only when provider is OpenAI */}
+			{currentProvider === "openai" && (
+				<Box>
+					<Typography variant="subtitle2" gutterBottom>
+						OpenAI API Key
+					</Typography>
+					{config.hasOpenaiApiKey && (
+						<Box
+							sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1.5 }}
+						>
+							<Chip
+								label={config.maskedOpenaiApiKey || "Configured"}
+								color="success"
+								size="small"
+								variant="outlined"
+								sx={{ fontFamily: "monospace" }}
+							/>
+							<Button size="small" color="error" onClick={handleClearOpenaiKey}>
+								Clear
+							</Button>
+						</Box>
+					)}
+					<Box sx={{ display: "flex", gap: 1 }}>
+						<TextField
+							size="small"
+							type="password"
+							placeholder="sk-..."
+							value={openaiKeyInput}
+							onChange={(e) => setOpenaiKeyInput(e.target.value)}
+							sx={{ flex: 1 }}
+							fullWidth={variant === "standalone"}
+						/>
+						<Button
+							variant="outlined"
+							onClick={handleSaveOpenaiKey}
+							disabled={!openaiKeyInput.trim() || updateMutation.isPending}
+						>
+							{config.hasOpenaiApiKey ? "Update" : "Save"}
+						</Button>
+					</Box>
+					<Typography
+						variant="caption"
+						color="text.secondary"
+						sx={{ mt: 0.5, display: "block" }}
+					>
+						OpenAI has no subscription fallback — an API key is required.
+					</Typography>
+				</Box>
+			)}
+
+			{/* Subscription: CLI login (Anthropic only) */}
+			{currentProvider === "anthropic" &&
+				config.authMode === "subscription" && (
+					<Box>
+						<Box
+							sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1.5 }}
+						>
+							<Typography variant="subtitle2">CLI Login Status</Typography>
+							<Chip
+								icon={config.cliLoggedIn ? <CheckCircleIcon /> : <ErrorIcon />}
+								label={config.cliLoggedIn ? "Logged In" : "Not Logged In"}
+								color={config.cliLoggedIn ? "success" : "warning"}
+								size="small"
+								variant="outlined"
+							/>
+						</Box>
+						{config.cliLoggedIn ? (
+							<Button
+								variant="outlined"
+								color="error"
+								size="small"
+								startIcon={
+									logoutMutation.isPending ? (
+										<CircularProgress size={14} />
+									) : (
+										<LogoutIcon />
+									)
+								}
+								onClick={() => logoutMutation.mutate()}
+								disabled={logoutMutation.isPending}
+							>
+								Logout
+							</Button>
+						) : (
+							<Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+								<Button
+									variant="contained"
+									fullWidth={variant === "standalone"}
+									startIcon={
+										loginMutation.isPending || isPolling ? (
+											<CircularProgress size={16} color="inherit" />
+										) : (
+											<LoginIcon />
+										)
+									}
+									onClick={() => loginMutation.mutate()}
+									disabled={loginMutation.isPending || isPolling}
+								>
+									{isPolling
+										? "Waiting for login..."
+										: loginMutation.isPending
+											? "Opening browser..."
+											: "Login with Claude"}
+								</Button>
+								{isPolling && (
+									<Alert
+										severity="info"
+										sx={{
+											fontSize: variant === "standalone" ? "0.8rem" : undefined,
+										}}
+									>
+										Complete the login in your browser. This page will update
+										automatically.
+									</Alert>
+								)}
+								{loginResult && (
+									<Alert severity={loginResult.success ? "success" : "error"}>
+										{loginResult.message}
+									</Alert>
+								)}
+							</Box>
+						)}
+					</Box>
+				)}
+
+			{/* API Key mode (Anthropic only) */}
+			{currentProvider === "anthropic" && config.authMode === "api_key" && (
 				<Box>
 					<Typography variant="subtitle2" gutterBottom>
 						Anthropic API Key

@@ -185,21 +185,45 @@ class TradingAgent:
         self._cancel_event = asyncio.Event()
         self._session_id = resume_session_id or session_id
         self._resume_session_id = resume_session_id
+        # When the AppSettings provider is set to OpenAI, requests are
+        # routed through OpenAIAgentRunner instead of ClaudeSDKClient.
+        self._openai_runner: Any = None
+        self._provider: str = "anthropic"
 
     async def connect(self) -> None:
         """Initialize the SDK client and start a session.
 
         Reads auth configuration from AppSettings (DB) with env var fallback.
+        When the active provider is OpenAI, builds an ``OpenAIAgentRunner``
+        instead of the Claude SDK client.
         """
         from app.agent.auth import resolve_anthropic_api_key
         from app.api.v1.settings import FAMILY_TO_API_MODEL
-        from app.db.models.app_settings import AppSettings
+        from app.db.models.app_settings import AgentProvider, AppSettings
+
+        # Snapshot the provider first; OpenAI takes a different path entirely.
+        app_settings = await AppSettings.get_instance()
+        self._provider = app_settings.agent_provider.value
+        if app_settings.agent_provider == AgentProvider.OPENAI:
+            from app.agent.openai_client import OpenAIAgentRunner
+
+            api_model = (
+                FAMILY_TO_API_MODEL.get(app_settings.agent_model, app_settings.agent_model)
+                or "gpt-5.5"
+            )
+            self._openai_runner = OpenAIAgentRunner(
+                system_prompt=SYSTEM_PROMPT,
+                model=api_model,
+                allowed_tool_names=list(ALLOWED_TOOL_NAMES),
+                reasoning_effort=app_settings.agent_effort or None,
+                session_id=self._session_id,
+            )
+            await self._openai_runner.connect()
+            logger.info("Trading agent connected (provider=openai, model=%s)", api_model)
+            return
 
         server = create_trading_mcp_server()
-        app_settings, api_key = await asyncio.gather(
-            AppSettings.get_instance(),
-            resolve_anthropic_api_key(),
-        )
+        api_key = await resolve_anthropic_api_key()
 
         # Build ThinkingConfig from DB settings
         match app_settings.agent_thinking_mode:
@@ -242,7 +266,12 @@ class TradingAgent:
         )
 
     async def disconnect(self) -> None:
-        """Disconnect and clean up the CLI subprocess."""
+        """Disconnect and clean up the active provider client."""
+        if self._openai_runner is not None:
+            await self._openai_runner.disconnect()
+            self._openai_runner = None
+            logger.info("Trading agent disconnected (openai)")
+            return
         if self._client:
             await self._client.disconnect()
             self._client = None
@@ -251,14 +280,18 @@ class TradingAgent:
     def cancel(self) -> None:
         """Signal the running chat loop to stop after the current iteration."""
         self._cancel_event.set()
+        if self._openai_runner is not None:
+            self._openai_runner.cancel()
 
     def reset_cancel(self) -> None:
         """Clear the cancel signal so the next chat() call runs normally."""
         self._cancel_event.clear()
+        if self._openai_runner is not None:
+            self._openai_runner.reset_cancel()
 
     async def _ensure_connected(self) -> None:
         """Connect lazily for background workers using the shared agent instance."""
-        if not self._client:
+        if self._openai_runner is None and not self._client:
             await self.connect()
 
     async def chat(
@@ -279,6 +312,21 @@ class TradingAgent:
             The agent's final text response
         """
         await self._ensure_connected()
+
+        # OpenAI path delegates the whole turn to OpenAIAgentRunner. The
+        # runner mirrors our per-turn accumulator surface so callers
+        # (websocket/agent.py) can read tool_calls / tokens / model
+        # exactly like the Anthropic branch.
+        if self._openai_runner is not None:
+            response = await self._openai_runner.chat(user_message, on_event=on_event)
+            self._tool_calls_this_turn = list(self._openai_runner.tool_calls)
+            self._thinking_content_this_turn = self._openai_runner.thinking_content
+            self._partial_response_this_turn = self._openai_runner.partial_response
+            self._input_tokens = self._openai_runner.input_tokens
+            self._output_tokens = self._openai_runner.output_tokens
+            self._model_this_turn = self._openai_runner.model
+            self._session_id = self._openai_runner.session_id or self._session_id
+            return response
 
         self.reset_cancel()
         self._tool_calls_this_turn = []

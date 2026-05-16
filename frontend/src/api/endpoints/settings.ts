@@ -5,9 +5,12 @@
 import apiClient from "../client";
 
 export interface AgentConfig {
+	provider: string;
 	authMode: string;
 	hasApiKey: boolean;
 	maskedApiKey: string;
+	hasOpenaiApiKey: boolean;
+	maskedOpenaiApiKey: string;
 	model: string;
 	thinkingMode: string;
 	thinkingBudget: number;
@@ -16,8 +19,10 @@ export interface AgentConfig {
 }
 
 export interface AgentConfigUpdate {
+	provider?: string;
 	authMode?: string;
 	apiKey?: string;
+	openaiApiKey?: string;
 	model?: string;
 	thinkingMode?: string;
 	thinkingBudget?: number;
@@ -25,6 +30,12 @@ export interface AgentConfigUpdate {
 }
 
 export interface AgentModelOption {
+	provider: string;
+	value: string;
+	label: string;
+}
+
+export interface AgentProviderOption {
 	value: string;
 	label: string;
 }
@@ -167,9 +178,12 @@ function transformAgentConfig(data: Record<string, unknown>): AgentConfig {
 			: "high";
 
 	return {
+		provider: (data.provider as string) ?? "anthropic",
 		authMode: data.auth_mode as string,
 		hasApiKey: data.has_api_key as boolean,
 		maskedApiKey: data.masked_api_key as string,
+		hasOpenaiApiKey: (data.has_openai_api_key as boolean) ?? false,
+		maskedOpenaiApiKey: (data.masked_openai_api_key as string) ?? "",
 		model: data.model as string,
 		thinkingMode,
 		thinkingBudget,
@@ -222,6 +236,17 @@ export const settingsApi = {
 			"/settings/agent/models",
 		);
 		return response.data.map((entry) => ({
+			provider: (entry.provider as string) ?? "anthropic",
+			value: entry.value as string,
+			label: entry.label as string,
+		}));
+	},
+
+	async getAgentProviders(): Promise<AgentProviderOption[]> {
+		const response = await apiClient.get<Array<Record<string, unknown>>>(
+			"/settings/agent/providers",
+		);
+		return response.data.map((entry) => ({
 			value: entry.value as string,
 			label: entry.label as string,
 		}));
@@ -229,8 +254,11 @@ export const settingsApi = {
 
 	async updateAgentConfig(update: AgentConfigUpdate): Promise<AgentConfig> {
 		const payload: Record<string, unknown> = {};
+		if (update.provider !== undefined) payload.provider = update.provider;
 		if (update.authMode !== undefined) payload.auth_mode = update.authMode;
 		if (update.apiKey !== undefined) payload.api_key = update.apiKey;
+		if (update.openaiApiKey !== undefined)
+			payload.openai_api_key = update.openaiApiKey;
 		if (update.model !== undefined) payload.model = update.model;
 		if (update.thinkingMode !== undefined)
 			payload.thinking_mode = update.thinkingMode;

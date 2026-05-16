@@ -41,6 +41,10 @@ function capitalize(s: string): string {
 
 /** Map model value to short display label */
 function modelDisplayLabel(model: string): string {
+	if (model.startsWith("gpt-")) {
+		if (model.includes("5-5") || model.includes("5.5")) return "GPT 5.5";
+		return model.toUpperCase();
+	}
 	if (model.includes("1m")) {
 		return model.includes("opus") ? "Opus 1M" : "Sonnet 1M";
 	}
@@ -51,6 +55,7 @@ function modelDisplayLabel(model: string): string {
 
 /** Dot color per model family */
 function modelDotColor(model: string): string {
+	if (model.startsWith("gpt-")) return "#10a37f"; // OpenAI green
 	if (model.includes("1m")) {
 		return model.includes("opus") ? "#e879f9" : "#fbbf24";
 	}
@@ -76,6 +81,10 @@ function effortDotColor(effort: string): string {
 
 /** Context window size per model family (approximate) */
 function contextWindowSize(model: string): number {
+	if (model.startsWith("gpt-")) {
+		// GPT-5 family ships with a 400k context window.
+		return 400_000;
+	}
 	if (model.includes("1m")) return 1_000_000;
 	if (model.includes("opus")) return 200_000;
 	if (model.includes("sonnet")) return 200_000;

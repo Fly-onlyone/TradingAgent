@@ -3,6 +3,13 @@
 Enforces `SUPPRESS_CLI_HOOKS` (required per `.claude/rules/code-guide.md`
 "Chat-Session Features" leg) and centralizes API-key resolution. Callers
 retain ownership of the lifecycle — `connect()`, `query()`, `disconnect()`.
+
+Provider routing: ``build_provider_client()`` dispatches to either the
+Anthropic-backed ``ClaudeSDKClient`` or the OpenAI-backed lightweight
+text client based on ``AppSettings.agent_provider``. Tool-use agents
+(TradingAgent) handle their own provider branching because the OpenAI
+runtime requires MCP-tool translation; this helper covers the
+text-only side services (NewsSummarizer, TaskMerger fallback, etc.).
 """
 
 from __future__ import annotations
