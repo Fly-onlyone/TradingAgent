@@ -28,7 +28,7 @@ from app.db.models.agent_session import (
     persist_session_message,
     persist_session_message_doc,
 )
-from app.db.models.app_settings import AgentAuthMode, AppSettings
+from app.db.models.app_settings import AgentAuthMode, AgentProvider, AppSettings
 from app.db.models.notification import NotificationType
 from app.db.models.user import User
 from app.services.notification_service import get_notification_service
@@ -249,6 +249,14 @@ async def agent_chat_websocket(
     connection_id = uuid.uuid4().hex
     set_active_user_id(str(user.id))
     set_active_connection_id(connection_id)
+
+    # ATK ContextVars — atk_pretool_hook reads these to know the user / session
+    # the tool call belongs to. asyncio.create_task() inherits the current
+    # context by default (Python 3.11+), so just setting them here propagates
+    # to _process_chat and downstream hook callbacks.
+    from app.agent.context import current_user_id_var
+
+    current_user_id_var.set(str(user.id))
 
     agent = None
     session = None
@@ -503,8 +511,20 @@ async def agent_chat_websocket(
             rehydrate_session_history=prior_message_count > 0 and not has_persisted_sdk_session,
         )
         set_active_session_id(str(session.id))
+        # Carry the session id into the ATK ContextVar — the risk hook reads
+        # current_session_id_var to populate Order.agent_session_id on stubs.
+        from app.agent.context import current_session_id_var
+
+        current_session_id_var.set(str(session.id))
         chat_cancel_reason = None
-        chat_task = asyncio.create_task(_process_chat(agent_message))
+        # Explicit context copy: belt-and-braces in case a future asyncio impl
+        # changes default behavior. Today create_task() copies by default.
+        import contextvars as _cv
+
+        chat_task = asyncio.create_task(
+            _process_chat(agent_message),
+            context=_cv.copy_context(),
+        )
 
     async def _send_and_persist_assistant_message(
         content: str,
@@ -593,7 +613,10 @@ async def agent_chat_websocket(
             app_settings = await AppSettings.get_instance()
             auth_error: str | None = None
 
-            if app_settings.agent_auth_mode == AgentAuthMode.SUBSCRIPTION:
+            if app_settings.agent_provider == AgentProvider.OPENAI:
+                if not app_settings.get_openai_api_key() and not settings.openai_api_key:
+                    auth_error = "No OpenAI API key configured. Use the gear icon to add one."
+            elif app_settings.agent_auth_mode == AgentAuthMode.SUBSCRIPTION:
                 from app.api.v1.settings import _check_cli_login
 
                 if not _check_cli_login():

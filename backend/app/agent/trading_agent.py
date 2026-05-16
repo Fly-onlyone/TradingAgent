@@ -44,6 +44,7 @@ from claude_agent_sdk import (
     ResultMessage,
     TextBlock,
     ThinkingBlock,
+    ToolResultBlock,
     ToolUseBlock,
 )
 from claude_agent_sdk.types import StreamEvent
@@ -205,21 +206,32 @@ class TradingAgent:
         app_settings = await AppSettings.get_instance()
         self._provider = app_settings.agent_provider.value
         if app_settings.agent_provider == AgentProvider.OPENAI:
-            from app.agent.openai_client import OpenAIAgentRunner
+            from app.agent.openai_client import (
+                OpenAIAgentRunner,
+                translate_thinking_to_openai_effort,
+            )
 
             api_model = (
                 FAMILY_TO_API_MODEL.get(app_settings.agent_model, app_settings.agent_model)
                 or "gpt-5.5"
             )
+            openai_effort = translate_thinking_to_openai_effort(
+                app_settings.agent_thinking_mode,
+                app_settings.agent_effort,
+            )
             self._openai_runner = OpenAIAgentRunner(
                 system_prompt=SYSTEM_PROMPT,
                 model=api_model,
                 allowed_tool_names=list(ALLOWED_TOOL_NAMES),
-                reasoning_effort=app_settings.agent_effort or None,
+                reasoning_effort=openai_effort,
                 session_id=self._session_id,
             )
             await self._openai_runner.connect()
-            logger.info("Trading agent connected (provider=openai, model=%s)", api_model)
+            logger.info(
+                "Trading agent connected (provider=openai, model=%s, reasoning_effort=%s)",
+                api_model,
+                openai_effort or "<model-default>",
+            )
             return
 
         server = create_trading_mcp_server()
@@ -237,14 +249,55 @@ class TradingAgent:
             case _:
                 thinking = {"type": "adaptive"}
 
+        # ATK wire-up: mount the okx-trade-mcp stdio server alongside our in-process
+        # "trading" server. claude-agent-sdk spawns its own child from this config.
+        # HookMatcher routes every mcp__okx__* call through atk_pretool_hook
+        # (fail-closed risk gate). See backend/app/agent/okx_atk/risk_hook.py.
+        from claude_agent_sdk.types import HookMatcher
+
+        from app.agent.context import current_user_id_var
+        from app.agent.okx_atk.process_manager import get_manager as _get_atk_manager
+        from app.agent.okx_atk.risk_hook import atk_pretool_hook
+        from app.agent.okx_atk.tool_curation import (
+            MCP_SERVER_NAME as _ATK_SERVER,
+        )
+        from app.agent.okx_atk.tool_curation import (
+            prefixed_tool_names as _atk_prefixed,
+        )
+
+        atk_argv = _get_atk_manager().stdio_argv()
+
+        async def _atk_hook_adapter(input_data: dict, _tool_use_id: str, _ctx: object) -> dict:
+            # claude-agent-sdk hook signature → atk_pretool_hook kwargs.
+            return await atk_pretool_hook(
+                tool_name=input_data.get("tool_name", ""),
+                tool_input=input_data.get("tool_input", {}),
+                user_id=current_user_id_var.get(None),
+            )
+
         options = ClaudeAgentOptions(
             system_prompt=SYSTEM_PROMPT,
-            mcp_servers={"trading": server},
-            allowed_tools=ALLOWED_TOOL_NAMES,
+            mcp_servers={
+                "trading": server,
+                _ATK_SERVER: {
+                    "type": "stdio",
+                    "command": atk_argv[0],
+                    "args": atk_argv[1:],
+                },
+            },
+            allowed_tools=[*ALLOWED_TOOL_NAMES, *_atk_prefixed()],
             disallowed_tools=DISALLOWED_BUILTIN_TOOLS,
             permission_mode="bypassPermissions",
             max_turns=10,
             extra_args=SUPPRESS_CLI_HOOKS,
+            hooks={
+                "PreToolUse": [
+                    HookMatcher(
+                        matcher=f"mcp__{_ATK_SERVER}__*",
+                        hooks=[_atk_hook_adapter],
+                    ),
+                ],
+            },
             model=FAMILY_TO_API_MODEL.get(app_settings.agent_model, app_settings.agent_model)
             or None,
             thinking=thinking,
@@ -379,6 +432,13 @@ class TradingAgent:
                                     "arguments": _truncate_tool_argument(block.input),
                                 }
 
+                                # Carry tool_use_id into ContextVars so the ATK risk hook
+                                # can populate Order.tool_use_id at insert time
+                                # (Chat-Session leg 4 — O(1) PK lookup in mirror).
+                                from app.agent.context import current_tool_use_id_var
+
+                                current_tool_use_id_var.set(block.id)
+
                                 # Merge captured result from the MCP tool buffer
                                 tool_result = pop_tool_result(block.name)
                                 if tool_result:
@@ -400,6 +460,37 @@ class TradingAgent:
                                         await on_event({"type": "chart_data", "data": chart_data})
 
                                 logger.info(f"Tool called: {block.name}")
+
+                            elif isinstance(block, ToolResultBlock):
+                                # External MCP tools (ATK) don't push into our
+                                # in-process _tool_results buffer. Backfill
+                                # result_summary on the matching ToolUseBlock so
+                                # the persisted bubble carries the OKX response.
+                                _result_text = None
+                                content = getattr(block, "content", None)
+                                if isinstance(content, str):
+                                    _result_text = content
+                                elif isinstance(content, list):
+                                    parts: list[str] = []
+                                    for item in content:
+                                        text = getattr(item, "text", None)
+                                        if isinstance(text, str):
+                                            parts.append(text)
+                                        elif isinstance(item, dict) and "text" in item:
+                                            parts.append(str(item["text"]))
+                                    _result_text = "\n".join(parts) if parts else None
+                                if _result_text:
+                                    truncated = _result_text[:_MAX_TOOL_ARGUMENT_STRING_CHARS]
+                                    if len(_result_text) > _MAX_TOOL_ARGUMENT_STRING_CHARS:
+                                        truncated += _TRUNCATION_MARKER
+                                    tool_use_id = getattr(block, "tool_use_id", None)
+                                    for _tc in reversed(self._tool_calls_this_turn):
+                                        if (
+                                            _tc.get("id") == tool_use_id
+                                            and "result_summary" not in _tc
+                                        ):
+                                            _tc["result_summary"] = truncated
+                                            break
 
                             elif isinstance(block, TextBlock):
                                 if not self._saw_text_delta_this_turn:
