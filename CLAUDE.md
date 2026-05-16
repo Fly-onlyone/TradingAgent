@@ -2,144 +2,100 @@
 
 This file provides guidance to Coding agent when working with this project.
 
+## Documentation Index — read the vault first
+
+Primary documentation source: **[`obsidian/_HOME.md`](obsidian/_HOME.md)** — a 356-note
+Obsidian vault covering architecture, modules, patterns, integrations, and operations.
+Open as an Obsidian vault, or browse the markdown directly.
+
+Pick the zone by what you're about to do:
+
+| Task                                  | Zone to read first                                                                                                       |
+|---------------------------------------|--------------------------------------------------------------------------------------------------------------------------|
+| Bug fix in a Python module            | [`obsidian/01-Backend/<module>/_index.md`](obsidian/01-Backend/_index.md)                                                |
+| Bug fix in a React module             | [`obsidian/02-Frontend/<module>/_index.md`](obsidian/02-Frontend/_index.md)                                              |
+| New feature touching the agent or RAG | [`obsidian/00-Architecture/`](obsidian/00-Architecture/_index.md) + [`obsidian/04-Patterns/`](obsidian/04-Patterns/_index.md) |
+| Anything chat-session related         | **[`obsidian/04-Patterns/Chat-Session Checklist.md`](obsidian/04-Patterns/Chat-Session%20Checklist.md)** (10-leg list)    |
+| Adding an external dependency         | [`obsidian/03-Integrations/`](obsidian/03-Integrations/_index.md)                                                        |
+| Build / dev server / release / debug  | [`obsidian/05-Operations/`](obsidian/05-Operations/_index.md)                                                            |
+| Unfamiliar acronym or term            | [`obsidian/06-Glossary/`](obsidian/06-Glossary/_index.md)                                                                |
+
 ## External References
 
-- **Notion task board**: See [`docs/NOTION.md`](docs/NOTION.md) for database schema, status values, and property
-  definitions
-- **Rule files**: `.claude/rules/architecture.md` (data flow, RAG pipeline, knowledge graph),
-  `.claude/rules/code-guide.md` (CSS zoom handling, Framer Motion variants, AI auth pattern, chat-session checklist),
-  `.claude/rules/documentation-style.md` (docstring rules). Read these before designing frontend components,
-  chat-session features, or AI service integrations.
-
-## Build Commands
-
-| Task                      | Command                         |
-|---------------------------|---------------------------------|
-| Install backend deps      | `uv sync`                       |
-| Install frontend deps     | `cd frontend && bun install`    |
-| Install git hooks         | `uv run pre-commit install`     |
-| Run dev server (backend)  | `uv run python run.py`          |
-| Run dev server (frontend) | `cd frontend && bun run dev`    |
-| Test backend              | `uv run pytest`                 |
-| Test frontend             | `cd frontend && bun run test`   |
-| Lint backend              | `uv run ruff check`             |
-| Lint frontend             | `cd frontend && bun run lint`   |
-| Format backend            | `uv run ruff format`            |
-| Format frontend           | `cd frontend && bun run format` |
-| Check frontend            | `cd frontend && bun run check`  |
-
-## Tauri (v2) Quick Notes
-
-- Run desktop dev: `cd frontend && bun run tauri:dev` (or `npm run tauri:dev`)
-- Build desktop app: `cd frontend && bun run tauri:build` (or `npm run tauri:build`)
-- Required on Windows:
-    - Rust (`cargo`) available in PATH (`%USERPROFILE%\.cargo\bin`)
-    - Visual Studio 2022 Build Tools with C++ workload (`MSVC v143` + Windows SDK)
-- Tauri v2 config note:
-    - Do not use `plugins.shell.scope` in `tauri.conf.json`
-    - Keep `plugins.shell` minimal (e.g. `open`)
-    - Put shell command permissions in `src-tauri/capabilities/default.json`
-
-## Releases
-
-- Automated via **Release Please** (`.github/workflows/release-please.yml`). Pushing conventional
-  commits to `master` opens a `chore(release): vX.Y.Z` PR that bumps versions in `pyproject.toml`,
-  `frontend/package.json`, `frontend/src-tauri/Cargo.toml`, and `frontend/src-tauri/tauri.conf.json`,
-  and updates `CHANGELOG.md`. Merge that PR to ship — the tag push triggers `tauri-build.yml`,
-  which attaches MSI/DMG/AppImage/deb bundles to the GitHub Release.
-- **Don't hand-edit `CHANGELOG.md` or version strings** — Release Please owns them. Source of truth
-  for the last-released version is `.release-please-manifest.json`.
-- **Conventional commits are required.** PR titles are linted by `.github/workflows/commitlint.yml`
-  (squash-merge → PR title becomes the commit message). Per-commit format is enforced locally via
-  `conventional-pre-commit`. Accepted types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`,
-  `build`, `ci`, `chore`, `revert`, `style`, `deps`. Only `feat`/`fix`/`perf`/`revert`/`deps`/
-  `refactor` appear in the changelog; the rest are `hidden: true` in `release-please-config.json`.
-
-## Sentry
-
-Separate Sentry projects per layer (org: `fly-theonlyone`). Env vars live in `.env.example`.
-
-- **Backend** (`trading-agent-backend`): `sentry-sdk[fastapi]`, conditional init when `SENTRY_DSN` is set. FastAPI auto-integration + `LoggingIntegration` (ERROR+ as events, INFO+ as breadcrumbs). Test endpoint: `POST /api/v1/admin/sentry-test` (superuser).
-- **Frontend** (`trading-agent-frontend`): `@sentry/react`, conditional init when `VITE_SENTRY_DSN` is set. `Sentry.ErrorBoundary` wraps the React tree in `main.tsx`. Source maps uploaded via `@sentry/vite-plugin` at build time when `SENTRY_AUTH_TOKEN` is set.
+- **Notion task board**: See [`docs/NOTION.md`](docs/NOTION.md) for database schema, status values, and properties.
+- **Rule files**: `.claude/rules/architecture.md`, `.claude/rules/code-guide.md`, `.claude/rules/documentation-style.md` — thin pointers into the vault for architecture/patterns/style.
 
 ## Project Overview
 
-**Trading agent** is a full-stack application for automated cryptocurrency trading with AI-powered analysis.
+**Trading Agent** — full-stack AI-powered cryptocurrency trading platform.
 
-- **Backend**: FastAPI + Beanie (MongoDB) on Python 3.11+, managed by `uv`
-- **Frontend**: React 19 + Vite + TanStack (Router/Query) + Zustand + MUI 6, managed by `bun`
-- **Desktop shell**: Tauri v2 wraps the frontend; backend runs as a sidecar binary
+- Backend: FastAPI + Beanie (MongoDB), Python 3.11+, managed by `uv`
+- Frontend: React 19 + Vite + TanStack (Router/Query) + Zustand + MUI 6, managed by `bun`
+- Desktop shell: Tauri v2 wraps the frontend; Python backend runs as a sidecar binary
 
-## Architecture Notes
+Full stack and module map: [`obsidian/_HOME.md`](obsidian/_HOME.md).
 
-- **Backend port**: **7001** in dev (`uv run python run.py`), **7000** when launched with
-  `--serve` (Tauri production sidecar). See `run.py:32`.
-- **Dev entry**: `uv run python run.py` starts both frontend + backend. Reload uses
-  `watchfiles.watch()` + `subprocess.Popen` — NOT uvicorn `--reload` (its `multiprocessing.spawn`
-  children create `SelectorEventLoop` before app code runs, breaking subprocess tools).
-- **Windows event loop**: `run.py` and `backend/app/main.py` set `WindowsProactorEventLoopPolicy()`
-  at module level because `SelectorEventLoop` can't spawn subprocesses, which the Claude Agent SDK
-  needs. Keep that policy set before any `asyncio.run()` in new entry points.
-- **Auth**: JWT-based with configurable token expiry and transparent refresh. Superuser check via
-  `get_current_superuser`
-  dependency (defined in auth dependency files)
-    - Token expiry: configurable via `AppSettings.access_token_expire_minutes` (DB) > `ACCESS_TOKEN_EXPIRE_MINUTES` (
-      env) > 0 (no expiry)
-    - `POST /auth/refresh` — re-issues token from valid current token
-    - `POST /auth/change-password` — invalidates all prior tokens via `iat` vs `password_changed_at` check
-    - Frontend interceptor auto-refreshes on 401 before logging out
-    - Encryption: Fernet (AES-128-CBC + HMAC-SHA256) for secrets at rest, keys from `SECRETS_ENCRYPTION_KEYS` env var
+## Quickstart commands
 
-## Key Patterns
+| Task              | Command                                                                |
+|-------------------|------------------------------------------------------------------------|
+| Install backend   | `uv sync`                                                              |
+| Install frontend  | `cd frontend && bun install`                                           |
+| Dev server (both) | `uv run python run.py`                                                 |
+| Run tests         | `uv run pytest` / `cd frontend && bun run test`                        |
+| Lint / format     | `uv run ruff check` / `cd frontend && bun run lint && bun run format`  |
 
-- **Production debugging**: When investigating production issues, query the production MongoDB (`trading_agent` DB) and
-  check the `logs` collection first. Use the MongoDB MCP tools (`find`, `aggregate`) to inspect task state, error
-  history, and app settings before reading code
-- **Backend model**: Beanie `Document` with `class Settings` for collection name + indexes. See `log.py`
-- **Backend API**: Router with Pydantic request/response schemas. Aggregation uses `get_pymongo_collection()` (not the
-  deprecated `get_motor_collection`)
-- **DB session**: All models must be registered in `backend/app/db/session.py` `document_models` list
-- **API router registration**: In `backend/app/api/v1/__init__.py` — order matters (specific prefixes before generic
-  `/admin`). Sub-prefixes (e.g. `/strategies/import`) must be registered before their parent (`/strategies`)
-- **Strategy import** (`backend/app/services/strategy_extractor.py`): Two-step extract-then-confirm
-  flow at `/api/v1/strategies/import/`. Saves both `Strategy` + `StrategyKnowledge` with embedding.
-- **Strategy auto-discovery** (`backend/app/services/strategy_discovery.py`): Scheduled crawl of
-  news sources flagged `strategy_extraction=True` → AI extraction → dedupe → `StrategyKnowledge`
-  (RAG only, not executable). Config lives in `AppSettings` (`auto_discover_*`); scheduler in
-  `backend/app/agent/task_scheduler.py`.
-- **Frontend types**: snake_case from API → camelCase in TS via transform functions in endpoint files
-- **Frontend state**: Zustand stores with devtools middleware. Pattern: `store/xxxStore.ts`
-- **Query options**: Centralized in `frontend/src/api/queryOptions/admin.ts` with shared `ADMIN_STALE_TIME`/
-  `ADMIN_GC_TIME`
-- **Route pages**: TanStack Router file-based routing. `@tanstack/router-plugin` in `frontend/vite.config.ts`
-  auto-generates the route tree during dev/build, so manual `router-cli generate` is usually unnecessary.
-- **Sidebar nav**: Items defined as arrays in `Sidebar.tsx` — `adminGroup` for admin section
-- **RAG retrieval pipeline**: `_vectorized_search()` in `retriever.py` — Motor projection loads only `_id` +
-  `embedding`,
-  NumPy matrix dot product scores all docs at once, time-decay weighting applied per-collection, then top-k full docs
-  fetched. Each search method runs hybrid (vector + text via `_text_search()`), merges via `fusion.py` RRF, then
-  optionally re-ranks via `reranker.py` (FlashRank, controlled by `AppSettings.reranking_enabled`)
-- **RAG scoring**: Search methods return `list[tuple[Document, float]]` — all consumers (knowledge_tools, news_tools,
-  API endpoints) unpack `(doc, score)` tuples. Scores include `relevance_score` in agent tool responses
-- **Contextual embeddings**: `context_generator.py` uses Claude Haiku to prepend 1-2 sentence context prefix before
-  embedding (write-time). `context_prefix` field on all 4 knowledge models. Embedding generators prepend it
-  automatically
-- **Knowledge graph**: `KnowledgeEdge` model in `knowledge_graph.py`, `graph.py` builds edges during document creation.
-  Registered in `session.py`
-- **Document chunking**: `chunker.py` splits long text into 200-word chunks with 50-word overlap. `KnowledgeChunk` model
-  stores chunks with parent references. Registered in `session.py`
-- **RAG evaluation**: `evaluator.py` computes Precision@k, Recall@k, MRR, NDCG@k. Tests in `test_rag_evaluation.py`
+Full command table: [`obsidian/05-Operations/Build Commands.md`](obsidian/05-Operations/Build%20Commands.md).
 
-## Linting Rules
+## Critical Operational Rules
 
-- **Ruff**: Enforces `X | None` over `Optional[X]`, `datetime.UTC` over `timezone.utc`, sorted imports. Run
-  `ruff check --fix` to auto-fix
-- **Biome**: Enforces tabs (not spaces), double quotes, sorted imports. PyCharm reformatter uses spaces — always run
-  `biome check --write` AFTER `reformat_file` to reconcile
-- **Skeleton keys**: Biome enforces `noArrayIndexKey` even for loading placeholders. Use stable string keys for
-  skeleton rows/cards instead of array indexes.
-- **Hook ordering**: Biome enforces `useHookAtTopLevel` — early returns (like auth guards) must come AFTER all hooks,
-  not before
+These are gotchas that silently break builds, ports, or features if forgotten. Everything
+else is in the vault.
+
+- **Backend port**: **7001** in dev (`uv run python run.py`); **7000** when launched as the Tauri sidecar (`--serve`). See [`obsidian/05-Operations/Backend Port 7000 vs 7001.md`](obsidian/05-Operations/Backend%20Port%207000%20vs%207001.md).
+- **Windows event loop**: `run.py` and `backend/app/main.py` set `WindowsProactorEventLoopPolicy()` at module level — `SelectorEventLoop` can't spawn subprocesses, which the Claude Agent SDK needs. Set it before any `asyncio.run()` in new entry points.
+- **Dev reload**: uses `watchfiles.watch()` + `subprocess.Popen`, **NOT** `uvicorn --reload` (its `multiprocessing.spawn` children create `SelectorEventLoop` before app code runs). See [`obsidian/05-Operations/Dev Server Architecture.md`](obsidian/05-Operations/Dev%20Server%20Architecture.md).
+- **JWT auth**: frontend interceptor auto-refreshes on 401 before logging out. `change-password` invalidates all prior tokens via `iat` vs `password_changed_at`. Encryption keys come from `SECRETS_ENCRYPTION_KEYS` env var (Fernet). See [`obsidian/00-Architecture/JWT Auth Flow.md`](obsidian/00-Architecture/JWT%20Auth%20Flow.md).
+- **Production debugging**: query MongoDB `logs` collection first (use MongoDB MCP `find` / `aggregate`) before reading code. See [`obsidian/05-Operations/Production Debugging Checklist.md`](obsidian/05-Operations/Production%20Debugging%20Checklist.md).
+- **DB models**: all Beanie `Document` classes must be registered in `backend/app/db/session.py` `document_models` list, or Beanie won't see them.
+- **API router order**: in `backend/app/api/v1/__init__.py`, specific prefixes before generic `/admin`; sub-prefixes (e.g. `/strategies/import`) before parents (`/strategies`).
+- **Strategy import**: `/api/v1/strategies/import/` is a **two-step** extract-then-confirm flow. Saves both `Strategy` + `StrategyKnowledge` with embedding.
+- **Strategy shadow doc**: when a scheduler creates `StrategyKnowledge`, also create a `Strategy` doc owned by a real user. `user_id=None` silently skips the shadow and the Strategies page won't render it.
+- **Aggregations**: use `get_pymongo_collection()`, **not** the deprecated `get_motor_collection`.
+- **LLM provider**: `AppSettings.agent_provider` (enum: `ANTHROPIC` | `OPENAI`) selects the runtime. Anthropic supports dual auth (subscription via [`claude-agent-sdk`](obsidian/03-Integrations/claude-agent-sdk.md) OR API key); OpenAI is API-key only. `openai_api_key` is encrypted in `SECRET_FIELD_NAMES`. The main agent dispatch lives in `backend/app/agent/trading_agent.py`; all side services must use the `create()` factory from [`obsidian/04-Patterns/AI Service Auth.md`](obsidian/04-Patterns/AI%20Service%20Auth.md). Never hardcode model IDs in services.
+- **ATK is the trade execution source of truth**: OKX Agent Trade Kit (Node MCP server `@okx_ai/okx-trade-mcp`) is mounted by both runtimes — Anthropic via `ClaudeAgentOptions.mcp_servers`, OpenAI via `backend/app/agent/okx_atk/openai_bridge.py`. **Never add a write method to `OKXClient`** — it is now READ-only (powers `services.order_mirror` + chart endpoints). The risk gate (`backend/app/agent/okx_atk/risk_hook.py`) is FAIL-CLOSED: it reads `RiskManager.assess_trade_risk().recommendation == "AVOID"` and denies; place tools with no recognized size alias (`SIZE_ALIASES` in `tool_curation.py`) are denied. Add new ATK write tools to one of `ATK_PLACE_TOOLS` / `ATK_CANCEL_TOOLS` / `ATK_TRANSFER_TOOLS` / `ATK_LEVERAGE_TOOLS` or they fail-closed. Sandbox toggle quiesces in-flight writes via `process_manager.is_accepting()` and rewrites `~/.okx/config.toml`. Agent system prompt requires `clOrdId = "s<24hex-session>-<4hex-nonce>"` so the mirror can O(1) update the originating chat-session tool-call bubble. Tauri production bundles ATK as a per-arch sidecar under `frontend/src-tauri/binaries/`; dev uses `npm install -g @okx_ai/okx-trade-mcp@1.3`.
+
+## Tauri (v2) Gotchas
+
+- Windows build deps: Rust (`%USERPROFILE%\.cargo\bin` on PATH) + Visual Studio 2022 Build Tools with C++ workload (`MSVC v143` + Windows SDK).
+- **Do not** use `plugins.shell.scope` in `tauri.conf.json` (v2 ignores it). Keep `plugins.shell` minimal (`open` only). Shell command permissions live in `src-tauri/capabilities/default.json`.
+
+Full Tauri + sidecar reference: [`obsidian/03-Integrations/Tauri v2.md`](obsidian/03-Integrations/Tauri%20v2.md), [`obsidian/02-Frontend/tauri/_index.md`](obsidian/02-Frontend/tauri/_index.md).
+
+## Releases
+
+**Release Please owns** versions (`pyproject.toml`, `frontend/package.json`,
+`frontend/src-tauri/Cargo.toml`, `frontend/src-tauri/tauri.conf.json`) and `CHANGELOG.md`.
+Don't hand-edit any of them. Source of truth: `.release-please-manifest.json`.
+
+**Conventional commits required** — enforced by `commitlint.yml` + `conventional-pre-commit`.
+Only `feat` / `fix` / `perf` / `revert` / `deps` / `refactor` appear in the changelog.
+
+Full workflow: [`obsidian/05-Operations/Release Please Workflow.md`](obsidian/05-Operations/Release%20Please%20Workflow.md), [`obsidian/05-Operations/Conventional Commits.md`](obsidian/05-Operations/Conventional%20Commits.md).
+
+## Sentry
+
+Two projects under org `fly-theonlyone` — backend (`trading-agent-backend`) and frontend (`trading-agent-frontend`). Env vars in `.env.example`. Backend test endpoint: `POST /api/v1/admin/sentry-test` (superuser).
+
+Setup details: [`obsidian/03-Integrations/Sentry Backend.md`](obsidian/03-Integrations/Sentry%20Backend.md), [`obsidian/03-Integrations/Sentry Frontend.md`](obsidian/03-Integrations/Sentry%20Frontend.md), [`obsidian/05-Operations/Sentry Setup.md`](obsidian/05-Operations/Sentry%20Setup.md).
+
+## Linting Gotchas
+
+- **Skeleton keys**: Biome enforces `noArrayIndexKey` **even for loading placeholders** — use stable string keys for skeleton rows/cards, not array indexes.
+- **Hook ordering**: Biome enforces `useHookAtTopLevel` — early returns (auth guards) must come **after** all hooks, not before.
+- **PyCharm reformat → Biome**: PyCharm uses spaces; Biome enforces tabs. Always run `biome check --write` **after** any PyCharm `reformat_file`.
+
+Full rule reference: [`obsidian/05-Operations/Ruff Rules.md`](obsidian/05-Operations/Ruff%20Rules.md), [`obsidian/05-Operations/Biome Rules.md`](obsidian/05-Operations/Biome%20Rules.md).
 
 ## Context7 IDs
 

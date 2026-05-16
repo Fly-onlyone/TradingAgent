@@ -1,180 +1,56 @@
 # Code Guide
 
-## Code Patterns
+Five non-obvious patterns this codebase requires. Full tables, examples, and rationale
+live in the Obsidian vault — links below.
 
-### Pattern: CSS Zoom Handling
+### CSS Zoom Handling
 
-**When to Apply**: Any frontend component using MUI `<Select>`, `<Menu>`, popovers, or mouse
-coordinates — the app uses CSS `zoom` for UI scaling, which breaks `getBoundingClientRect()`-based
-positioning.
+**When**: any frontend component using MUI `<Select>`, `<Menu>`, popovers, or mouse coords.
+**Don't**: use plain MUI `<Select>` or `anchorEl`-based `<Menu>` — always use the zoom-aware variants.
+→ [obsidian/04-Patterns/CSS Zoom Handling.md](../../obsidian/04-Patterns/CSS%20Zoom%20Handling.md)
+([ZoomAwareSelect](../../obsidian/04-Patterns/ZoomAwareSelect%20Pattern.md),
+[useZoomAwareMenu](../../obsidian/04-Patterns/useZoomAwareMenu%20Pattern.md))
 
-**Quick reference:**
+### Frontend Component Animations
 
-| Component Type | Solution | Import |
-|---|---|---|
-| `<Select>` dropdown | Use `<ZoomAwareSelect>` (drop-in replacement) | `@/components/common/ZoomAwareSelect` |
-| `<Menu>` anchored to button | Use `useZoomAwareMenu()` hook | `@/hooks/useZoomAwareMenu` |
-| Popover (manual) | Divide `getBoundingClientRect()` coords by `uiScale` | `@/store/uiStore` |
-| Mouse position for effects | Divide `e.clientX`/`e.clientY` by `uiScale` | `@/store/uiStore` |
-| Framer Motion `MotionValue` cursor | `useTransform(x, v => v / uiScale)` before `useSpring` | `framer-motion` + `@/store/uiStore` |
+**When**: every new React component in `frontend/src/`.
+**Don't**: create ad-hoc spring values — reuse variants from `frontend/src/utils/animations/variants.ts`. Always respect `useReducedMotion()`.
+→ [obsidian/04-Patterns/Framer Motion Variants.md](../../obsidian/04-Patterns/Framer%20Motion%20Variants.md)
 
-**Key rules:**
+### AI Service Auth (Provider + Auth Mode)
 
-- **Never** use plain MUI `<Select>` or `anchorEl`-based `<Menu>` — always use the zoom-aware variants
-- Global theme overrides handle `MuiPopper` (with child re-zoom) and `MuiTooltip` automatically
-- CSS vars `--ui-zoom` / `--ui-zoom-inverse` are available for custom overrides
-- **Safe patterns** (no fix needed): ratio math like `(clientX - rect.left) / rect.width`, offsets within same parent
+**When**: any service that calls Claude/Anthropic OR OpenAI APIs.
+**Don't**: instantiate `Anthropic(api_key=...)`, `AsyncAnthropic(...)`, or `openai.OpenAI(...)` directly — always use the `create()` async factory. It resolves `AppSettings.agent_provider` first, then the matching key via `resolve_active_provider_api_key()`. Three runtime configs: Anthropic+API-key, Anthropic+subscription ([`claude-agent-sdk`](../../obsidian/03-Integrations/claude-agent-sdk.md)), or OpenAI+API-key. Never hardcode model IDs — read from settings.
+→ [obsidian/04-Patterns/AI Service Auth.md](../../obsidian/04-Patterns/AI%20Service%20Auth.md)
++ [create() Factory Pattern](../../obsidian/04-Patterns/create()%20Factory%20Pattern.md),
+[OpenAI API](../../obsidian/03-Integrations/OpenAI%20API.md),
+[OpenAIAgentRunner](../../obsidian/01-Backend/agent/OpenAIAgentRunner.md)
 
-**Minimal example (`useZoomAwareMenu` for Menu):**
+### Windows Desktop Toast Notifications
 
-```tsx
-import {Menu, MenuItem} from "@mui/material";
-import {useZoomAwareMenu} from "@/hooks/useZoomAwareMenu";
+**When**: any feature that sends desktop toasts on Windows.
+**Don't**: use Tauri's notification plugin or `notify_rust` for the icon — use `winotify` from the Python backend with the `TradingAgent` AUMID.
+→ [obsidian/04-Patterns/Windows Toast Notifications.md](../../obsidian/04-Patterns/Windows%20Toast%20Notifications.md)
++ [AUMID Configuration](../../obsidian/04-Patterns/AUMID%20Configuration.md)
 
-function MyMenu() {
-    const {anchorRef, open, handleOpen, handleClose, menuProps} = useZoomAwareMenu();
+### ATK Trade Tool Hook
 
-    return (
-        <div ref={anchorRef}>
-            <button onClick={handleOpen}>Open</button>
-            <Menu open={open} onClose={handleClose} {...menuProps}>
-                <MenuItem onClick={handleClose}>Option A</MenuItem>
-            </Menu>
-        </div>
-    );
-}
-```
+**When**: ATK adds a new write tool (any `place_*`, `cancel_*`, `amend_*`, `set_leverage`, `transfer`, `_create_order`, `_stop_order`).
+**Don't**: let a write tool reach OKX without going through `atk_pretool_hook`. Add its bare name to the matching set in `backend/app/agent/okx_atk/tool_curation.py` (`ATK_PLACE_TOOLS` / `ATK_CANCEL_TOOLS` / `ATK_TRANSFER_TOOLS` / `ATK_LEVERAGE_TOOLS`). Unknown write tools fall through to DENY — that's the contract.
+→ [`backend/app/agent/okx_atk/risk_hook.py`](../../backend/app/agent/okx_atk/risk_hook.py)
 
-### Pattern: Frontend Component Animations
+The hook fires identically for both runtimes:
+- Anthropic: `HookMatcher("mcp__okx__*")` in `trading_agent.py` `ClaudeAgentOptions.hooks`.
+- OpenAI: inline call from `openai_bridge.invoke_atk_tool` before the proxy.
 
-**When to Apply**: Every new React component in `frontend/src/`.
+The same `RiskManager.assess_trade_risk` returns scoring (`AVOID|CAUTION|PROCEED`). Hook denies AVOID; CAUTION and PROCEED both allow. For tool-shape-specific gates (transfer USD cap, leverage cap), see the per-category branches in `risk_hook.atk_pretool_hook`.
 
-Always add Framer Motion entry animations to new components. Reuse variants from
-`frontend/src/utils/animations/variants.ts` — never create ad-hoc spring values.
+### Chat-Session Features — No UI Gaps
 
-**Variant selection by component type:**
+**When**: any feature that creates an `AgentSession` or writes `AgentSessionMessage` documents.
+**Don't**: ship without auditing every leg of the 10-point checklist — writing to the DB is necessary but NOT sufficient (live stream, sidebar spinner, in-place updates, completion toast, failure visibility, strategy shadow, etc.).
+→ **[obsidian/04-Patterns/Chat-Session Checklist.md](../../obsidian/04-Patterns/Chat-Session%20Checklist.md)** (read in full before shipping)
++ [persist_session_message Pattern](../../obsidian/04-Patterns/persist_session_message%20Pattern.md),
+[Chat-Session Lifecycle](../../obsidian/00-Architecture/Chat-Session%20Lifecycle.md)
 
-| Component Type      | Variant                             | Import        |
-|---------------------|-------------------------------------|---------------|
-| Page / route        | `pageEntrance`                      | `variants.ts` |
-| Card in a grid/list | `staggerCascade` (container + item) | `variants.ts` |
-| Table / list rows   | `listStagger` (container + item)    | `variants.ts` |
-| Modal / dialog      | `scaleIn`                           | `variants.ts` |
-| Panel sliding in    | `slideIn.left/right/bottom`         | `variants.ts` |
-| Scroll-triggered    | `scrollReveal.up/down/left/right`   | `variants.ts` |
-| Interactive card    | `createCardHover(primaryRgb)`       | `variants.ts` |
-
-**Spring configs** (for custom transitions): `spring.snappy`, `spring.bouncy`, `spring.gentle`.
-
-**Reduced motion**: Always respect `useReducedMotion()` hook — skip or shorten animations when true.
-
-**Minimal example (card in a stagger grid):**
-
-```tsx
-import {motion} from "framer-motion";
-import {staggerCascade} from "@/utils/animations/variants";
-
-<motion.div variants={staggerCascade.container} initial="hidden" animate="visible">
-    {items.map((item) => (
-        <motion.div key={item.id} variants={staggerCascade.item}>
-            ...
-        </motion.div>
-    ))}
-</motion.div>
-```
-
-### Pattern: AI Service Auth (Subscription vs API Key)
-
-**When to Apply**: Any service that calls Claude/Anthropic APIs.
-
-**Key rule**: NEVER use `Anthropic(api_key=...)` or `AsyncAnthropic(api_key=...)` directly without
-a subscription fallback. The app supports two auth modes:
-- `api_key`: Direct Anthropic API key (stored encrypted in DB or env var)
-- `subscription`: Claude Code CLI credentials (no API key needed)
-
-**Required pattern** — use a `create()` async factory with dual mode:
-
-```python
-class MyService:
-    def __init__(self, api_key: str = "", use_sdk: bool = False):
-        self._use_sdk = use_sdk
-        if api_key and not use_sdk:
-            from anthropic import Anthropic
-            self._client = Anthropic(api_key=api_key)
-        else:
-            self._client = None
-
-    @classmethod
-    async def create(cls) -> "MyService":
-        from app.agent.auth import resolve_anthropic_api_key
-        api_key = await resolve_anthropic_api_key()
-        if api_key:
-            return cls(api_key=api_key)
-        return cls(use_sdk=True)  # Subscription mode via ClaudeSDKClient
-```
-
-| Service | Auth pattern | Notes |
-|---------|-------------|-------|
-| `StrategyExtractor` | Dual-mode factory | `_extract_via_api` / `_extract_via_sdk` |
-| `TradeLearner` | Dual-mode factory | Same pattern |
-| `NewsSummarizer` | Dual-mode factory | `_call_claude` / `_call_via_sdk` |
-| `context_generator` | Graceful skip | Returns `None` when no key |
-| `TradingAgent`, subagents | `ClaudeSDKClient` only | Always works with subscription |
-
-### Pattern: Windows Desktop Toast Notifications
-
-**When to Apply**: Any feature that sends desktop toast notifications on Windows.
-
-**Key rule**: Use `winotify` from the Python backend (same as ZZZ Bot). Do NOT use
-Tauri's notification plugin or `notify_rust` — their `icon` property is Android/Linux
-only and does nothing on Windows.
-
-**How Windows toast icons work:**
-
-| Icon position | Source | How to set |
-|---------------|--------|------------|
-| Content icon (left of title/body) | `winotify` `icon=` parameter | Absolute path to `.ico` or `.png` |
-| Title icon (tiny, next to app name) | Windows AUMID lookup | Start Menu shortcut with matching `System.AppUserModel.ID` |
-
-**AUMID rules:**
-- The `app_id` in `winotify.Notification()` must match the shortcut's AUMID exactly
-- NSIS installer sets AUMID from `tauri.conf.json` `identifier` — but if Windows caches
-  a broken state for that ID, you need a different one
-- Current working AUMID: `TradingAgent` (set in `desktop_notify.py`)
-- `ensure_notification_shortcut()` patches the AUMID on first run via `pywin32`
-- NEVER clear Windows icon cache (`ie4uinit.exe -ClearIconCache` + explorer restart)
-  unless absolutely necessary — it breaks ALL app toast title icons until cache rebuilds
-
-**Implementation**: `backend/app/services/desktop_notify.py`
-- Hooked into `NotificationService.create_notification()` via `_send_desktop_toast()`
-- Runs in `asyncio.to_thread()` to avoid blocking the event loop
-- Icon resolved from `frontend/src-tauri/icons/` (dev) or `icons/` next to exe (production)
-
-### Pattern: Chat-Session Features — No UI Gaps
-
-**When to Apply**: Any feature that creates an `AgentSession` or writes
-`AgentSessionMessage` documents (subagents, background cycles, scheduled
-agents, AI merge, etc.). Writing to the DB is necessary but NOT sufficient.
-
-**Required checklist before shipping a chat-session feature:**
-
-| Leg | Requirement | How |
-|---|---|---|
-| Persistence | Insert via `persist_session_message()` — or `persist_session_message_doc()` when you need the inserted id for in-place updates | `backend/app/db/models/agent_session.py` |
-| Live stream | Broadcast a WebSocket event on every insert with `type: "message"` + outer `session_id` | `manager.send_to_user(_agent_channel_user_id(user_id), ...)`; see `_get_user_id_int` in `backend/app/api/websocket/agent.py` |
-| Sidebar spinner | Multi-message runs set `keep_running: true` on the WS payload; clear it by broadcasting a final message without the flag | Frontend auto-clears `activeRunSessionId` on every assistant message unless `keep_running` is set |
-| In-place updates | For rows that transition state (running → saved), mutate the existing doc + emit `message_updated`; don't insert a second row | Capture `document.id` on insert → `AgentSessionMessage.get(id).save()` → `_broadcast_message_updated(...)` |
-| Message id on wire | REST `MessageResponse` and frontend `SessionMessage` MUST carry `id` | Needed for in-place updates and merge-on-hydrate dedup; frontend dedups by 24-char hex DB id, DB wins |
-| Suppress Claude CLI hooks | Every `ClaudeAgentOptions(...)` passes `extra_args={"setting-sources": "local"}` | Without it, the user-level Stop hook fires a toast on every subagent turn. Audit: `grep -n 'ClaudeAgentOptions(' backend/` — every hit must include this flag |
-| Completion toast | Fire `NotificationService.create_notification(type=TASK_COMPLETED, session_id=...)` on success and `TASK_FAILED` on failure | Hooks into `desktop_notify._send_desktop_toast`; pass `session_id` so the toast deep-links |
-| Failure visibility | Wrap the cycle body in try/except that flips any "running" row to failed, and add a startup hook for orphans | See `task_scheduler._mark_orphaned_discovery_cycles_failed` |
-| UI surfaces | Every place listing cycles/runs: animated spinner on in-flight rows + `setSelectedSessionId(id)` + `navigate({to: "/agent"})` click-through | Reference: `StrategyDiscoveryCard` |
-| Strategy shadow | If the feature creates `StrategyKnowledge`, also create a `Strategy` shadow doc owned by a real user | The Strategies page reads `Strategy`; scheduler paths must resolve a superuser first — `user_id=None` silently skips the shadow |
-
-**Subagent pattern**: Match the existing TechnicalAnalyst / NewsAnalyst /
-FundamentalAnalyst pattern — subagents are pure compute, they return dicts,
-they do NOT create their own `AgentSession`. The parent's session captures
-the timeline via delegation tool-call bubbles. Creating a session per
-subagent clutters the chat sidebar and does not match the codebase.
-
-When adding a new chat-session surface, audit every applicable leg above — or flag the gap explicitly in the plan.
+**Subagent rule**: subagents are pure compute, return dicts, do NOT create their own `AgentSession`. The parent's session captures the timeline via tool-call bubbles.
