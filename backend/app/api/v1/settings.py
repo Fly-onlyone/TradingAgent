@@ -180,9 +180,9 @@ def _get_agent_sdk_model_aliases() -> list[str]:
 
 DEFAULT_MODEL_BY_FAMILY = {
     "sonnet": "claude-sonnet-4-6",
-    "opus": "claude-opus-4-6",
+    "opus": "claude-opus-4-7",
     "sonnet-1m": "claude-sonnet-4-6",
-    "opus-1m": "claude-opus-4-6",
+    "opus-1m": "claude-opus-4-7[1m]",
 }
 
 MODEL_ALIAS_TO_NAME = {
@@ -201,13 +201,14 @@ MODEL_ALIAS_TO_FAMILY = {
     "claude-sonnet-4-6": "sonnet",
     "claude-opus-4-5": "opus",
     "claude-opus-4-6": "opus",
+    "claude-opus-4-7": "opus",
 }
 
 FAMILY_TO_API_MODEL = {
     "sonnet": "claude-sonnet-4-6",
-    "opus": "claude-opus-4-6",
+    "opus": "claude-opus-4-7",
     "sonnet-1m": "claude-sonnet-4-6[1m]",
-    "opus-1m": "claude-opus-4-6[1m]",
+    "opus-1m": "claude-opus-4-7[1m]",
 }
 
 MODEL_FAMILY_ORDER = ("sonnet", "opus", "sonnet-1m", "opus-1m")
