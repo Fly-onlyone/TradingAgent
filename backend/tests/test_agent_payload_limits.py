@@ -148,22 +148,26 @@ async def test_build_resume_history_reads_from_persisted_messages(
 ) -> None:
     session = _build_session()
 
-    async def fake_fetch_session_messages(
+    async def fake_fetch_session_message_window(
         _: agent_session.AgentSession,
         *,
-        skip: int = 0,
-        limit: int | None = None,
-    ) -> tuple[list[agent_session.SessionMessage], int]:
-        assert skip == 0
-        assert limit is None
+        before: object = None,
+        limit: int = 100,
+    ) -> tuple[list[agent_session.SessionMessage], int, bool, object]:
+        assert limit > 0
         messages = [
             agent_session.SessionMessage(role="user", content="First question"),
             agent_session.SessionMessage(role="assistant", content="First answer"),
             agent_session.SessionMessage(role="user", content="Current message"),
         ]
-        return messages, len(messages)
+        # (messages, total, has_more, older-history cursor)
+        return messages, len(messages), False, None
 
-    monkeypatch.setattr(websocket_agent, "fetch_session_messages", fake_fetch_session_messages)
+    monkeypatch.setattr(
+        websocket_agent,
+        "fetch_session_message_window",
+        fake_fetch_session_message_window,
+    )
 
     history = await websocket_agent._build_resume_history(session)
 
