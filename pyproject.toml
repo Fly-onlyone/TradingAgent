@@ -75,7 +75,9 @@ dev = [
 ]
 
 [tool.uv]
-environments = ["sys_platform == 'win32'"]
+# win32 is the production target (Tauri desktop app); linux is added so the
+# lockfile resolves on the Linux CI runner (`uv sync` aborts otherwise).
+environments = ["sys_platform == 'win32'", "sys_platform == 'linux'"]
 
 [build-system]
 requires = ["hatchling"]
