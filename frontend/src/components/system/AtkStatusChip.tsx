@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
 import { Chip, Tooltip } from "@mui/material";
+import { useQuery } from "@tanstack/react-query";
 import { atkHealthQueryOptions } from "@/api/atkQueries";
 
 /**
@@ -16,14 +16,17 @@ export function AtkStatusChip() {
 	const { data, isError } = useQuery(atkHealthQueryOptions());
 
 	if (!data && !isError) {
-		return <Chip size="small" label="ATK ?" variant="outlined" sx={{ ml: 1 }} />;
+		return (
+			<Chip size="small" label="ATK ?" variant="outlined" sx={{ ml: 1 }} />
+		);
 	}
 
 	const running = data?.running ?? false;
 	const accepting = data?.accepting ?? false;
 	const profile = data?.profile ?? "?";
 	const toolCount = data?.tool_count ?? 0;
-	const lastError = data?.last_error ?? (isError ? "health endpoint unreachable" : null);
+	const lastError =
+		data?.last_error ?? (isError ? "health endpoint unreachable" : null);
 
 	const color: "success" | "warning" | "error" = !running
 		? "error"
@@ -45,7 +48,13 @@ export function AtkStatusChip() {
 
 	return (
 		<Tooltip title={tip} arrow>
-			<Chip size="small" label={label} color={color} variant="outlined" sx={{ ml: 1 }} />
+			<Chip
+				size="small"
+				label={label}
+				color={color}
+				variant="outlined"
+				sx={{ ml: 1 }}
+			/>
 		</Tooltip>
 	);
 }

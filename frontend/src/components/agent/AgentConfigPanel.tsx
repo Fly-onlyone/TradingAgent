@@ -407,7 +407,9 @@ export function AgentConfigPanel({
 						color="text.secondary"
 						sx={{ mt: 0.5, display: "block" }}
 					>
-						OpenAI's API is paid-per-use only. There is no subscription auth mode like Claude Pro/Max — click "Sign in with ChatGPT" above to generate a key from your existing plan's API org.
+						OpenAI's API is paid-per-use only. There is no subscription auth
+						mode like Claude Pro/Max — click "Sign in with ChatGPT" above to
+						generate a key from your existing plan's API org.
 					</Typography>
 				</Box>
 			)}

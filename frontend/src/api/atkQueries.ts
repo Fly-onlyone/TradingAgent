@@ -1,4 +1,8 @@
-import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+	queryOptions,
+	useMutation,
+	useQueryClient,
+} from "@tanstack/react-query";
 import apiClient from "./client";
 
 export type AtkHealth = {
@@ -12,7 +16,8 @@ export type AtkHealth = {
 export const atkHealthQueryOptions = () =>
 	queryOptions({
 		queryKey: ["atk", "health"],
-		queryFn: () => apiClient.get<AtkHealth>("/api/v1/atk/health").then((r) => r.data),
+		queryFn: () =>
+			apiClient.get<AtkHealth>("/api/v1/atk/health").then((r) => r.data),
 		refetchInterval: 15_000,
 		staleTime: 10_000,
 	});
@@ -25,7 +30,10 @@ export const atkHealthQueryOptions = () =>
 export const useAtkProxy = () => {
 	const qc = useQueryClient();
 	return useMutation({
-		mutationFn: async (vars: { toolName: string; args: Record<string, unknown> }) => {
+		mutationFn: async (vars: {
+			toolName: string;
+			args: Record<string, unknown>;
+		}) => {
 			const res = await apiClient.post<Record<string, unknown>>(
 				`/api/v1/atk/proxy/${encodeURIComponent(vars.toolName)}`,
 				vars.args,
