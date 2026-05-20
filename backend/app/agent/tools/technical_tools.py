@@ -6,16 +6,15 @@ Kept importable during the transition. Slated for deletion in a follow-up PR.
 """
 
 import warnings as _warnings
+from typing import Any
+
+from app.agent.tools.market_tools import get_candlesticks
 
 _warnings.warn(
     "app.agent.tools.technical_tools is deprecated; use ATK tools (mcp__okx__market_*) instead.",
     DeprecationWarning,
     stacklevel=2,
 )
-
-from typing import Any
-
-from app.agent.tools.market_tools import get_candlesticks
 
 
 async def get_technical_indicators(

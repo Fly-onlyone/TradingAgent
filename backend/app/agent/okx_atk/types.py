@@ -32,7 +32,7 @@ class AtkError:
     raw: dict[str, Any]  # original envelope, kept for full forensics
 
     @classmethod
-    def from_atk_envelope(cls, env: dict[str, Any]) -> "AtkError":
+    def from_atk_envelope(cls, env: dict[str, Any]) -> AtkError:
         """Translate ATK's structured error block.
 
         ATK error shape per ARCHITECTURE.md §7:

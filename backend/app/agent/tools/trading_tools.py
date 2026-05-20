@@ -12,18 +12,17 @@ callers don't break mid-transition. They will be deleted in a follow-up PR
 """
 
 import warnings as _warnings
+from decimal import Decimal
+from typing import Any
+
+from app.config import get_settings
+from app.exchange.okx_client import OKXClient
 
 _warnings.warn(
     "app.agent.tools.trading_tools is deprecated; use ATK tools (mcp__okx__*) instead.",
     DeprecationWarning,
     stacklevel=2,
 )
-
-from decimal import Decimal
-from typing import Any
-
-from app.config import get_settings
-from app.exchange.okx_client import OKXClient
 
 settings = get_settings()
 

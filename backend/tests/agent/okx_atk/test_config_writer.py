@@ -6,8 +6,6 @@ import os
 import tomllib
 from pathlib import Path
 
-import pytest
-
 from app.agent.okx_atk.config_writer import atk_config_path, write_atk_config
 
 

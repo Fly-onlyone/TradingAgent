@@ -7,18 +7,17 @@ during the transition (chart endpoints / RiskManager still use them).
 Slated for deletion in a follow-up PR after CI confirms no callers remain.
 """
 
+import asyncio
 import warnings as _warnings
+from typing import Any
+
+from app.exchange.okx_client import OKXClient
 
 _warnings.warn(
     "app.agent.tools.market_tools is deprecated; use ATK tools (mcp__okx__market_*) instead.",
     DeprecationWarning,
     stacklevel=2,
 )
-
-import asyncio
-from typing import Any
-
-from app.exchange.okx_client import OKXClient
 
 
 async def get_ticker(symbol: str) -> dict[str, Any]:
