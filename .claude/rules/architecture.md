@@ -1,38 +1,17 @@
 # Architecture
 
-## Data Flow
+System flows, data-flow diagrams (Mermaid), and the knowledge-graph schema live in the
+Obsidian vault under `obsidian/00-Architecture/`.
 
-### Trading Decision Flow
+- [Trading Decision Flow](../../obsidian/00-Architecture/Trading%20Decision%20Flow.md)
+- [RAG Retrieval Pipeline](../../obsidian/00-Architecture/RAG%20Retrieval%20Pipeline.md)
+- [Knowledge Graph Edges](../../obsidian/00-Architecture/Knowledge%20Graph%20Edges.md)
+- [JWT Auth Flow](../../obsidian/00-Architecture/JWT%20Auth%20Flow.md)
+- [WebSocket Connection Manager](../../obsidian/00-Architecture/WebSocket%20Connection%20Manager.md)
+- [Background Service Startup](../../obsidian/00-Architecture/Background%20Service%20Startup.md)
+- [Request Logging Pipeline](../../obsidian/00-Architecture/Request%20Logging%20Pipeline.md)
+- [Strategy Auto-Discovery Cycle](../../obsidian/00-Architecture/Strategy%20Auto-Discovery%20Cycle.md)
+- [Subagent Delegation Pattern](../../obsidian/00-Architecture/Subagent%20Delegation%20Pattern.md)
+- [Chat-Session Lifecycle](../../obsidian/00-Architecture/Chat-Session%20Lifecycle.md)
 
-1. **User Request** → API receives trading query
-2. **TradingAgent** → Claude processes with tool use
-3. **Subagent Delegation** → Specialized analysis:
-   - TechnicalAnalyst: Chart patterns, indicators
-   - FundamentalAnalyst: On-chain metrics, valuations
-   - NewsAnalyst: Sentiment from news sources
-   - RiskManager: Position sizing, risk assessment
-4. **OrderExecutor** → Execute via OKX with risk controls
-5. **Response** → Return analysis and execution status
-
-### Knowledge RAG Flow
-
-1. **Query** → Knowledge tool receives search request
-2. **Embedding** → Local nomic-embed-text-v1.5 (sentence-transformers/ONNX), cached for 300s
-3. **Hybrid Search** → Vectorized NumPy similarity (projection-optimized) + MongoDB text search in parallel
-4. **Fusion** → Reciprocal Rank Fusion (RRF) merges vector and text results
-5. **Time Decay** → Exponential decay weighting (news=24h, lessons=7d, strategies=30d half-life)
-6. **Re-Ranking** (optional) → FlashRank cross-encoder re-ranks top candidates
-7. **Context Assembly** → Retrieve full documents for top-k, format with relevance scores
-8. **Response** → Claude uses context for informed answers
-
-### Knowledge Graph
-
-Entity relationships tracked via `KnowledgeEdge` documents:
-- `APPLIES_TO` — Strategy → Asset
-- `DETECTED_IN` — Pattern → Asset
-- `MENTIONS` — News → Asset
-- `LEARNED_FROM` — Lesson → Trade
-- `USED_IN`, `SUPPORTS`, `CONTRADICTS`, `CORRELATED_WITH`
-
-Edges built incrementally during document creation. Enables multi-hop queries like
-"strategies that work for BTC in bearish markets with profitable lesson history."
+Full zone MOC: [`obsidian/00-Architecture/_index.md`](../../obsidian/00-Architecture/_index.md)
