@@ -82,8 +82,8 @@ function effortDotColor(effort: string): string {
 /** Context window size per model family (approximate) */
 function contextWindowSize(model: string): number {
 	if (model.startsWith("gpt-")) {
-		// GPT-5 family ships with a 400k context window.
-		return 400_000;
+		// GPT-5.5 ships with a 1M context window.
+		return 1_000_000;
 	}
 	if (model.includes("1m")) return 1_000_000;
 	if (model.includes("opus")) return 200_000;

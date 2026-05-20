@@ -7,6 +7,7 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ErrorIcon from "@mui/icons-material/Error";
 import LoginIcon from "@mui/icons-material/Login";
 import LogoutIcon from "@mui/icons-material/Logout";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import {
@@ -25,6 +26,7 @@ import {
 	Typography,
 } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { open as openExternal } from "@tauri-apps/plugin-shell";
 import { useCallback, useState } from "react";
 import type { AgentConfig, AgentConfigUpdate } from "@/api/endpoints/settings";
 import { settingsApi } from "@/api/endpoints/settings";
@@ -388,12 +390,24 @@ export function AgentConfigPanel({
 							{config.hasOpenaiApiKey ? "Update" : "Save"}
 						</Button>
 					</Box>
+					<Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}>
+						<Button
+							size="small"
+							variant="text"
+							startIcon={<OpenInNewIcon fontSize="small" />}
+							onClick={() => {
+								void openExternal("https://platform.openai.com/api-keys");
+							}}
+						>
+							Sign in with ChatGPT → get API key
+						</Button>
+					</Box>
 					<Typography
 						variant="caption"
 						color="text.secondary"
 						sx={{ mt: 0.5, display: "block" }}
 					>
-						OpenAI has no subscription fallback — an API key is required.
+						OpenAI's API is paid-per-use only. There is no subscription auth mode like Claude Pro/Max — click "Sign in with ChatGPT" above to generate a key from your existing plan's API org.
 					</Typography>
 				</Box>
 			)}
