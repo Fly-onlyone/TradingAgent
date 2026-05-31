@@ -19,8 +19,8 @@ tauri-build = { version = "2.5.4", features = [] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
-reqwest = { version = "0.12", features = ["blocking", "json"] }
-tauri = { version = "2.10.0", features = ["tray-icon", "image-png"] }
+reqwest = { version = "0.13", features = ["blocking", "json"] }
+tauri = { version = "2.10.3", features = ["tray-icon", "image-png"] }
 tauri-plugin-log = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-shell = "2"
@@ -28,7 +28,7 @@ tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows-sys = { version = "0.59", features = [
+windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Security",
     "Win32_System_JobObjects",
