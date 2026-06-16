@@ -37,7 +37,7 @@ dependencies = [
     "ta>=0.11.0",
     "pandas>=2.2.0",
     "numpy>=1.26.0",
-    "python-multipart>=0.0.9",
+    "python-multipart>=0.0.31",
     # Direct transitive deps (imported directly in code)
     "starlette>=0.30.0",
     "pymongo>=4.6.0",
