@@ -12,7 +12,7 @@ dependencies = [
     "python-okx>=0.4.0",
     # MCP client — used by okx_atk.mcp_client to talk to the OKX Agent Trade Kit
     # stdio MCP server from the OpenAI runtime bridge and from server-side ATK tooling.
-    "mcp>=1.0.0,<2.0.0",
+    "mcp>=1.28.1,<2.0.0",
     # MongoDB
     "motor>=3.6.0",
     "beanie>=1.26.0",
