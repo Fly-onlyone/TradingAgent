@@ -44,6 +44,16 @@
         <TextBlock Classes="secondary" Text="{Binding ShellStatus}" />
       </StackPanel>
 
+      <StackPanel Spacing="10">
+        <TextBlock Classes="title" Text="Updates" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Content="Check for updates" Command="{Binding CheckForUpdatesCommand}" />
+          <Button Content="Restart to install" Command="{Binding RestartToUpdateCommand}"
+                  IsVisible="{Binding IsUpdateReady}" />
+        </StackPanel>
+        <TextBlock Classes="secondary" Text="{Binding UpdateStatus}" />
+      </StackPanel>
+
     </StackPanel>
   </ScrollViewer>
 </UserControl>

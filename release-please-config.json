@@ -44,6 +44,11 @@
 					"type": "toml",
 					"path": "frontend/src-tauri/Cargo.toml",
 					"jsonpath": "$.package.version"
+				},
+				{
+					"type": "xml",
+					"path": "Directory.Build.props",
+					"xpath": "//Project/PropertyGroup/Version"
 				}
 			]
 		}

@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
+using TradingAgent.App.Shell;
 using TradingAgent.App.ViewModels;
 using TradingAgent.Core;
 using TradingAgent.Core.Settings;
@@ -17,6 +18,8 @@ public sealed class DiagnosticsViewModelTests : IDisposable
     private readonly SqliteSettingsStore _settings;
     private readonly FakeAutostart _autostart = new();
     private readonly FakeToasts _toasts = new();
+    private readonly FakeUpdates _updates = new();
+    private readonly ShellRequests _shell = new();
 
     public DiagnosticsViewModelTests()
     {
@@ -105,8 +108,37 @@ public sealed class DiagnosticsViewModelTests : IDisposable
         Assert.NotEmpty(body);
     }
 
+    [Fact]
+    public async Task Check_for_updates_asks_the_updater_and_shows_what_it_reports()
+    {
+        var viewModel = NewViewModel();
+
+        Assert.Equal("Not checked yet.", viewModel.UpdateStatus);
+
+        await viewModel.CheckForUpdatesCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, _updates.Checks);
+        Assert.False(viewModel.IsUpdateReady);
+    }
+
+    [Fact]
+    public void A_downloaded_update_offers_a_restart_and_asks_the_shell_for_it()
+    {
+        _updates.Status = new UpdateStatus(UpdateState.ReadyToInstall, "2.0.0", "Version 2.0.0 is ready.");
+        var requested = 0;
+        _shell.RestartToUpdateRequested += (_, _) => requested++;
+        var viewModel = NewViewModel();
+
+        Assert.True(viewModel.IsUpdateReady);
+        Assert.Equal("Version 2.0.0 is ready.", viewModel.UpdateStatus);
+
+        viewModel.RestartToUpdateCommand.Execute(null);
+
+        Assert.Equal(1, requested);
+    }
+
     private DiagnosticsViewModel NewViewModel() =>
-        new(new AppInfo("1.0.0", IsDevelopmentBuild: true), _paths, _database, _settings, _autostart, _toasts);
+        new(new AppInfo("1.0.0", IsDevelopmentBuild: true), _paths, _database, _settings, _autostart, _toasts, _updates, _shell);
 
     private sealed class FakeAutostart : IAutostart
     {
@@ -130,6 +162,27 @@ public sealed class DiagnosticsViewModelTests : IDisposable
 
             IsEnabled = enabled;
         }
+    }
+
+    private sealed class FakeUpdates : IUpdateService
+    {
+        public event EventHandler? StatusChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public int Checks { get; private set; }
+
+        public UpdateStatus Status { get; set; } = new(UpdateState.Idle, null, "Not checked yet.");
+
+        public Task CheckAsync(CancellationToken cancellationToken = default)
+        {
+            Checks++;
+            return Task.CompletedTask;
+        }
+
+        public bool ApplyOnExit(bool restart) => false;
     }
 
     private sealed class FakeToasts : IToastNotifier
