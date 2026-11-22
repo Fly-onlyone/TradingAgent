@@ -32,6 +32,18 @@
         <SelectableTextBlock Grid.Row="6" Grid.Column="1" Classes="value" Text="{Binding LogFolder}" />
       </Grid>
 
+      <StackPanel Spacing="10">
+        <TextBlock Classes="title" Text="Desktop shell" />
+        <ToggleSwitch IsChecked="{Binding StartWithWindows}"
+                      AutomationProperties.Name="Start with Windows"
+                      OnContent="Start with Windows" OffContent="Start with Windows" />
+        <ToggleSwitch IsChecked="{Binding OpenWindowAtStart}"
+                      AutomationProperties.Name="Open the window at start"
+                      OnContent="Open the window at start" OffContent="Open the window at start" />
+        <Button Content="Send test notification" Command="{Binding SendTestNotificationCommand}" />
+        <TextBlock Classes="secondary" Text="{Binding ShellStatus}" />
+      </StackPanel>
+
     </StackPanel>
   </ScrollViewer>
 </UserControl>

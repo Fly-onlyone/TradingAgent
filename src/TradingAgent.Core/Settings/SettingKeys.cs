@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using TradingAgent.Core.Shell;
 
 namespace TradingAgent.Core.Settings;
 
@@ -28,6 +29,7 @@ public static class SettingKeys
     // Desktop shell
     public static readonly SettingKey<bool> AutostartEnabled = new("desktop.autostart_enabled", false, Json.Boolean);
     public static readonly SettingKey<bool> WindowStartOpen = new("window.start_open", true, Json.Boolean);
+    public static readonly SettingKey<WindowPlacement?> MainWindowPlacement = new("window.placement", null, Json.WindowPlacement!);
 
     // Crash and performance reporting
     public static readonly SettingKey<bool> TelemetryEnabled = new("telemetry.enabled", true, Json.Boolean);
@@ -75,4 +77,5 @@ public static class SettingKeys
 [JsonSerializable(typeof(double))]
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(string[]))]
+[JsonSerializable(typeof(WindowPlacement))]
 internal sealed partial class SettingsJsonContext : JsonSerializerContext;

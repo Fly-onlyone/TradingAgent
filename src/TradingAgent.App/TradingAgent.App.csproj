@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <!-- Fixed so the lock file contains the Native AOT compiler packs for the one platform shipped today. -->
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <AssemblyName>TradingAgent</AssemblyName>

@@ -13,6 +13,15 @@ public sealed record AppInfo(string Version, bool IsDevelopmentBuild)
 
     public string BuildMode => IsDevelopmentBuild ? "Debug" : "Release";
 
+    /// <summary>
+    /// Identity of the app towards the operating system: single-instance lock, notification sender and
+    /// start-up shortcut. The development build has its own, so it can run next to an installed app.
+    /// </summary>
+    public string ApplicationId => ApplicationIdFor(IsDevelopmentBuild);
+
+    public static string ApplicationIdFor(bool isDevelopmentBuild) =>
+        isDevelopmentBuild ? "Fly.TradingAgent.Dev" : "Fly.TradingAgent";
+
     public string Runtime { get; } = RuntimeInformation.FrameworkDescription;
 
     /// <summary>True when the app runs as a Native AOT binary rather than on the JIT.</summary>
