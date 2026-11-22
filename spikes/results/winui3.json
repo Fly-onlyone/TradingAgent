@@ -1,0 +1,96 @@
+{
+  "candidate": "winui3",
+  "start": {
+    "warm_min_ms": 304.0,
+    "warm_median_ms": 327.0,
+    "runs_ms": [
+      480,
+      309,
+      320,
+      330,
+      327,
+      331,
+      332,
+      304,
+      310,
+      331
+    ],
+    "first_run_ms": 480,
+    "warm_max_ms": 332.0
+  },
+  "idle": {
+    "working_set_mb": 140.3,
+    "exited_early": false,
+    "private_mb": 141.5
+  },
+  "load": {
+    "stream_trace": {
+      "other_presents": 59,
+      "app": {
+        "note": "PresentMon saw no presents from this process",
+        "frames": 0
+      },
+      "dwm": {
+        "displays_over_33_4ms": 969,
+        "frame_ms_max": 83.47,
+        "displays_over_83_4ms": 0,
+        "frame_ms_p99": 69.7,
+        "display_ms_p50": 62.35,
+        "display_ms_p99": 69.61,
+        "presents_per_second": 19.5,
+        "display_ms_max": 83.35,
+        "frames": 1169,
+        "present_modes": [
+          "Hardware: Legacy Flip x1169"
+        ],
+        "dropped": 0,
+        "frame_ms_p50": 62.18,
+        "displays_over_16_7ms": 1081,
+        "frame_ms_p95": 69.28
+      }
+    },
+    "memory_after_trace": {
+      "working_set_mb": 213.3,
+      "private_mb": 220.0
+    },
+    "scroll_trace": {
+      "window_found": true,
+      "other_presents": 8,
+      "app": {
+        "note": "PresentMon saw no presents from this process",
+        "frames": 0
+      },
+      "dwm": {
+        "displays_over_33_4ms": 12,
+        "frame_ms_max": 62.93,
+        "displays_over_83_4ms": 0,
+        "frame_ms_p99": 27.04,
+        "display_ms_p50": 6.95,
+        "display_ms_p99": 27.62,
+        "presents_per_second": 134.3,
+        "display_ms_max": 62.68,
+        "frames": 1343,
+        "present_modes": [
+          "Hardware: Legacy Flip x1343"
+        ],
+        "dropped": 0,
+        "frame_ms_p50": 6.95,
+        "displays_over_16_7ms": 15,
+        "frame_ms_p95": 7.52
+      }
+    },
+    "cpu_percent_of_one_core": 8.2,
+    "gpu_3d_percent_avg": 0.5,
+    "memory_at_end": {
+      "working_set_mb": 224.7,
+      "private_mb": 231.2
+    },
+    "exited_early": false,
+    "load_seconds": 300
+  },
+  "size": {
+    "zipped_mb": 25.6,
+    "files": 237,
+    "disk_mb": 65.1
+  }
+}

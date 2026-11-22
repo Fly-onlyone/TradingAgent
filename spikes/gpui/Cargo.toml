@@ -1,0 +1,24 @@
+[package]
+name = "spike-gpui"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Standalone package: must not join any parent workspace.
+[workspace]
+
+[[bin]]
+name = "spike-gpui"
+path = "src/main.rs"
+
+[dependencies]
+# Same pin as D:\CodeWiki\crates\codewiki-app (default features: component + assets).
+gpui-kit = "=0.9.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true

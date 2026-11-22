@@ -1,0 +1,3 @@
+# Same as D:\CodeWiki: link the C runtime statically so the exe needs no vcruntime140.dll.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

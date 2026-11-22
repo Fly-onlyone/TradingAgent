@@ -1,0 +1,10 @@
+{
+  "measured_at": "2026-11-22T21:10:50",
+  "cpu": "12th Gen Intel(R) Core(TM) i7-12700F",
+  "gpu": [
+    "NVIDIA GeForce RTX 4070 @ 143 Hz, 2560x1440"
+  ],
+  "os": "Microsoft Windows 11 Pro 26300",
+  "logical_cores": 20,
+  "ram_gb": 16.0
+}

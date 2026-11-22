@@ -1,0 +1,126 @@
+<Window x:Class="SpikeWinUI3.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:SpikeWinUI3">
+    <Grid x:Name="Root" Background="#211B14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="48" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" CornerRadius="12" BorderBrush="#26F97316" BorderThickness="1" Margin="8,4,8,0">
+            <Border.Background>
+                <AcrylicBrush TintColor="#342818" TintOpacity="0.72" FallbackColor="#342818" />
+            </Border.Background>
+            <Grid Padding="16,0,8,0">
+                <TextBlock Text="Trading Agent - UI spike" Foreground="#F8FAFC" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                <Border x:Name="PauseBtn" HorizontalAlignment="Right" VerticalAlignment="Center" CornerRadius="8"
+                        BorderThickness="1" Padding="16,5" Height="32"
+                        PointerEntered="PauseBtn_PointerEntered" PointerExited="PauseBtn_PointerExited" Tapped="PauseBtn_Tapped">
+                    <Border.Background>
+                        <SolidColorBrush x:Name="PauseBg" Color="#26F97316" />
+                    </Border.Background>
+                    <Border.BorderBrush>
+                        <SolidColorBrush x:Name="PauseBorder" Color="#26F97316" />
+                    </Border.BorderBrush>
+                    <TextBlock x:Name="PauseText" Text="Pause" Foreground="#F8FAFC" FontSize="14" VerticalAlignment="Center" />
+                </Border>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="420" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Chat -->
+            <Border Grid.Column="0" Background="#332818" CornerRadius="12" BorderBrush="#14F97316" BorderThickness="1" Margin="8,8,4,8">
+                <ScrollViewer x:Name="ChatScroll" VerticalScrollBarVisibility="Auto" Padding="10">
+                    <StackPanel x:Name="ChatPanel" SizeChanged="Pin" />
+                </ScrollViewer>
+            </Border>
+
+            <Grid Grid.Column="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="280" />
+                </Grid.RowDefinitions>
+
+                <!-- Chart -->
+                <Border Grid.Row="0" Background="#332818" CornerRadius="12" BorderBrush="#14F97316" BorderThickness="1" Margin="4,8,8,4">
+                    <local:CandleChart x:Name="Chart" Margin="4" />
+                </Border>
+
+                <!-- Orders -->
+                <Border Grid.Row="1" Background="#332818" CornerRadius="12" BorderBrush="#14F97316" BorderThickness="1" Margin="4,4,8,8">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="30" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Grid Background="#211B14" Padding="8,0,0,0" CornerRadius="12,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="215" />
+                                <ColumnDefinition Width="140" />
+                                <ColumnDefinition Width="88" />
+                                <ColumnDefinition Width="50" />
+                                <ColumnDefinition Width="70" />
+                                <ColumnDefinition Width="88" />
+                                <ColumnDefinition Width="88" />
+                                <ColumnDefinition Width="88" />
+                                <ColumnDefinition Width="70" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="id" Foreground="#B8A894" FontSize="12" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="time (UTC)" Foreground="#B8A894" FontSize="12" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="2" Text="symbol" Foreground="#B8A894" FontSize="12" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="3" Text="side" Foreground="#B8A894" FontSize="12" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="4" Text="type" Foreground="#B8A894" FontSize="12" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="5" Text="price" Foreground="#B8A894" FontSize="12" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="6" Text="size" Foreground="#B8A894" FontSize="12" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="7" Text="filled" Foreground="#B8A894" FontSize="12" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="8" Text="status" Foreground="#B8A894" FontSize="12" VerticalAlignment="Center" />
+                        </Grid>
+                        <ListView x:Name="OrdersList" Grid.Row="1" SelectionMode="None" IsItemClickEnabled="False">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="MinHeight" Value="24" />
+                                    <Setter Property="Height" Value="24" />
+                                    <Setter Property="Padding" Value="8,0,0,0" />
+                                    <Setter Property="Margin" Value="0" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="local:OrderRow">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="215" />
+                                            <ColumnDefinition Width="140" />
+                                            <ColumnDefinition Width="88" />
+                                            <ColumnDefinition Width="50" />
+                                            <ColumnDefinition Width="70" />
+                                            <ColumnDefinition Width="88" />
+                                            <ColumnDefinition Width="88" />
+                                            <ColumnDefinition Width="88" />
+                                            <ColumnDefinition Width="70" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{x:Bind Id}" FontSize="12" Foreground="#B8A894" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="1" Text="{x:Bind Time}" FontSize="12" Foreground="#F8FAFC" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="2" Text="{x:Bind Symbol}" FontSize="12" Foreground="#F8FAFC" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="3" Text="{x:Bind Side}" FontSize="12" Foreground="{x:Bind SideBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="4" Text="{x:Bind Type}" FontSize="12" Foreground="#F8FAFC" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="5" Text="{x:Bind Price}" FontSize="12" Foreground="#F8FAFC" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="6" Text="{x:Bind Size}" FontSize="12" Foreground="#F8FAFC" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="7" Text="{x:Bind Filled}" FontSize="12" Foreground="#F8FAFC" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="8" Text="{x:Bind Status}" FontSize="12" Foreground="#B8A894" VerticalAlignment="Center" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

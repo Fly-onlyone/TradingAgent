@@ -1,0 +1,124 @@
+{
+  "candidate": "gpui",
+  "start": {
+    "warm_min_ms": 321.0,
+    "warm_median_ms": 334.0,
+    "runs_ms": [
+      417,
+      334,
+      329,
+      337,
+      323,
+      378,
+      338,
+      321,
+      342,
+      327
+    ],
+    "first_run_ms": 417,
+    "warm_max_ms": 378.0
+  },
+  "idle": {
+    "working_set_mb": 77.8,
+    "exited_early": false,
+    "private_mb": 108.0
+  },
+  "load": {
+    "stream_trace": {
+      "other_presents": 59,
+      "app": {
+        "displays_over_33_4ms": 1168,
+        "frame_ms_max": 71.21,
+        "displays_over_83_4ms": 0,
+        "frame_ms_p99": 66.06,
+        "display_ms_p50": 48.6,
+        "display_ms_p99": 69.51,
+        "presents_per_second": 23.0,
+        "display_ms_max": 76.57,
+        "frames": 1379,
+        "present_modes": [
+          "Composed: Flip x1379"
+        ],
+        "dropped": 22,
+        "frame_ms_p50": 48.13,
+        "displays_over_16_7ms": 1187,
+        "frame_ms_p95": 63.05
+      },
+      "dwm": {
+        "displays_over_33_4ms": 1163,
+        "frame_ms_max": 76.48,
+        "displays_over_83_4ms": 0,
+        "frame_ms_p99": 69.74,
+        "display_ms_p50": 48.58,
+        "display_ms_p99": 69.51,
+        "presents_per_second": 22.9,
+        "display_ms_max": 76.57,
+        "frames": 1371,
+        "present_modes": [
+          "Hardware: Legacy Flip x1371"
+        ],
+        "dropped": 0,
+        "frame_ms_p50": 48.53,
+        "displays_over_16_7ms": 1194,
+        "frame_ms_p95": 62.69
+      }
+    },
+    "memory_after_trace": {
+      "working_set_mb": 78.6,
+      "private_mb": 109.4
+    },
+    "scroll_trace": {
+      "window_found": true,
+      "other_presents": 9,
+      "app": {
+        "displays_over_33_4ms": 0,
+        "frame_ms_max": 20.84,
+        "displays_over_83_4ms": 0,
+        "frame_ms_p99": 12.44,
+        "display_ms_p50": 6.95,
+        "display_ms_p99": 13.95,
+        "presents_per_second": 143.2,
+        "display_ms_max": 20.84,
+        "frames": 1432,
+        "present_modes": [
+          "Composed: Flip x1432"
+        ],
+        "dropped": 104,
+        "frame_ms_p50": 6.97,
+        "displays_over_16_7ms": 2,
+        "frame_ms_p95": 10.72
+      },
+      "dwm": {
+        "displays_over_33_4ms": 0,
+        "frame_ms_max": 20.99,
+        "displays_over_83_4ms": 0,
+        "frame_ms_p99": 14.04,
+        "display_ms_p50": 6.95,
+        "display_ms_p99": 13.95,
+        "presents_per_second": 132.8,
+        "display_ms_max": 20.84,
+        "frames": 1328,
+        "present_modes": [
+          "Hardware: Legacy Flip x1328"
+        ],
+        "dropped": 0,
+        "frame_ms_p50": 6.96,
+        "displays_over_16_7ms": 2,
+        "frame_ms_p95": 13.82
+      }
+    },
+    "cpu_percent_of_one_core": 11.3,
+    "gpu_3d_percent_avg": 2.8,
+    "memory_at_end": {
+      "working_set_mb": 80.8,
+      "private_mb": 111.4
+    },
+    "exited_early": false,
+    "load_seconds": 300
+  },
+  "size": {
+    "zipped_mb": 6.8,
+    "files": 1,
+    "disk_mb": 17.6
+  }
+}

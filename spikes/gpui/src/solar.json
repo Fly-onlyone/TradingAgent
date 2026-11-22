@@ -1,0 +1,50 @@
+{
+  "name": "Solar",
+  "author": "spike",
+  "themes": [
+    {
+      "name": "Solar",
+      "mode": "dark",
+      "font.size": 14,
+      "mono_font.size": 13,
+      "radius": 8,
+      "radius.lg": 12,
+      "shadow": false,
+      "colors": {
+        "background": "#211B14",
+        "foreground": "#F8FAFC",
+        "border": "#5844244D",
+        "window.border": "#5844244D",
+        "ring": "#F97316",
+        "link": "#F97316",
+        "link.hover": "#FB923C",
+        "link.active": "#FB923C",
+        "muted.background": "#332818",
+        "muted.foreground": "#B8A894",
+        "accent.background": "#332818",
+        "accent.foreground": "#F8FAFC",
+        "primary.background": "#F97316",
+        "primary.foreground": "#FFFFFF",
+        "secondary.background": "#332818",
+        "secondary.foreground": "#F8FAFC",
+        "popover.background": "#332818",
+        "popover.foreground": "#F8FAFC",
+        "selection.background": "#F9731640",
+        "scrollbar.background": "#00000000",
+        "scrollbar.thumb.background": "#B8A89455",
+        "scrollbar.thumb.hover.background": "#B8A89488",
+        "table.background": "#332818",
+        "table.even.background": "#382C1B",
+        "table.head.background": "#2A2116",
+        "table.head.foreground": "#B8A894",
+        "table.hover.background": "#F9731614",
+        "table.row.border": "#F9731614",
+        "chart.bullish": "#10B981",
+        "chart.bearish": "#EF4444",
+        "chart.grid": "#5844244D",
+        "success.background": "#10B981",
+        "danger.background": "#EF4444"
+      }
+    }
+  ]
+}
