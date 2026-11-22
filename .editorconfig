@@ -49,3 +49,6 @@ dotnet_naming_style.underscore_camel.required_prefix = _
 [tests/**.cs]
 # Test method names read as sentences.
 dotnet_diagnostic.CA1707.severity = none
+# Logging performance rules: tests call the plain Log* helpers to exercise the sinks.
+dotnet_diagnostic.CA1848.severity = none
+dotnet_diagnostic.CA1873.severity = none

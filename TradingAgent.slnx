@@ -2,9 +2,12 @@
   <Folder Name="/src/">
     <Project Path="src/TradingAgent.App/TradingAgent.App.csproj" />
     <Project Path="src/TradingAgent.Core/TradingAgent.Core.csproj" />
+    <Project Path="src/TradingAgent.Data/TradingAgent.Data.csproj" />
+    <Project Path="src/TradingAgent.Platform.Windows/TradingAgent.Platform.Windows.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/TradingAgent.App.Tests/TradingAgent.App.Tests.csproj" />
     <Project Path="tests/TradingAgent.Core.Tests/TradingAgent.Core.Tests.csproj" />
+    <Project Path="tests/TradingAgent.Data.Tests/TradingAgent.Data.Tests.csproj" />
   </Folder>
 </Solution>

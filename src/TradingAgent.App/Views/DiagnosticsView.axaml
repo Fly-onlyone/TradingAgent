@@ -9,7 +9,7 @@
 
       <TextBlock Classes="pageTitle" Text="{Binding Title}" />
 
-      <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="10">
+      <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="10">
         <TextBlock Grid.Row="0" Grid.Column="0" Classes="secondary" Text="Version" />
         <SelectableTextBlock Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding Version}" />
 
@@ -25,8 +25,11 @@
         <TextBlock Grid.Row="4" Grid.Column="0" Classes="secondary" Text="Database" />
         <SelectableTextBlock Grid.Row="4" Grid.Column="1" Classes="value" Text="{Binding DatabaseFile}" />
 
-        <TextBlock Grid.Row="5" Grid.Column="0" Classes="secondary" Text="Logs" />
-        <SelectableTextBlock Grid.Row="5" Grid.Column="1" Classes="value" Text="{Binding LogFolder}" />
+        <TextBlock Grid.Row="5" Grid.Column="0" Classes="secondary" Text="Schema" />
+        <SelectableTextBlock Grid.Row="5" Grid.Column="1" Classes="value" Text="{Binding Schema}" />
+
+        <TextBlock Grid.Row="6" Grid.Column="0" Classes="secondary" Text="Logs" />
+        <SelectableTextBlock Grid.Row="6" Grid.Column="1" Classes="value" Text="{Binding LogFolder}" />
       </Grid>
 
     </StackPanel>
