@@ -1,0 +1,46 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:TradingAgent.App.ViewModels"
+        x:Class="TradingAgent.App.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="{Binding WindowTitle}"
+        Icon="/Assets/icon.ico"
+        Width="1400" Height="900"
+        MinWidth="1024" MinHeight="700"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource AppBackgroundBrush}"
+        Foreground="{StaticResource TextPrimaryBrush}"
+        FontSize="14">
+
+  <Grid RowDefinitions="Auto,*" ColumnDefinitions="Auto,*">
+
+    <Border Grid.Row="0" Grid.ColumnSpan="2" Classes="header" Height="48" Margin="8,8,8,0">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Grid.Column="0" Classes="title" Text="{Binding WindowTitle}"
+                   VerticalAlignment="Center" Margin="16,0,0,0" />
+        <TextBlock Grid.Column="1" Classes="secondary" Text="{Binding VersionLabel}"
+                   VerticalAlignment="Center" Margin="0,0,16,0" />
+      </Grid>
+    </Border>
+
+    <Border Grid.Row="1" Grid.Column="0" Classes="panel" Width="208" Margin="8">
+      <ListBox x:Name="Navigation"
+               Classes="navigation"
+               ItemsSource="{Binding Pages}"
+               SelectedItem="{Binding SelectedPage}"
+               Background="Transparent"
+               Margin="6">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:PageViewModel">
+            <TextBlock Text="{Binding Title}" />
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </Border>
+
+    <Border Grid.Row="1" Grid.Column="1" Classes="panel" Margin="0,8,8,8" ClipToBounds="True">
+      <ContentControl x:Name="PageHost" Content="{Binding SelectedPage}" />
+    </Border>
+
+  </Grid>
+</Window>

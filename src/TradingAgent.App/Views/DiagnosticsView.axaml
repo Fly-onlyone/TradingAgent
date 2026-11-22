@@ -1,0 +1,34 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TradingAgent.App.ViewModels"
+             x:Class="TradingAgent.App.Views.DiagnosticsView"
+             x:DataType="vm:DiagnosticsViewModel">
+
+  <ScrollViewer>
+    <StackPanel Margin="24" Spacing="20">
+
+      <TextBlock Classes="pageTitle" Text="{Binding Title}" />
+
+      <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="10">
+        <TextBlock Grid.Row="0" Grid.Column="0" Classes="secondary" Text="Version" />
+        <SelectableTextBlock Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding Version}" />
+
+        <TextBlock Grid.Row="1" Grid.Column="0" Classes="secondary" Text="Build" />
+        <SelectableTextBlock Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding Build}" />
+
+        <TextBlock Grid.Row="2" Grid.Column="0" Classes="secondary" Text="Runtime" />
+        <SelectableTextBlock Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding Runtime}" />
+
+        <TextBlock Grid.Row="3" Grid.Column="0" Classes="secondary" Text="Data folder" />
+        <SelectableTextBlock Grid.Row="3" Grid.Column="1" Classes="value" Text="{Binding DataFolder}" />
+
+        <TextBlock Grid.Row="4" Grid.Column="0" Classes="secondary" Text="Database" />
+        <SelectableTextBlock Grid.Row="4" Grid.Column="1" Classes="value" Text="{Binding DatabaseFile}" />
+
+        <TextBlock Grid.Row="5" Grid.Column="0" Classes="secondary" Text="Logs" />
+        <SelectableTextBlock Grid.Row="5" Grid.Column="1" Classes="value" Text="{Binding LogFolder}" />
+      </Grid>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

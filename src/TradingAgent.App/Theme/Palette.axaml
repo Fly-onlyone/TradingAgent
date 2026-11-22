@@ -1,0 +1,20 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Colors of the "Solar" preset of the previous UI (frontend/src/theme/presets.ts). -->
+  <SolidColorBrush x:Key="AppBackgroundBrush" Color="#211B14" />
+  <SolidColorBrush x:Key="PanelBrush" Color="#332818" />
+  <!-- Panel color at 72% opacity; the header floats over the window background. -->
+  <SolidColorBrush x:Key="HeaderPanelBrush" Color="#B8342818" />
+  <SolidColorBrush x:Key="PrimaryBrush" Color="#F97316" />
+  <SolidColorBrush x:Key="TextPrimaryBrush" Color="#F8FAFC" />
+  <SolidColorBrush x:Key="TextSecondaryBrush" Color="#B8A894" />
+  <SolidColorBrush x:Key="BorderSubtleBrush" Color="#14F97316" />
+  <SolidColorBrush x:Key="BorderMediumBrush" Color="#26F97316" />
+  <SolidColorBrush x:Key="BullishBrush" Color="#10B981" />
+  <SolidColorBrush x:Key="BearishBrush" Color="#EF4444" />
+
+  <CornerRadius x:Key="PanelCornerRadius">12</CornerRadius>
+  <CornerRadius x:Key="ControlCornerRadius">8</CornerRadius>
+
+</ResourceDictionary>
