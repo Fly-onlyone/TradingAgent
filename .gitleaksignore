@@ -1,0 +1,10 @@
+# Triaged findings, one fingerprint per line: <commit>:<file>:<rule-id>:<line>
+# Add a line only after confirming the value is not a live secret. A real leaked secret must be
+# rotated first; listing it here does not remove it from history.
+
+# Sample JWT used as input to the stderr-scrubbing test.
+c83d2ee6c9766e13729960a29461afd04dba6471:backend/tests/agent/okx_atk/test_process_manager.py:jwt:62
+# Placeholder api_key value used as input to the stderr-scrubbing test.
+c83d2ee6c9766e13729960a29461afd04dba6471:backend/tests/agent/okx_atk/test_process_manager.py:generic-api-key:48
+# Keyword arguments named secrets_encryption_keys*, passed variables, no literal value.
+ce1c1152248f61c4f3a9ce44218da78f99d995e5:backend/tests/test_key_provider.py:generic-api-key:15
