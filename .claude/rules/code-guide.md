@@ -1,6 +1,6 @@
 # Code Guide
 
-Five non-obvious patterns this codebase requires. Full tables, examples, and rationale
+Non-obvious patterns this codebase requires. Full tables, examples, and rationale
 live in the Obsidian vault — links below.
 
 ### CSS Zoom Handling
@@ -54,3 +54,13 @@ The same `RiskManager.assess_trade_risk` returns scoring (`AVOID|CAUTION|PROCEED
 [Chat-Session Lifecycle](../../obsidian/00-Architecture/Chat-Session%20Lifecycle.md)
 
 **Subagent rule**: subagents are pure compute, return dicts, do NOT create their own `AgentSession`. The parent's session captures the timeline via tool-call bubbles.
+
+### Native Desktop App — Native AOT, Redaction, Privacy
+
+**When**: any C# code under `src/` or `tests/` (the native rewrite). The patterns above are for the old Python + React app and do not apply there.
+**Don't**: use reflection-based APIs, EF Core or Dapper (Native AOT); log or report text that has not passed `Redactor`; return a secret value to the UI; add a `user_id`; edit a shipped migration script; change Sentry privacy defaults or let an ordinary build upload debug symbols.
+→ [obsidian/07-Desktop/Desktop Solution Layout.md](../../obsidian/07-Desktop/Desktop%20Solution%20Layout.md)
++ [Desktop Build Gotchas](../../obsidian/07-Desktop/Desktop%20Build%20Gotchas.md),
+[SQLite Schema Conventions](../../obsidian/07-Desktop/SQLite%20Schema%20Conventions.md),
+[Desktop Data Folder](../../obsidian/07-Desktop/Desktop%20Data%20Folder.md),
+[Desktop Crash Reporting](../../obsidian/07-Desktop/Desktop%20Crash%20Reporting.md)

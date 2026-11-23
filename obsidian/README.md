@@ -35,6 +35,7 @@ filename inside `[[...]]` is the target.
 - `04-Patterns/` — codebase conventions (CSS zoom, Framer Motion, AI auth, etc.)
 - `05-Operations/` — build, dev server, releases, debugging
 - `06-Glossary/` — domain terms
+- `07-Desktop/` — the native rewrite (C# + Avalonia, Native AOT, SQLite): decisions, build, data, shell, release
 - `_Templates/` — note templates for new concepts
 
 Each leaf folder has an `_index.md` MOC that lists every concept inside it.
