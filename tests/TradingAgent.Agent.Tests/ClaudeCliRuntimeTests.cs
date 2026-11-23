@@ -583,15 +583,14 @@ public sealed class ClaudeCliRuntimeTests : IDisposable
     [Fact]
     public async Task Cancelling_ends_claude_code_and_the_run_is_recorded_as_cancelled()
     {
-        var streaming = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _launcher.Plays(async run =>
         {
             run.Init();
             run.MessageStart();
             run.Delta("Thinking about it");
-            streaming.SetResult();
             await run.Process.WhenKilled.WaitAsync(TimeSpan.FromSeconds(10));
         });
+        using var events = _store.Events.Subscribe();
         var session = _store.Sessions.Create();
         var runner = new AgentRunner(
             _store.Sessions,
@@ -601,7 +600,16 @@ public sealed class ClaudeCliRuntimeTests : IDisposable
             NullLogger<AgentRunner>.Instance);
 
         var running = runner.RunAsync(session.Id, "Hello", Ct);
-        await streaming.Task.WaitAsync(TimeSpan.FromSeconds(10), Ct);
+        // Cancelled once the text has been recorded, not merely written by Claude Code: the two
+        // happen on different threads.
+        using (var patience = CancellationTokenSource.CreateLinkedTokenSource(Ct))
+        {
+            patience.CancelAfter(TimeSpan.FromSeconds(10));
+            while (await events.Reader.ReadAsync(patience.Token) is not TextDelta)
+            {
+            }
+        }
+
         Assert.True(runner.Cancel(session.Id));
         var result = await running.WaitAsync(TimeSpan.FromSeconds(10), Ct);
 
