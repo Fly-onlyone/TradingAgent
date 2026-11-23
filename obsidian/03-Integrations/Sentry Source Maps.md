@@ -4,6 +4,10 @@ tags: [integrations]
 
 # Sentry Source Maps
 
+> [!warning] No longer active
+> The upload step was removed from `frontend/vite.config.ts` on 2026-11-23, when the Sentry project
+> `trading-agent-frontend` was deleted. This note is kept as a record.
+
 > Build-time upload of frontend source maps to Sentry for readable stack traces.
 
 ## Used for

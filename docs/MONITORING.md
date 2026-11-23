@@ -13,7 +13,7 @@ Auto-create these local monitoring cron jobs on every new Claude session.
 2. **Agent sessions** (`trading_agent.agent_sessions`): sessions created, failed (0 `assistant_messages`), stuck (`is_active=true` older than 2h) — metadata only
 3. **Embeddings** (`trading_agent.logs`): "Embedding generation failed" or "Embeddings permanently disabled"
 4. **News crawler** (`trading_agent.logs`): crawler errors/warnings, failed RSS crawls
-5. **Sentry**: new unresolved issues in `trading-agent-backend` and `trading-agent-frontend` (org: `fly-theonlyone`)
+5. **Sentry**: new unresolved issues in `trading-agent-desktop` (org: `fly-theonlyone`). The old projects `trading-agent-backend` and `trading-agent-frontend` were deleted on 2026-11-23
 
 ## Weekly Deep Analysis
 

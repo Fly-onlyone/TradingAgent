@@ -4,6 +4,10 @@ tags: [operations]
 
 # Sentry Setup
 
+> [!warning] Projects deleted
+> Both projects described here were deleted on 2026-11-23. The only Sentry project now is
+> `trading-agent-desktop`, used by the native app. This note is kept as a record.
+
 > Separate Sentry projects per layer under org `fly-theonlyone`.
 
 ## What it does

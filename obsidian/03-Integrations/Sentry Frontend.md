@@ -4,6 +4,10 @@ tags: [integrations]
 
 # Sentry Frontend
 
+> [!warning] Project deleted
+> The Sentry project `trading-agent-frontend` was deleted on 2026-11-23. The frontend sends nothing unless a new
+> project is created and its DSN set. This note is kept as a record of how the integration works.
+
 > Error monitoring for the React frontend — project `trading-agent-frontend` under org `fly-theonlyone`.
 
 ## Used for

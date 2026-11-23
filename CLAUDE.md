@@ -85,9 +85,11 @@ Full workflow: [`obsidian/05-Operations/Release Please Workflow.md`](obsidian/05
 
 ## Sentry
 
-Two projects under org `fly-theonlyone` — backend (`trading-agent-backend`) and frontend (`trading-agent-frontend`). Env vars in `.env.example`. Backend test endpoint: `POST /api/v1/admin/sentry-test` (superuser).
+One project under org `fly-theonlyone`: **`trading-agent-desktop`** (platform .NET), used by the native app. Its DSN is not in the repository; builds read it from the `SENTRY_DSN` secret or environment variable.
 
-Setup details: [`obsidian/03-Integrations/Sentry Backend.md`](obsidian/03-Integrations/Sentry%20Backend.md), [`obsidian/03-Integrations/Sentry Frontend.md`](obsidian/03-Integrations/Sentry%20Frontend.md), [`obsidian/05-Operations/Sentry Setup.md`](obsidian/05-Operations/Sentry%20Setup.md).
+The projects of the Python + React app, `trading-agent-backend` and `trading-agent-frontend`, were **deleted on 2026-11-23**. Sentry is therefore off in that app: leave `SENTRY_DSN` and `VITE_SENTRY_DSN` unset, and do not re-add a DSN to `backend/.env.example` (that file ships inside desktop builds). The SDK code and the test endpoint `POST /api/v1/admin/sentry-test` are still there but send nothing without a DSN.
+
+Historical setup notes: [`obsidian/03-Integrations/Sentry Backend.md`](obsidian/03-Integrations/Sentry%20Backend.md), [`obsidian/03-Integrations/Sentry Frontend.md`](obsidian/03-Integrations/Sentry%20Frontend.md), [`obsidian/05-Operations/Sentry Setup.md`](obsidian/05-Operations/Sentry%20Setup.md).
 
 ## Linting Gotchas
 
