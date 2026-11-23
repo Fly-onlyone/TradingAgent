@@ -85,7 +85,13 @@ public static class SettingKeys
     // News
     public static readonly SettingKey<long?> NewsCrawlLastRunAt = new("news.crawl_last_run_at", null, Json.NullableInt64);
 
-    // Embedding. Background embedding can wait while a listed game is running.
+    // Embedding provider for search by meaning: none, ollama, lmstudio, openai or custom. The address and
+    // the model are the provider's defaults while these are empty.
+    public static readonly SettingKey<string> EmbeddingProvider = new("embedding.provider", "none", Json.String);
+    public static readonly SettingKey<string> EmbeddingBaseUrl = new("embedding.base_url", string.Empty, Json.String);
+    public static readonly SettingKey<string> EmbeddingModel = new("embedding.model", string.Empty, Json.String);
+
+    // Background embedding can wait while a listed game is running.
     public static readonly SettingKey<bool> EmbeddingDeferWhenGaming = new("embedding.defer_when_gaming", false, Json.Boolean);
     public static readonly SettingKey<string[]> EmbeddingGamingProcesses = new("embedding.gaming_processes", [], Json.StringArray);
     public static readonly SettingKey<int> EmbeddingGamingCheckMinutes = new("embedding.gaming_check_minutes", 3, Json.Int32);

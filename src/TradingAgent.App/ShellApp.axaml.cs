@@ -8,10 +8,14 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using TradingAgent.Agent.Atk;
 using TradingAgent.Agent.Cli;
+using TradingAgent.Agent.Knowledge;
 using TradingAgent.Agent.Models;
+using TradingAgent.Agent.News;
 using TradingAgent.Agent.Orders;
 using TradingAgent.Agent.Runs;
+using TradingAgent.Agent.Tasks;
 using TradingAgent.Agent.Tools;
+using TradingAgent.Agent.Web;
 using TradingAgent.App.Hosting;
 using TradingAgent.App.Shell;
 using TradingAgent.App.Telemetry;
@@ -24,8 +28,11 @@ using TradingAgent.Core.Settings;
 using TradingAgent.Core.Shell;
 using TradingAgent.Data;
 using TradingAgent.Data.Agent;
+using TradingAgent.Data.Knowledge;
 using TradingAgent.Data.Logging;
+using TradingAgent.Data.News;
 using TradingAgent.Data.Notifications;
+using TradingAgent.Data.Tasks;
 using TradingAgent.Data.Trading;
 using TradingAgent.Exchange.Okx;
 using TradingAgent.Exchange.Risk;
@@ -46,6 +53,9 @@ public sealed partial class ShellApp : Application
 
     /// <summary>How long OKX may take to answer a read request.</summary>
     private static readonly TimeSpan _exchangeTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>How long a feed, a web page, a web search or an embedding provider may take to answer.</summary>
+    private static readonly TimeSpan _webTimeout = TimeSpan.FromSeconds(30);
 
     private ServiceProvider? _services;
 
@@ -176,6 +186,7 @@ public sealed partial class ShellApp : Application
             provider.GetRequiredService<IChildProcessJob>(),
             provider.GetRequiredService<ILogger<AtkProcessLauncher>>()));
         services.AddSingleton<OrderStubRepository>();
+        services.AddSingleton<SessionWriteBlocks>();
         services.AddSingleton<IAtkGate, RiskGate>();
         services.AddSingleton(provider => new AtkService(
             provider.GetRequiredService<IAtkLauncher>(),
@@ -196,6 +207,44 @@ public sealed partial class ShellApp : Application
         services.AddSingleton<ITool, GetAccountBalanceTool>();
         services.AddSingleton<ITool, GetPositionsTool>();
         services.AddSingleton<ITool, GetOpenOrdersTool>();
+        // What the app knows and collects: memories, strategies, news, scheduled tasks, and the search
+        // over them. Each outside service gets an HTTP client of its own, so that no header set for one
+        // (a search key) can reach another.
+        services.AddSingleton<MemoryRepository>();
+        services.AddSingleton<StrategyRepository>();
+        services.AddSingleton<KnowledgeIndex>();
+        services.AddSingleton<NewsRepository>();
+        services.AddSingleton<AgentTaskRepository>();
+        services.AddSingleton(provider => new EmbedderResolver(
+            provider.GetRequiredService<ISettingsStore>(),
+            provider.GetRequiredService<ISecretStore>(),
+            new HttpClient { Timeout = _webTimeout }));
+        services.AddSingleton<EmbeddingIndexer>();
+        services.AddSingleton<KnowledgeSearch>();
+        services.AddSingleton(provider => new BraveSearchClient(
+            new HttpClient { Timeout = _webTimeout },
+            () => provider.GetRequiredService<ISecretStore>().Reveal(SecretNames.BraveSearchApiKey)));
+        // No automatic redirects: the reader checks every address it is sent to before it goes there.
+        services.AddSingleton(_ => new PageReader(new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false }) { Timeout = _webTimeout }));
+        services.AddSingleton(provider => new NewsCrawler(
+            provider.GetRequiredService<NewsRepository>(),
+            new HttpClient { Timeout = _webTimeout },
+            provider.GetRequiredService<EmbeddingIndexer>(),
+            provider.GetRequiredService<ISettingsStore>(),
+            provider.GetRequiredService<TimeProvider>(),
+            provider.GetRequiredService<ILogger<NewsCrawler>>()));
+        services.AddSingleton<ITool, SaveMemoryTool>();
+        services.AddSingleton<ITool, SearchMemoryTool>();
+        services.AddSingleton<ITool, DeleteMemoryTool>();
+        services.AddSingleton<ITool, SearchKnowledgeTool>();
+        services.AddSingleton<ITool, SaveStrategyTool>();
+        services.AddSingleton<ITool, ListStrategiesTool>();
+        services.AddSingleton<ITool, GetNewsTool>();
+        services.AddSingleton<ITool, WebSearchTool>();
+        services.AddSingleton<ITool, FetchUrlTool>();
+        services.AddSingleton<ITool, CreateTaskTool>();
+        services.AddSingleton<ITool, ListTasksTool>();
+        services.AddSingleton<ITool, PauseTaskTool>();
         services.AddSingleton(provider => new ToolHost(
             provider.GetServices<ITool>(),
             provider.GetServices<IToolGate>(),
@@ -228,6 +277,12 @@ public sealed partial class ShellApp : Application
         services.AddSingleton<NotificationService>();
         services.AddSingleton<OrderMirror>();
         services.AddSingleton<IBackgroundService>(provider => provider.GetRequiredService<OrderMirror>());
+        services.AddSingleton<IBackgroundService>(provider => provider.GetRequiredService<EmbeddingIndexer>());
+        services.AddSingleton<IBackgroundService>(provider => provider.GetRequiredService<NewsCrawler>());
+        services.AddSingleton<AgentTaskScheduler>();
+        services.AddSingleton<IBackgroundService>(provider => provider.GetRequiredService<AgentTaskScheduler>());
+        services.AddSingleton<StrategyDiscovery>();
+        services.AddSingleton<IBackgroundService>(provider => provider.GetRequiredService<StrategyDiscovery>());
         services.AddSingleton<BackgroundServiceHost>();
 
         services.AddSingleton<ISecretProtector, DpapiSecretProtector>();
