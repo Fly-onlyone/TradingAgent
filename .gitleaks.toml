@@ -1,0 +1,6 @@
+title = "TradingAgent gitleaks config"
+
+# Start from the built-in rule set. Add [[allowlists]] entries here only for patterns that are
+# false positives everywhere; a single triaged finding belongs in .gitleaksignore instead.
+[extend]
+useDefault = true
