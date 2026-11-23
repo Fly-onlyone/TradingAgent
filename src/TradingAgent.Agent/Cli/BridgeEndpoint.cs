@@ -85,9 +85,14 @@ public sealed partial class BridgeEndpoint : IAsyncDisposable
                 connections.Add(ServeAsync(connected));
             }
         }
-        catch (Exception ex) when (ex is OperationCanceledException or IOException or ObjectDisposedException)
+        catch (OperationCanceledException)
         {
             // Closing.
+        }
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            // The pipe is gone while the run goes on: Claude Code can no longer reach the tools.
+            LogAcceptFailed(_logger, ex);
         }
         finally
         {
@@ -112,7 +117,8 @@ public sealed partial class BridgeEndpoint : IAsyncDisposable
                     return;
                 }
 
-                Interlocked.Increment(ref _accepted);
+                var number = Interlocked.Increment(ref _accepted);
+                LogConnected(_logger, number);
                 await _server.ServeAsync(transport, _closing.Token).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is OperationCanceledException or IOException or ObjectDisposedException)
@@ -121,6 +127,12 @@ public sealed partial class BridgeEndpoint : IAsyncDisposable
             }
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Claude Code connected to the tool bridge (connection {Number} of this run).")]
+    private static partial void LogConnected(ILogger logger, int number);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "The tool bridge stopped taking connections.")]
+    private static partial void LogAcceptFailed(ILogger logger, Exception exception);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "A connection to the tool bridge did not show the run's token and was closed.")]
     private static partial void LogRefused(ILogger logger);

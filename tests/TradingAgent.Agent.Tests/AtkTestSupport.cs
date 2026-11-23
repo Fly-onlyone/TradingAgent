@@ -20,6 +20,9 @@ internal sealed class FakeMcpServer : IMcpTransport
         On("tools/list", _ => """{"tools":[]}""");
     }
 
+    /// <summary>Every message the client sent, as it was written.</summary>
+    public List<string> Sent { get; } = [];
+
     /// <summary>Every message the client sent, parsed.</summary>
     public List<JsonElement> Received { get; } = [];
 
@@ -62,6 +65,7 @@ internal sealed class FakeMcpServer : IMcpTransport
         var root = document.RootElement.Clone();
         lock (Received)
         {
+            Sent.Add(message);
             Received.Add(root);
         }
 

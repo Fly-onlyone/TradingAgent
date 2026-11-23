@@ -53,6 +53,25 @@ tags: [desktop, agent]
 - Signing in with a Claude subscription uses another runtime: the Claude Code command line runs the
   model and reaches the same tool host through a bridge. See [[Claude Code Runtime]].
 
+## The system prompt
+
+`TradingSystemPrompt` (`src/TradingAgent.Agent/Runs/`) is what every run starts with.
+
+- It names only tools that exist. The old app's prompt promised web search, a knowledge base, memory
+  and scheduled tasks; sections come back as their features do. A test fails when a tool of the app
+  is missing from the prompt.
+- It tells the model the trading mode (demo or live), the user's risk limits, what a size means for
+  each kind of order, what the [[Risk Gate]] refuses, and that a refusal is final.
+- It does not teach a client order id: the gate sets it.
+- It changes only when a setting changes, so the provider can cache it.
+
+## Checking it for real
+
+The Diagnostics page has an **Agent** card (`AgentCardViewModel`): the provider and whether it can
+answer, the trade kit's state, and **Run test prompt**, which asks for the price of BTC-USDT through
+the real run and shows the tool call, the answer and the tokens. The test's session is deleted
+afterwards. Until there is a chat screen this is the way to check a key or a sign-in.
+
 ## Not verified
 
 No test calls a real model with an API key. The two API clients are tested against recorded stream

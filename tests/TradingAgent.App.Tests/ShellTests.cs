@@ -1,11 +1,14 @@
+using System.IO.Pipes;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using TradingAgent.Agent.Atk;
 using TradingAgent.Agent.Cli;
+using TradingAgent.Agent.Mcp;
 using TradingAgent.Agent.Runs;
 using TradingAgent.Agent.Tools;
 using TradingAgent.App.ViewModels;
@@ -97,6 +100,68 @@ public sealed class ShellTests : IDisposable
     }
 
     [Fact]
+    public void The_system_prompt_names_every_tool_of_the_apps_own_and_the_page_has_its_agent_card()
+    {
+        using var services = ShellApp.BuildServices(_info, _paths);
+
+        var prompt = services.GetRequiredService<ISystemPrompt>().Build();
+        var tools = services.GetRequiredService<ToolHost>().Definitions.Select(definition => definition.Name).ToList();
+
+        // A tool the prompt does not mention is one the model has to guess the use of.
+        Assert.NotEmpty(tools);
+        Assert.All(tools, tool => Assert.Contains($"`{tool}`", prompt, StringComparison.Ordinal));
+        var card = services.GetRequiredService<DiagnosticsViewModel>().Agent;
+        Assert.NotNull(card);
+        Assert.Equal("Not running.", card.TradeKit);
+    }
+
+    [Fact]
+    public void Every_tool_describes_its_arguments_with_a_json_schema_object()
+    {
+        using var services = ShellApp.BuildServices(_info, _paths);
+
+        Assert.All(services.GetRequiredService<ToolHost>().Definitions, definition =>
+        {
+            // Sent as it is to the model provider and to Claude Code; one schema that does not
+            // parse loses every tool, not just its own.
+            using var schema = System.Text.Json.JsonDocument.Parse(definition.InputSchemaJson);
+            Assert.Equal(System.Text.Json.JsonValueKind.Object, schema.RootElement.ValueKind);
+            Assert.Equal("object", schema.RootElement.GetProperty("type").GetString());
+            Assert.NotEmpty(definition.Description);
+        });
+    }
+
+    [Fact]
+    public async Task The_apps_real_tools_can_be_listed_over_the_bridge_pipe()
+    {
+        // Found with the real Claude Code: with one test tool the list went through, with the app's
+        // own tools it never arrived, and the model answered without tools. Their schemas are
+        // written over several lines, which cut the one-line message into pieces.
+        using var services = ShellApp.BuildServices(_info, _paths);
+        var host = services.GetRequiredService<ToolHost>();
+        var log = new CapturingLogger();
+        var server = new McpToolServer(
+            () => host.Definitions,
+            (_, _) => Task.FromResult(new ToolOutcome("unused")),
+            "trading",
+            "9.8.7",
+            log);
+        await using var endpoint = BridgeEndpoint.Start(server, log);
+        var pipe = new NamedPipeClientStream(".", endpoint.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        await pipe.ConnectAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        await pipe.WriteAsync(System.Text.Encoding.UTF8.GetBytes(endpoint.Token + "\n"), TestContext.Current.CancellationToken);
+        await using var client = new McpClient(new StreamTransport(pipe), NullLogger.Instance, TimeSpan.FromSeconds(10));
+
+        await client.InitializeAsync("claude-code", "2.1.330", TestContext.Current.CancellationToken);
+        var listing = await Record.ExceptionAsync(() => client.ListToolsAsync(TestContext.Current.CancellationToken));
+        Assert.True(listing is null, $"{listing?.Message} Server log: {string.Join(" | ", log.Entries)}");
+        var listed = await client.ListToolsAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(host.Definitions.Select(definition => definition.Name), listed.Select(tool => tool.Name));
+        Assert.Contains(host.Definitions, definition => definition.InputSchemaJson.Contains('\n', StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Development_build_is_marked_in_the_title()
     {
         var dev = new AppInfo("1.0.0", IsDevelopmentBuild: true);
@@ -155,5 +220,29 @@ public sealed class ShellTests : IDisposable
     private sealed class UnknownPage : PageViewModel
     {
         public override string Title => "Unknown";
+    }
+
+    /// <summary>Keeps what was logged, so a failing test can say what the server ran into.</summary>
+    private sealed class CapturingLogger : Microsoft.Extensions.Logging.ILogger
+    {
+        public List<string> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            Microsoft.Extensions.Logging.LogLevel logLevel,
+            Microsoft.Extensions.Logging.EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            lock (Entries)
+            {
+                Entries.Add($"{logLevel}: {formatter(state, exception)} {exception?.GetType().Name}: {exception?.Message}");
+            }
+        }
     }
 }

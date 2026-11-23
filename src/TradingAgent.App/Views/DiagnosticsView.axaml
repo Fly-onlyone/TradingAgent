@@ -32,6 +32,32 @@
         <SelectableTextBlock Grid.Row="6" Grid.Column="1" Classes="value" Text="{Binding LogFolder}" />
       </Grid>
 
+      <StackPanel Spacing="10" IsVisible="{Binding Agent, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <TextBlock Classes="title" Text="Agent" />
+        <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
+          <TextBlock Grid.Row="0" Grid.Column="0" Classes="secondary" Text="Model" />
+          <SelectableTextBlock Grid.Row="0" Grid.Column="1" Classes="value" TextWrapping="Wrap" Text="{Binding Agent.Provider}" />
+
+          <TextBlock Grid.Row="1" Grid.Column="0" Classes="secondary" Text="Sign-in" />
+          <SelectableTextBlock Grid.Row="1" Grid.Column="1" Classes="value" TextWrapping="Wrap" Text="{Binding Agent.SignIn}" />
+
+          <TextBlock Grid.Row="2" Grid.Column="0" Classes="secondary" Text="OKX trade kit" />
+          <SelectableTextBlock Grid.Row="2" Grid.Column="1" Classes="value" TextWrapping="Wrap" Text="{Binding Agent.TradeKit}" />
+        </Grid>
+        <TextBlock Classes="secondary" TextWrapping="Wrap" Text="{Binding Agent.Notice}"
+                   IsVisible="{Binding Agent.Notice, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Content="Run test prompt" Command="{Binding Agent.RunTestPromptCommand}" />
+          <Button Content="Stop" Command="{Binding Agent.RunTestPromptCancelCommand}" />
+          <Button Content="Check again" Command="{Binding Agent.RefreshCommand}" />
+        </StackPanel>
+        <TextBlock Classes="secondary" TextWrapping="Wrap" Text="{Binding Agent.TestStatus}" />
+        <SelectableTextBlock Classes="value" TextWrapping="Wrap" Text="{Binding Agent.TestEvents}"
+                             IsVisible="{Binding Agent.TestEvents, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <SelectableTextBlock Classes="value" TextWrapping="Wrap" Text="{Binding Agent.TestAnswer}"
+                             IsVisible="{Binding Agent.TestAnswer, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </StackPanel>
+
       <StackPanel Spacing="10">
         <TextBlock Classes="title" Text="Desktop shell" />
         <ToggleSwitch IsChecked="{Binding StartWithWindows}"

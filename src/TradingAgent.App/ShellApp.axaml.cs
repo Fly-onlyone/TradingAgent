@@ -212,7 +212,8 @@ public sealed partial class ShellApp : Application
         services.AddSingleton(new CliRuntimeOptions(
             Environment.ProcessPath ?? throw new InvalidOperationException("The process path is unknown."),
             paths.ClaudeCodeDirectory));
-        services.AddSingleton<ISystemPrompt, DefaultSystemPrompt>();
+        services.AddSingleton<ISystemPrompt, TradingSystemPrompt>();
+        services.AddSingleton<AgentCardViewModel>();
         services.AddSingleton<IAgentRuntimeResolver, AgentRuntimeResolver>();
         services.AddSingleton<AgentRunner>();
 
