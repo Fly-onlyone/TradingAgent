@@ -33,7 +33,10 @@ public sealed partial class TradingSystemPromptTests
 
         var prompt = new TradingSystemPrompt(_settings).Build();
 
-        Assert.Contains("at or below 7.5 % of the account", prompt, StringComparison.Ordinal);
+        Assert.Contains("at or below 7.5 % of the account, counting what is already held", prompt, StringComparison.Ordinal);
+        Assert.Contains("larger than 7.5 % of the account", prompt, StringComparison.Ordinal);
+        // The way out of a position is named, so that the limit is not met with a retry.
+        Assert.Contains("a spot sell with `tdMode` `cash`, or a swap order with `reduceOnly` true", prompt, StringComparison.Ordinal);
         Assert.Contains("the stop-loss is 1.25 % and the take-profit 4 % from the entry price", prompt, StringComparison.Ordinal);
     }
 

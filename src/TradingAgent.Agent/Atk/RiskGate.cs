@@ -74,9 +74,12 @@ public static class ClientOrderId
 /// <item>Transfer: more than zero and at most <see cref="MaxTransferAmount"/>, USDT or USDC only,
 /// between the user's own funding and trading account only.</item>
 /// <item>Place: the arguments must be complete and plain; the size is turned into a value in the quote
-/// currency; a tool call places one order; <see cref="RiskManager"/> must assess the trade and not
-/// say <see cref="RiskRecommendation.Avoid"/>; the order gets a client order id of the gate's own
-/// and a pending row in <c>orders</c> before it is let through.</item>
+/// currency; a tool call places one order; the position, with what is already held, must stay within
+/// <c>risk.max_position_size_pct</c> of the account; <see cref="RiskManager"/> must assess the trade
+/// and not say <see cref="RiskRecommendation.Avoid"/>; the order gets a client order id of the gate's
+/// own and a pending row in <c>orders</c> before it is let through. An order that can only reduce a
+/// position (a spot sell in cash mode, a swap order with <c>reduceOnly</c>) skips the limit and the
+/// assessment, not the rest.</item>
 /// </list>
 /// <para>
 /// The gate does not know whether the trade kit is running or in which mode; the caller
@@ -320,6 +323,9 @@ public sealed partial class RiskGate(
 
         decimal entryPrice;
         decimal quantity;
+        decimal orderValue;
+        // For a swap: what one contract is worth, and whether that is in coins (linear) or in US dollars.
+        (decimal Size, bool InCoins)? perContractValue = null;
         try
         {
             var last = (await okx.GetTickerAsync(instrumentId, cancellationToken).ConfigureAwait(false)).Last;
@@ -348,10 +354,12 @@ public sealed partial class RiskGate(
                     case "linear":
                         // One contract is an amount of the coin.
                         value = size * perContract * entryPrice;
+                        perContractValue = (perContract, true);
                         break;
                     case "inverse":
                         // One contract is an amount of US dollars.
                         value = size * perContract;
+                        perContractValue = (perContract, false);
                         break;
                     default:
                         return GateDecision.Deny($"The contract type of {instrumentId} is not known to this app.");
@@ -363,26 +371,44 @@ public sealed partial class RiskGate(
             }
 
             quantity = value / entryPrice;
+            orderValue = value;
         }
         catch (OkxException ex)
         {
             return GateDecision.Deny($"The price or the contract could not be read from OKX, so the trade was not assessed: {ex.Message}");
         }
 
-        RiskAssessment assessment;
-        try
+        // An order that can only make a position smaller is let out without the two checks below:
+        // they exist to keep exposure from growing, and a gate that refuses the way out in a falling
+        // market does harm. The exchange itself enforces "only smaller" for both kinds.
+        var reducing = swap
+            ? input.TryGetProperty("reduceOnly", out var reduceOnly) && reduceOnly.ValueKind == JsonValueKind.True
+            : side == "sell" && Token(input, "tdMode") == "cash";
+        var score = 0;
+        var recommendation = RiskRecommendation.Proceed;
+        if (!reducing)
         {
-            assessment = await risk.AssessTradeAsync(instrumentId, side, quantity, entryPrice, cancellationToken).ConfigureAwait(false);
-        }
-        catch (OkxException ex)
-        {
-            return GateDecision.Deny($"The account could not be read from OKX, so the trade was not assessed: {ex.Message}");
-        }
+            try
+            {
+                if (await OverPositionLimitAsync(instrumentId, swap, orderValue, perContractValue, entryPrice, cancellationToken).ConfigureAwait(false) is { } over)
+                {
+                    return GateDecision.Deny(over);
+                }
 
-        if (assessment.Recommendation == RiskRecommendation.Avoid)
-        {
-            var warnings = assessment.Warnings.Count > 0 ? string.Join("; ", assessment.Warnings) : "no detail";
-            return GateDecision.Deny(string.Create(CultureInfo.InvariantCulture, $"Risk check: AVOID (score {assessment.Score}). {warnings}."));
+                var assessment = await risk.AssessTradeAsync(instrumentId, side, quantity, entryPrice, cancellationToken).ConfigureAwait(false);
+                if (assessment.Recommendation == RiskRecommendation.Avoid)
+                {
+                    var warnings = assessment.Warnings.Count > 0 ? string.Join("; ", assessment.Warnings) : "no detail";
+                    return GateDecision.Deny(string.Create(CultureInfo.InvariantCulture, $"Risk check: AVOID (score {assessment.Score}). {warnings}."));
+                }
+
+                score = assessment.Score;
+                recommendation = assessment.Recommendation;
+            }
+            catch (OkxException ex)
+            {
+                return GateDecision.Deny($"The account could not be read from OKX, so the trade was not assessed: {ex.Message}");
+            }
         }
 
         var clientOrderId = ClientOrderId.New(context.SessionId);
@@ -407,8 +433,72 @@ public sealed partial class RiskGate(
             return GateDecision.Deny("The order could not be recorded, so it was not placed.");
         }
 
-        LogAssessed(logger, toolName, instrumentId, side, (double)assessment.PositionValueUsd, assessment.Score, assessment.Recommendation);
+        if (reducing)
+        {
+            LogReducing(logger, toolName, instrumentId, side, (double)orderValue);
+        }
+        else
+        {
+            LogAssessed(logger, toolName, instrumentId, side, (double)orderValue, score, recommendation);
+        }
+
         return new GateDecision(true, null, Rewrite(input, clientOrderId, unitToSend));
+    }
+
+    /// <summary>
+    /// The hard limit on one position: what is already held in the instrument plus this order may not
+    /// be more than <c>risk.max_position_size_pct</c> of the account. Returns why the order is over
+    /// it, or null.
+    /// </summary>
+    /// <remarks>
+    /// Not a score: the risk manager only adds points for size, and at most 45 of the 60 that refuse,
+    /// so without this an order of the whole account passed in a calm market. Counting what is held
+    /// keeps ten orders of 4 % from becoming a position of 40 %. A long and a short in the same swap
+    /// are added, not set off against each other: the stricter reading.
+    /// </remarks>
+    /// <exception cref="OkxException">The balance or the positions could not be read.</exception>
+    private async Task<string?> OverPositionLimitAsync(
+        string instrumentId,
+        bool swap,
+        decimal orderValue,
+        (decimal Size, bool InCoins)? perContract,
+        decimal entryPrice,
+        CancellationToken cancellationToken)
+    {
+        var limit = (decimal)settings.GetValue(SettingKeys.RiskMaxPositionSizePercent);
+        var balance = await okx.GetBalanceAsync(cancellationToken).ConfigureAwait(false);
+        if (balance.TotalEquityUsd <= 0)
+        {
+            return "The account has no equity to measure the order against.";
+        }
+
+        decimal held = 0;
+        if (swap && perContract is { } contract)
+        {
+            foreach (var position in await okx.GetPositionsAsync("SWAP", cancellationToken).ConfigureAwait(false))
+            {
+                if (position.InstrumentId == instrumentId)
+                {
+                    var price = position.MarkPrice > 0 ? position.MarkPrice : entryPrice;
+                    held += Math.Abs(position.Size) * contract.Size * (contract.InCoins ? price : 1);
+                }
+            }
+        }
+        else if (!swap)
+        {
+            var coin = instrumentId[..instrumentId.IndexOf('-', StringComparison.Ordinal)];
+            held = Math.Max(0, balance.Assets.FirstOrDefault(asset => asset.Currency == coin)?.EquityUsd ?? 0);
+        }
+
+        var percent = (held + orderValue) / balance.TotalEquityUsd * 100;
+        if (percent <= limit)
+        {
+            return null;
+        }
+
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"This order would make the {instrumentId} position {percent:0.0}% of the account ({held:0.##} USD held, {orderValue:0.##} USD ordered). Your limit for one position is {limit:0.##}%. An order that only reduces a position is not held to it: a spot sell with tdMode cash, a swap order with reduceOnly true.");
     }
 
     /// <summary>The arguments with the gate's client order id and the size unit it assessed.</summary>
@@ -514,6 +604,9 @@ public sealed partial class RiskGate(
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Risk gate could not record the order of {Tool} (session {SessionId}); the order was refused.")]
     private static partial void LogStubFailed(ILogger logger, string tool, string sessionId, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Risk gate let a reducing order through without the size limit and the risk score: {Tool} {Instrument} {Side}, value {ValueUsd:0.00} USD.")]
+    private static partial void LogReducing(ILogger logger, string tool, string instrument, string side, double valueUsd);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Risk gate assessed {Tool} {Instrument} {Side}: value {ValueUsd:0.00} USD, score {Score} ({Recommendation}).")]
     private static partial void LogAssessed(ILogger logger, string tool, string instrument, string side, double valueUsd, int score, RiskRecommendation recommendation);
