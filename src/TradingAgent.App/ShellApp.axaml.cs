@@ -214,6 +214,8 @@ public sealed partial class ShellApp : Application
             paths.ClaudeCodeDirectory));
         services.AddSingleton<ISystemPrompt, TradingSystemPrompt>();
         services.AddSingleton<AgentCardViewModel>();
+        services.AddSingleton<ChatViewModel>();
+        services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<IAgentRuntimeResolver, AgentRuntimeResolver>();
         services.AddSingleton<AgentRunner>();
 

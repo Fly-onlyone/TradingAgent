@@ -14,6 +14,8 @@ public sealed class ViewLocator : IDataTemplate
 {
     public Control Build(object? param) => param switch
     {
+        ChatViewModel => new ChatView(),
+        SettingsViewModel => new SettingsView(),
         DiagnosticsViewModel => new DiagnosticsView(),
         _ => new TextBlock { Text = $"No view is registered for {param?.GetType().Name ?? "null"}." },
     };

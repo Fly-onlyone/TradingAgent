@@ -55,8 +55,9 @@ public sealed class ShellTests : IDisposable
 
         var main = services.GetRequiredService<MainViewModel>();
 
-        Assert.Same(services.GetRequiredService<DiagnosticsViewModel>(), main.SelectedPage);
-        Assert.Single(main.Pages);
+        // Chat first: it is what the app is opened for.
+        Assert.Equal(["Chat", "Settings", "Diagnostics"], main.Pages.Select(page => page.Title));
+        Assert.Same(services.GetRequiredService<ChatViewModel>(), main.SelectedPage);
         Assert.True(File.Exists(_paths.DatabaseFile));
         Assert.True(services.GetRequiredService<ISettingsStore>().GetValue(SettingKeys.OkxSandbox));
         Assert.Equal(SecretState.Unset, services.GetRequiredService<ISecretStore>().GetState(SecretNames.OkxApiKey));
@@ -195,6 +196,28 @@ public sealed class ShellTests : IDisposable
         Assert.IsType<ModelLoopRuntime>(services.GetRequiredService<IAgentRuntimeResolver>().Resolve().Runtime);
     }
 
+    [AvaloniaFact]
+    public void Every_page_of_the_rail_has_a_view_that_renders()
+    {
+        using var services = ShellApp.BuildServices(_info, _paths);
+        var main = services.GetRequiredService<MainViewModel>();
+        var window = new MainWindow { DataContext = main };
+        window.Show();
+
+        foreach (var page in main.Pages)
+        {
+            main.SelectedPage = page;
+            Dispatcher.UIThread.RunJobs();
+
+            // The locator's fallback is a text block that says no view is registered.
+            var host = window.GetVisualDescendants().OfType<ContentControl>().Single(control => control.Name == "PageHost");
+            Assert.IsNotType<TextBlock>(host.GetVisualDescendants().OfType<Control>().First(control => control is UserControl or TextBlock));
+        }
+
+        Assert.Single(window.GetVisualDescendants().OfType<DiagnosticsView>());
+        window.Close();
+    }
+
     [Fact]
     public void Development_build_is_marked_in_the_title()
     {
@@ -223,7 +246,9 @@ public sealed class ShellTests : IDisposable
     public void Page_host_renders_the_diagnostics_page_with_build_facts()
     {
         using var services = ShellApp.BuildServices(_info, _paths);
-        var window = new MainWindow { DataContext = services.GetRequiredService<MainViewModel>() };
+        var main = services.GetRequiredService<MainViewModel>();
+        main.SelectedPage = services.GetRequiredService<DiagnosticsViewModel>();
+        var window = new MainWindow { DataContext = main };
 
         window.Show();
         Dispatcher.UIThread.RunJobs();
