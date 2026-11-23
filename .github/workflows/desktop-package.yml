@@ -76,7 +76,12 @@ jobs:
           # Debug symbols are uploaded to Sentry only for a real release, and only if the token exists.
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           UPLOAD_SYMBOLS: ${{ inputs.release_tag != '' }}
-        run: dotnet publish src/TradingAgent.App/TradingAgent.App.csproj -c Release -r win-x64 --no-restore -o publish "-p:Version=$env:APP_VERSION" "-p:UploadSentrySymbols=$env:UPLOAD_SYMBOLS"
+        run: |
+          dotnet publish src/TradingAgent.App/TradingAgent.App.csproj -c Release -r win-x64 --no-restore -o publish "-p:Version=$env:APP_VERSION" "-p:UploadSentrySymbols=$env:UPLOAD_SYMBOLS"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Debug symbols go to Sentry, never into the installer. The project deletes them after publish.
+          $leftover = Get-ChildItem publish -Filter *.pdb -Recurse
+          if ($leftover) { throw "Debug symbols left in the publish folder: $($leftover.Name -join ', ')" }
 
       - name: Install vpk
         run: dotnet tool install --global vpk --version ${{ env.VPK_VERSION }}
