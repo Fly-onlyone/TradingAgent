@@ -59,6 +59,13 @@ public sealed class AgentRuntimeResolver(
         var authMode = settings.GetValue(SettingKeys.AgentAuthMode) == AgentWire.ApiKey ? AgentWire.ApiKey : AgentWire.Subscription;
         if (authMode == AgentWire.Subscription)
         {
+            // The user has to have read what this mode means for their subscription. Checked here,
+            // for every run: taking the confirmation back stops the next run.
+            if (!settings.GetValue(SettingKeys.AgentSubscriptionNoticeConfirmed))
+            {
+                return new ResolvedRuntime(null, provider, authMode, ClaudeCli.NoticeNotConfirmed);
+            }
+
             // Whether Claude Code is installed and signed in is found out when the run starts, and
             // told to the user as the run's failure: both can change while the app is open.
             return new ResolvedRuntime(
