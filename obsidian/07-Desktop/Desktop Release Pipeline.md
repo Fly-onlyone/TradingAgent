@@ -43,7 +43,7 @@ tags: [desktop, operations, release]
   packages before starting an installed copy.
 - The install folder is `%LOCALAPPDATA%\Fly.TradingAgent\`; data is elsewhere
   ([[Desktop Data Folder]]), so an uninstall keeps it.
-- `tauri-build.yml` still builds the old app. It goes away with the old app.
+- The packaging workflow also bundles the OKX trade kit into the app's folder (`build/trade-kit/bundle.ps1`; see [[Trade Kit Sidecar]]). It runs on a pull request that changes the workflow or `build/trade-kit`, so a broken bundle is caught before merge.
 
 ## See also
 

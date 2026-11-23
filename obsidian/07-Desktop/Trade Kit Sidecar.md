@@ -66,13 +66,17 @@ kit (`tools/list`), then make `AtkToolCatalogTests` pass by deciding the kind of
 
 ## Gotchas
 
-- **The kit is not bundled yet.** An installed build finds no kit unless the user ran
-  `npm install -g @okx_ai/okx-trade-mcp@1.3.3`; the status is then `Unavailable` and the agent has
-  only the app's own tools.
+- **A release bundles the kit** with a Node runtime of its own, as `atk\` next to the app
+  (`build/trade-kit/bundle.ps1`, run by the packaging workflow). The kit's version is pinned by a
+  lock file and the Node download by a SHA-256 kept in the repository. A build of your own has no
+  bundle: it uses a kit installed with `npm install -g @okx_ai/okx-trade-mcp@1.3.3`, and without
+  one the status is `Unavailable` and the agent has only the app's own tools. To update the kit,
+  change `build/trade-kit/package.json`, its lock file and `AtkCommandResolver.PinnedVersion`
+  together.
 - **The package's install script downloads two programs** (`okx-auth`, `okx-pilot`) into
   `.okx\bin` of the home folder at install time. With a key from the environment the kit does not
-  need them, and in the app's own home folder it does not find them. When the kit is bundled, install
-  it with `--ignore-scripts`.
+  need them, and in the app's own home folder it does not find them. The bundle is therefore installed
+  with `--ignore-scripts`.
 - **`account_set_position_mode` is left out on purpose** (`AtkToolCatalog.IsExcluded`): it changes how
   every position of the account is read.
 - **The kit's `initialize` answer carries instructions for a model.** They are not passed on; the

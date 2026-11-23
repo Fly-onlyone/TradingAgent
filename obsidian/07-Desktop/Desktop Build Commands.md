@@ -36,4 +36,4 @@ tags: [desktop, operations]
 
 - [[_index]]
 - [[Desktop Solution Layout]]
-- [[Build Commands]] — the old app
+- [[Build Commands]]: the previous app (history)
