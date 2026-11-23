@@ -91,7 +91,10 @@ public sealed class ShellTests : IDisposable
         var texts = page.GetVisualDescendants().OfType<SelectableTextBlock>().Select(t => t.Text).ToList();
         Assert.Contains("9.8.7", texts);
         Assert.Contains(_paths.DataDirectory, texts);
-        Assert.Contains(texts, text => text is not null && text.StartsWith("version 1, SQLite 3.", StringComparison.Ordinal));
+        // The schema version grows with every migration; the page must show whatever the database has.
+        var schema = services.GetRequiredService<TradingAgent.Data.Database>().SchemaVersion;
+        Assert.True(schema >= 2);
+        Assert.Contains(texts, text => text is not null && text.StartsWith($"version {schema}, SQLite 3.", StringComparison.Ordinal));
         window.Close();
     }
 

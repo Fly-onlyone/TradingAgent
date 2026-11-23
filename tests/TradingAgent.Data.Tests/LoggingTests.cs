@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using TradingAgent.Data.Agent;
 using TradingAgent.Data.Logging;
 using Xunit;
 
@@ -118,7 +119,12 @@ public sealed class LoggingTests
             new LogEntry(Now - (29 * Day), LogLevel.Warning, "Recent", "kept", null),
             new LogEntry(Now, LogLevel.Error, "New", "kept", null),
         ]);
-        using var retention = new RetentionService(repository, _time, NullLogger<RetentionService>.Instance);
+        using var retention = new RetentionService(
+            repository,
+            new AgentSessionRepository(temp.Database, _time),
+            new SqliteSettingsStore(temp.Database, _time, NullLogger<SqliteSettingsStore>.Instance),
+            _time,
+            NullLogger<RetentionService>.Instance);
 
         var removed = retention.RunOnce();
 

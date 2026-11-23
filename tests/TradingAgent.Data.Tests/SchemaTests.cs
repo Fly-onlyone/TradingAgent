@@ -16,7 +16,7 @@ public sealed class SchemaTests
         string[] expected =
         [
             "agent_decisions", "agent_memories", "agent_session_messages", "agent_sessions", "agent_tasks",
-            "agent_tool_calls", "credibility_events", "logs", "meta", "news_article_assets", "news_articles",
+            "agent_tool_calls", "agent_transcript", "credibility_events", "logs", "meta", "news_article_assets", "news_articles",
             "news_sources", "notifications", "orders", "secrets", "settings", "strategies",
             "strategy_discovery_cycles", "strategy_knowledge", "trade_lessons", "trading_patterns", "vectors",
         ];
