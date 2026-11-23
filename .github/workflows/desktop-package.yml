@@ -17,6 +17,11 @@ on:
         description: "Version to stamp. Empty: the version in Directory.Build.props."
         required: false
         type: string
+      upload_symbols:
+        description: "Also upload debug symbols to Sentry. Use it to test the SENTRY_AUTH_TOKEN secret."
+        required: false
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       version:
@@ -73,9 +78,10 @@ jobs:
           APP_VERSION: ${{ steps.version.outputs.value }}
           # Stamped into the app. Without it the build sends no crash reports at all.
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
-          # Debug symbols are uploaded to Sentry only for a real release, and only if the token exists.
+          # Debug symbols are uploaded to Sentry only for a real release, or when a manual run asks for
+          # it, and only if the token exists.
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          UPLOAD_SYMBOLS: ${{ inputs.release_tag != '' }}
+          UPLOAD_SYMBOLS: ${{ inputs.release_tag != '' || inputs.upload_symbols == true }}
         run: |
           dotnet publish src/TradingAgent.App/TradingAgent.App.csproj -c Release -r win-x64 --no-restore -o publish "-p:Version=$env:APP_VERSION" "-p:UploadSentrySymbols=$env:UPLOAD_SYMBOLS"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
