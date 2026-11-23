@@ -11,6 +11,7 @@ on:
   pull_request:
     paths:
       - .github/workflows/desktop-package.yml
+      - build/trade-kit/**
   workflow_dispatch:
     inputs:
       version:
@@ -88,6 +89,12 @@ jobs:
           # Debug symbols go to Sentry, never into the installer. The project deletes them after publish.
           $leftover = Get-ChildItem publish -Filter *.pdb -Recurse
           if ($leftover) { throw "Debug symbols left in the publish folder: $($leftover.Name -join ', ')" }
+
+      # The OKX trade kit with a Node runtime of its own, next to the app: an installed app needs no Node
+      # of the user's. Versions and checksums are pinned in build/trade-kit.
+      - name: Bundle the trade kit
+        shell: pwsh
+        run: ./build/trade-kit/bundle.ps1 -OutputDirectory publish/atk
 
       - name: Install vpk
         run: dotnet tool install --global vpk --version ${{ env.VPK_VERSION }}

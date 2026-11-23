@@ -1,7 +1,3 @@
-# Internal docs (contain Notion IDs / project-specific references)
-docs/NOTION.md
-docs/MONITORING.md
-
 # Claude Code worktrees
 .claude/worktrees/
 
@@ -11,11 +7,6 @@ docs/MONITORING.md
 # MCP config (may contain local tool paths / tokens)
 .mcp.json
 opencode.json
-
-# ATK Tauri sidecar bundles + vendor cache (generated per-build, ~150MB each).
-# Lockfile under scripts/atk-lock/ IS committed for reproducibility.
-frontend/src-tauri/binaries/
-frontend/src-tauri/vendor/
 
 # Environment variables
 .env
@@ -29,16 +20,6 @@ frontend/src-tauri/vendor/
 *.pfx
 *.crt
 *.cer
-
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.egg-info/
-dist/
-build/
-.venv/
-venv/
 
 # Logs
 logs/
@@ -56,11 +37,6 @@ logs/
 obsidian/.obsidian/workspace.json
 obsidian/.obsidian/workspace-mobile.json
 obsidian/.obsidian/workspaces.json
-
-# Frontend
-frontend/node_modules/
-frontend/dist/
-frontend/.vite/
 
 # OS
 .DS_Store

@@ -1,282 +1,51 @@
-# Trading agent
+# Trading Agent
 
-AI-powered cryptocurrency trading platform with automated task scheduling, multi-agent analysis, and real-time
-monitoring.
+A Windows desktop app in which an AI agent analyses crypto markets and trades on OKX for you. It is
+one native program: no server to run, no account to create, your data in one file on your computer.
 
-## Table of Contents
+> The app can place real orders with real money. It starts in **demo trading** and stays there until
+> you switch to live trading in Settings. Read [Safety](#safety) first.
 
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [Prerequisites](#prerequisites)
-- [Quick Start](#quick-start)
-- [Getting Started](#getting-started)
-- [Development](#development)
-- [Environment Variables](#environment-variables)
-- [Architecture](#architecture)
-- [Agent Chat](#agent-chat)
-  - [Agent Tools](#agent-tools)
-  - [Agent Memory](#agent-memory)
-  - [Agent Access](#agent-access)
-- [Knowledge Base (RAG)](#knowledge-base-rag)
-  - [Knowledge Types](#knowledge-types)
-  - [Auto-Generated Knowledge](#auto-generated-knowledge)
-  - [Agent Integration](#agent-integration)
-  - [Knowledge Refresh Schedule](#knowledge-refresh-schedule)
-- [Strategy Import](#strategy-import)
-  - [Auto-Discovery](#auto-discovery)
-- [Automation Flow](#automation-flow)
-  - [Task Types](#task-types)
-  - [Lifecycle](#lifecycle)
-  - [Subagents](#subagents)
-  - [Risk & Safeguards](#risk--safeguards)
-- [Production Checklist](#production-checklist)
-- [Deployment](#deployment)
-- [CI/CD](#cicd)
-- [Troubleshooting](#troubleshooting)
-- [API Overview](#api-overview)
+## What it does
 
-## Features
+- **Chat** with the agent: it reads prices, your balance and positions, the news, and what it
+  learned before, and places an order when you ask for one.
+- **Scheduled tasks**: work the agent does on its own, such as a market review every morning. A task
+  cannot trade unless you allow that task to.
+- **Dashboard, Trading, Orders, Trades**: your account, a price chart, every order, and what each
+  closed trade came to.
+- **Strategies and Knowledge**: strategies you wrote, imported from a page, or let the agent find;
+  one search over strategies, trade lessons, price patterns, news and memories.
+- **Memory**: what the agent keeps between conversations, for you to read and correct.
+- **News**: articles collected from the feeds you choose.
+- **Notifications** on the desktop and, if you want, by email.
+- **Admin**: the log, backups, and deleting data.
 
-- **AI Trading agent** — Chat with Claude AI via WebSocket, get structured trade recommendations with confidence scores
-- **Multi-Agent Analysis** — Parallel subagents for technical, fundamental, and news sentiment analysis
-- **Scheduled Tasks** — Cron-based automation with ASK (confirm before trading) and AUTO (immediate execution) modes
-- **Real-Time Market Data** — Live tickers, watchlists, and technical indicator charts via OKX
-- **Order Management** — Track open orders, order history, and active positions
-- **Risk Controls** — Configurable risk levels (conservative/moderate/aggressive), position limits, stop-loss enforcement
-- **Strategy Import** — Create strategies from URLs (articles, blog posts) or file uploads (TXT, JSON, YAML, PDF) with AI-powered extraction
-- **Strategy Auto-Discovery** — Scheduled crawling of news sources with AI extraction, automatically populating the knowledge base
-- **Knowledge Base (RAG)** — Hybrid search (vector + BM25) over strategies, lessons, patterns, and news with cross-encoder re-ranking, time-decay scoring, and knowledge graph relationships
-- **News & Sentiment** — Aggregated market news with credibility-weighted sentiment scoring
-- **Price Monitoring** — Condition-based alerts (price thresholds, RSI, volume spikes) with cooldowns
-- **Multi-Channel Notifications** — Alerts via 80+ channels (Telegram, Discord, Slack, email, webhooks) powered by Apprise
-- **Strategy Ratings** — Rate and review strategies with aggregate scoring and confidence metrics
-- **Two-Factor Auth** — Optional TOTP-based 2FA with QR code provisioning
-- **Agent Memory** — Cross-session memory with category-based TTL, semantic deduplication, and automatic context injection
-- **Interactive Agent** — Ask-user tool for in-chat clarification with single/multi-select options; create-task tool for agent-initiated task scheduling
-- **Desktop & Web** — Runs as a web app or native desktop app via Tauri v2
+## Install
 
-## Tech Stack
+Download `TradingAgent-win-Setup.exe` from the
+[latest release](https://github.com/Fly-onlyone/TradingAgent/releases/latest) and run it. The builds
+are not signed yet, so Windows SmartScreen warns about an unknown publisher on the first install.
+The app updates itself from the same releases.
 
-| Layer        | Technology                                                                      |
-|--------------|---------------------------------------------------------------------------------|
-| Frontend     | React 19, TypeScript 5.7, MUI 6, TanStack Router/Query, Zustand, Framer Motion |
-| Backend      | Python 3.11+, FastAPI, Beanie (MongoDB ODM), APScheduler                        |
-| AI           | Claude SDK (Anthropic), nomic-embed-text-v1.5 (local, ONNX), FlashRank (re-ranking) |
-| Exchange     | OKX REST API                                                                    |
-| Database     | MongoDB                                                                         |
-| Desktop      | Tauri v2 (Rust)                                                                 |
-| Package Mgmt | uv (Python), Bun (Node)                                                         |
+Then, in **Settings**:
 
-## Prerequisites
+1. Choose how the model runs: an Anthropic or OpenAI API key, or your Claude subscription (below).
+2. Save your OKX API key, secret key and passphrase. Create the key on OKX for **demo trading**
+   first.
+3. Set your risk limits.
 
-- **Python** 3.11+ (< 3.13)
-- **uv** — Python package manager ([install](https://docs.astral.sh/uv/getting-started/installation/))
-- **Bun** — JavaScript runtime & package manager ([install](https://bun.sh))
-- **MongoDB** — Local instance or Atlas cluster
+Your data is in `%LOCALAPPDATA%\TradingAgent\`. Uninstalling the app does not delete it.
 
-For the desktop app (optional):
-
-- **Rust** — cargo available in PATH
-- **Windows**: Visual Studio 2022 Build Tools with C++ workload (MSVC v143 + Windows SDK)
-
-## Quick Start
-
-```bash
-# Install dependencies
-uv sync
-cd frontend && bun install && cd ..
-
-# Copy environment files and fill in your values
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
-
-# Start both backend (port 7000) and frontend (port 3000)
-uv run python run.py
-```
-
-Open http://localhost:3000 in your browser.
-
-## Getting Started
-
-1. **Register** at `/auth/register` with email and password. If email delivery is configured (`EMAIL_URL`), you'll receive a verification email
-2. **Log in** at `/auth/login` — you'll receive a JWT token (auto-managed by the frontend)
-3. **Set superuser** — the first user is _not_ automatically a superuser. Set `is_superuser: true` on your user document in MongoDB manually, or use the dev mode below
-4. **Configure exchange** (superuser) — go to Settings and enter your OKX API credentials. Toggle sandbox mode for paper trading
-5. **Configure agent** (superuser) — set the Anthropic API key and model in Settings, or use the `ANTHROPIC_API_KEY` env var
-
-**Dev mode:** When `DEBUG=true`, the app uses a pre-authenticated superuser (`dev@localhost.dev`) with no login required.
-
-**Superuser-only features:** OKX credentials, agent configuration, token expiry, embedding settings, admin logs, database explorer, database backup.
-
-**Auth details:** JWT with HS256, configurable expiry (`ACCESS_TOKEN_EXPIRE_MINUTES`), transparent refresh on 401, token revocation on password change (all tokens issued before the change are invalidated), and optional TOTP two-factor authentication.
-
-## Development
-
-| Task             | Command                         |
-|------------------|---------------------------------|
-| Web dev          | `uv run python run.py`          |
-| Desktop dev      | `cd frontend && bun run tauri:dev` |
-| Build desktop    | `cd frontend && bun run tauri:build` |
-| Test backend     | `uv run pytest`                 |
-| Test frontend    | `cd frontend && bun run test`   |
-| Lint backend     | `uv run ruff check`             |
-| Lint frontend    | `cd frontend && bun run lint`   |
-| Format backend   | `uv run ruff format`            |
-| Format frontend  | `cd frontend && bun run format` |
-
-> **Note:** Do not run `uv run python run.py` alongside `bun run tauri:dev` — the backend would start twice.
-
-## Environment Variables
-
-Both `.env.example` files document all available variables. The key ones:
-
-### Backend (`backend/.env`)
-
-| Variable                 | Required | Description                                      |
-|--------------------------|----------|--------------------------------------------------|
-| `SECRET_KEY`             | Prod     | JWT signing key (generate: `python -c "import secrets; print(secrets.token_urlsafe(48))"`) |
-| `MONGODB_URL`            | No       | Default: `mongodb://localhost:27017`              |
-| `MONGODB_DB_NAME`        | No       | Default: `trading_agent`                          |
-| `ANTHROPIC_API_KEY`      | No       | Falls back to Claude Code CLI credentials         |
-| `OKX_API_KEY`            | No       | Prefer Settings UI; env var as fallback           |
-| `OKX_SECRET_KEY`         | No       | Prefer Settings UI; env var as fallback           |
-| `OKX_PASSPHRASE`         | No       | Prefer Settings UI; env var as fallback           |
-| `OKX_SANDBOX`            | No       | Default: `true`                                   |
-| `SECRETS_ENCRYPTION_KEYS`| No       | Fernet keys for encrypting secrets at rest        |
-| `SENTRY_DSN`             | No       | Enables Sentry error tracking                     |
-
-### Frontend (`frontend/.env`)
-
-| Variable                 | Required | Description                                       |
-|--------------------------|----------|---------------------------------------------------|
-| `VITE_SENTRY_DSN`        | No       | Enables Sentry in the browser                     |
-| `SENTRY_AUTH_TOKEN`      | No       | Uploads source maps during build                  |
-
-See `backend/.env.example` and `frontend/.env.example` for the full list including Sentry tuning, logging, and external data API keys (Brave Search, CoinGecko, Glassnode).
-
-## Architecture
-
-```
-Frontend (React 19 + MUI 6 + TanStack Router)
-  ↕  REST / WebSocket
-Backend (FastAPI + Beanie/MongoDB)
-  ↕
-Trading agent (Claude SDK)
-  ├── TechnicalAnalyst   — chart patterns, indicators (RSI, MACD, Bollinger)
-  ├── FundamentalAnalyst  — on-chain metrics, tokenomics, macro
-  ├── NewsAnalyst         — sentiment, credibility-weighted signals
-  ├── RiskManager         — position sizing, drawdown limits
-  └── OrderExecutor       — OKX spot execution with idempotency
-  ↕
-External: OKX Exchange │ News APIs │ Local Embeddings (nomic) │ FlashRank │ MongoDB
-```
-
-## Agent Chat
-
-The primary interface is a real-time chat with Claude AI over WebSocket (`/agent` page).
-
-**How it works:**
-
-1. Frontend opens a WebSocket connection to the backend
-2. Backend creates a `TradingAgent` instance with 24 MCP tools attached
-3. User sends a message (e.g., "Analyze BTC-USDT") — the agent streams back thinking blocks, tool calls, and a final response
-4. At the end of analysis, the agent calls `submit_recommendation` to produce a structured decision (action, confidence, entry/SL/TP, key factors)
-5. Sessions are persisted in MongoDB — messages, tool calls, and thinking content are all saved and resumable
-
-**Agent decision framework** (enforced via system prompt):
-
-```
-Historical Context → search knowledge base for past strategies, lessons, patterns
-  → Data Gathering → fetch ticker, indicators, on-chain metrics, news
-    → Explore & Extract → browse promising URLs, extract strategies to knowledge base
-      → Technical Analysis → RSI, MACD, Bollinger, chart patterns
-      → Fundamental Analysis → on-chain flows, macro indicators
-        → Sentiment Analysis → news sentiment, web search
-          → Risk Assessment → position sizing, stop-loss placement
-            → submit_recommendation (structured output)
-```
-
-### Agent Tools
-
-| Category           | Tools                                                          |
-|--------------------|----------------------------------------------------------------|
-| Market Data        | `get_ticker`, `get_orderbook`, `get_candlesticks`              |
-| Technical Analysis | `get_technical_indicators`, `detect_chart_patterns`            |
-| Fundamental        | `get_onchain_metrics`, `get_macro_indicators`                  |
-| News & Sentiment   | `get_latest_news`, `get_news_sentiment`                        |
-| Knowledge (RAG)    | `search_strategies`, `search_lessons`, `search_patterns`       |
-| Strategy Mgmt      | `list_user_strategies`, `toggle_strategy`                      |
-| Trading            | `get_account_balance`, `get_open_orders`, `place_order`, `cancel_order` |
-| Web Search         | `search_web`, `search_news`                                    |
-| Browser            | `browse_url`, `extract_strategy_from_url`                      |
-| Memory             | `save_memory`, `search_memories`, `update_memory`, `delete_memory` |
-| Interactive        | `ask_user`, `create_task`                                      |
-| Output             | `submit_recommendation`, `modify_task`                         |
-
-### Agent Memory
-
-The agent remembers context across sessions using a category-based memory system with automatic TTL expiry.
-
-**Memory categories:**
-
-| Category              | TTL       | Purpose                                         |
-|-----------------------|-----------|-------------------------------------------------|
-| `preference`          | Permanent | Risk tolerance, favorite pairs, timeframes      |
-| `watchlist`           | 30 days   | Symbols the user is tracking                    |
-| `trading_context`     | 7 days    | Active positions, portfolio goals               |
-| `market_observation`  | 24 hours  | Fleeting observations about market conditions   |
-| `decision_rationale`  | 14 days   | Reasoning behind important trading decisions    |
-| `lesson`              | 90 days   | Lessons learned from trades                     |
-| `general`             | 30 days   | Anything else worth remembering                 |
-
-**How it works:**
-
-- **Semantic deduplication** — When saving a memory, existing memories in the same category are checked by cosine similarity (threshold 0.95). Near-duplicates are updated instead of creating new entries.
-- **Session injection** — At session start, the most relevant memories are loaded and injected into the system prompt as a `[MEMORY CONTEXT]` block (capped at 25 entries).
-- **Auto-expiry** — MongoDB TTL index automatically deletes expired memories.
-- **Per-user limit** — 200 memories per user maximum.
-- **Embeddings** — Memories are embedded using the same local nomic model as the knowledge base, enabling semantic search via `search_memories`.
-
-### Agent Access
-
-Summary of what the agent can **read**, **modify**, and **not access**.
-
-| Resource | Access | Details |
-|----------|--------|---------|
-| Market data (OKX) | Read | Ticker, orderbook, candlesticks (1m–1D) |
-| Technical analysis | Read | RSI, MACD, Bollinger Bands, chart patterns, price action (calculated from candles) |
-| Fundamentals | Read | On-chain metrics, tokenomics, TVL (CoinGecko + DefiLlama), macro indicators |
-| News & web search | Read | Articles from DB with sentiment, Brave web/news search (cached 5 min), browse any URL for full content |
-| Knowledge base (RAG) | Read + **Write** (strategies) | Strategies via `extract_strategy_from_url` during chat; trade lessons and patterns via semantic search (read-only) |
-| Account & positions | Read | Balance, equity, open orders from OKX |
-| Orders | **Modify** | Place market/limit orders, cancel open orders — **blocked when sandbox mode is on** |
-| User strategies | **Modify** | Toggle `is_active` only — cannot create or delete strategies |
-| Agent task config | **Modify** | 10 whitelisted fields: `symbols`, `risk_level`, `holding_term`, `max_position_size`, `max_daily_trades`, `monitoring_conditions`, `alert_cooldown_minutes`, `custom_instructions`, `schedules`, `use_subagents` — only when `task_modification_mode` is enabled |
-| Decisions | **Write** | Creates `AgentDecision` records with action, confidence, entry/SL/TP, reasoning, market snapshot |
-| Agent memory | **Read/Write** | Save, search, update, and delete cross-session memories. Injected at session start. 200 per-user cap |
-| App settings | Read | Model config, risk defaults, sandbox flag — cannot modify |
-| File system | None | No disk read/write access |
-| User accounts | None | Cannot create, delete, or modify users |
-| News sources | None | Cannot add, remove, or edit source configuration |
-| Knowledge base | **Write** (strategies) | Can save strategies via `extract_strategy_from_url` during chat; lessons and patterns remain auto-generated only |
-
-**Guardrails:**
-
-- **Sandbox mode** — `OKX_SANDBOX=true` blocks all order placement and cancellation
-- **Position size cap** — order value limited to `max_position_size_pct` of total account equity
-- **Idempotency keys** — duplicate orders are rejected via unique index
-- **Max turns** — agent loop capped at 10 turns per execution to prevent runaway calls
-- **Task field whitelist** — enforced via `AGENT_MODIFIABLE_FIELDS` frozenset; all other fields are locked
-
-### Signing in with a Claude subscription
+## Signing in with a Claude subscription
 
 The agent can run on an API key (Anthropic or OpenAI) or on a Claude subscription. With a
 subscription, the Claude Code program installed on the computer runs the model:
 
 - The app starts Claude Code unmodified. It shows no Claude sign-in of its own and never sees,
   stores or passes on the sign-in. The user signs in with `claude auth login` in a terminal.
-- The native app asks the user to read and confirm a notice before the first run with a
-  subscription (Diagnostics → Agent).
+- The app asks the user to read and confirm a notice before the first run with a subscription
+  (Settings → Model).
 - Use it with your own subscription, for your own use. Anthropic does not allow an app to route
   requests through another person's plan, and the plans' usage limits assume ordinary use by one
   person.
@@ -286,242 +55,63 @@ subscription, the Claude Code program installed on the computer runs the model:
 This is a summary, not legal advice. Anthropic's page is the authority:
 <https://code.claude.com/docs/en/legal-and-compliance>.
 
-## Knowledge Base (RAG)
+## Safety
 
-The agent augments its analysis with a local knowledge base using semantic search — no external embedding API required.
+- **Demo first.** Orders are simulated on OKX demo trading until you switch to live trading, which
+  asks you twice.
+- **One way to the exchange.** Every order, cancel, transfer and leverage change the agent asks for
+  is checked by the app before it reaches OKX. The app refuses an order that would make one position
+  larger than your limit, leverage above 10, transfers above 1000 USDT, and anything it has no rule
+  for. There is no order form: an order always goes through this check.
+- **Emergency stop** in Settings: while it is on, the agent can cancel orders and nothing else.
+- **Unattended runs cannot trade** unless you allowed that task to. The agent cannot give itself
+  that permission.
+- **Your keys** are stored encrypted for your Windows account and are never shown again. The OKX key
+  is handed to the trade kit when it starts and is not written to a file.
+- **What the agent reads on the web is not an instruction.** It reads public pages only.
+- **Crash reports** hold no keys, account data or personal details, and can be switched off on the
+  Diagnostics page.
 
-### Knowledge Types
+Trading crypto can lose all the money you put in. The agent's analysis is not financial advice, and
+nothing here promises a profit.
 
-| Type                | Source                           | Contains                                                     |
-|---------------------|----------------------------------|--------------------------------------------------------------|
-| **Strategy**        | Manual, URL/file import, or auto-discovery | Entry/exit rules, risk params, win rate, Sharpe ratio        |
-| **Trade Lesson**    | Auto-extracted from filled orders | Outcome, P&L %, mistakes, successes, market context          |
-| **Trading Pattern** | Discovered by PatternMiner       | Conditions, success rate, sample count, average return       |
+## Search by meaning (optional)
 
-### How It Works
+The Knowledge search finds by words out of the box. To let it also find texts that mean the same in
+other words, choose an embedding provider on the Knowledge page: [Ollama](https://ollama.com) or
+LM Studio on your own computer, or OpenAI.
 
-- **Embedding model:** `nomic-ai/nomic-embed-text-v1.5` — 768 dimensions, runs locally on CPU via ONNX (~30-50ms per embedding, no API key needed)
-- **Storage:** Vectors stored inline on each MongoDB document; MongoDB text indexes on searchable fields
-- **Hybrid search:** Each query runs two retrieval paths in parallel:
-  1. **Vector search** — NumPy-vectorized dot product over projected embeddings (loads only `_id` + `embedding` from MongoDB, scores via matrix multiply, fetches full docs for top-k only)
-  2. **Text search** — MongoDB `$text` search on indexed fields (name, description, title, summary)
-- **Fusion:** Results merged via Reciprocal Rank Fusion (RRF) — documents appearing in both result sets get boosted
-- **Time-decay scoring:** Exponential decay weighting makes recent knowledge more relevant (news: 24h half-life, lessons: 7d, strategies/patterns: 30d)
-- **Re-ranking** (optional): FlashRank cross-encoder (~4MB, ~5ms for 20 candidates) re-scores top candidates. Enable via `AppSettings.reranking_enabled`
-- **Contextual embeddings:** Claude Haiku generates 1-2 sentence context prefixes before embedding (write-time), improving retrieval precision by 35-49%
-- **Fallback:** If hybrid search yields no results, falls back to regex matching on name/description/content fields
-- **Query caching:** Query embeddings cached for 300s (LRU, 64 entries) to avoid redundant encoding within a session
-- **Chunking:** Long documents (300+ words) can be split into 200-word chunks with 50-word overlap via `KnowledgeChunk` for fine-grained retrieval
-- **Knowledge graph:** `KnowledgeEdge` documents track relationships between entities (strategy→asset, pattern→asset, lesson→trade) for multi-hop reasoning
-- **Evaluation:** Built-in metrics (Precision@k, Recall@k, MRR, NDCG@k) for measuring retrieval quality
+## Build from source
 
-### Auto-Generated Knowledge
+Needs the [.NET 10 SDK](https://dotnet.microsoft.com/download) and, for the Native AOT publish,
+Visual Studio 2022 Build Tools with the "Desktop development with C++" workload.
 
-- **Trade lessons:** When an order is filled, `TradeLearner` uses Claude Sonnet to extract a lesson — what went right, what went wrong, and recommendations. Falls back to rule-based analysis (checks for missing stop-loss, trading against trend, overbought/oversold entries) if the API call fails.
-- **Trading patterns:** `PatternMiner` scans historical candles for RSI bullish divergence, volume spike breakouts, support bounces, and golden crosses. Patterns are validated against recent trade outcomes periodically.
-
-### Agent Integration
-
-The agent uses knowledge at two levels:
-
-1. **Interactive chat** — The system prompt instructs the agent to call `search_strategies`, `search_lessons`, and `search_patterns` before every analysis
-2. **Scheduled tasks** — The task scheduler automatically injects relevant knowledge context into the prompt before the agent runs
-
-### Knowledge Refresh Schedule
-
-| Knowledge Type        | Trigger                | Frequency                                                              |
-|-----------------------|------------------------|------------------------------------------------------------------------|
-| **StrategyKnowledge** | Auto-discovery         | Configurable (`auto_discover_interval_hours`, default 6h)              |
-| **StrategyKnowledge** | Manual import          | On-demand — URL/file at `/strategies/import`                           |
-| **StrategyKnowledge** | Direct API             | On-demand — `POST /knowledge/strategies`                               |
-| **NewsArticle**       | Scheduled crawl        | Every 15 min (all enabled RSS sources)                                 |
-| **NewsArticle**       | Credibility re-score   | Every 6 hours                                                         |
-| **TradeLesson**       | Auto-extracted         | On `close_trade()` — `TradeLearner` extracts via Claude, async        |
-| **TradeLesson**       | Manual / API           | On-demand — `POST /knowledge/lessons`                                  |
-| **TradingPattern**    | Scheduled mining       | Configurable (`pattern_mining_interval_hours`, default 12h)            |
-| **TradingPattern**    | Manual / API           | On-demand — `POST /knowledge/patterns`                                 |
-
-### Embedding Generation
-
-Every document and query that participates in vector search requires a 768-dim embedding generated by the local `nomic-ai/nomic-embed-text-v1.5` model (ONNX, CPU). The table below shows when embeddings are computed:
-
-| Content Type | Trigger | Frequency |
-|---|---|---|
-| **News Articles** | RSS crawl via `NewsScheduler` | Every 15 min + on startup |
-| **Strategy** (manual) | `POST /api/v1/strategies` | On-demand |
-| **Strategy** (import) | `POST /api/v1/import/confirm` | On-demand |
-| **Strategy** (auto-discovery) | `AgentTaskScheduler` discovery cycle | Configurable interval (default 6h) |
-| **Agent Memory** (save/update) | `POST/PUT /api/v1/memories` | On-demand |
-| **Agent Memory** (search) | `POST /api/v1/memories/search` | On-demand (query embedding) |
-| **Knowledge search** | `POST /api/v1/knowledge/search` | On-demand (query embedding) |
-
-**Notes:**
-
-- **Model preloading** — When `preload_embeddings_on_startup` is enabled in settings, the model is warm-loaded during app startup to avoid first-request latency.
-- **Threading** — Embeddings run in a `ThreadPoolExecutor(max_workers=2)` with an encode lock to prevent rotary cache corruption.
-- **Game deferral** — When `defer_embedding_when_gaming` is enabled, embedding generation is deferred while a game process is detected, to avoid CPU contention.
-
-## Strategy Import
-
-Strategies can be created from external sources — web articles or uploaded files — using AI to extract structured rules.
-
-**Supported sources:**
-
-- **URL** — Paste a link to a trading strategy article or blog post. The backend fetches content via trafilatura and sends it to Claude for extraction.
-- **File upload** — Upload a `.txt`, `.json`, `.yaml`, or `.pdf` file. PDF text is extracted via PyMuPDF.
-
-**Flow:**
-
-```
-Provide URL or File → Backend extracts text → Claude AI extracts structured fields
-  → Preview (name, entry/exit rules, risk params, symbols, timeframes)
-  → User reviews & edits → Confirm
-  → Creates Strategy (user-owned) + StrategyKnowledge (RAG with embedding)
+```powershell
+dotnet build TradingAgent.slnx
+dotnet test TradingAgent.slnx
+dotnet run --project src/TradingAgent.App
 ```
 
-The create page is at `/strategies/create` with three tabs: **Manual**, **URL Import**, and **File Upload**.
+A Debug build keeps its data apart, in `%LOCALAPPDATA%\TradingAgent-Dev\`. For the agent to trade
+from a build of your own, install the OKX trade kit: `npm install -g @okx_ai/okx-trade-mcp@1.3.3`.
+Release builds bundle it.
 
-### Auto-Discovery
-
-News sources can be configured to automatically extract strategies on a schedule. Enable `strategy_extraction` on a news source, then toggle auto-discovery in the Tasks page:
-
-- **Interval** — How often to crawl (1h to 24h)
-- **Min confidence** — Threshold for AI extraction quality
-- **Run Now** — Trigger an immediate discovery cycle
-
-Discovered strategies are saved to the knowledge base only (not executable). Superusers receive a notification for each new strategy found. Deduplication by strategy name prevents duplicates across runs.
-
-## Automation Flow
-
-Users create scheduled tasks via the UI (`/tasks`) or API. Each task defines a **type**, **frequency**, **risk level**, and **agent mode**.
-
-### Task Types
-
-| Type           | Purpose                        | Output                                    |
-|----------------|--------------------------------|-------------------------------------------|
-| **Analysis**   | Market analysis only           | Agent decision (analysis report)          |
-| **Trading**    | Analysis + potential execution | Recommendation → trade (if gates pass)    |
-| **Monitoring** | Condition-based alerts         | Notification when threshold is breached   |
-
-### Lifecycle
-
-```
-Task Created → APScheduler trigger (once / hourly / daily / weekly / cron)
-  │
-  ├─ Analysis: agent analyzes each symbol with MCP tools → stores decision
-  │
-  ├─ Trading: agent analyzes → gate checks (confidence ≥ threshold? daily limit?)
-  │    ├─ AUTO mode → execute trade immediately via OKX
-  │    └─ ASK mode  → send confirmation notification → user accepts/rejects → execute or discard
-  │
-  └─ Monitoring: evaluate conditions (price, RSI, volume) per symbol
-       └─ condition triggered → alert notification (respects cooldown)
+```powershell
+dotnet publish src/TradingAgent.App -c Release -r win-x64 -o publish
 ```
 
-### Subagents
+## How it is built
 
-When enabled, three specialist agents run **in parallel** before the main analysis:
+C# on .NET 10, [Avalonia](https://avaloniaui.net) 12, compiled ahead of time to one native program;
+SQLite for everything it stores; [Velopack](https://velopack.io) for the installer and updates. The
+[OKX trade kit](https://www.npmjs.com/package/@okx_ai/okx-trade-mcp) runs as a helper process and is
+the only part that can write to the exchange.
 
-| Subagent           | Focus                                              |
-|--------------------|----------------------------------------------------|
-| TechnicalAnalyst   | Indicators, chart patterns, BUY/SELL/HOLD signal   |
-| FundamentalAnalyst | On-chain metrics, tokenomics, valuation             |
-| NewsAnalyst        | Sentiment score, top stories, directional signal    |
+The design notes are in [`obsidian/07-Desktop`](obsidian/07-Desktop/_index.md); the rules for
+working on the code are in [`CLAUDE.md`](CLAUDE.md). The app replaces an earlier Python, React and
+Tauri version, whose last state is the tag before this change.
 
-Their results are aggregated into an enriched prompt for the main agent, improving decision quality at the cost of additional API calls.
+## Contributing
 
-### Risk & Safeguards
-
-| Level        | Max Risk / Trade | Min Confidence | Use Case             |
-|--------------|------------------|----------------|----------------------|
-| Conservative | 1.5%             | 75%            | Capital preservation |
-| Moderate     | 3.0%             | 65%            | Balanced approach    |
-| Aggressive   | 7.5%             | 55%            | Growth-oriented      |
-
-Additional safeguards: max position size cap, daily trade limit per task, mandatory stop-loss recommendation, idempotent order execution (no duplicate trades on retry), auto-pause after consecutive failures.
-
-## Production Checklist
-
-Before deploying to production:
-
-- [ ] Generate a strong `SECRET_KEY`: `python -c "import secrets; print(secrets.token_urlsafe(48))"`
-- [ ] Set `DEBUG=false` (debug mode bypasses all authentication)
-- [ ] Set `OKX_SANDBOX=false` for live trading
-- [ ] Configure `CORS_ORIGINS` to your production domain only
-- [ ] Set up MongoDB authentication and TLS
-- [ ] Configure `SENTRY_DSN` and `VITE_SENTRY_DSN` for error tracking
-- [ ] Generate `SECRETS_ENCRYPTION_KEYS` for API key encryption at rest
-- [ ] Set up automated database backups
-- [ ] Configure `NOTIFICATION_URLS` and `EMAIL_URL` (Apprise) for notifications and transactional emails
-- [ ] Review risk levels and max position sizes in task configuration
-
-## Deployment
-
-### Reverse Proxy (nginx)
-
-Place the backend behind nginx with SSL termination. The backend listens on port 7000, the frontend on port 3000 (or serve the built frontend as static files).
-
-### Process Manager
-
-Use `systemd` (Linux) or a container runtime to keep the backend running:
-
-```bash
-# Build frontend
-cd frontend && bun run build
-
-# Run backend (serves API + static frontend build)
-uv run uvicorn app.main:app --host 0.0.0.0 --port 7000
-```
-
-### Environment
-
-Copy `.env.example` files and fill in production values. Never commit `.env` files.
-
-### MongoDB
-
-- Use MongoDB Atlas or a replica set for production
-- Enable authentication and TLS
-- Create a dedicated database user with minimal permissions
-- Set up automated backups
-
-## CI/CD
-
-| Workflow | Trigger | What it does |
-|----------|---------|--------------|
-| `ci.yml` | Push/PR to master | Ruff lint + format, pytest, Biome check, vitest, vite build |
-| `tauri-build.yml` | Version tags or manual | Multi-platform desktop builds (Windows .msi, macOS .dmg, Linux .AppImage) |
-
-## Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| MongoDB connection refused | Check `MONGODB_URL`, ensure MongoDB is running, verify network/firewall |
-| OKX API errors (401/403) | Verify API key, secret, passphrase in Settings. Check IP whitelist on OKX |
-| Agent not responding | Check Anthropic API key in Settings. Verify `ANTHROPIC_API_KEY` env var |
-| WebSocket disconnects | Check browser console for errors. Verify backend is reachable on port 7000 |
-| Embedding model slow to load | First run downloads the model (~100-300MB depending on model). Subsequent runs use cache |
-| Frontend blank page | Run `bun install` then `bun run dev`. Check for TypeScript errors with `bun run check` |
-| Rate limit errors (429) | Auth endpoints are rate-limited. Wait and retry, or check for brute-force attempts |
-
-## API Overview
-
-The backend serves a REST API at `http://localhost:7000`. Interactive docs are available at `/docs` (Swagger) and `/redoc`.
-
-| Prefix                | Description                    |
-|-----------------------|--------------------------------|
-| `/auth`               | Login, register, token refresh, password, 2FA, email verification |
-| `/api/v1/market`      | Tickers, indicators, candles   |
-| `/api/v1/orders`      | Order history and positions    |
-| `/api/v1/strategies`  | Strategy CRUD                  |
-| `/api/v1/strategies/import` | AI extraction from URL/file, confirm |
-| `/api/v1/knowledge`   | Knowledge base (RAG) search    |
-| `/api/v1/news`        | News feed and sentiment        |
-| `/api/v1/agent/tasks` | Scheduled task management      |
-| `/api/v1/agent/sessions` | Agent WebSocket sessions    |
-| `/api/v1/agent/decisions` | Trading decision history   |
-| `/api/v1/notifications` | Alerts and confirmations     |
-| `/api/v1/settings`    | App configuration              |
-| `/api/v1/settings/strategy-discovery` | Auto-discovery config, run-now |
-| `/api/v1/users`       | User profile management        |
-| `/api/v1/strategies/ratings` | Strategy rating system  |
-| `/api/v1/admin`       | User management, logs, backup (superuser) |
+Commits and pull request titles follow [Conventional Commits](https://www.conventionalcommits.org).
+Versions and the changelog are written by Release Please; do not edit them by hand.

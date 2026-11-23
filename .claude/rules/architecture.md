@@ -1,28 +1,17 @@
 # Architecture
 
-System flows, data-flow diagrams (Mermaid), and the knowledge-graph schema live in the
-Obsidian vault under `obsidian/00-Architecture/`.
+How the app is put together is written in the vault, under `obsidian/07-Desktop/`.
 
-- [Trading Decision Flow](../../obsidian/00-Architecture/Trading%20Decision%20Flow.md)
-- [RAG Retrieval Pipeline](../../obsidian/00-Architecture/RAG%20Retrieval%20Pipeline.md)
-- [Knowledge Graph Edges](../../obsidian/00-Architecture/Knowledge%20Graph%20Edges.md)
-- [JWT Auth Flow](../../obsidian/00-Architecture/JWT%20Auth%20Flow.md)
-- [WebSocket Connection Manager](../../obsidian/00-Architecture/WebSocket%20Connection%20Manager.md)
-- [Background Service Startup](../../obsidian/00-Architecture/Background%20Service%20Startup.md)
-- [Request Logging Pipeline](../../obsidian/00-Architecture/Request%20Logging%20Pipeline.md)
-- [Strategy Auto-Discovery Cycle](../../obsidian/00-Architecture/Strategy%20Auto-Discovery%20Cycle.md)
-- [Subagent Delegation Pattern](../../obsidian/00-Architecture/Subagent%20Delegation%20Pattern.md)
-- [Chat-Session Lifecycle](../../obsidian/00-Architecture/Chat-Session%20Lifecycle.md)
+- [Desktop Solution Layout](../../obsidian/07-Desktop/Desktop%20Solution%20Layout.md): the projects and what may depend on what
+- [App Pages](../../obsidian/07-Desktop/App%20Pages.md): the navigation rail, pages, how a page reaches another
+- [Agent Runs](../../obsidian/07-Desktop/Agent%20Runs.md): a run from the user's message to the stored reply; events
+- [Claude Code Runtime](../../obsidian/07-Desktop/Claude%20Code%20Runtime.md): the model through a Claude subscription
+- [Trade Kit Sidecar](../../obsidian/07-Desktop/Trade%20Kit%20Sidecar.md) and [Risk Gate](../../obsidian/07-Desktop/Risk%20Gate.md): the only way to the exchange
+- [Order Mirror](../../obsidian/07-Desktop/Order%20Mirror.md): how the app learns what became of an order
+- [Scheduled Tasks](../../obsidian/07-Desktop/Scheduled%20Tasks.md): runs with nobody watching
+- [Knowledge and Search](../../obsidian/07-Desktop/Knowledge%20and%20Search.md): memory, strategies, news, embeddings
+- [Trades and Learning](../../obsidian/07-Desktop/Trades%20and%20Learning.md): profit and loss, lessons, patterns
+- [Admin and Backup](../../obsidian/07-Desktop/Admin%20and%20Backup.md): log, backup, restore, email
 
-Full zone MOC: [`obsidian/00-Architecture/_index.md`](../../obsidian/00-Architecture/_index.md)
-
-## Native desktop app (`src/`, `tests/`)
-
-The native rewrite (C# + Avalonia, Native AOT, SQLite) has its own zone, `obsidian/07-Desktop/`.
-
-- [Native Rewrite Decisions](../../obsidian/07-Desktop/Native%20Rewrite%20Decisions.md) — settled; do not reopen without the owner
-- [Desktop Solution Layout](../../obsidian/07-Desktop/Desktop%20Solution%20Layout.md)
-- [SQLite Schema Conventions](../../obsidian/07-Desktop/SQLite%20Schema%20Conventions.md)
-- [Desktop Shell Behaviour](../../obsidian/07-Desktop/Desktop%20Shell%20Behaviour.md)
-
-Full zone MOC: [`obsidian/07-Desktop/_index.md`](../../obsidian/07-Desktop/_index.md)
+Zone index: [`obsidian/07-Desktop/_index.md`](../../obsidian/07-Desktop/_index.md). The vault's zones
+`00` to `06` describe the previous app and are history.
