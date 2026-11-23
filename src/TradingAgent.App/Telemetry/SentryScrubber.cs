@@ -139,6 +139,8 @@ internal static class SentryScrubber
         // The device name is the computer name, which is often the owner's name.
         contexts.Device.Name = null;
         contexts.Device.DeviceUniqueIdentifier = null;
+        // The time zone says roughly where the user lives and helps no diagnosis: all app times are UTC.
+        contexts.Device.Timezone = null;
     }
 
     private static string? FileNameOnly(string? path) => path is null ? null : Path.GetFileName(path);

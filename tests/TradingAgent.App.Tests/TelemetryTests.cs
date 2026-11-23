@@ -19,7 +19,7 @@ public sealed class SentryScrubberTests
     private const string Key = "abcdabcdabcdab";
 
     [Fact]
-    public void Event_keeps_only_an_installation_id_as_user_and_no_machine_name()
+    public void Event_keeps_only_an_installation_id_as_user_and_no_machine_name_or_time_zone()
     {
         var sentryEvent = new SentryEvent
         {
@@ -27,11 +27,13 @@ public sealed class SentryScrubberTests
             User = new SentryUser { Id = "someone", Email = "alice@example.com", Username = "alice", IpAddress = "203.0.113.7" },
         };
         sentryEvent.Contexts.Device.Name = "ALICE-PC";
+        sentryEvent.Contexts.Device.Timezone = TimeZoneInfo.Utc;
 
         var scrubbed = SentryScrubber.ScrubEvent(sentryEvent, InstallId);
 
         Assert.Null(scrubbed.ServerName);
         Assert.Null(scrubbed.Contexts.Device.Name);
+        Assert.Null(scrubbed.Contexts.Device.Timezone);
         Assert.Equal(InstallId, scrubbed.User.Id);
         Assert.Null(scrubbed.User.Email);
         Assert.Null(scrubbed.User.Username);
