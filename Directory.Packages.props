@@ -13,6 +13,7 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.15" />
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.15" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.15" />
+    <PackageVersion Include="Sentry" Version="7.0.1" />
     <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.15" />
     <!-- Keep in step with the vpk tool version in the packaging workflows. -->
     <PackageVersion Include="Velopack" Version="1.2.161" />

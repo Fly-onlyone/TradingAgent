@@ -15,8 +15,35 @@
     <DebugType>none</DebugType>
   </PropertyGroup>
 
+  <!--
+    Crash reporting. The Sentry address (DSN) is not in the repository: a build stamps it into the
+    assembly from the SENTRY_DSN environment variable. A build without it sends nothing.
+  -->
+  <ItemGroup Condition="'$(SENTRY_DSN)' != ''">
+    <AssemblyMetadata Include="SentryDsn" Value="$(SENTRY_DSN)" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <!--
+      The Sentry package can upload debug symbols during a build. Off unless a build asks for it with
+      -p:UploadSentrySymbols=true, which only the release workflow does. A developer machine that
+      happens to have SENTRY_AUTH_TOKEN set must never upload from an ordinary build.
+    -->
+    <SentryOrg>fly-theonlyone</SentryOrg>
+    <SentryProject>trading-agent-desktop</SentryProject>
+    <SentryUploadSymbols>false</SentryUploadSymbols>
+    <SentryUploadSymbols Condition="'$(UploadSentrySymbols)' == 'true' and '$(SENTRY_AUTH_TOKEN)' != ''">true</SentryUploadSymbols>
+    <SentryUploadSources>false</SentryUploadSources>
+    <SentryCreateRelease>false</SentryCreateRelease>
+    <SentrySetCommits>false</SentrySetCommits>
+  </PropertyGroup>
+
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="TradingAgent.App.Tests" />
   </ItemGroup>
 
   <ItemGroup>
@@ -32,6 +59,7 @@
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Sentry" />
     <PackageReference Include="Velopack" />
   </ItemGroup>
 

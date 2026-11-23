@@ -68,7 +68,15 @@ jobs:
         run: dotnet restore TradingAgent.slnx --locked-mode
 
       - name: Publish (Native AOT)
-        run: dotnet publish src/TradingAgent.App/TradingAgent.App.csproj -c Release -r win-x64 --no-restore -o publish -p:Version=${{ steps.version.outputs.value }}
+        shell: pwsh
+        env:
+          APP_VERSION: ${{ steps.version.outputs.value }}
+          # Stamped into the app. Without it the build sends no crash reports at all.
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          # Debug symbols are uploaded to Sentry only for a real release, and only if the token exists.
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          UPLOAD_SYMBOLS: ${{ inputs.release_tag != '' }}
+        run: dotnet publish src/TradingAgent.App/TradingAgent.App.csproj -c Release -r win-x64 --no-restore -o publish "-p:Version=$env:APP_VERSION" "-p:UploadSentrySymbols=$env:UPLOAD_SYMBOLS"
 
       - name: Install vpk
         run: dotnet tool install --global vpk --version ${{ env.VPK_VERSION }}

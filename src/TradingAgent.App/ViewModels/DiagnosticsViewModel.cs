@@ -3,6 +3,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TradingAgent.App.Shell;
+using TradingAgent.App.Telemetry;
 using TradingAgent.Core;
 using TradingAgent.Core.Settings;
 using TradingAgent.Core.Shell;
@@ -11,13 +12,14 @@ using TradingAgent.Data;
 namespace TradingAgent.App.ViewModels;
 
 /// <summary>Facts about the running build, and the place where each skeleton feature gets its test control.</summary>
-public sealed partial class DiagnosticsViewModel : PageViewModel
+internal sealed partial class DiagnosticsViewModel : PageViewModel
 {
     private readonly ISettingsStore _settings;
     private readonly IAutostart _autostart;
     private readonly IToastNotifier _toasts;
     private readonly IUpdateService _updates;
     private readonly ShellRequests _shell;
+    private readonly TelemetryService _telemetry;
 
     /// <summary>True while a property is set from code, so its change handler does not act on it.</summary>
     private bool _synchronizing;
@@ -30,7 +32,8 @@ public sealed partial class DiagnosticsViewModel : PageViewModel
         IAutostart autostart,
         IToastNotifier toasts,
         IUpdateService updates,
-        ShellRequests shell)
+        ShellRequests shell,
+        TelemetryService telemetry)
     {
         ArgumentNullException.ThrowIfNull(info);
         ArgumentNullException.ThrowIfNull(paths);
@@ -43,6 +46,7 @@ public sealed partial class DiagnosticsViewModel : PageViewModel
         _toasts = toasts;
         _updates = updates;
         _shell = shell;
+        _telemetry = telemetry;
         ShowUpdateStatus();
         // Raised on a background thread.
         updates.StatusChanged += (_, _) => Dispatcher.UIThread.Post(ShowUpdateStatus);
@@ -58,9 +62,13 @@ public sealed partial class DiagnosticsViewModel : PageViewModel
         LogFolder = paths.LogDirectory;
 
         _synchronizing = true;
+        ReportingEnabled = settings.GetValue(SettingKeys.TelemetryEnabled);
         StartWithWindows = autostart.IsEnabled;
         OpenWindowAtStart = settings.GetValue(SettingKeys.WindowStartOpen);
         _synchronizing = false;
+
+        ShowReportingStatus();
+        telemetry.StateChanged += (_, _) => Dispatcher.UIThread.Post(ShowReportingStatus);
     }
 
     public override string Title => "Diagnostics";
@@ -96,6 +104,22 @@ public sealed partial class DiagnosticsViewModel : PageViewModel
     /// <summary>A new version is downloaded and waits for the app to exit.</summary>
     [ObservableProperty]
     public partial bool IsUpdateReady { get; set; }
+
+    /// <summary>The user's choice. Whether reports actually go out also depends on the build; see <see cref="ReportingStatus"/>.</summary>
+    [ObservableProperty]
+    public partial bool ReportingEnabled { get; set; }
+
+    [ObservableProperty]
+    public partial string ReportingStatus { get; set; } = string.Empty;
+
+    partial void OnReportingEnabledChanged(bool value)
+    {
+        if (!_synchronizing)
+        {
+            // TelemetryService listens to this setting and starts or stops reporting at once.
+            _settings.SetValue(SettingKeys.TelemetryEnabled, value);
+        }
+    }
 
     partial void OnStartWithWindowsChanged(bool value)
     {
@@ -150,6 +174,21 @@ public sealed partial class DiagnosticsViewModel : PageViewModel
         UpdateStatus = status.Message;
         IsUpdateReady = status.State == UpdateState.ReadyToInstall;
     }
+
+    [RelayCommand]
+    private void SendTestError()
+    {
+        ReportingStatus = _telemetry.SendTestError()
+            ? "Test error sent. It appears in Sentry within a minute."
+            : "Nothing was sent: reporting is not active.";
+    }
+
+    private void ShowReportingStatus() => ReportingStatus = _telemetry.State switch
+    {
+        TelemetryState.On => "Crash and performance reports are being sent.",
+        TelemetryState.Off => "Reporting is switched off. Nothing is sent.",
+        _ => "This build has no reporting address. Nothing is sent.",
+    };
 
     [RelayCommand]
     private void SendTestNotification()
