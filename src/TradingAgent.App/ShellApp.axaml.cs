@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using TradingAgent.Agent.Atk;
+using TradingAgent.Agent.Cli;
 using TradingAgent.Agent.Models;
 using TradingAgent.Agent.Runs;
 using TradingAgent.Agent.Tools;
@@ -198,6 +199,17 @@ public sealed partial class ShellApp : Application
             provider.GetServices<IToolGate>(),
             provider.GetRequiredService<ILogger<ToolHost>>(),
             sources: provider.GetServices<IToolSource>()));
+        // Claude Code, for a user who signs in with a subscription. It is started per run and reaches
+        // the tools above through this app's own exe in bridge mode.
+        services.AddSingleton<ICliProcessLauncher>(provider => new CliProcessLauncher(provider.GetRequiredService<IChildProcessJob>()));
+        services.AddSingleton(provider => new ClaudeCli(
+            provider.GetRequiredService<ICliProcessLauncher>(),
+            paths.ClaudeCodeDirectory,
+            provider.GetRequiredService<TimeProvider>(),
+            provider.GetRequiredService<ILogger<ClaudeCli>>()));
+        services.AddSingleton(new CliRuntimeOptions(
+            Environment.ProcessPath ?? throw new InvalidOperationException("The process path is unknown."),
+            paths.ClaudeCodeDirectory));
         services.AddSingleton<ISystemPrompt, DefaultSystemPrompt>();
         services.AddSingleton<IAgentRuntimeResolver, AgentRuntimeResolver>();
         services.AddSingleton<AgentRunner>();

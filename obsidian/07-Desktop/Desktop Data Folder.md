@@ -13,6 +13,8 @@ tags: [desktop, data]
 - `logs\app.jsonl` — rolling JSON-lines log, 10 MB × 5 files.
 - `trade-kit\` — the home folder the OKX trade kit is given, see [[Trade Kit Sidecar]]. Created when
   the kit is first started. It never holds the key.
+- `claude-code\` — the folder Claude Code is started in, see [[Claude Code Runtime]]. Holds a
+  `runs\` folder per run in progress, deleted when the run ends.
 - Paths come from `AppPaths` in `src/TradingAgent.Core/AppPaths.cs`.
 
 ## Settings and secrets

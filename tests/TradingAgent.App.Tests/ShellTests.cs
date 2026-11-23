@@ -5,6 +5,8 @@ using Avalonia.VisualTree;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using TradingAgent.Agent.Atk;
+using TradingAgent.Agent.Cli;
+using TradingAgent.Agent.Runs;
 using TradingAgent.Agent.Tools;
 using TradingAgent.App.ViewModels;
 using TradingAgent.App.Views;
@@ -73,6 +75,25 @@ public sealed class ShellTests : IDisposable
         Assert.DoesNotContain(tools, name => name.StartsWith(AtkToolCatalog.Prefix, StringComparison.Ordinal));
         Assert.False(Directory.Exists(_paths.TradeKitHomeDirectory));
         Assert.StartsWith(_paths.DataDirectory, _paths.TradeKitHomeDirectory, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("anthropic", "subscription", typeof(ClaudeCliRuntime))]
+    [InlineData("anthropic", "api_key", typeof(ModelLoopRuntime))]
+    [InlineData("openai", "subscription", typeof(ModelLoopRuntime))]
+    public void The_sign_in_mode_decides_which_runtime_answers(string provider, string authMode, Type runtime)
+    {
+        using var services = ShellApp.BuildServices(_info, _paths);
+        var settings = services.GetRequiredService<ISettingsStore>();
+        settings.SetValue(SettingKeys.AgentProvider, provider);
+        settings.SetValue(SettingKeys.AgentAuthMode, authMode);
+
+        var resolved = services.GetRequiredService<IAgentRuntimeResolver>().Resolve();
+
+        // A subscription means Claude Code runs the model; the app never holds that credential.
+        Assert.IsType(runtime, resolved.Runtime);
+        Assert.Null(resolved.Problem);
+        Assert.StartsWith(_paths.DataDirectory, _paths.ClaudeCodeDirectory, StringComparison.Ordinal);
     }
 
     [Fact]

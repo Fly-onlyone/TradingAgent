@@ -32,6 +32,12 @@ public sealed class AppPaths
     /// </summary>
     public string TradeKitHomeDirectory => Path.Combine(DataDirectory, "trade-kit");
 
+    /// <summary>
+    /// The folder Claude Code is started in. Empty of project files on purpose, and always the same:
+    /// Claude Code files a conversation under the folder it ran in and resumes it from there.
+    /// </summary>
+    public string ClaudeCodeDirectory => Path.Combine(DataDirectory, "claude-code");
+
     /// <summary>Resolves the paths under the current user's local application data folder.</summary>
     public static AppPaths ForCurrentUser(bool isDevelopmentBuild) =>
         new(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), isDevelopmentBuild);
