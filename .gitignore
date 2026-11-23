@@ -75,3 +75,7 @@ bin/
 obj/
 publish/
 *.csproj.user
+# Rider / ReSharper per-user settings
+*.DotSettings.user
+# Crash database the Sentry native SDK creates in the working directory of a run
+.sentry-native/
