@@ -239,6 +239,12 @@ public sealed partial class ClaudeCliRuntime(
                             switch (item)
                             {
                                 case CliInit init:
+                                    if (logger.IsEnabled(LogLevel.Information))
+                                    {
+                                        var servers = string.Join(", ", init.Servers.Select(server => $"{server.Name}={server.Status}"));
+                                        LogStarted(logger, init.Model, init.Tools.Count, servers);
+                                    }
+
                                     if (Unexpected(init) is { } stop)
                                     {
                                         process.Kill();
@@ -285,10 +291,12 @@ public sealed partial class ClaudeCliRuntime(
     /// </summary>
     private string? Unexpected(CliInit init)
     {
-        // Missing altogether, or failed: the model would answer without tools, and say whatever it
-        // likes about prices it never read. "pending" is fine: the tools arrive a moment later.
+        // Claude Code waits for its tool servers before it writes this line. One that is not
+        // connected by now (missing, failed, or still "pending" after that wait) will not be there
+        // for the model's first request: the model would answer without tools, and say whatever it
+        // likes about prices it never read. Seen with the real program: it wrote a tool call as text.
         var server = init.Servers.FirstOrDefault(candidate => candidate.Name == ServerName);
-        if (server is null or { Status: "failed" })
+        if (server is not { Status: "connected" } || (tools.Definitions.Count > 0 && init.Tools.Count == 0))
         {
             LogBridgeDown(logger, server?.Status ?? "not loaded");
             return "Claude Code could not reach this app's tools. Try again; if it keeps happening, restart the app.";
@@ -388,6 +396,9 @@ public sealed partial class ClaudeCliRuntime(
         run.FinishTool(id, outcome, (long)Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         return outcome;
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Claude Code started: model {Model}, {ToolCount} tools, tool servers: {Servers}.")]
+    private static partial void LogStarted(ILogger logger, string model, int toolCount, string servers);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Claude Code could not be started.")]
     private static partial void LogStartFailed(ILogger logger, Exception exception);

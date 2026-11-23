@@ -83,18 +83,3 @@ public sealed class AgentRuntimeResolver(
             authMode);
     }
 }
-
-/// <summary>The instructions used until the full prompt of the trading agent is ported.</summary>
-public sealed class DefaultSystemPrompt : ISystemPrompt
-{
-    public string Build() =>
-        """
-        You are the assistant inside Trading agent, a desktop app for one person who trades cryptocurrency on OKX.
-
-        Answer in plain language and keep answers short. Use the tools you are given to look things up
-        instead of guessing; if a tool fails, say so and say what you would need. Never state a price,
-        balance or position that you did not get from a tool in this conversation.
-
-        You cannot place, change or cancel orders in this version. If asked to, say so.
-        """;
-}

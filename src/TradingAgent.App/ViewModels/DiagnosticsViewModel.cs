@@ -33,7 +33,8 @@ internal sealed partial class DiagnosticsViewModel : PageViewModel
         IToastNotifier toasts,
         IUpdateService updates,
         ShellRequests shell,
-        TelemetryService telemetry)
+        TelemetryService telemetry,
+        AgentCardViewModel? agent = null)
     {
         ArgumentNullException.ThrowIfNull(info);
         ArgumentNullException.ThrowIfNull(paths);
@@ -47,6 +48,7 @@ internal sealed partial class DiagnosticsViewModel : PageViewModel
         _updates = updates;
         _shell = shell;
         _telemetry = telemetry;
+        Agent = agent;
         ShowUpdateStatus();
         // Raised on a background thread.
         updates.StatusChanged += (_, _) => Dispatcher.UIThread.Post(ShowUpdateStatus);
@@ -72,6 +74,9 @@ internal sealed partial class DiagnosticsViewModel : PageViewModel
     }
 
     public override string Title => "Diagnostics";
+
+    /// <summary>The "Agent" card; null where the page is built without the agent (some tests).</summary>
+    public AgentCardViewModel? Agent { get; }
 
     public string Version { get; }
 

@@ -94,6 +94,32 @@ public sealed class McpClientTests
     }
 
     [Fact]
+    public async Task Arguments_a_model_laid_out_over_several_lines_are_sent_as_one_message()
+    {
+        var server = new FakeMcpServer().On("tools/call", _ => """{"content":[{"type":"text","text":"ok"}]}""");
+        await using var client = NewClient(server);
+
+        var result = await client.CallToolAsync("spot_place_order", "{\n  \"instId\": \"BTC-USDT\",\r\n  \"sz\": \"100\"\n}", Ct);
+
+        Assert.Equal("ok", result.Text);
+        // One message, with nothing of the layout left; split in two, the server would have read neither half.
+        var arguments = Assert.Single(server.RequestsOf("tools/call")).GetProperty("params").GetProperty("arguments");
+        Assert.Equal("""{"instId":"BTC-USDT","sz":"100"}""", arguments.GetRawText());
+        Assert.All(server.Sent, message => Assert.DoesNotContain('\n', message));
+    }
+
+    [Fact]
+    public async Task Arguments_that_are_not_json_are_not_sent()
+    {
+        var server = new FakeMcpServer().On("tools/call", _ => """{"content":[]}""");
+        await using var client = NewClient(server);
+
+        await Assert.ThrowsAnyAsync<System.Text.Json.JsonException>(() => client.CallToolAsync("spot_place_order", "{\"sz\": ", Ct));
+
+        Assert.Empty(server.RequestsOf("tools/call"));
+    }
+
+    [Fact]
     public async Task A_result_the_server_marks_as_failed_is_returned_as_a_failure_not_thrown()
     {
         var server = new FakeMcpServer().On("tools/call", _ => """{"content":[{"type":"text","text":"No credentials found."}],"isError":true}""");

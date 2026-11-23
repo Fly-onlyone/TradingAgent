@@ -202,7 +202,9 @@ public sealed partial class McpClient : IAsyncDisposable
                 writer.WriteStartObject();
                 writer.WriteString("name", name);
                 writer.WritePropertyName("arguments");
-                writer.WriteRawValue(argumentsJson);
+                // Written anew, not pasted in: a model may lay its arguments out over several
+                // lines, and a message must stay on one.
+                WriteJson(writer, argumentsJson);
                 writer.WriteEndObject();
             },
             cancellationToken).ConfigureAwait(false);
@@ -224,6 +226,29 @@ public sealed partial class McpClient : IAsyncDisposable
 
         var isError = result.TryGetProperty("isError", out var error) && error.ValueKind == JsonValueKind.True;
         return new McpCallResult(text.ToString(), isError);
+    }
+
+    /// <summary>
+    /// Writes a JSON value given as text, without the line breaks and spaces it was laid out with.
+    /// Digits of numbers are kept as they are.
+    /// </summary>
+    /// <exception cref="JsonException">The text is not JSON.</exception>
+    internal static void WriteJson(Utf8JsonWriter writer, string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        document.RootElement.WriteTo(writer);
+    }
+
+    /// <summary>
+    /// The transports send one message per line. A line break inside a message would cut it in two,
+    /// and the other side would drop both halves without a word. Refused here, loudly.
+    /// </summary>
+    internal static void EnsureOneLine(string message)
+    {
+        if (message.AsSpan().IndexOfAny('\n', '\r') >= 0)
+        {
+            throw new InvalidOperationException("A protocol message must be one line; this one has a line break in it.");
+        }
     }
 
     public async ValueTask DisposeAsync()

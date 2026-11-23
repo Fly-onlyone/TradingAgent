@@ -90,8 +90,9 @@ internal sealed class FakeCliRun(FakeCliProcess process, IReadOnlyList<string> a
 
     public string SessionId => Arg("--session-id") ?? Arg("--resume") ?? string.Empty;
 
-    /// <summary>The first line of a real run. <paramref name="tools"/> are the names the model sees.</summary>
-    public void Init(params string[] tools) => InitServers("""[{"name":"trading","status":"connected"}]""", tools);
+    /// <summary>The first line of a real run. Without names, the one tool the tests' tool host has.</summary>
+    public void Init(params string[] tools) =>
+        InitServers("""[{"name":"trading","status":"connected"}]""", tools.Length > 0 ? tools : ["mcp__trading__get_ticker"]);
 
     /// <summary>The first line with the given <c>mcp_servers</c> array.</summary>
     public void InitServers(string serversJson, params string[] tools) =>

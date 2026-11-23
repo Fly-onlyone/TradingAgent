@@ -99,7 +99,7 @@ public sealed class ProcessTransport : IMcpTransport
 
     public async Task SendAsync(string message, CancellationToken cancellationToken)
     {
-        // A message is one line; JSON written by Utf8JsonWriter has no raw line breaks in it.
+        McpClient.EnsureOneLine(message);
         await _process.StandardInput.WriteLineAsync(message.AsMemory(), cancellationToken).ConfigureAwait(false);
         await _process.StandardInput.FlushAsync(cancellationToken).ConfigureAwait(false);
     }

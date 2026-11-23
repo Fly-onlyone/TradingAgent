@@ -152,6 +152,53 @@ public sealed class McpToolServerTests
     }
 
     [Fact]
+    public async Task A_schema_laid_out_over_several_lines_still_travels_as_one_message()
+    {
+        // Found with the real Claude Code: the app's tools write their schemas over several lines.
+        // Pasted into the answer as they were, they cut the message into pieces nobody could read.
+        var laidOut = new ToolDefinition(
+            "get_candlesticks",
+            "Reads price history.",
+            """
+            {
+              "type": "object",
+              "properties": {
+                "symbol": { "type": "string" },
+                "limit": { "type": "integer", "minimum": 1.50 }
+              }
+            }
+            """);
+        var (clientSide, serverSide) = DuplexTransport.CreatePair();
+        var server = new McpToolServer(() => [laidOut], (_, _) => Task.FromResult(new ToolOutcome("x")), "trading", "1.2.3", NullLogger.Instance);
+        using var stopping = new CancellationTokenSource();
+        var serving = server.ServeAsync(serverSide, stopping.Token);
+
+        await clientSide.SendAsync("""{"jsonrpc":"2.0","id":1,"method":"tools/list"}""", Ct);
+        var reply = (await clientSide.ReceiveAsync(Ct))!;
+
+        Assert.DoesNotContain('\n', reply);
+        using var document = JsonDocument.Parse(reply);
+        var schema = document.RootElement.GetProperty("result").GetProperty("tools")[0].GetProperty("inputSchema");
+        // The layout is gone, the content is not, and a number keeps its digits.
+        Assert.Equal("""{"type":"object","properties":{"symbol":{"type":"string"},"limit":{"type":"integer","minimum":1.50}}}""", schema.GetRawText());
+        await stopping.CancelAsync();
+        await clientSide.DisposeAsync();
+        await serving.WaitAsync(TimeSpan.FromSeconds(10), Ct);
+    }
+
+    [Fact]
+    public async Task A_message_with_a_line_break_is_refused_by_the_transport_instead_of_sent_in_pieces()
+    {
+        using var stream = new MemoryStream();
+        await using var transport = new StreamTransport(stream);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => transport.SendAsync("{\"a\":\n1}", Ct));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => transport.SendAsync("{\"a\":1}\r", Ct));
+
+        Assert.Equal(0, stream.Length);
+    }
+
+    [Fact]
     public async Task A_tool_that_throws_is_answered_as_failed_without_the_inner_message()
     {
         await using var harness = Start((_, _) => throw new InvalidOperationException("connection string leaked"));

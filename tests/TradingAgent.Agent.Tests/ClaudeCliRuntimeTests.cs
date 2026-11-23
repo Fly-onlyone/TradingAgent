@@ -352,12 +352,14 @@ public sealed class ClaudeCliRuntimeTests : IDisposable
     // What --safe-mode does: the server is not loaded at all, and the model answers without tools.
     [InlineData("[]", "could not reach this app's tools")]
     [InlineData("""[{"name":"other","status":"connected"}]""", "could not reach this app's tools")]
+    // What a reply that never arrives leaves behind: Claude Code gives up waiting and goes on.
+    [InlineData("""[{"name":"trading","status":"pending"}]""", "could not reach this app's tools")]
     [InlineData("""[{"name":"trading","status":"connected"},{"name":"github","status":"connected"}]""", "tool servers that are not this app's")]
     public async Task A_run_is_stopped_when_claude_code_did_not_load_exactly_this_apps_tool_server(string servers, string because)
     {
         _launcher.Plays(async run =>
         {
-            run.InitServers(servers);
+            run.InitServers(servers, "mcp__trading__get_ticker");
             await run.Process.WhenKilled.WaitAsync(TimeSpan.FromSeconds(10));
         });
 
@@ -368,18 +370,18 @@ public sealed class ClaudeCliRuntimeTests : IDisposable
     }
 
     [Fact]
-    public async Task A_tool_server_that_is_still_connecting_does_not_stop_the_run()
+    public async Task A_run_is_stopped_when_claude_code_is_connected_and_has_none_of_the_apps_tools()
     {
-        _launcher.Plays(run =>
+        _launcher.Plays(async run =>
         {
-            run.InitServers("""[{"name":"trading","status":"pending"}]""");
-            run.Success("ok");
-            return Task.CompletedTask;
+            run.InitServers("""[{"name":"trading","status":"connected"}]""");
+            await run.Process.WhenKilled.WaitAsync(TimeSpan.FromSeconds(10));
         });
 
         var (outcome, _, _) = await RunAsync("Hello");
 
-        Assert.Equal(RunOutcome.Complete, outcome);
+        Assert.Equal(MessageStatus.Failed, outcome.Status);
+        Assert.Contains("could not reach this app's tools", outcome.Error, StringComparison.Ordinal);
     }
 
     // ---- not installed, not signed in ----

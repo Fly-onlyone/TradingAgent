@@ -78,6 +78,11 @@ Terms: <https://code.claude.com/docs/en/legal-and-compliance>. Not legal advice.
 
 ## Gotchas
 
+- **One message, one line.** The protocol to Claude Code and to the trade kit is one JSON message per
+  line. A tool's schema written over several lines, pasted into a message as it was, cut the message in
+  pieces: Claude Code waited 30 s for the tool list, went on without tools, and the model wrote a tool
+  call as text. JSON values are now written anew (`McpClient.WriteJson`), and both transports refuse a
+  message with a line break. Found only by running the real app.
 - **Not `--safe-mode`.** Tried against Claude Code 2.1.330: it also drops the `--mcp-config` server,
   and the model then answers without tools. `--setting-sources ""` keeps the server and was seen to
   run no hooks and load no instruction file.

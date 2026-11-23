@@ -242,7 +242,9 @@ public sealed partial class McpToolServer
                                     writer.WriteString("name", tool.Name);
                                     writer.WriteString("description", tool.Description);
                                     writer.WritePropertyName("inputSchema");
-                                    writer.WriteRawValue(tool.InputSchemaJson);
+                                    // Written anew, not pasted in: a schema is often laid out over
+                                    // several lines, and a message must stay on one.
+                                    McpClient.WriteJson(writer, tool.InputSchemaJson);
                                     writer.WriteEndObject();
                                 }
 
@@ -262,9 +264,15 @@ public sealed partial class McpToolServer
                 }
             }
         }
-        catch (Exception ex) when (ex is IOException or ObjectDisposedException or OperationCanceledException or InvalidOperationException)
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException or OperationCanceledException)
         {
             // The connection went away while the answer was written. The client is gone with it.
+        }
+        catch (Exception ex) when (ex is not (IOException or ObjectDisposedException or OperationCanceledException))
+        {
+            // A request this server could not answer. Said in the log: a client that gets no
+            // answer only goes quiet, and the model then works without tools.
+            LogRequestFailed(_logger, ex);
         }
     }
 
@@ -323,6 +331,9 @@ public sealed partial class McpToolServer
             cancellationToken).ConfigureAwait(false);
     }
 
+    [LoggerMessage(Level = LogLevel.Error, Message = "A request of the tool client could not be answered.")]
+    private static partial void LogRequestFailed(ILogger logger, Exception exception);
+
     [LoggerMessage(Level = LogLevel.Warning, Message = "The tool client sent {Length} characters that are not a protocol message; ignored.")]
     private static partial void LogNotJson(ILogger logger, int length);
 
@@ -350,6 +361,7 @@ public sealed class StreamTransport : IMcpTransport
 
     public async Task SendAsync(string message, CancellationToken cancellationToken)
     {
+        McpClient.EnsureOneLine(message);
         await _writer.WriteLineAsync(message.AsMemory(), cancellationToken).ConfigureAwait(false);
         await _writer.FlushAsync(cancellationToken).ConfigureAwait(false);
     }
