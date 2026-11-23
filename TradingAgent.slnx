@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TradingAgent.App/TradingAgent.App.csproj" />
+    <Project Path="src/TradingAgent.Core/TradingAgent.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TradingAgent.App.Tests/TradingAgent.App.Tests.csproj" />
+    <Project Path="tests/TradingAgent.Core.Tests/TradingAgent.Core.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -69,3 +69,9 @@ Thumbs.db
 .codex
 screenshot
 .claude/scheduled_tasks.lock
+
+# .NET
+bin/
+obj/
+publish/
+*.csproj.user

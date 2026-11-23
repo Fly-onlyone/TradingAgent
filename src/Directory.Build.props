@@ -1,0 +1,17 @@
+<Project>
+
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <!-- Everything under src/ ships in the Native AOT app: turn on the trim and AOT analyzers for all of it. -->
+    <IsAotCompatible>true</IsAotCompatible>
+
+    <!--
+      `dotnet publish -r win-x64` restores the whole project graph for that runtime. Declaring it here
+      keeps each lock file identical whether it was written by a plain restore or by a publish; otherwise
+      a publish rewrites the library lock files and the next locked-mode restore fails with NU1004.
+    -->
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+  </PropertyGroup>
+
+</Project>

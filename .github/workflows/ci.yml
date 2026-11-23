@@ -3,8 +3,9 @@ name: CI
 on:
   push:
     branches: [ master ]
+  # Every pull request, whatever its base: a stacked PR targets another feature branch and must be
+  # checked too.
   pull_request:
-    branches: [ master ]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -71,3 +72,40 @@ jobs:
 
       - name: Build
         run: bun run build
+
+  desktop:
+    name: Desktop — Build, Test & Publish
+    # Windows: the app is Windows-first and Native AOT cannot cross-compile from Linux.
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
+
+      - name: Restore
+        run: dotnet restore TradingAgent.slnx --locked-mode
+
+      - name: Format check
+        run: dotnet format TradingAgent.slnx --verify-no-changes --no-restore
+
+      - name: Build
+        run: dotnet build TradingAgent.slnx -c Release --no-restore
+
+      - name: Run tests
+        run: dotnet test TradingAgent.slnx -c Release --no-build
+
+      # Trim and AOT warnings are errors (TreatWarningsAsErrors), so this step is the AOT-compatibility gate.
+      - name: Publish (Native AOT)
+        run: dotnet publish src/TradingAgent.App/TradingAgent.App.csproj -c Release -r win-x64 --no-restore -o publish
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trading-agent-win-x64
+          path: publish/
+          if-no-files-found: error
+          retention-days: 7

@@ -1,0 +1,29 @@
+<Project>
+
+  <PropertyGroup>
+    <!-- Owned by Release Please once the release pipeline lands. Do not edit by hand. -->
+    <Version>0.1.2</Version>
+    <Product>Trading agent</Product>
+    <Authors>Fly</Authors>
+
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+    <!-- Culture data is not needed: all persisted and wire formats are invariant. Saves size under Native AOT. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+
+    <!--
+      Lock files make restore reproducible and let CI cache packages. Native AOT adds the ILCompiler packs,
+      whose version follows the SDK, to the lock file: global.json therefore pins the SDK exactly, and an
+      SDK bump must regenerate the lock files (dotnet restore -force-evaluate).
+    -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+
+</Project>

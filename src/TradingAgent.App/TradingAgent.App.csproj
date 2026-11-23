@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <!-- Fixed so the lock file contains the Native AOT compiler packs for the one platform shipped today. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <AssemblyName>TradingAgent</AssemblyName>
+    <RootNamespace>TradingAgent.App</RootNamespace>
+    <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
+    <PublishAot>true</PublishAot>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TradingAgent.Core\TradingAgent.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <!-- SkiaSharp and HarfBuzz ship native .pdb files (about 100 MB) that publish copies next to the exe. -->
+  <Target Name="DropNativePdb" AfterTargets="Publish">
+    <ItemGroup>
+      <NativePdb Include="$(PublishDir)*.pdb" />
+    </ItemGroup>
+    <Delete Files="@(NativePdb)" />
+  </Target>
+
+</Project>
