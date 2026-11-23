@@ -74,8 +74,8 @@ id and used a `-`, which OKX does not allow.
 `OrderStubRepository` (`src/TradingAgent.Data/Trading/`) writes a row in `orders` with status
 `pending`, source `atk_mirror`, the client order id (also as `execution_idempotency_key`, which is
 unique), the session, the message and the `tool_use_id`, and `pending_until` two minutes ahead. The
-order mirror will fill the row in from the exchange and remove rows that never reached it. **Until
-the mirror exists nothing removes a row** whose order the exchange rejected.
+[[Order Mirror]] fills the row in from the exchange, and closes it as `rejected` when the exchange
+still does not know the order after that time.
 
 ## Writing tools without a rule
 
@@ -104,5 +104,6 @@ its rule in `RiskGate`, add it to the set, add tests.
 ## See also
 
 - [[Trade Kit Sidecar]]
+- [[Order Mirror]]
 - [[Exchange and Risk]]
 - [[Agent Runs]]
