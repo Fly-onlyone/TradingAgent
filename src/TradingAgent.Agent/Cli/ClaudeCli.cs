@@ -187,15 +187,31 @@ public sealed record CliStatus(CliState State, string? Path, string? AuthMethod)
 public sealed partial class ClaudeCli(ICliProcessLauncher launcher, string workingDirectory, TimeProvider time, ILogger<ClaudeCli> logger)
 {
     /// <summary>
-    /// What a screen must show where the user chooses to sign in with a subscription. Not legal advice;
-    /// the link is where Anthropic says what is allowed.
+    /// What the user must read and confirm before the first run with a Claude subscription. It says
+    /// what Anthropic's page on Claude Code's terms says about a subscription in someone else's app;
+    /// it is not legal advice, and the page is the authority.
     /// </summary>
+    /// <remarks>
+    /// The page (https://code.claude.com/docs/en/legal-and-compliance, read 2026-11-23) allows an end
+    /// user to sign in to the unmodified Claude Code program with their own subscription. It does not
+    /// allow an app to offer the Claude.ai sign-in itself, to collect, store or pass on that sign-in,
+    /// or to route requests through plan credentials on behalf of its users. Running Claude Code in a
+    /// product needs Anthropic's Commercial Terms unless agreed otherwise. This app's design follows
+    /// the first sentence and the notice tells the user the rest.
+    /// </remarks>
     public const string SubscriptionNotice =
-        "With this choice, Claude Code on this computer runs the model, signed in with your own Claude subscription. "
-        + "Trading agent starts the unmodified Claude Code program and never sees, stores or passes on your sign-in: "
-        + "sign in yourself by running 'claude auth login' in a terminal. "
-        + "Use is under Anthropic's terms for Claude Code. If you give this app to other people, read them first: "
-        + "https://code.claude.com/docs/en/legal-and-compliance";
+        "With this choice, the Claude Code program installed on this computer runs the model, signed in with your own Claude subscription. "
+        + "Trading agent starts that program unmodified. It never shows a Claude sign-in, and never sees, stores or passes on your sign-in: "
+        + "you sign in yourself by running 'claude auth login' in a terminal. "
+        + "Use this only with your own subscription, for your own use. Anthropic does not allow an app to route requests through another person's plan, "
+        + "and its usage limits assume ordinary use by one person. "
+        + "Anthropic's terms for Claude Code apply. Anyone who offers this app to other people with this sign-in mode needs Anthropic's Commercial Terms; "
+        + "an API key is the other way to sign in. Details: https://code.claude.com/docs/en/legal-and-compliance";
+
+    /// <summary>What a run says while <see cref="SubscriptionNotice"/> is not confirmed yet.</summary>
+    public const string NoticeNotConfirmed =
+        "Before the first run with a Claude subscription, read the notice in the Agent section of the Diagnostics page and confirm it. "
+        + "Or choose \"API key\" as the sign-in mode.";
 
     /// <summary>A "signed in" answer is trusted this long, so not every run starts with a question.</summary>
     private static readonly TimeSpan _signedInFor = TimeSpan.FromMinutes(5);

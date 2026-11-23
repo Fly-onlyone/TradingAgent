@@ -71,10 +71,22 @@ Cancelling ends the process; the next run resumes.
 
 ## The subscription
 
-The app never sees the sign-in. The user signs in with `claude auth login` in their own terminal;
-the app starts the unmodified program. `ClaudeCli.SubscriptionNotice` is the text a settings screen
-must show where this mode is chosen. Giving the app to other people may need Anthropic's Commercial
-Terms: <https://code.claude.com/docs/en/legal-and-compliance>. Not legal advice.
+What Anthropic's page on Claude Code's terms says (read 2026-11-23; the page is the authority, this is
+not legal advice):
+
+| The page says | What the app does |
+|---|---|
+| An end user may sign in to the unmodified Claude Code program with their own subscription | Starts the program the user installed, unmodified |
+| An app may not offer the Claude.ai sign-in itself, or collect, store or pass on the sign-in | Shows no sign-in. The user runs `claude auth login`. Of `claude auth status` two fields are read |
+| An app may not route requests through plan credentials on behalf of its users | Each user's own Claude Code, on their own computer |
+| Running Claude Code in a product needs the Commercial Terms unless agreed otherwise | Not something code can do: the owner's to settle before giving the app to others |
+
+- **The user confirms a notice first.** `ClaudeCli.SubscriptionNotice` is shown on the Diagnostics
+  page while the subscription mode is chosen. Until `agent.subscription_notice_confirmed` is true,
+  `AgentRuntimeResolver` gives no runtime for that mode and a run fails with what to do.
+- The app does not install or bundle Claude Code.
+- `README.md` has the same summary for whoever builds or passes on the app.
+- Page: <https://code.claude.com/docs/en/legal-and-compliance>.
 
 ## Gotchas
 

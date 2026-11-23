@@ -268,6 +268,24 @@ Summary of what the agent can **read**, **modify**, and **not access**.
 - **Max turns** — agent loop capped at 10 turns per execution to prevent runaway calls
 - **Task field whitelist** — enforced via `AGENT_MODIFIABLE_FIELDS` frozenset; all other fields are locked
 
+### Signing in with a Claude subscription
+
+The agent can run on an API key (Anthropic or OpenAI) or on a Claude subscription. With a
+subscription, the Claude Code program installed on the computer runs the model:
+
+- The app starts Claude Code unmodified. It shows no Claude sign-in of its own and never sees,
+  stores or passes on the sign-in. The user signs in with `claude auth login` in a terminal.
+- The native app asks the user to read and confirm a notice before the first run with a
+  subscription (Diagnostics → Agent).
+- Use it with your own subscription, for your own use. Anthropic does not allow an app to route
+  requests through another person's plan, and the plans' usage limits assume ordinary use by one
+  person.
+- Anyone who offers this app to other people with this sign-in mode needs Anthropic's Commercial
+  Terms. An API key is the other way to sign in.
+
+This is a summary, not legal advice. Anthropic's page is the authority:
+<https://code.claude.com/docs/en/legal-and-compliance>.
+
 ## Knowledge Base (RAG)
 
 The agent augments its analysis with a local knowledge base using semantic search — no external embedding API required.

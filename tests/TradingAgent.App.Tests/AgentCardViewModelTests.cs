@@ -78,6 +78,7 @@ public sealed class AgentCardViewModelTests : IDisposable
         Assert.Equal(expected, card.Provider);
         Assert.Equal("An API key is saved (ends in wxyz).", card.SignIn);
         Assert.Equal(string.Empty, card.Notice);
+        Assert.False(card.NeedsConfirmation);
         Assert.Equal(0, _secrets.Reveals);
     }
 
@@ -99,9 +100,39 @@ public sealed class AgentCardViewModelTests : IDisposable
 
         Assert.Equal("Anthropic, with a Claude subscription (Claude Code runs the model)", card.Provider);
         Assert.Equal(ClaudeCli.SubscriptionNotice, card.Notice);
-        Assert.StartsWith("Not asked yet.", card.SignIn, StringComparison.Ordinal);
+        Assert.True(card.NeedsConfirmation);
+        Assert.Equal("Held back until you confirm the notice below.", card.SignIn);
         // Opening the page must not start a program.
         Assert.Empty(_cliLauncher.Starts);
+    }
+
+    [Fact]
+    public void Confirming_the_notice_is_remembered_and_lets_the_subscription_run()
+    {
+        var card = NewCard();
+
+        card.ConfirmNotice();
+
+        Assert.True(_settings.GetValue(SettingKeys.AgentSubscriptionNoticeConfirmed));
+        Assert.False(card.NeedsConfirmation);
+        Assert.StartsWith("Not asked yet.", card.SignIn, StringComparison.Ordinal);
+        // Remembered: the next start of the app does not ask again.
+        Assert.False(NewCard().NeedsConfirmation);
+        // Still shown: the notice stays readable for as long as the mode is chosen.
+        Assert.Equal(ClaudeCli.SubscriptionNotice, card.Notice);
+    }
+
+    [Theory]
+    [InlineData("installed on this computer runs the model, signed in with your own Claude subscription")]
+    [InlineData("never sees, stores or passes on your sign-in")]
+    [InlineData("you sign in yourself by running 'claude auth login'")]
+    [InlineData("only with your own subscription, for your own use")]
+    [InlineData("does not allow an app to route requests through another person's plan")]
+    [InlineData("needs Anthropic's Commercial Terms")]
+    [InlineData("https://code.claude.com/docs/en/legal-and-compliance")]
+    public void The_notice_says_what_the_terms_page_says(string sentence)
+    {
+        Assert.Contains(sentence, ClaudeCli.SubscriptionNotice, StringComparison.Ordinal);
     }
 
     [Fact]
