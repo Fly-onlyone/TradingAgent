@@ -31,6 +31,7 @@ public abstract class BatchingLoggerProvider : ILoggerProvider
     /// <param name="minimumLevel">Entries below this level are ignored by this sink.</param>
     /// <param name="batchSize">A batch is written as soon as it holds this many entries.</param>
     /// <param name="flushInterval">Longest time an entry waits before it is written.</param>
+    /// <param name="time">Clock that measures the flush interval. Tests pass one they control.</param>
     protected BatchingLoggerProvider(LogLevel minimumLevel, int batchSize, TimeSpan flushInterval, TimeProvider time)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(batchSize);

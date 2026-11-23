@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging;
-using Sentry;
 using TradingAgent.Core.Logging;
 
 namespace TradingAgent.App.Telemetry;

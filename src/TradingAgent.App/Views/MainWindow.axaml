@@ -23,7 +23,7 @@
       </Grid>
     </Border>
 
-    <Border Grid.Row="1" Grid.ColumnSpan="2" Classes="panel" Margin="8,8,8,0" Padding="16,8"
+    <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Classes="panel" Margin="8,8,8,0" Padding="16,8"
             IsVisible="{Binding ShowTelemetryNotice}">
       <Grid ColumnDefinitions="*,Auto">
         <TextBlock Grid.Column="0" VerticalAlignment="Center" TextWrapping="Wrap"

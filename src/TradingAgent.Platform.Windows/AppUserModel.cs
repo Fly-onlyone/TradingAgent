@@ -13,6 +13,8 @@ namespace TradingAgent.Platform.Windows;
 public static partial class AppUserModel
 {
     /// <summary>Registers the identity for the current user and assigns it to this process.</summary>
+    /// <param name="appUserModelId">The identity, for example <c>Fly.TradingAgent</c>. The installer must use the same value.</param>
+    /// <param name="displayName">Name shown as the sender of notifications.</param>
     /// <param name="iconFile">Full path of a PNG shown next to notifications.</param>
     public static void Register(string appUserModelId, string displayName, string iconFile)
     {
@@ -43,6 +45,8 @@ public static partial class AppUserModel
         _ = AllowSetForegroundWindow(AnyProcess);
     }
 
+    // The method name is the name of the function exported by shell32.dll, so it keeps Windows' spelling.
+    // ReSharper disable once InconsistentNaming
     [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16)]
     private static partial int SetCurrentProcessExplicitAppUserModelID(string appId);
 
