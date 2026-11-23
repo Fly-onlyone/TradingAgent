@@ -48,7 +48,12 @@ internal sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     public partial bool ShowTelemetryNotice { get; set; }
 
-    partial void OnSelectedPageChanged(PageViewModel value) => value.Activate();
+    partial void OnSelectedPageChanged(PageViewModel oldValue, PageViewModel newValue)
+    {
+        // Null the first time, whatever the declared type says.
+        (oldValue as PageViewModel)?.Deactivate();
+        newValue.Activate();
+    }
 
     private void OpenChat(string sessionId)
     {

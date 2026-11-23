@@ -34,6 +34,14 @@
     <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
   </Style>
 
+  <Style Selector=":is(TextBlock).good">
+    <Setter Property="Foreground" Value="{StaticResource BullishBrush}" />
+  </Style>
+
+  <Style Selector=":is(TextBlock).bad">
+    <Setter Property="Foreground" Value="{StaticResource BearishBrush}" />
+  </Style>
+
   <Style Selector="SelectableTextBlock.value">
     <Setter Property="FontFamily" Value="Cascadia Mono,Consolas,monospace" />
   </Style>

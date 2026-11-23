@@ -38,6 +38,12 @@ public sealed class AppPaths
     /// </summary>
     public string ClaudeCodeDirectory => Path.Combine(DataDirectory, "claude-code");
 
+    /// <summary>Where "Back up now" writes copies of the database.</summary>
+    public string BackupDirectory => Path.Combine(DataDirectory, "backups");
+
+    /// <summary>Holds the path of the backup that replaces the database at the next start.</summary>
+    public string RestoreMarkerFile => Path.Combine(DataDirectory, "restore-pending.txt");
+
     /// <summary>Resolves the paths under the current user's local application data folder.</summary>
     public static AppPaths ForCurrentUser(bool isDevelopmentBuild) =>
         new(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), isDevelopmentBuild);

@@ -1,0 +1,37 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TradingAgent.App.ViewModels"
+             xmlns:controls="using:TradingAgent.App.Controls"
+             x:Class="TradingAgent.App.Views.TradingView"
+             x:DataType="vm:TradingViewModel">
+
+  <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="24,16">
+
+    <Grid Grid.Row="0" ColumnDefinitions="Auto,200,110,Auto,*">
+      <TextBlock Grid.Column="0" Classes="pageTitle" Text="{Binding Title}" VerticalAlignment="Center" Margin="0,0,16,0" />
+      <TextBox Grid.Column="1" Text="{Binding Symbol}" PlaceholderText="BTC-USDT" AutomationProperties.Name="Instrument" />
+      <ComboBox Grid.Column="2" Margin="8,0,0,0" HorizontalAlignment="Stretch" ItemsSource="{Binding Timeframes}"
+                SelectedItem="{Binding Timeframe}" AutomationProperties.Name="Timeframe" />
+      <Button Grid.Column="3" Content="Show" Margin="8,0,0,0" IsDefault="True" Command="{Binding LoadCommand}" />
+      <TextBlock Grid.Column="4" Foreground="{StaticResource BearishBrush}" VerticalAlignment="Center" Margin="12,0,0,0"
+                 TextTrimming="CharacterEllipsis" Text="{Binding Status}" />
+    </Grid>
+
+    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="24" Margin="0,12,0,8">
+      <SelectableTextBlock FontSize="22" FontWeight="SemiBold" Text="{Binding Price}"
+                           Classes.good="{Binding IsRising}" Classes.bad="{Binding IsFalling}" />
+      <TextBlock Classes="secondary" VerticalAlignment="Bottom" Margin="0,0,0,3" Text="{Binding Day}" />
+    </StackPanel>
+
+    <Border Grid.Row="2" Background="{StaticResource AppBackgroundBrush}" CornerRadius="{StaticResource ControlCornerRadius}"
+            ClipToBounds="True">
+      <controls:CandleChart Candles="{Binding Candles}" />
+    </Border>
+
+    <StackPanel Grid.Row="3" Spacing="4" Margin="0,8,0,0">
+      <SelectableTextBlock Text="{Binding Indicators}" TextWrapping="Wrap" />
+      <TextBlock Classes="secondary" FontSize="12" TextWrapping="Wrap"
+                 Text="Wheel zooms, drag moves. The orange line is the 20-bar average. To trade, ask the agent in Chat: every order goes through the risk check." />
+    </StackPanel>
+  </Grid>
+</UserControl>

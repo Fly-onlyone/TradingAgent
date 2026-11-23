@@ -126,6 +126,46 @@
                    Text="A search is an agent run that uses your model. It reads and saves strategies; the app does not let it trade." />
       </StackPanel>
 
+      <StackPanel Spacing="10">
+        <TextBlock Classes="title" Text="Past price signals" />
+        <ToggleSwitch IsChecked="{Binding PatternMining}" AutomationProperties.Name="Measure past signals on a schedule"
+                      OnContent="The app measures past signals on a schedule" OffContent="The app measures past signals on a schedule" />
+        <TextBox Text="{Binding PatternSymbols}" PlaceholderText="BTC-USDT, ETH-USDT" IsVisible="{Binding PatternMining}"
+                 AutomationProperties.Name="Instruments to measure" />
+        <TextBlock Classes="secondary" TextWrapping="Wrap"
+                   Text="Counts on past prices what followed an oversold or overbought RSI, a break of the 20-bar high and a cross above the 50-bar average. No model is used. The results are on the Trades page and the agent reads them." />
+      </StackPanel>
+
+      <StackPanel Spacing="10">
+        <TextBlock Classes="title" Text="Email" />
+        <ToggleSwitch IsChecked="{Binding EmailEnabled}" AutomationProperties.Name="Send notifications by email too"
+                      OnContent="Notifications are also sent by email" OffContent="Notifications are also sent by email" />
+        <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="8" IsVisible="{Binding EmailEnabled}">
+          <TextBlock Grid.Row="0" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="SMTP server" />
+          <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding EmailHost}" PlaceholderText="smtp.example.com" AutomationProperties.Name="SMTP server" />
+          <TextBlock Grid.Row="1" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="Port" />
+          <NumericUpDown Grid.Row="1" Grid.Column="1" Width="160" HorizontalAlignment="Left" Minimum="1" Maximum="65535" Increment="1"
+                         FormatString="0" Value="{Binding EmailPort}" AutomationProperties.Name="SMTP port" />
+          <TextBlock Grid.Row="2" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="User name" />
+          <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding EmailUser}" AutomationProperties.Name="SMTP user name" />
+          <TextBlock Grid.Row="3" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="From" />
+          <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding EmailFrom}" PlaceholderText="you@example.com" AutomationProperties.Name="Sender address" />
+          <TextBlock Grid.Row="4" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="To" />
+          <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding EmailTo}" PlaceholderText="you@example.com" AutomationProperties.Name="Receiver address" />
+        </Grid>
+        <StackPanel Spacing="8" IsVisible="{Binding EmailEnabled}">
+          <ContentControl Content="{Binding EmailPassword}" />
+          <ToggleSwitch IsChecked="{Binding EmailTls}" AutomationProperties.Name="Encrypt the connection"
+                        OnContent="The connection is encrypted (STARTTLS)" OffContent="The connection is NOT encrypted" />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Content="Send a test email" Command="{Binding SendTestEmailCommand}" />
+            <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding EmailStatus}" />
+          </StackPanel>
+          <TextBlock Classes="secondary" TextWrapping="Wrap"
+                     Text="Most providers use port 587 with STARTTLS and want an app password, not your normal one. An email holds the notification's text, which can name an instrument and an amount." />
+        </StackPanel>
+      </StackPanel>
+
       <StackPanel Spacing="6">
         <TextBlock Classes="title" Text="Notifications" />
         <ToggleSwitch IsChecked="{Binding DesktopNotifications}" AutomationProperties.Name="Show desktop notifications"
