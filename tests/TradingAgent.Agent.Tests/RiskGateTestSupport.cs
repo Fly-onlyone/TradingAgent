@@ -87,14 +87,36 @@ internal sealed class FakeExchange : IOkxReader
 
     public Task<IReadOnlyList<Position>> GetPositionsAsync(string? instrumentType, CancellationToken cancellationToken) => throw new NotSupportedException();
 
-    public Task<IReadOnlyList<OkxOrder>> GetOpenOrdersAsync(string instrumentType, string? instrumentId, CancellationToken cancellationToken) =>
-        throw new NotSupportedException();
+    /// <summary>Orders that are not finished, by instrument type (<c>SPOT</c>, <c>SWAP</c>).</summary>
+    public Dictionary<string, List<OkxOrder>> OpenOrders { get; } = new(StringComparer.Ordinal) { ["SPOT"] = [], ["SWAP"] = [] };
+
+    /// <summary>Finished orders, by instrument type.</summary>
+    public Dictionary<string, List<OkxOrder>> RecentOrders { get; } = new(StringComparer.Ordinal) { ["SPOT"] = [], ["SWAP"] = [] };
+
+    public List<OkxAlgoOrder> AlgoOrders { get; } = [];
+
+    /// <summary>When set, reading orders fails with it.</summary>
+    public Exception? OrdersFailure { get; set; }
+
+    /// <summary>When set, reading algorithmic orders fails with it.</summary>
+    public Exception? AlgoFailure { get; set; }
+
+    /// <summary>How often the open orders were asked for, over all instrument types.</summary>
+    public int OrderReads { get; private set; }
+
+    public Task<IReadOnlyList<OkxOrder>> GetOpenOrdersAsync(string instrumentType, string? instrumentId, CancellationToken cancellationToken)
+    {
+        OrderReads++;
+        return OrdersFailure is null ? Task.FromResult<IReadOnlyList<OkxOrder>>([.. OpenOrders[instrumentType]]) : throw OrdersFailure;
+    }
 
     public Task<IReadOnlyList<OkxOrder>> GetOrderHistoryAsync(string instrumentType, int limit, CancellationToken cancellationToken) =>
-        throw new NotSupportedException();
+        OrdersFailure is null ? Task.FromResult<IReadOnlyList<OkxOrder>>([.. RecentOrders[instrumentType].Take(limit)]) : throw OrdersFailure;
 
     public Task<IReadOnlyList<OkxAlgoOrder>> GetPendingAlgoOrdersAsync(string instrumentType, string orderType, CancellationToken cancellationToken) =>
-        throw new NotSupportedException();
+        AlgoFailure is null
+            ? Task.FromResult<IReadOnlyList<OkxAlgoOrder>>([.. AlgoOrders.Where(order => order.InstrumentType == instrumentType && order.OrderType == orderType)])
+            : throw AlgoFailure;
 }
 
 /// <summary>A gate whose answer a test sets, and which keeps what it was asked.</summary>
