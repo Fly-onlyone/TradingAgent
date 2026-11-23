@@ -132,7 +132,10 @@ public sealed partial class OkxClient : IOkxReader
                 Text(item, "state"),
                 Number(item, "tickSz"),
                 Number(item, "lotSz"),
-                Number(item, "minSz"))),
+                Number(item, "minSz"),
+                Number(item, "ctVal"),
+                Number(item, "ctMult"),
+                Text(item, "ctType"))),
         ];
     }
 

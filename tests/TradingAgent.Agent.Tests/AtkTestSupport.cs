@@ -174,6 +174,15 @@ internal sealed class FakeSettings : ISettingsStore
         Changed?.Invoke(this, new SettingChangedEventArgs(key.Name));
     }
 
+    /// <summary>Changes a value without telling anyone, as a write that is seen only at the next read.</summary>
+    public void SetQuietly<T>(SettingKey<T> key, T value)
+    {
+        lock (_values)
+        {
+            _values[key.Name] = value;
+        }
+    }
+
     public void Reset<T>(SettingKey<T> key)
     {
         lock (_values)

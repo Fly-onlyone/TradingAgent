@@ -71,4 +71,5 @@ The private endpoints (balance, positions, orders) have not been called with a r
 
 - [[_index]]
 - [[Agent Runs]]
+- [[Risk Gate]]
 - [[Desktop Solution Layout]]

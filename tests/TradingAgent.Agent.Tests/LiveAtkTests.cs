@@ -2,11 +2,15 @@ using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using TradingAgent.Agent.Atk;
+using TradingAgent.Agent.Tools;
 using TradingAgent.Core;
 using TradingAgent.Core.Agent;
 using TradingAgent.Core.Settings;
 using TradingAgent.Core.Shell;
+using TradingAgent.Data.Agent;
+using TradingAgent.Data.Trading;
 using TradingAgent.Exchange.Okx;
+using TradingAgent.Exchange.Risk;
 using Xunit;
 
 namespace TradingAgent.Agent.Tests;
@@ -51,14 +55,14 @@ public sealed class LiveAtkTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task The_real_kit_offers_exactly_the_reading_tools_of_the_inventory()
+    public async Task The_real_kit_offers_every_tool_of_the_inventory_the_agent_may_use()
     {
         SkipUnlessLive();
 
         var service = await StartAsync(credentials: null);
 
         var expected = AtkToolCatalog.Names
-            .Where(name => AtkToolCatalog.Kind(name) == AtkToolKind.Read)
+            .Where(name => AtkToolCatalog.Kind(name) == AtkToolKind.Read || AtkToolCatalog.IsSupportedWrite(name))
             .Select(AtkToolCatalog.ModelName)
             .Order(StringComparer.Ordinal);
         Assert.Equal(expected, service.GetTools().Select(tool => tool.Definition.Name).Order(StringComparer.Ordinal));
@@ -75,8 +79,8 @@ public sealed class LiveAtkTests : IAsyncDisposable
         SkipUnlessLive();
         var service = await StartAsync(credentials: null);
 
-        var ticker = await service.CallAsync("market_get_ticker", """{"instId":"BTC-USDT"}""", Ct);
-        var balance = await service.CallAsync("account_get_balance", "{}", Ct);
+        var ticker = await CallAsync(service, "market_get_ticker", """{"instId":"BTC-USDT"}""");
+        var balance = await CallAsync(service, "account_get_balance", "{}");
         var capabilities = await CapabilitiesAsync(service);
 
         Assert.Equal(ToolCallStatus.Succeeded, ticker.Status);
@@ -99,7 +103,7 @@ public sealed class LiveAtkTests : IAsyncDisposable
 
         Assert.True(capabilities.GetProperty("hasAuth").GetBoolean());
         Assert.Equal(sandbox, capabilities.GetProperty("demo").GetBoolean());
-        Assert.True(capabilities.GetProperty("readOnly").GetBoolean());
+        Assert.False(capabilities.GetProperty("readOnly").GetBoolean());
         // The kit keeps files in its home folder; the key must be in none of them, and it must
         // not have made itself a config file or a log.
         var files = Directory.EnumerateFiles(_home, "*", SearchOption.AllDirectories).ToList();
@@ -134,6 +138,33 @@ public sealed class LiveAtkTests : IAsyncDisposable
         Assert.True(refusal is Mcp.McpException || result is { IsError: true });
     }
 
+    [Theory]
+    [InlineData("spot_place_order", """{"instId":"BTC-USDT","tdMode":"cash","side":"buy","ordType":"market","sz":"10"}""")]
+    [InlineData("swap_place_order", """{"instId":"BTC-USDT-SWAP","tdMode":"cross","side":"buy","ordType":"market","sz":"1"}""")]
+    public async Task The_real_gate_reads_the_real_market_and_refuses_an_order_it_cannot_measure_against_an_account(string tool, string input)
+    {
+        SkipUnlessLive();
+        // The real gate over the real exchange, without a key: the price and the contract are
+        // read from OKX, the balance cannot be, so the order is refused and the kit is not asked.
+        using var temp = new TempDatabase();
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        var okx = new OkxClient(http, () => null, () => true, TimeProvider.System, NullLogger<OkxClient>.Instance);
+        var orders = new OrderStubRepository(temp.Database, TimeProvider.System);
+        var gate = new RiskGate(okx, new RiskManager(okx, _settings), _settings, orders, TimeProvider.System, NullLogger<RiskGate>.Instance);
+        var session = new AgentSessionRepository(temp.Database, TimeProvider.System).Create();
+        var message = new SessionMessageRepository(temp.Database, TimeProvider.System).Append(session.Id, MessageRole.Assistant, string.Empty, MessageStatus.Running);
+        var context = new ToolContext(session.Id, message.Id, "toolu_live");
+        var service = await StartAsync(credentials: null, gate);
+        using var document = JsonDocument.Parse(input);
+
+        var outcome = await service.CallAsync(tool, document.RootElement.Clone(), context, Ct);
+
+        Assert.Equal(ToolCallStatus.Denied, outcome.Status);
+        // Not "the price or the contract could not be read": those two steps worked.
+        Assert.StartsWith("The account could not be read from OKX", outcome.Content, StringComparison.Ordinal);
+        Assert.False(orders.ExistsForToolCall(session.Id, "toolu_live"));
+    }
+
     private static void SkipUnlessLive() =>
         Assert.SkipUnless(
             Environment.GetEnvironmentVariable("TRADINGAGENT_LIVE_TESTS") == "1",
@@ -141,19 +172,26 @@ public sealed class LiveAtkTests : IAsyncDisposable
 
     private static async Task<JsonElement> CapabilitiesAsync(AtkService service)
     {
-        var outcome = await service.CallAsync("system_get_capabilities", "{}", Ct);
+        var outcome = await CallAsync(service, "system_get_capabilities", "{}");
         Assert.Equal(ToolCallStatus.Succeeded, outcome.Status);
         using var document = JsonDocument.Parse(outcome.Content);
         return document.RootElement.GetProperty("data").GetProperty("capabilities").Clone();
     }
 
+    private static async Task<ToolOutcome> CallAsync(AtkService service, string tool, string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return await service.CallAsync(tool, document.RootElement.Clone(), new ToolContext("session", "message", "toolu_live"), Ct);
+    }
+
     private AtkProcessLauncher NewLauncher() =>
         new(AppContext.BaseDirectory, isDevelopmentBuild: true, _home, new NoJob(), NullLogger<AtkProcessLauncher>.Instance);
 
-    private async Task<AtkService> StartAsync(OkxCredentials? credentials)
+    private async Task<AtkService> StartAsync(OkxCredentials? credentials, IAtkGate? gate = null)
     {
         _service = new AtkService(
             NewLauncher(),
+            gate ?? new FakeGate { Decide = (_, _) => GateDecision.Deny("The live tests place no orders.") },
             () => credentials,
             _settings,
             new AppInfo("0.0.0-test", IsDevelopmentBuild: true),

@@ -66,6 +66,28 @@ public static class AtkToolCatalog
     ],
     StringComparer.Ordinal);
 
+    /// <summary>
+    /// The writing tools the risk gate has a rule for. A writing tool of the inventory that is not
+    /// here is refused and not shown to the model: knowing that a tool writes is not the same as
+    /// knowing how to check what it is asked to do.
+    /// </summary>
+    /// <remarks>
+    /// Left out so far, each for want of a rule: amending orders (the new size changes the exposure),
+    /// algo orders, the batch tools (up to 20 orders in free-form objects), closing a whole position
+    /// (it has no size to assess) and the grid and DCA bots (their size is spread over several
+    /// arguments and multiplied by leverage).
+    /// </remarks>
+    private static readonly FrozenSet<string> _supportedWrites = FrozenSet.ToFrozenSet(
+    [
+        "spot_place_order", "swap_place_order",
+        "spot_cancel_order", "spot_cancel_algo_order", "spot_batch_cancel",
+        "swap_cancel_order", "swap_cancel_algo_orders", "swap_batch_cancel",
+        "grid_stop_order", "dca_stop_order",
+        "spot_set_leverage", "swap_set_leverage",
+        "account_transfer",
+    ],
+    StringComparer.Ordinal);
+
     /// <summary>Every tool name of the inventory, without prefix.</summary>
     public static IEnumerable<string> Names => _tools.Keys;
 
@@ -76,6 +98,9 @@ public static class AtkToolCatalog
     public static bool IsExcluded(string toolName) => _excluded.Contains(toolName);
 
     public static bool IsWrite(AtkToolKind kind) => kind is AtkToolKind.Place or AtkToolKind.Cancel or AtkToolKind.Transfer or AtkToolKind.Leverage;
+
+    /// <summary>True for a writing tool the risk gate has a rule for.</summary>
+    public static bool IsSupportedWrite(string toolName) => _supportedWrites.Contains(toolName);
 
     /// <summary>The name the model sees for a trade kit tool.</summary>
     public static string ModelName(string toolName) => Prefix + toolName;
