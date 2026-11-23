@@ -1,6 +1,5 @@
 import type { Duplex } from "node:stream";
 import { fileURLToPath, URL } from "node:url";
-import { sentryVitePlugin } from "@sentry/vite-plugin";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
@@ -120,19 +119,9 @@ export default defineConfig({
 			: []),
 		viteReact(),
 
-		// Sentry source map upload — only during builds with auth token
-		...(process.env.SENTRY_AUTH_TOKEN
-			? [
-					sentryVitePlugin({
-						org: "fly-theonlyone",
-						project: "trading-agent-frontend",
-						authToken: process.env.SENTRY_AUTH_TOKEN,
-						sourcemaps: {
-							filesToDeleteAfterUpload: ["./dist/**/*.map"],
-						},
-					}),
-				]
-			: []),
+		// No Sentry source map upload: the `trading-agent-frontend` Sentry project was deleted on
+		// 2026-11-23. A build on a machine with SENTRY_AUTH_TOKEN set would otherwise try to upload
+		// to a project that no longer exists.
 	],
 	build: {
 		sourcemap: "hidden",
