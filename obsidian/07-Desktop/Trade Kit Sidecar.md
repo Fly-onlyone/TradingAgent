@@ -5,7 +5,8 @@ tags: [desktop, agent, okx, atk]
 # Trade Kit Sidecar
 
 > The native app runs the OKX Agent Trade Kit (`@okx_ai/okx-trade-mcp`, a Node program) as a child
-> process and offers its **reading** tools to the agent. Code: `src/TradingAgent.Agent/Atk/` and
+> process and offers its tools to the agent: the reading ones, and the writing ones the [[Risk Gate]]
+> has a rule for. Code: `src/TradingAgent.Agent/Atk/` and
 > `src/TradingAgent.Agent/Mcp/`.
 
 ## What it does
@@ -36,19 +37,16 @@ tags: [desktop, agent, okx, atk]
 | Home folder | `USERPROFILE` and `HOME` point at `<data folder>\trade-kit` | The kit does not see the user's own `~/.okx/config.toml`, which may hold another key |
 | Profile | `--profile trading-agent-no-profile` | Second lock: asked for a profile that does not exist, the kit runs without a key instead of taking the file's default |
 | Kit's own log | `--no-log` | That log holds the arguments and full result of every call as plain text, and nothing prunes it |
-| Writing tools | `--read-only` | See below |
 
-## Only reading tools, for now
+## Which tools reach the model
 
-Three things keep orders out, each enough alone:
+- Tools the catalog lists as `Read`, unless the kit itself marks one as writing
+  (`annotations.readOnlyHint`): then the stricter reading wins and the tool is hidden.
+- Writing tools the risk gate has a rule for (`AtkToolCatalog.IsSupportedWrite`, 13 tools).
+- Nothing else: not the 14 writing tools without a rule, not `account_set_position_mode`, not a tool
+  the catalog does not know.
 
-1. The kit is started with `--read-only`, so it has no tool that writes.
-2. `AtkService` puts only `Read` tools in the list for the model, and hides a tool the catalog lists
-   as reading when the kit itself marks it as writing (`annotations.readOnlyHint`).
-3. `AtkService.CallAsync` refuses a writing tool by name before the kit is asked.
-
-Writing arrives together with the risk gate, in the same change. There must be no state of the code
-in which an order can reach OKX unchecked.
+Every call of a writing tool passes the gate inside `AtkService.CallAsync`; see [[Risk Gate]].
 
 ## The inventory is checked against the real kit
 
@@ -88,6 +86,7 @@ kit (`tools/list`), then make `AtkToolCatalogTests` pass by deciding the kind of
 
 ## See also
 
+- [[Risk Gate]] — what a writing tool must pass
 - [[Agent Runs]] — the tool host and the gates
 - [[Exchange and Risk]] — the app's own read-only OKX client and the risk score
 - [[Desktop Data Folder]] — where the kit's home folder is

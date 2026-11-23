@@ -24,6 +24,29 @@ public sealed class OkxClientTests
     }
 
     [Fact]
+    public async Task A_contract_is_read_with_what_one_contract_stands_for()
+    {
+        var handler = new StubHttpHandler().Respond("""{"code":"0","msg":"","data":[{"instType":"SWAP","instId":"BTC-USDT-SWAP","baseCcy":"","quoteCcy":"","state":"live","tickSz":"0.1","lotSz":"1","minSz":"1","ctVal":"0.01","ctMult":"1","ctValCcy":"BTC","ctType":"linear"},{"instType":"SWAP","instId":"BTC-USD-SWAP","baseCcy":"","quoteCcy":"","state":"live","tickSz":"0.1","lotSz":"1","minSz":"1","ctVal":"100","ctMult":"1","ctValCcy":"USD","ctType":"inverse"}]}""");
+
+        var instruments = await NewClient(handler).GetInstrumentsAsync("SWAP", TestContext.Current.CancellationToken);
+
+        Assert.Equal("https://www.okx.com/api/v5/public/instruments?instType=SWAP", Assert.Single(handler.Requests).RequestUri!.ToString());
+        Assert.Equal((0.01m, 1m, "linear"), (instruments[0].ContractValue, instruments[0].ContractMultiplier, instruments[0].ContractType));
+        Assert.Equal((100m, 1m, "inverse"), (instruments[1].ContractValue, instruments[1].ContractMultiplier, instruments[1].ContractType));
+    }
+
+    [Fact]
+    public async Task A_spot_pair_has_no_contract_value()
+    {
+        // OKX sends empty strings where a field does not apply.
+        var handler = new StubHttpHandler().Respond("""{"code":"0","msg":"","data":[{"instType":"SPOT","instId":"BTC-USDT","baseCcy":"BTC","quoteCcy":"USDT","state":"live","tickSz":"0.1","lotSz":"0.00000001","minSz":"0.00001","ctVal":"","ctMult":"","ctValCcy":"","ctType":""}]}""");
+
+        var instrument = Assert.Single(await NewClient(handler).GetInstrumentsAsync("SPOT", TestContext.Current.CancellationToken));
+
+        Assert.Equal((0m, 0m, string.Empty), (instrument.ContractValue, instrument.ContractMultiplier, instrument.ContractType));
+        Assert.Equal(("BTC", "USDT", 0.00001m), (instrument.BaseCurrency, instrument.QuoteCurrency, instrument.MinSize));
+    }
+    [Fact]
     public async Task A_private_request_is_signed_with_the_time_the_path_and_the_saved_key()
     {
         var handler = new StubHttpHandler().Respond("""{"code":"0","msg":"","data":[{"totalEq":"12500.5","details":[{"ccy":"USDT","eq":"10000","availBal":"9000","eqUsd":"10000"},{"ccy":"BTC","eq":"0.025","availBal":"0.025","eqUsd":"2500.5"}]}]}""");

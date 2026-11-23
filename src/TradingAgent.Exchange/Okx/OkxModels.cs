@@ -104,6 +104,12 @@ public sealed record OkxAlgoOrder(
 /// <param name="TickSize">Smallest price step.</param>
 /// <param name="LotSize">Smallest size step.</param>
 /// <param name="MinSize">Smallest order.</param>
+/// <param name="ContractValue">
+/// Contracts only: what one contract stands for. For a <c>linear</c> contract an amount of the coin
+/// (0.01 BTC for <c>BTC-USDT-SWAP</c>); for an <c>inverse</c> one an amount of US dollars. Zero for spot.
+/// </param>
+/// <param name="ContractMultiplier">Contracts only: multiplies <paramref name="ContractValue"/>. Zero for spot.</param>
+/// <param name="ContractType">Contracts only: <c>linear</c> or <c>inverse</c>. Empty for spot.</param>
 public sealed record Instrument(
     string InstrumentId,
     string InstrumentType,
@@ -112,7 +118,10 @@ public sealed record Instrument(
     string State,
     decimal TickSize,
     decimal LotSize,
-    decimal MinSize);
+    decimal MinSize,
+    decimal ContractValue = 0,
+    decimal ContractMultiplier = 0,
+    string ContractType = "");
 
 /// <summary>Why a request to OKX failed, by what can be done about it.</summary>
 public enum OkxFailure

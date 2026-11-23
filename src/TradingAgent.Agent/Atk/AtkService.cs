@@ -39,19 +39,15 @@ public sealed record AtkStatus(AtkState State, string? Detail, int ToolCount, bo
 /// it does not. Not disposable on purpose: the background service host stops it at exit, within the
 /// host's deadline, and the job object ends the process should that be missed.
 /// <para>
-/// <b>Only tools that read are offered.</b> Three things keep it so, each enough alone: the kit is
-/// started read-only, so it does not have the tools that place orders, cancel them, move funds or
-/// change leverage; such a tool is never put in the list for the model; and <see cref="CallAsync"/>
-/// refuses one by name. Writing arrives together with the risk gate, not before: there must be no
-/// state of the code in which an order can reach the exchange unchecked.
+/// <b>Every write passes the risk gate, here.</b> <see cref="CallAsync"/> is the only code that sends
+/// a tool call to the kit, and for a tool that places an order, cancels one, moves funds or changes
+/// leverage it asks <see cref="IAtkGate"/> first, in line. There is no second path to the kit that
+/// could leave the gate out. A writing tool the gate has no rule for is refused before the gate is
+/// asked, and is not shown to the model.
 /// </para>
 /// </remarks>
 public sealed partial class AtkService : IBackgroundService, IToolSource
 {
-    /// <summary>
-    /// Started without the kit's writing tools. Becomes a decision of the risk gate's when the gate exists.
-    /// </summary>
-    private const bool ReadOnlyKit = true;
 
     private static readonly TimeSpan[] _restartDelays =
         [TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(60)];
@@ -60,6 +56,7 @@ public sealed partial class AtkService : IBackgroundService, IToolSource
     private static readonly TimeSpan _drainTimeout = TimeSpan.FromSeconds(10);
 
     private readonly IAtkLauncher _launcher;
+    private readonly IAtkGate _gate;
     private readonly Func<OkxCredentials?> _credentials;
     private readonly ISettingsStore _settings;
     private readonly AppInfo _info;
@@ -77,6 +74,7 @@ public sealed partial class AtkService : IBackgroundService, IToolSource
     private volatile bool _accepting;
 
     /// <param name="launcher">Starts the trade kit.</param>
+    /// <param name="gate">Decides about every tool call that writes.</param>
     /// <param name="credentials">Returns the saved OKX key, or null. Called at each start of the kit.</param>
     /// <param name="settings">Tells the trading mode, and when it changes.</param>
     /// <param name="info">The app's version, told to the trade kit.</param>
@@ -84,6 +82,7 @@ public sealed partial class AtkService : IBackgroundService, IToolSource
     /// <param name="logger">Receives state changes and failures. Never tool arguments or results.</param>
     public AtkService(
         IAtkLauncher launcher,
+        IAtkGate gate,
         Func<OkxCredentials?> credentials,
         ISettingsStore settings,
         AppInfo info,
@@ -91,12 +90,14 @@ public sealed partial class AtkService : IBackgroundService, IToolSource
         ILogger<AtkService> logger)
     {
         ArgumentNullException.ThrowIfNull(launcher);
+        ArgumentNullException.ThrowIfNull(gate);
         ArgumentNullException.ThrowIfNull(credentials);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(info);
         ArgumentNullException.ThrowIfNull(time);
         ArgumentNullException.ThrowIfNull(logger);
         _launcher = launcher;
+        _gate = gate;
         _credentials = credentials;
         _settings = settings;
         _info = info;
@@ -174,20 +175,27 @@ public sealed partial class AtkService : IBackgroundService, IToolSource
     public IReadOnlyList<ITool> GetTools() => _tools;
 
     /// <summary>Calls a tool of the trade kit by its own name (without the model-facing prefix).</summary>
-    public async Task<ToolOutcome> CallAsync(string toolName, string argumentsJson, CancellationToken cancellationToken)
+    /// <param name="toolName">The kit's name of the tool.</param>
+    /// <param name="input">The arguments the model gave.</param>
+    /// <param name="context">The run and the tool call; the risk gate records an order under it.</param>
+    /// <param name="cancellationToken">Stops waiting. An order already sent may still be carried out.</param>
+    public async Task<ToolOutcome> CallAsync(string toolName, JsonElement input, ToolContext context, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(context);
         var kind = AtkToolCatalog.Kind(toolName);
         if (kind == AtkToolKind.Unknown)
         {
             return ToolOutcome.Denied($"'{toolName}' is not a tool this app allows.");
         }
 
-        if (AtkToolCatalog.IsWrite(kind))
+        var writes = AtkToolCatalog.IsWrite(kind);
+        if (writes && !AtkToolCatalog.IsSupportedWrite(toolName))
         {
-            return ToolOutcome.Denied("Placing, changing and cancelling orders is not available in this version of the app.");
+            return ToolOutcome.Denied($"'{toolName}' is not supported by this app yet.");
         }
 
-        // Counted before the check, so a restart that starts now waits for this call.
+        // Counted before the checks, so a restart that starts now waits for this call: a write is
+        // never cut off between the gate's yes and the answer of the exchange.
         Interlocked.Increment(ref _inFlight);
         try
         {
@@ -201,9 +209,28 @@ public sealed partial class AtkService : IBackgroundService, IToolSource
                         : "The OKX trade kit is starting or restarting. Try again in a few seconds.");
             }
 
+            var arguments = input;
+            if (writes)
+            {
+                // The kit trades in the mode it was started in. When the setting says otherwise, a
+                // restart is on its way, and an order now would go to the wrong exchange.
+                if (status.Sandbox != _settings.GetValue(SettingKeys.OkxSandbox))
+                {
+                    return ToolOutcome.Denied("The trading mode is being changed. Try again in a few seconds.");
+                }
+
+                var decision = await AskGateAsync(toolName, input, context, cancellationToken).ConfigureAwait(false);
+                if (!decision.Allowed)
+                {
+                    return ToolOutcome.Denied(decision.Reason ?? "The risk gate refused the action.");
+                }
+
+                arguments = decision.Input ?? input;
+            }
+
             try
             {
-                var result = await client.CallToolAsync(toolName, argumentsJson, cancellationToken).ConfigureAwait(false);
+                var result = await client.CallToolAsync(toolName, arguments.GetRawText(), cancellationToken).ConfigureAwait(false);
                 if (!result.IsError)
                 {
                     return new ToolOutcome(result.Text);
@@ -216,7 +243,9 @@ public sealed partial class AtkService : IBackgroundService, IToolSource
             }
             catch (McpException ex)
             {
-                return ToolOutcome.Failed(ex.Message);
+                return ToolOutcome.Failed(writes
+                    ? ex.Message + " It is not known whether OKX carried the action out. Read the open orders and the balance before trying again."
+                    : ex.Message);
             }
         }
         finally
@@ -225,6 +254,19 @@ public sealed partial class AtkService : IBackgroundService, IToolSource
         }
     }
 
+    /// <summary>Asks the gate. A gate that throws has allowed nothing.</summary>
+    private async Task<GateDecision> AskGateAsync(string toolName, JsonElement input, ToolContext context, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _gate.CheckAsync(toolName, input, context, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            LogGateThrew(_logger, toolName, ex);
+            return GateDecision.Deny("The safety check could not be completed, so the action was refused.");
+        }
+    }
     private static TaskCompletionSource NewSignal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private void OnSettingChanged(object? sender, SettingChangedEventArgs e)
@@ -242,7 +284,7 @@ public sealed partial class AtkService : IBackgroundService, IToolSource
         {
             var restart = Volatile.Read(ref _restart);
             var credentials = _credentials();
-            var options = new AtkLaunchOptions(_settings.GetValue(SettingKeys.OkxSandbox), AtkToolCatalog.DefaultModules, ReadOnlyKit, credentials);
+            var options = new AtkLaunchOptions(_settings.GetValue(SettingKeys.OkxSandbox), AtkToolCatalog.DefaultModules, ReadOnly: false, credentials);
             var hasKey = credentials is not null;
             try
             {
@@ -332,7 +374,10 @@ public sealed partial class AtkService : IBackgroundService, IToolSource
         }
     }
 
-    /// <summary>The offered tools the agent may use: in the inventory as reading, and not marked as writing by the kit.</summary>
+    /// <summary>
+    /// The offered tools the agent may use: those the inventory lists as reading (unless the kit
+    /// marks them as writing), and the writing tools the risk gate has a rule for.
+    /// </summary>
     private ITool[] Curate(IReadOnlyList<McpTool> offered)
     {
         var tools = new List<ITool>();
@@ -359,6 +404,10 @@ public sealed partial class AtkService : IBackgroundService, IToolSource
 
                 tools.Add(new AtkTool(this, tool));
             }
+            else if (AtkToolCatalog.IsSupportedWrite(tool.Name))
+            {
+                tools.Add(new AtkTool(this, tool));
+            }
         }
 
         return [.. tools];
@@ -379,6 +428,9 @@ public sealed partial class AtkService : IBackgroundService, IToolSource
     [LoggerMessage(Level = LogLevel.Error, Message = "The OKX trade kit marks a tool as writing that this app's inventory lists as reading; it is hidden: {Tool}")]
     private static partial void LogInventoryDisagrees(ILogger logger, string tool);
 
+    [LoggerMessage(Level = LogLevel.Error, Message = "The risk gate threw on {Tool}; the action was refused.")]
+    private static partial void LogGateThrew(ILogger logger, string tool, Exception exception);
+
     [LoggerMessage(Level = LogLevel.Warning, Message = "The OKX trade kit is not available: {Reason}")]
     private static partial void LogUnavailable(ILogger logger, string reason);
 
@@ -397,6 +449,6 @@ public sealed partial class AtkService : IBackgroundService, IToolSource
             tool.InputSchemaJson);
 
         public Task<ToolOutcome> InvokeAsync(JsonElement input, ToolContext context, CancellationToken cancellationToken) =>
-            service.CallAsync(tool.Name, input.GetRawText(), cancellationToken);
+            service.CallAsync(tool.Name, input, context, cancellationToken);
     }
 }

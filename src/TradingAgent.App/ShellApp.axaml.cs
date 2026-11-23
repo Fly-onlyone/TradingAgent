@@ -23,6 +23,7 @@ using TradingAgent.Core.Shell;
 using TradingAgent.Data;
 using TradingAgent.Data.Agent;
 using TradingAgent.Data.Logging;
+using TradingAgent.Data.Trading;
 using TradingAgent.Exchange.Okx;
 using TradingAgent.Exchange.Risk;
 using TradingAgent.Platform.Windows;
@@ -171,8 +172,11 @@ public sealed partial class ShellApp : Application
             paths.TradeKitHomeDirectory,
             provider.GetRequiredService<IChildProcessJob>(),
             provider.GetRequiredService<ILogger<AtkProcessLauncher>>()));
+        services.AddSingleton<OrderStubRepository>();
+        services.AddSingleton<IAtkGate, RiskGate>();
         services.AddSingleton(provider => new AtkService(
             provider.GetRequiredService<IAtkLauncher>(),
+            provider.GetRequiredService<IAtkGate>(),
             OkxCredentialsFrom(provider.GetRequiredService<ISecretStore>()),
             provider.GetRequiredService<ISettingsStore>(),
             info,
