@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using TradingAgent.Agent.Atk;
 using TradingAgent.Agent.Cli;
 using TradingAgent.Agent.Models;
+using TradingAgent.Agent.Orders;
 using TradingAgent.Agent.Runs;
 using TradingAgent.Agent.Tools;
 using TradingAgent.App.Hosting;
@@ -24,6 +25,7 @@ using TradingAgent.Core.Shell;
 using TradingAgent.Data;
 using TradingAgent.Data.Agent;
 using TradingAgent.Data.Logging;
+using TradingAgent.Data.Notifications;
 using TradingAgent.Data.Trading;
 using TradingAgent.Exchange.Okx;
 using TradingAgent.Exchange.Risk;
@@ -218,6 +220,11 @@ public sealed partial class ShellApp : Application
         services.AddSingleton<RetentionService>();
         services.AddSingleton<IBackgroundService>(provider => provider.GetRequiredService<RetentionService>());
         services.AddSingleton<IBackgroundService>(provider => provider.GetRequiredService<AtkService>());
+        // After the trade kit: what the kit places, the mirror reads back from OKX.
+        services.AddSingleton<MirrorOrderRepository>();
+        services.AddSingleton<NotificationService>();
+        services.AddSingleton<OrderMirror>();
+        services.AddSingleton<IBackgroundService>(provider => provider.GetRequiredService<OrderMirror>());
         services.AddSingleton<BackgroundServiceHost>();
 
         services.AddSingleton<ISecretProtector, DpapiSecretProtector>();
