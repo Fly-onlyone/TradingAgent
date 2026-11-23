@@ -11,12 +11,52 @@
     <PublishAot>true</PublishAot>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+  <!--
+    Release builds carry no debug symbols, except the one build that uploads them to Sentry: Native AOT
+    writes TradingAgent.pdb only when DebugType is set, and Sentry needs that file to show file names
+    and line numbers in a crash report. The file is deleted after the upload (DropNativePdb below).
+  -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release' and '$(UploadSentrySymbols)' != 'true'">
     <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <!--
+    Crash reporting. The Sentry address (DSN) is not in the repository: a build stamps it into the
+    assembly from the SENTRY_DSN environment variable. A build without it sends nothing.
+  -->
+  <ItemGroup Condition="'$(SENTRY_DSN)' != ''">
+    <AssemblyMetadata Include="SentryDsn" Value="$(SENTRY_DSN)" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <!--
+      The Sentry package can upload debug symbols during a build. Off unless a build asks for it with
+      -p:UploadSentrySymbols=true, which only the release workflow does. A developer machine that
+      happens to have SENTRY_AUTH_TOKEN set must never upload from an ordinary build.
+    -->
+    <SentryOrg>fly-theonlyone</SentryOrg>
+    <SentryProject>trading-agent-desktop</SentryProject>
+    <SentryUploadSymbols>false</SentryUploadSymbols>
+    <SentryUploadSymbols Condition="'$(UploadSentrySymbols)' == 'true' and '$(SENTRY_AUTH_TOKEN)' != ''">true</SentryUploadSymbols>
+    <SentryUploadSources>false</SentryUploadSources>
+    <SentryCreateRelease>false</SentryCreateRelease>
+    <SentrySetCommits>false</SentrySetCommits>
+    <!--
+      Works around a fault in Sentry 7.0.1. Its Native AOT symbol upload switches on only when this
+      property is true, but the package computes it in a .props file, where the target framework of a
+      single-target project is not known yet. Left alone, the upload runs after Build on the managed
+      output folder and never sees TradingAgent.pdb. Check on a Sentry upgrade whether this can go:
+      dotnet msbuild -p:_IsPublishing=true -getProperty:SentryCLIUploadNativeAOT must print true.
+    -->
+    <_SentryIsNet8OrGreater>true</_SentryIsNet8OrGreater>
   </PropertyGroup>
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="TradingAgent.App.Tests" />
   </ItemGroup>
 
   <ItemGroup>
@@ -32,11 +72,20 @@
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Sentry" />
     <PackageReference Include="Velopack" />
   </ItemGroup>
 
-  <!-- SkiaSharp and HarfBuzz ship native .pdb files (about 100 MB) that publish copies next to the exe. -->
-  <Target Name="DropNativePdb" AfterTargets="Publish">
+  <!--
+    No .pdb file may ship. SkiaSharp and HarfBuzz bring native .pdb files (about 100 MB) that publish
+    copies next to the exe, and a symbol-uploading build adds TradingAgent.pdb.
+
+    Order matters: publish, then _CopyAotSymbols (Native AOT copies TradingAgent.pdb in), then Sentry's
+    UploadDebugInfoToSentry, then the delete. Naming both as dependencies fixes that order whatever
+    they hook themselves to; each still obeys its own condition, so nothing is uploaded unless asked.
+    If a later SDK or Sentry package renames one, the publish fails here instead of shipping symbols.
+  -->
+  <Target Name="DropNativePdb" AfterTargets="Publish" DependsOnTargets="_CopyAotSymbols;UploadDebugInfoToSentry">
     <ItemGroup>
       <NativePdb Include="$(PublishDir)*.pdb" />
     </ItemGroup>

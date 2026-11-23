@@ -1,6 +1,7 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using TradingAgent.App.Shell;
+using TradingAgent.App.Telemetry;
 using TradingAgent.App.ViewModels;
 using TradingAgent.Core;
 using TradingAgent.Core.Settings;
@@ -20,6 +21,7 @@ public sealed class DiagnosticsViewModelTests : IDisposable
     private readonly FakeToasts _toasts = new();
     private readonly FakeUpdates _updates = new();
     private readonly ShellRequests _shell = new();
+    private readonly TelemetryGate _gate = new();
 
     public DiagnosticsViewModelTests()
     {
@@ -87,6 +89,23 @@ public sealed class DiagnosticsViewModelTests : IDisposable
     }
 
     [Fact]
+    public void Reporting_switch_saves_the_choice_and_a_build_without_an_address_says_so()
+    {
+        var viewModel = NewViewModel();
+
+        Assert.True(viewModel.ReportingEnabled);
+        Assert.Equal("This build has no reporting address. Nothing is sent.", viewModel.ReportingStatus);
+
+        viewModel.ReportingEnabled = false;
+
+        Assert.False(_settings.GetValue(SettingKeys.TelemetryEnabled));
+
+        viewModel.SendTestErrorCommand.Execute(null);
+
+        Assert.Equal("Nothing was sent: reporting is not active.", viewModel.ReportingStatus);
+    }
+
+    [Fact]
     public void Open_window_at_start_is_saved()
     {
         var viewModel = NewViewModel();
@@ -138,7 +157,7 @@ public sealed class DiagnosticsViewModelTests : IDisposable
     }
 
     private DiagnosticsViewModel NewViewModel() =>
-        new(new AppInfo("1.0.0", IsDevelopmentBuild: true), _paths, _database, _settings, _autostart, _toasts, _updates, _shell);
+        new(new AppInfo("1.0.0", IsDevelopmentBuild: true), _paths, _database, _settings, _autostart, _toasts, _updates, _shell, new TelemetryService(new AppInfo("1.0.0", IsDevelopmentBuild: true), _settings, _gate, NullLogger<TelemetryService>.Instance, dsn: null));
 
     private sealed class FakeAutostart : IAutostart
     {

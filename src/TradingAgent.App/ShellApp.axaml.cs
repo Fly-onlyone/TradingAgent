@@ -3,9 +3,11 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform;
+using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using TradingAgent.App.Shell;
+using TradingAgent.App.Telemetry;
 using TradingAgent.App.ViewModels;
 using TradingAgent.Core;
 using TradingAgent.Core.Secrets;
@@ -41,6 +43,12 @@ public sealed partial class ShellApp : Application
             LogStarted(logger, info.Version, buildMode, schemaVersion);
             _services.GetRequiredService<RetentionService>().Start();
 
+            // After the settings store exists, before the window: start-up problems get reported too.
+            var telemetry = _services.GetRequiredService<TelemetryService>();
+            telemetry.Start();
+            telemetry.BeginStartup();
+            ReportUnhandledExceptions(logger);
+
             RegisterIdentity(info, paths, logger);
 
             // Lives for the whole run; disposed in the Exit handler below.
@@ -54,6 +62,7 @@ public sealed partial class ShellApp : Application
                 _services.GetRequiredService<IToastNotifier>(),
                 _services.GetRequiredService<IUpdateService>(),
                 _services.GetRequiredService<ShellRequests>(),
+                telemetry,
                 _services.GetRequiredService<ILogger<DesktopShell>>());
             shell.Start(Instance);
             _services.GetRequiredService<VelopackUpdateService>().Start();
@@ -104,6 +113,8 @@ public sealed partial class ShellApp : Application
             provider.GetRequiredService<ILogger<WindowsToastNotifier>>()));
 
         services.AddSingleton<ShellRequests>();
+        services.AddSingleton<TelemetryGate>();
+        services.AddSingleton<TelemetryService>();
         services.AddSingleton<VelopackUpdateService>();
         services.AddSingleton<IUpdateService>(provider => provider.GetRequiredService<VelopackUpdateService>());
 
@@ -113,11 +124,31 @@ public sealed partial class ShellApp : Application
             logging.Services.AddSingleton<ILoggerProvider>(
                 provider => new JsonLinesFileLoggerProvider(paths.LogDirectory, provider.GetRequiredService<TimeProvider>()));
             logging.Services.AddSingleton<ILoggerProvider, SqliteLoggerProvider>();
+            logging.Services.AddSingleton<ILoggerProvider, SentryLoggerProvider>();
         });
 
         services.AddSingleton<DiagnosticsViewModel>();
         services.AddSingleton<MainViewModel>();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });
+    }
+
+    /// <summary>
+    /// Logs exceptions nobody caught. The log reaches the file, the database and, when reporting is on,
+    /// Sentry. A failure on the UI thread is then treated as handled: the app keeps running in the tray,
+    /// because a monitoring app that disappears is worse than one with a broken page.
+    /// </summary>
+    private static void ReportUnhandledExceptions(ILogger logger)
+    {
+        Dispatcher.UIThread.UnhandledException += (_, e) =>
+        {
+            LogUnhandled(logger, e.Exception);
+            e.Handled = true;
+        };
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            LogUnobserved(logger, e.Exception);
+            e.SetObserved();
+        };
     }
 
     /// <summary>File name, without extension, of the shortcut in the Startup folder.</summary>
@@ -153,6 +184,12 @@ public sealed partial class ShellApp : Application
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Started version {Version} ({BuildMode}), database schema {SchemaVersion}.")]
     private static partial void LogStarted(ILogger logger, string version, string buildMode, int schemaVersion);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Unhandled error on the UI thread.")]
+    private static partial void LogUnhandled(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "A background task failed and nobody observed it.")]
+    private static partial void LogUnobserved(ILogger logger, Exception exception);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Registering the app's notification identity with Windows failed.")]
     private static partial void LogIdentityFailed(ILogger logger, Exception exception);

@@ -389,6 +389,7 @@
           "CommunityToolkit.Mvvm": "[8.4.2, )",
           "Microsoft.Extensions.DependencyInjection": "[10.0.15, )",
           "Microsoft.Extensions.Logging": "[10.0.15, )",
+          "Sentry": "[7.0.1, )",
           "TradingAgent.Core": "[0.1.2, )",
           "TradingAgent.Data": "[0.1.2, )",
           "TradingAgent.Platform.Windows": "[0.1.2, )",
@@ -493,6 +494,12 @@
         "dependencies": {
           "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.15"
         }
+      },
+      "Sentry": {
+        "type": "CentralTransitive",
+        "requested": "[7.0.1, )",
+        "resolved": "7.0.1",
+        "contentHash": "4hyExeUWArJdiO6VlmwCUHgWPosvasauNpgB6pVP7swuwyahWHRqgWHKwj3t5h18wFezIMte6BmI4dqEzl1TYw=="
       },
       "System.Security.Cryptography.ProtectedData": {
         "type": "CentralTransitive",

@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using Microsoft.Extensions.Logging;
+using TradingAgent.App.Telemetry;
 using TradingAgent.App.ViewModels;
 using TradingAgent.App.Views;
 using TradingAgent.Core;
@@ -28,6 +29,7 @@ internal sealed partial class DesktopShell(
     IToastNotifier toasts,
     IUpdateService updates,
     ShellRequests requests,
+    TelemetryService telemetry,
     ILogger<DesktopShell> logger) : IDisposable
 {
     private readonly WindowPlacementTracker _placement = new(settings);
@@ -59,11 +61,13 @@ internal sealed partial class DesktopShell(
 
         if (settings.GetValue(SettingKeys.WindowStartOpen))
         {
+            _window.Opened += (_, _) => telemetry.CompleteStartup();
             _window.Show();
         }
         else
         {
             LogStartedHidden(logger);
+            telemetry.CompleteStartup();
         }
     }
 

@@ -34,6 +34,10 @@ public static class SettingKeys
     // Crash and performance reporting
     public static readonly SettingKey<bool> TelemetryEnabled = new("telemetry.enabled", true, Json.Boolean);
 
+    /// <summary>Random id that stands for this installation in crash reports. Says nothing about the person.</summary>
+    public static readonly SettingKey<string> TelemetryInstallId = new("telemetry.install_id", string.Empty, Json.String);
+    public static readonly SettingKey<bool> TelemetryNoticeDismissed = new("telemetry.notice_dismissed", false, Json.Boolean);
+
     // Notifications
     public static readonly SettingKey<bool> NativeNotificationsEnabled = new("notifications.native_enabled", true, Json.Boolean);
     public static readonly SettingKey<bool> NotifyTradeConfirmations = new("notifications.trade_confirmations", true, Json.Boolean);
