@@ -21,6 +21,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\TradingAgent.Core\TradingAgent.Core.csproj" />
+    <ProjectReference Include="..\TradingAgent.Data\TradingAgent.Data.csproj" />
+    <ProjectReference Include="..\TradingAgent.Platform.Windows\TradingAgent.Platform.Windows.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -29,6 +31,7 @@
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
   </ItemGroup>
 
   <!-- SkiaSharp and HarfBuzz ship native .pdb files (about 100 MB) that publish copies next to the exe. -->
