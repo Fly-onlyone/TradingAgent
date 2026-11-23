@@ -14,8 +14,8 @@ tags: [desktop, architecture]
 | `src/TradingAgent.Core` | `net10.0` | Domain types, setting keys, interfaces (`ISettingsStore`, `ISecretStore`, `IToastNotifier`, `IAutostart`, `IUpdateService`), `Redactor`, `SingleInstanceGuard`. No UI and no IO packages |
 | `src/TradingAgent.Data` | `net10.0` | SQLite: `Database`, `MigrationRunner`, settings and secret stores, log sinks, `RetentionService` |
 | `src/TradingAgent.Exchange` | `net10.0` | Read-only OKX client, technical indicators, risk score (see [[Exchange and Risk]]) |
-| `src/TradingAgent.Agent` | `net10.0` | Model providers, the tool-use loop, tools and gates, runs (see [[Agent Runs]]) |
-| `src/TradingAgent.Platform.Windows` | `net10.0-windows10.0.19041.0` | DPAPI, toasts, start-up shortcut, app identity (AUMID) |
+| `src/TradingAgent.Agent` | `net10.0` | Model providers, the tool-use loop, tools and gates, runs (see [[Agent Runs]]); the MCP client and the OKX trade kit (see [[Trade Kit Sidecar]]) |
+| `src/TradingAgent.Platform.Windows` | `net10.0-windows10.0.19041.0` | DPAPI, toasts, start-up shortcut, app identity (AUMID), the job object that ends child processes with the app |
 | `src/TradingAgent.App` | `net10.0-windows10.0.19041.0`, `WinExe`, `PublishAot` | Avalonia UI, composition root (`ShellApp`), shell, updates, telemetry |
 
 Tests: `tests/TradingAgent.Core.Tests`, `tests/TradingAgent.Data.Tests`,

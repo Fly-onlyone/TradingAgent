@@ -19,19 +19,27 @@ public sealed partial class ToolHost
 
     private readonly Dictionary<string, ITool> _tools = new(StringComparer.Ordinal);
     private readonly ToolDefinition[] _definitions;
+    private readonly IToolSource[] _sources;
     private readonly IToolGate[] _gates;
     private readonly TimeSpan _timeout;
     private readonly ILogger<ToolHost> _logger;
 
-    /// <param name="tools">Every tool the model may call. Names must be unique.</param>
+    /// <param name="tools">The tools that always exist. Names must be unique.</param>
     /// <param name="gates">Checks run before every call, in this order.</param>
     /// <param name="logger">Receives failures. Never tool arguments or results.</param>
     /// <param name="timeout">Longest a tool may run; two minutes when null.</param>
-    public ToolHost(IEnumerable<ITool> tools, IEnumerable<IToolGate> gates, ILogger<ToolHost> logger, TimeSpan? timeout = null)
+    /// <param name="sources">Tools that come and go while the app runs. A fixed tool wins over one of the same name.</param>
+    public ToolHost(
+        IEnumerable<ITool> tools,
+        IEnumerable<IToolGate> gates,
+        ILogger<ToolHost> logger,
+        TimeSpan? timeout = null,
+        IEnumerable<IToolSource>? sources = null)
     {
         ArgumentNullException.ThrowIfNull(tools);
         ArgumentNullException.ThrowIfNull(gates);
         ArgumentNullException.ThrowIfNull(logger);
+        _sources = [.. sources ?? []];
         foreach (var tool in tools)
         {
             if (!_tools.TryAdd(tool.Definition.Name, tool))
@@ -47,8 +55,33 @@ public sealed partial class ToolHost
         _logger = logger;
     }
 
-    /// <summary>The tools to describe to the model, in a stable order.</summary>
-    public IReadOnlyList<ToolDefinition> Definitions => _definitions;
+    /// <summary>The tools to describe to the model right now, in a stable order.</summary>
+    public IReadOnlyList<ToolDefinition> Definitions
+    {
+        get
+        {
+            if (_sources.Length == 0)
+            {
+                return _definitions;
+            }
+
+            var definitions = new SortedDictionary<string, ToolDefinition>(StringComparer.Ordinal);
+            foreach (var source in _sources)
+            {
+                foreach (var tool in source.GetTools())
+                {
+                    definitions.TryAdd(tool.Definition.Name, tool.Definition);
+                }
+            }
+
+            foreach (var definition in _definitions)
+            {
+                definitions[definition.Name] = definition;
+            }
+
+            return [.. definitions.Values];
+        }
+    }
 
     /// <summary>Runs one tool call. Never throws, except for cancellation by <paramref name="cancellationToken"/>.</summary>
     public async Task<ToolOutcome> InvokeAsync(ToolRequest request, ToolContext context, CancellationToken cancellationToken)
@@ -56,7 +89,7 @@ public sealed partial class ToolHost
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(context);
 
-        if (!_tools.TryGetValue(request.Name, out var tool))
+        if (Find(request.Name) is not { } tool)
         {
             return ToolOutcome.Failed($"There is no tool named '{request.Name}'.");
         }
@@ -141,6 +174,27 @@ public sealed partial class ToolHost
                 return ToolOutcome.Failed($"The tool failed: {ex.Message}");
             }
         }
+    }
+
+    private ITool? Find(string name)
+    {
+        if (_tools.TryGetValue(name, out var tool))
+        {
+            return tool;
+        }
+
+        foreach (var source in _sources)
+        {
+            foreach (var candidate in source.GetTools())
+            {
+                if (candidate.Definition.Name == name)
+                {
+                    return candidate;
+                }
+            }
+        }
+
+        return null;
     }
 
     [LoggerMessage(Level = LogLevel.Error, Message = "The safety check for tool '{Tool}' threw; the call was refused.")]

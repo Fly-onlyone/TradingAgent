@@ -6,6 +6,7 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using TradingAgent.Agent.Atk;
 using TradingAgent.Agent.Models;
 using TradingAgent.Agent.Runs;
 using TradingAgent.Agent.Tools;
@@ -150,20 +151,34 @@ public sealed partial class ShellApp : Application
         // model call. The key and the demo/live mode are read at the time of each request.
         services.AddSingleton<IOkxReader>(provider =>
         {
-            var secrets = provider.GetRequiredService<ISecretStore>();
             var settings = provider.GetRequiredService<ISettingsStore>();
             return new OkxClient(
                 new HttpClient { Timeout = _exchangeTimeout },
-                () => secrets.Reveal(SecretNames.OkxApiKey) is { Length: > 0 } key
-                    && secrets.Reveal(SecretNames.OkxSecretKey) is { Length: > 0 } secret
-                    && secrets.Reveal(SecretNames.OkxPassphrase) is { Length: > 0 } passphrase
-                        ? new OkxCredentials(key, secret, passphrase)
-                        : null,
+                OkxCredentialsFrom(provider.GetRequiredService<ISecretStore>()),
                 () => settings.GetValue(SettingKeys.OkxSandbox),
                 provider.GetRequiredService<TimeProvider>(),
                 provider.GetRequiredService<ILogger<OkxClient>>());
         });
         services.AddSingleton<RiskManager>();
+
+        // The OKX trade kit: a helper process whose tools the agent uses next to the app's own. Its
+        // tools come and go with the process, so the tool host asks for them at the time of each run.
+        services.AddSingleton<WindowsChildProcessJob>();
+        services.AddSingleton<IChildProcessJob>(provider => provider.GetRequiredService<WindowsChildProcessJob>());
+        services.AddSingleton<IAtkLauncher>(provider => new AtkProcessLauncher(
+            AppContext.BaseDirectory,
+            info.IsDevelopmentBuild,
+            paths.TradeKitHomeDirectory,
+            provider.GetRequiredService<IChildProcessJob>(),
+            provider.GetRequiredService<ILogger<AtkProcessLauncher>>()));
+        services.AddSingleton(provider => new AtkService(
+            provider.GetRequiredService<IAtkLauncher>(),
+            OkxCredentialsFrom(provider.GetRequiredService<ISecretStore>()),
+            provider.GetRequiredService<ISettingsStore>(),
+            info,
+            provider.GetRequiredService<TimeProvider>(),
+            provider.GetRequiredService<ILogger<AtkService>>()));
+        services.AddSingleton<IToolSource>(provider => provider.GetRequiredService<AtkService>());
 
         services.AddSingleton<QuestionBroker>();
         services.AddSingleton<ITool, AskUserTool>();
@@ -177,7 +192,8 @@ public sealed partial class ShellApp : Application
         services.AddSingleton(provider => new ToolHost(
             provider.GetServices<ITool>(),
             provider.GetServices<IToolGate>(),
-            provider.GetRequiredService<ILogger<ToolHost>>()));
+            provider.GetRequiredService<ILogger<ToolHost>>(),
+            sources: provider.GetServices<IToolSource>()));
         services.AddSingleton<ISystemPrompt, DefaultSystemPrompt>();
         services.AddSingleton<IAgentRuntimeResolver, AgentRuntimeResolver>();
         services.AddSingleton<AgentRunner>();
@@ -185,6 +201,7 @@ public sealed partial class ShellApp : Application
         // Background services, in start order. They stop in the reverse order.
         services.AddSingleton<RetentionService>();
         services.AddSingleton<IBackgroundService>(provider => provider.GetRequiredService<RetentionService>());
+        services.AddSingleton<IBackgroundService>(provider => provider.GetRequiredService<AtkService>());
         services.AddSingleton<BackgroundServiceHost>();
 
         services.AddSingleton<ISecretProtector, DpapiSecretProtector>();
@@ -242,6 +259,17 @@ public sealed partial class ShellApp : Application
     /// <remarks>Not "Trading agent": that name belongs to the previous app's shortcut while both exist.</remarks>
     internal static string AutostartShortcutName(bool isDevelopmentBuild) =>
         isDevelopmentBuild ? "TradingAgent-Dev" : "TradingAgent";
+
+    /// <summary>
+    /// Reads the saved OKX key at the time of each call, so a key saved in Settings is used without a
+    /// restart. Null until all three parts are saved.
+    /// </summary>
+    private static Func<OkxCredentials?> OkxCredentialsFrom(ISecretStore secrets) =>
+        () => secrets.Reveal(SecretNames.OkxApiKey) is { Length: > 0 } key
+            && secrets.Reveal(SecretNames.OkxSecretKey) is { Length: > 0 } secret
+            && secrets.Reveal(SecretNames.OkxPassphrase) is { Length: > 0 } passphrase
+                ? new OkxCredentials(key, secret, passphrase)
+                : null;
 
     /// <summary>
     /// Registers the app with Windows as a notification sender. The icon is written to disk because Windows
