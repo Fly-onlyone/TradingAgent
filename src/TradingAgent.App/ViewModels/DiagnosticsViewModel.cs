@@ -1,6 +1,8 @@
 using System.Globalization;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using TradingAgent.App.Shell;
 using TradingAgent.Core;
 using TradingAgent.Core.Settings;
 using TradingAgent.Core.Shell;
@@ -14,6 +16,8 @@ public sealed partial class DiagnosticsViewModel : PageViewModel
     private readonly ISettingsStore _settings;
     private readonly IAutostart _autostart;
     private readonly IToastNotifier _toasts;
+    private readonly IUpdateService _updates;
+    private readonly ShellRequests _shell;
 
     /// <summary>True while a property is set from code, so its change handler does not act on it.</summary>
     private bool _synchronizing;
@@ -24,16 +28,24 @@ public sealed partial class DiagnosticsViewModel : PageViewModel
         Database database,
         ISettingsStore settings,
         IAutostart autostart,
-        IToastNotifier toasts)
+        IToastNotifier toasts,
+        IUpdateService updates,
+        ShellRequests shell)
     {
         ArgumentNullException.ThrowIfNull(info);
         ArgumentNullException.ThrowIfNull(paths);
         ArgumentNullException.ThrowIfNull(database);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(autostart);
+        ArgumentNullException.ThrowIfNull(updates);
         _settings = settings;
         _autostart = autostart;
         _toasts = toasts;
+        _updates = updates;
+        _shell = shell;
+        ShowUpdateStatus();
+        // Raised on a background thread.
+        updates.StatusChanged += (_, _) => Dispatcher.UIThread.Post(ShowUpdateStatus);
 
         Version = info.Version;
         Build = info.IsNativeAot ? $"{info.BuildMode}, Native AOT" : $"{info.BuildMode}, JIT";
@@ -77,6 +89,14 @@ public sealed partial class DiagnosticsViewModel : PageViewModel
     [ObservableProperty]
     public partial string ShellStatus { get; set; } = string.Empty;
 
+    /// <summary>What the updater last reported.</summary>
+    [ObservableProperty]
+    public partial string UpdateStatus { get; set; } = string.Empty;
+
+    /// <summary>A new version is downloaded and waits for the app to exit.</summary>
+    [ObservableProperty]
+    public partial bool IsUpdateReady { get; set; }
+
     partial void OnStartWithWindowsChanged(bool value)
     {
         if (_synchronizing)
@@ -116,6 +136,19 @@ public sealed partial class DiagnosticsViewModel : PageViewModel
 
         _settings.SetValue(SettingKeys.WindowStartOpen, value);
         ShellStatus = value ? "The window opens at start." : "Starts in the tray, without a window.";
+    }
+
+    [RelayCommand]
+    private Task CheckForUpdatesAsync() => _updates.CheckAsync();
+
+    [RelayCommand]
+    private void RestartToUpdate() => _shell.RequestRestartToUpdate();
+
+    private void ShowUpdateStatus()
+    {
+        var status = _updates.Status;
+        UpdateStatus = status.Message;
+        IsUpdateReady = status.State == UpdateState.ReadyToInstall;
     }
 
     [RelayCommand]

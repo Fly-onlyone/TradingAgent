@@ -52,8 +52,11 @@ public sealed partial class ShellApp : Application
                 _services.GetRequiredService<ISettingsStore>(),
                 _services.GetRequiredService<IAutostart>(),
                 _services.GetRequiredService<IToastNotifier>(),
+                _services.GetRequiredService<IUpdateService>(),
+                _services.GetRequiredService<ShellRequests>(),
                 _services.GetRequiredService<ILogger<DesktopShell>>());
             shell.Start(Instance);
+            _services.GetRequiredService<VelopackUpdateService>().Start();
 
             desktop.Exit += (_, _) =>
             {
@@ -92,14 +95,17 @@ public sealed partial class ShellApp : Application
         services.AddSingleton<ISecretStore, SqliteSecretStore>();
 
         services.AddSingleton<IAutostart>(provider => new WindowsAutostart(
-            // Not "Trading agent.lnk": that name belongs to the previous app's shortcut while both exist.
-            shortcutName: info.IsDevelopmentBuild ? "TradingAgent-Dev" : "TradingAgent",
+            shortcutName: AutostartShortcutName(info.IsDevelopmentBuild),
             executable: Environment.ProcessPath ?? throw new InvalidOperationException("The process path is unknown."),
             description: AppInfo.ProductName,
             provider.GetRequiredService<ILogger<WindowsAutostart>>()));
         services.AddSingleton<IToastNotifier>(provider => new WindowsToastNotifier(
             info.ApplicationId,
             provider.GetRequiredService<ILogger<WindowsToastNotifier>>()));
+
+        services.AddSingleton<ShellRequests>();
+        services.AddSingleton<VelopackUpdateService>();
+        services.AddSingleton<IUpdateService>(provider => provider.GetRequiredService<VelopackUpdateService>());
 
         services.AddLogging(logging =>
         {
@@ -113,6 +119,11 @@ public sealed partial class ShellApp : Application
         services.AddSingleton<MainViewModel>();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });
     }
+
+    /// <summary>File name, without extension, of the shortcut in the Startup folder.</summary>
+    /// <remarks>Not "Trading agent": that name belongs to the previous app's shortcut while both exist.</remarks>
+    internal static string AutostartShortcutName(bool isDevelopmentBuild) =>
+        isDevelopmentBuild ? "TradingAgent-Dev" : "TradingAgent";
 
     /// <summary>
     /// Registers the app with Windows as a notification sender. The icon is written to disk because Windows

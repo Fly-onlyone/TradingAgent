@@ -32,6 +32,7 @@
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Velopack" />
   </ItemGroup>
 
   <!-- SkiaSharp and HarfBuzz ship native .pdb files (about 100 MB) that publish copies next to the exe. -->

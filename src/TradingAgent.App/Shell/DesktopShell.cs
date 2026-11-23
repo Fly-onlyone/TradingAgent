@@ -26,11 +26,14 @@ internal sealed partial class DesktopShell(
     ISettingsStore settings,
     IAutostart autostart,
     IToastNotifier toasts,
+    IUpdateService updates,
+    ShellRequests requests,
     ILogger<DesktopShell> logger) : IDisposable
 {
     private readonly WindowPlacementTracker _placement = new(settings);
     private MainWindow? _window;
     private TrayIcon? _tray;
+    private NativeMenuItem? _restartToUpdate;
     private bool _exiting;
 
     public void Start(SingleInstanceGuard? instance)
@@ -45,6 +48,7 @@ internal sealed partial class DesktopShell(
 
         CreateTrayIcon();
         ReconcileAutostart();
+        requests.RestartToUpdateRequested += (_, _) => RestartToUpdate();
 
         // Both events arrive on background threads.
         toasts.Activated += (_, _) => Dispatcher.UIThread.Post(ShowMainWindow);
@@ -94,6 +98,8 @@ internal sealed partial class DesktopShell(
 
         _exiting = true;
         _placement.SaveNow();
+        // A downloaded update installs now that the app is closing anyway.
+        updates.ApplyOnExit(restart: false);
         if (_tray is not null)
         {
             // Otherwise the icon lingers in the tray until the pointer passes over it.
@@ -131,15 +137,50 @@ internal sealed partial class DesktopShell(
         var exit = new NativeMenuItem("Exit");
         exit.Click += (_, _) => Exit();
 
+        // Appears only once a new version has been downloaded.
+        _restartToUpdate = new NativeMenuItem("Restart to update") { IsVisible = false };
+        _restartToUpdate.Click += (_, _) => RestartToUpdate();
+        updates.StatusChanged += (_, _) => Dispatcher.UIThread.Post(ShowUpdateInTray);
+        ShowUpdateInTray();
+
         using var icon = AssetLoader.Open(new Uri("avares://TradingAgent/Assets/icon.ico"));
         _tray = new TrayIcon
         {
             Icon = new WindowIcon(icon),
             ToolTipText = mainViewModel.WindowTitle,
-            Menu = new NativeMenu { Items = { show, new NativeMenuItemSeparator(), exit } },
+            Menu = new NativeMenu { Items = { show, _restartToUpdate, new NativeMenuItemSeparator(), exit } },
         };
         _tray.Clicked += (_, _) => ShowMainWindow();
         TrayIcon.SetIcons(application, [_tray]);
+    }
+
+    private void ShowUpdateInTray()
+    {
+        if (_restartToUpdate is null)
+        {
+            return;
+        }
+
+        var status = updates.Status;
+        _restartToUpdate.IsVisible = status.State == UpdateState.ReadyToInstall;
+        _restartToUpdate.Header = $"Restart to update to {status.AvailableVersion}";
+    }
+
+    private void RestartToUpdate()
+    {
+        if (_exiting || !updates.ApplyOnExit(restart: true))
+        {
+            return;
+        }
+
+        _exiting = true;
+        _placement.SaveNow();
+        if (_tray is not null)
+        {
+            _tray.IsVisible = false;
+        }
+
+        lifetime.Shutdown();
     }
 
     /// <summary>

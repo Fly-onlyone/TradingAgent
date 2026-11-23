@@ -17,6 +17,10 @@ jobs:
   release-please:
     name: Release Please
     runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
@@ -24,3 +28,20 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  # Builds the native app's installer for the release that was just created, in this same run: a tag
+  # pushed with GITHUB_TOKEN does not start other workflows, so a tag trigger would never fire.
+  #
+  # Off until the native app is usable. Turn it on with the repository variable
+  # DESKTOP_RELEASE_ENABLED = true (Settings > Secrets and variables > Actions > Variables).
+  desktop-release:
+    name: Desktop release
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true' && vars.DESKTOP_RELEASE_ENABLED == 'true'
+    uses: ./.github/workflows/desktop-package.yml
+    with:
+      version: ${{ needs.release-please.outputs.version }}
+      release_tag: ${{ needs.release-please.outputs.tag_name }}
+    permissions:
+      contents: write
+    secrets: inherit

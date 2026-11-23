@@ -1,0 +1,145 @@
+name: Desktop package
+
+# Builds the Windows installer and update packages of the native app.
+#
+# - Run by hand (workflow_dispatch): the packages are kept as a workflow artifact, for testing.
+# - On a pull request that changes this file: same, so a broken packaging step is caught before merge.
+# - Called by release-please.yml with a release tag: the packages are also attached to that GitHub
+#   release, which is where installed apps look for updates.
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/desktop-package.yml
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to stamp. Empty: the version in Directory.Build.props."
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      release_tag:
+        description: "Existing GitHub release to attach the packages to."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  # Keep in step with the Velopack package version in Directory.Packages.props.
+  VPK_VERSION: 1.2.161
+  REPO_URL: https://github.com/${{ github.repository }}
+
+jobs:
+  package:
+    name: Package (win-x64)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        env:
+          # Through the environment, not pasted into the script: an input must never become code.
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          $version = $env:REQUESTED_VERSION
+          if (-not $version) {
+            $version = (Select-Xml -Path Directory.Build.props -XPath '//Project/PropertyGroup/Version').Node.InnerText
+          }
+          # The value is used in later command lines, so it must be a version and nothing else.
+          if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') { throw "Not a version: '$version'" }
+          "value=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Restore
+        run: dotnet restore TradingAgent.slnx --locked-mode
+
+      - name: Publish (Native AOT)
+        run: dotnet publish src/TradingAgent.App/TradingAgent.App.csproj -c Release -r win-x64 --no-restore -o publish -p:Version=${{ steps.version.outputs.value }}
+
+      - name: Install vpk
+        run: dotnet tool install --global vpk --version ${{ env.VPK_VERSION }}
+
+      # Delta packages are built against the previous release, so it must be on disk first.
+      # The first release has no predecessor: a failure here is expected then.
+      - name: Download previous release
+        if: inputs.release_tag != ''
+        continue-on-error: true
+        shell: pwsh
+        env:
+          VPK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: vpk download github --repoUrl $env:REPO_URL --outputDir Releases
+
+      - name: Pack
+        shell: pwsh
+        env:
+          # Optional: signtool arguments (without "sign"). Unset means unsigned packages, which make
+          # Windows SmartScreen warn about an unknown publisher on first install.
+          SIGN_PARAMS: ${{ secrets.WINDOWS_SIGN_PARAMS }}
+        run: |
+          $arguments = @(
+            'pack',
+            '--packId', 'Fly.TradingAgent',
+            '--packVersion', '${{ steps.version.outputs.value }}',
+            '--packDir', 'publish',
+            '--mainExe', 'TradingAgent.exe',
+            '--packTitle', 'Trading agent',
+            '--packAuthors', 'Fly',
+            '--icon', 'src/TradingAgent.App/Assets/icon.ico',
+            # Same identity the app registers for its notifications, so shortcut, taskbar and toasts agree.
+            '--aumid', 'Fly.TradingAgent',
+            '--outputDir', 'Releases'
+          )
+          if ($env:SIGN_PARAMS) { $arguments += @('--signParams', $env:SIGN_PARAMS) }
+          vpk @arguments
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trading-agent-packages-${{ steps.version.outputs.value }}
+          path: Releases/
+          if-no-files-found: error
+          retention-days: 14
+
+  upload:
+    name: Attach to release
+    needs: package
+    if: inputs.release_tag != ''
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: trading-agent-packages-*
+          merge-multiple: true
+          path: Releases
+
+      - name: Install vpk
+        run: dotnet tool install --global vpk --version ${{ env.VPK_VERSION }}
+
+      # --merge: the release already exists; Release Please created it.
+      - name: Upload packages
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          VPK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: vpk upload github --repoUrl $env:REPO_URL --outputDir Releases --tag $env:RELEASE_TAG --merge

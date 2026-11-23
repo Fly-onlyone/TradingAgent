@@ -26,6 +26,13 @@ public static partial class AppUserModel
         Marshal.ThrowExceptionForHR(SetCurrentProcessExplicitAppUserModelID(appUserModelId));
     }
 
+    /// <summary>Removes the registration made by <see cref="Register"/>. Used when the app is uninstalled.</summary>
+    public static void Unregister(string appUserModelId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(appUserModelId);
+        Registry.CurrentUser.DeleteSubKeyTree($@"Software\Classes\AppUserModelId\{appUserModelId}", throwOnMissingSubKey: false);
+    }
+
     /// <summary>
     /// Lets the already running instance bring its window to the front. Windows only allows the process
     /// that received the last input to do that, which here is the second launch that is about to exit.

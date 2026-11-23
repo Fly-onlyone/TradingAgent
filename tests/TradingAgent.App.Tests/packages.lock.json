@@ -391,7 +391,8 @@
           "Microsoft.Extensions.Logging": "[10.0.15, )",
           "TradingAgent.Core": "[0.1.2, )",
           "TradingAgent.Data": "[0.1.2, )",
-          "TradingAgent.Platform.Windows": "[0.1.2, )"
+          "TradingAgent.Platform.Windows": "[0.1.2, )",
+          "Velopack": "[1.2.161, )"
         }
       },
       "tradingagent.core": {
@@ -498,6 +499,12 @@
         "requested": "[10.0.15, )",
         "resolved": "10.0.15",
         "contentHash": "AG49oTxB0R4YQJzeIIHRgqyaI3SOT8Q8vEfGUcju2WxOvsBkDJU4FKTQ8gYQAYCxmHOHqyJL0UDGcCf8nzRoiw=="
+      },
+      "Velopack": {
+        "type": "CentralTransitive",
+        "requested": "[1.2.161, )",
+        "resolved": "1.2.161",
+        "contentHash": "OpHNacIumnkhaaX3ZlQ/TCR4YPOJvud2/PAOoWb6o+mIrLwIVA275I5wAgt4q/1O2VrJeDwR1qFQyqzG4lUArg=="
       }
     }
   }
