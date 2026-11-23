@@ -9,18 +9,18 @@ namespace TradingAgent.Agent.Web;
 public sealed record WebResult(string Title, string Url, string Description, string? Age);
 
 /// <summary>A web request could not give a result. The message is fit to show to the model.</summary>
-public sealed class WebException : Exception
+public sealed class WebAccessException : Exception
 {
-    public WebException()
+    public WebAccessException()
     {
     }
 
-    public WebException(string message)
+    public WebAccessException(string message)
         : base(message)
     {
     }
 
-    public WebException(string message, Exception innerException)
+    public WebAccessException(string message, Exception innerException)
         : base(message, innerException)
     {
     }
@@ -34,12 +34,12 @@ public sealed class BraveSearchClient(HttpClient http, Func<string?> key)
     /// <summary>True when a key is saved.</summary>
     public bool IsConfigured => !string.IsNullOrEmpty(key());
 
-    /// <exception cref="WebException">No key is saved, or Brave did not answer with results.</exception>
+    /// <exception cref="WebAccessException">No key is saved, or Brave did not answer with results.</exception>
     public async Task<IReadOnlyList<WebResult>> SearchAsync(string query, int count, CancellationToken cancellationToken)
     {
         if (key() is not { Length: > 0 } token)
         {
-            throw new WebException("Web search is not set up: no Brave Search API key is saved in Settings.");
+            throw new WebAccessException("Web search is not set up: no Brave Search API key is saved in Settings.");
         }
 
         using var request = new HttpRequestMessage(
@@ -52,7 +52,7 @@ public sealed class BraveSearchClient(HttpClient http, Func<string?> key)
             using var response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
-                throw new WebException(response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
+                throw new WebAccessException(response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
                     ? "Brave Search refused the saved key."
                     : $"Brave Search answered {(int)response.StatusCode}.");
             }
@@ -74,15 +74,15 @@ public sealed class BraveSearchClient(HttpClient http, Func<string?> key)
         }
         catch (HttpRequestException ex)
         {
-            throw new WebException("Brave Search cannot be reached.", ex);
+            throw new WebAccessException("Brave Search cannot be reached.", ex);
         }
         catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new WebException("Brave Search took too long to answer.", ex);
+            throw new WebAccessException("Brave Search took too long to answer.", ex);
         }
         catch (JsonException ex)
         {
-            throw new WebException("Brave Search's answer could not be read.", ex);
+            throw new WebAccessException("Brave Search's answer could not be read.", ex);
         }
     }
 
@@ -169,12 +169,12 @@ public sealed class PageReader(HttpClient http, Func<string, CancellationToken, 
         };
     }
 
-    /// <exception cref="WebException">The address is not allowed, or the page could not be read.</exception>
+    /// <exception cref="WebAccessException">The address is not allowed, or the page could not be read.</exception>
     public async Task<string> ReadAsync(string url, CancellationToken cancellationToken)
     {
         if (!Uri.TryCreate(url?.Trim(), UriKind.Absolute, out var uri))
         {
-            throw new WebException("That is not a web address.");
+            throw new WebAccessException("That is not a web address.");
         }
 
         try
@@ -194,19 +194,19 @@ public sealed class PageReader(HttpClient http, Func<string, CancellationToken, 
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    throw new WebException($"The page answered {(int)response.StatusCode}.");
+                    throw new WebAccessException($"The page answered {(int)response.StatusCode}.");
                 }
 
                 var type = response.Content.Headers.ContentType?.MediaType ?? "text/html";
                 if (!type.StartsWith("text/", StringComparison.OrdinalIgnoreCase) && !type.Contains("html", StringComparison.OrdinalIgnoreCase)
                     && !type.Contains("json", StringComparison.OrdinalIgnoreCase) && !type.Contains("xml", StringComparison.OrdinalIgnoreCase))
                 {
-                    throw new WebException($"The address holds '{type}', not a page of text.");
+                    throw new WebAccessException($"The address holds '{type}', not a page of text.");
                 }
 
                 if (response.Content.Headers.ContentLength > MaxBytes)
                 {
-                    throw new WebException("The page is too large to read.");
+                    throw new WebAccessException("The page is too large to read.");
                 }
 
                 var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
@@ -214,15 +214,15 @@ public sealed class PageReader(HttpClient http, Func<string, CancellationToken, 
                 return text.Length <= MaxTextLength ? text : text[..MaxTextLength] + "\n[The page goes on; this is its first part.]";
             }
 
-            throw new WebException("The address redirects too many times.");
+            throw new WebAccessException("The address redirects too many times.");
         }
         catch (HttpRequestException ex)
         {
-            throw new WebException("The page cannot be reached.", ex);
+            throw new WebAccessException("The page cannot be reached.", ex);
         }
         catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new WebException("The page took too long to answer.", ex);
+            throw new WebAccessException("The page took too long to answer.", ex);
         }
     }
 
@@ -230,7 +230,7 @@ public sealed class PageReader(HttpClient http, Func<string, CancellationToken, 
     {
         if (uri.Scheme is not ("http" or "https"))
         {
-            throw new WebException("Only http and https addresses can be read.");
+            throw new WebAccessException("Only http and https addresses can be read.");
         }
 
         IPAddress[] addresses;
@@ -242,12 +242,12 @@ public sealed class PageReader(HttpClient http, Func<string, CancellationToken, 
         }
         catch (SocketException ex)
         {
-            throw new WebException($"The site '{uri.Host}' was not found.", ex);
+            throw new WebAccessException($"The site '{uri.Host}' was not found.", ex);
         }
 
         if (addresses.Length == 0 || !addresses.All(IsPublic))
         {
-            throw new WebException("That address is on this computer or the local network. Only public web pages can be read.");
+            throw new WebAccessException("That address is on this computer or the local network. Only public web pages can be read.");
         }
     }
 }

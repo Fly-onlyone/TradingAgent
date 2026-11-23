@@ -451,7 +451,7 @@ public sealed class WebSearchTool(BraveSearchClient brave) : ITool
                 writer.WriteEndObject();
             }));
         }
-        catch (WebException ex)
+        catch (WebAccessException ex)
         {
             return ToolOutcome.Failed(ex.Message);
         }
@@ -483,7 +483,7 @@ public sealed class FetchUrlTool(PageReader reader) : ITool
         {
             return new ToolOutcome(await reader.ReadAsync(url, cancellationToken).ConfigureAwait(false));
         }
-        catch (WebException ex)
+        catch (WebAccessException ex)
         {
             return ToolOutcome.Failed(ex.Message);
         }

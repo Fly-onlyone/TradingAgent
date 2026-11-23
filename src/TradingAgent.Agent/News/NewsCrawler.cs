@@ -136,6 +136,9 @@ public sealed partial class NewsCrawler(
     private CancellationTokenSource? _stop;
     private Task? _loop;
 
+    /// <summary>Raised after a pass that stored new articles or changed a source's state. Not on the UI thread.</summary>
+    public event EventHandler? Changed;
+
     public string Name => "News crawler";
 
     public Task StartAsync(CancellationToken stopping)
@@ -191,6 +194,7 @@ public sealed partial class NewsCrawler(
                 indexer.Request();
             }
 
+            Changed?.Invoke(this, EventArgs.Empty);
             return added;
         }
         finally

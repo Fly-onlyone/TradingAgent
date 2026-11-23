@@ -263,8 +263,6 @@ public sealed partial class ShellApp : Application
             paths.ClaudeCodeDirectory));
         services.AddSingleton<ISystemPrompt, TradingSystemPrompt>();
         services.AddSingleton<AgentCardViewModel>();
-        services.AddSingleton<ChatViewModel>();
-        services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<IAgentRuntimeResolver, AgentRuntimeResolver>();
         services.AddSingleton<AgentRunner>();
 
@@ -312,7 +310,24 @@ public sealed partial class ShellApp : Application
             logging.Services.AddSingleton<ILoggerProvider, SentryLoggerProvider>();
         });
 
+        // The pages, in the order of the navigation rail.
+        services.AddSingleton<AppNavigator>();
+        services.AddSingleton<ChatViewModel>();
+        services.AddSingleton<TasksViewModel>();
+        services.AddSingleton<StrategiesViewModel>();
+        services.AddSingleton<KnowledgeViewModel>();
+        services.AddSingleton<MemoryViewModel>();
+        services.AddSingleton<NewsViewModel>();
+        services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<DiagnosticsViewModel>();
+        services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<ChatViewModel>());
+        services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<TasksViewModel>());
+        services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<StrategiesViewModel>());
+        services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<KnowledgeViewModel>());
+        services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<MemoryViewModel>());
+        services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<NewsViewModel>());
+        services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<SettingsViewModel>());
+        services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<DiagnosticsViewModel>());
         services.AddSingleton<MainViewModel>();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });
     }

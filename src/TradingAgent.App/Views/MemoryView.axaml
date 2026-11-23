@@ -1,0 +1,49 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TradingAgent.App.ViewModels"
+             x:Class="TradingAgent.App.Views.MemoryView"
+             x:DataType="vm:MemoryViewModel">
+
+  <Grid ColumnDefinitions="*,380" Margin="24,16">
+
+    <Grid Grid.Column="0" RowDefinitions="Auto,Auto,*" Margin="0,0,20,0">
+      <TextBlock Grid.Row="0" Classes="pageTitle" Text="{Binding Title}" />
+      <Grid Grid.Row="1" ColumnDefinitions="*,180,Auto" Margin="0,12,0,8">
+        <TextBox Grid.Column="0" Text="{Binding Query}" PlaceholderText="Search what the agent remembers"
+                 AutomationProperties.Name="Search memories" />
+        <ComboBox Grid.Column="1" Margin="8,0,0,0" HorizontalAlignment="Stretch" ItemsSource="{Binding Filters}"
+                  SelectedItem="{Binding Filter}" AutomationProperties.Name="Category filter" />
+        <TextBlock Grid.Column="2" Classes="secondary" VerticalAlignment="Center" Margin="12,0,0,0" Text="{Binding Count}" />
+      </Grid>
+      <ListBox Grid.Row="2" Background="Transparent" ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}"
+               ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:MemoryItemViewModel">
+            <StackPanel Spacing="3">
+              <StackPanel Orientation="Horizontal" Spacing="10">
+                <TextBlock FontSize="12" Foreground="{StaticResource PrimaryBrush}" Text="{Binding Category}" />
+                <TextBlock Classes="secondary" FontSize="12" Text="{Binding When}" />
+              </StackPanel>
+              <TextBlock TextWrapping="Wrap" Text="{Binding Content}" />
+            </StackPanel>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </Grid>
+
+    <StackPanel Grid.Column="1" Spacing="10">
+      <TextBlock Classes="title" Text="Add or correct" />
+      <TextBlock Classes="secondary" TextWrapping="Wrap"
+                 Text="The agent saves memories by itself while you talk. Choose one to correct or remove it, or write a new one here." />
+      <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Categories}" SelectedItem="{Binding Category}"
+                AutomationProperties.Name="Category" />
+      <TextBox Text="{Binding Content}" AcceptsReturn="True" TextWrapping="Wrap" Height="200" MaxLength="2000"
+               PlaceholderText="One fact, in a full sentence." AutomationProperties.Name="Memory text" />
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button Content="Add as new" Command="{Binding AddCommand}" />
+        <Button Content="Save changes" Command="{Binding SaveCommand}" />
+        <Button Content="Delete" Command="{Binding DeleteCommand}" />
+      </StackPanel>
+    </StackPanel>
+  </Grid>
+</UserControl>
