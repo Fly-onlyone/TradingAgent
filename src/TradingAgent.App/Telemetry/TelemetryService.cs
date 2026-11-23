@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Reflection;
 using Microsoft.Extensions.Logging;
-using Sentry;
 using TradingAgent.Core;
 using TradingAgent.Core.Settings;
 

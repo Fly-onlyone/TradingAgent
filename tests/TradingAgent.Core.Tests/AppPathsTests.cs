@@ -1,4 +1,3 @@
-using TradingAgent.Core;
 using Xunit;
 
 namespace TradingAgent.Core.Tests;

@@ -23,6 +23,7 @@ public sealed partial class WindowsAutostart : IAutostart
     /// <param name="shortcutName">File name of the shortcut, without extension.</param>
     /// <param name="executable">Full path of the program to start.</param>
     /// <param name="description">Tooltip of the shortcut.</param>
+    /// <param name="logger">Receives the reason when the shortcut cannot be written or removed.</param>
     /// <param name="startupFolder">Folder to write to; the user's Startup folder when null.</param>
     public WindowsAutostart(
         string shortcutName,
@@ -51,6 +52,9 @@ public sealed partial class WindowsAutostart : IAutostart
             link.SetWorkingDirectory(Path.GetDirectoryName(_executable) ?? string.Empty);
             link.SetDescription(_description);
             link.SetIconLocation(_executable, 0);
+            // No C# type implements both interfaces: the cast asks the COM object for IPersistFile
+            // (QueryInterface), which the shell link object supports.
+            // ReSharper disable once SuspiciousTypeConversion.Global
             ((IPersistFile)link).Save(_shortcutFile, remember: true);
         }
         catch (Exception ex) when (ex is COMException or IOException or UnauthorizedAccessException)

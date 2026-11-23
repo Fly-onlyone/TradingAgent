@@ -16,10 +16,10 @@ internal partial interface IShellLinkW
     int UnusedGetPath();
 
     [PreserveSig]
-    int UnusedGetIDList();
+    int UnusedGetIdList();
 
     [PreserveSig]
-    int UnusedSetIDList();
+    int UnusedSetIdList();
 
     [PreserveSig]
     int UnusedGetDescription();
@@ -68,7 +68,7 @@ internal partial interface IPersistFile
 {
     // IPersist
     [PreserveSig]
-    int UnusedGetClassID();
+    int UnusedGetClassId();
 
     [PreserveSig]
     int UnusedIsDirty();

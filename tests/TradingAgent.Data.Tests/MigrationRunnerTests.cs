@@ -1,4 +1,3 @@
-using TradingAgent.Data;
 using Xunit;
 
 namespace TradingAgent.Data.Tests;

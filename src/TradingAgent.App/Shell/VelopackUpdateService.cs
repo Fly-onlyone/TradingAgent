@@ -49,7 +49,8 @@ internal sealed partial class VelopackUpdateService : IUpdateService, IDisposabl
     {
         if (IsInstalled)
         {
-            _timer ??= _time.CreateTimer(_ => _ = CheckAsync(), null, _firstCheckDelay, _checkInterval);
+            _timer ??= _time.CreateTimer(
+                static state => _ = ((VelopackUpdateService)state!).CheckAsync(), this, _firstCheckDelay, _checkInterval);
         }
     }
 

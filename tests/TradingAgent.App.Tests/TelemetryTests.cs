@@ -1,6 +1,5 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
-using Sentry;
 using Sentry.Extensibility;
 using Sentry.Protocol;
 using TradingAgent.App.Telemetry;
@@ -118,8 +117,7 @@ public sealed class SentryScrubberTests
                 ["from"] = "/settings?email=a@b.c",
                 ["status_code"] = "200",
             },
-            "http",
-            BreadcrumbLevel.Info);
+            "http");
 
         var scrubbed = SentryScrubber.ScrubBreadcrumb(breadcrumb);
 
