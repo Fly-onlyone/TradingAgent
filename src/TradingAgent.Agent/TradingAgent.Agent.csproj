@@ -11,6 +11,7 @@
   <ItemGroup>
     <ProjectReference Include="..\TradingAgent.Core\TradingAgent.Core.csproj" />
     <ProjectReference Include="..\TradingAgent.Data\TradingAgent.Data.csproj" />
+    <ProjectReference Include="..\TradingAgent.Exchange\TradingAgent.Exchange.csproj" />
   </ItemGroup>
 
   <ItemGroup>

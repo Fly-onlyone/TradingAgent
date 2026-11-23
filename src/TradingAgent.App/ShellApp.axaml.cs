@@ -22,6 +22,8 @@ using TradingAgent.Core.Shell;
 using TradingAgent.Data;
 using TradingAgent.Data.Agent;
 using TradingAgent.Data.Logging;
+using TradingAgent.Exchange.Okx;
+using TradingAgent.Exchange.Risk;
 using TradingAgent.Platform.Windows;
 
 namespace TradingAgent.App;
@@ -36,6 +38,9 @@ public sealed partial class ShellApp : Application
     /// for the first byte, which is long when the model thinks before it writes.
     /// </summary>
     private static readonly TimeSpan _modelCallTimeout = TimeSpan.FromMinutes(10);
+
+    /// <summary>How long OKX may take to answer a read request.</summary>
+    private static readonly TimeSpan _exchangeTimeout = TimeSpan.FromSeconds(15);
 
     private ServiceProvider? _services;
 
@@ -141,8 +146,34 @@ public sealed partial class ShellApp : Application
         services.AddSingleton(provider => new OpenAiModelClient(
             provider.GetRequiredService<HttpClient>(),
             () => provider.GetRequiredService<ISecretStore>().Reveal(SecretNames.OpenAiApiKey)));
+        // Exchange, read-only. Its own HTTP client: a market data request must fail fast, unlike a
+        // model call. The key and the demo/live mode are read at the time of each request.
+        services.AddSingleton<IOkxReader>(provider =>
+        {
+            var secrets = provider.GetRequiredService<ISecretStore>();
+            var settings = provider.GetRequiredService<ISettingsStore>();
+            return new OkxClient(
+                new HttpClient { Timeout = _exchangeTimeout },
+                () => secrets.Reveal(SecretNames.OkxApiKey) is { Length: > 0 } key
+                    && secrets.Reveal(SecretNames.OkxSecretKey) is { Length: > 0 } secret
+                    && secrets.Reveal(SecretNames.OkxPassphrase) is { Length: > 0 } passphrase
+                        ? new OkxCredentials(key, secret, passphrase)
+                        : null,
+                () => settings.GetValue(SettingKeys.OkxSandbox),
+                provider.GetRequiredService<TimeProvider>(),
+                provider.GetRequiredService<ILogger<OkxClient>>());
+        });
+        services.AddSingleton<RiskManager>();
+
         services.AddSingleton<QuestionBroker>();
         services.AddSingleton<ITool, AskUserTool>();
+        services.AddSingleton<ITool, GetTickerTool>();
+        services.AddSingleton<ITool, GetCandlesticksTool>();
+        services.AddSingleton<ITool, GetOrderBookTool>();
+        services.AddSingleton<ITool, GetTechnicalIndicatorsTool>();
+        services.AddSingleton<ITool, GetAccountBalanceTool>();
+        services.AddSingleton<ITool, GetPositionsTool>();
+        services.AddSingleton<ITool, GetOpenOrdersTool>();
         services.AddSingleton(provider => new ToolHost(
             provider.GetServices<ITool>(),
             provider.GetServices<IToolGate>(),

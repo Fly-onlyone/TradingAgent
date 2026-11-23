@@ -144,6 +144,13 @@
           "TradingAgent.Core": "[0.1.2, )"
         }
       },
+      "tradingagent.exchange": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Extensions.Logging.Abstractions": "[10.0.15, )",
+          "TradingAgent.Core": "[0.1.2, )"
+        }
+      },
       "Microsoft.Data.Sqlite": {
         "type": "CentralTransitive",
         "requested": "[10.0.15, )",
