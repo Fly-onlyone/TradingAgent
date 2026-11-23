@@ -40,6 +40,13 @@ public interface ITool
     Task<ToolOutcome> InvokeAsync(JsonElement input, ToolContext context, CancellationToken cancellationToken);
 }
 
+/// <summary>Tools that come and go while the app runs, such as those of a tool server that may be down.</summary>
+public interface IToolSource
+{
+    /// <summary>The tools available right now. Called often: return a ready list, do no work here.</summary>
+    IReadOnlyList<ITool> GetTools();
+}
+
 /// <summary>What a gate decided about a tool call.</summary>
 /// <param name="Allowed">False refuses the call.</param>
 /// <param name="Reason">Why the call was refused, in words the model and the user both read.</param>

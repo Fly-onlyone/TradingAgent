@@ -26,6 +26,12 @@ public sealed class AppPaths
 
     public string LogDirectory => Path.Combine(DataDirectory, "logs");
 
+    /// <summary>
+    /// The folder the OKX trade kit is given as its home, so what it keeps stays with the app's data
+    /// and it does not see files of the user's own home folder.
+    /// </summary>
+    public string TradeKitHomeDirectory => Path.Combine(DataDirectory, "trade-kit");
+
     /// <summary>Resolves the paths under the current user's local application data folder.</summary>
     public static AppPaths ForCurrentUser(bool isDevelopmentBuild) =>
         new(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), isDevelopmentBuild);

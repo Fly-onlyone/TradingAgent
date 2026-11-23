@@ -11,6 +11,8 @@ tags: [desktop, data]
 
 - `trading-agent.db` — the one SQLite file (WAL mode), see [[SQLite Schema Conventions]].
 - `logs\app.jsonl` — rolling JSON-lines log, 10 MB × 5 files.
+- `trade-kit\` — the home folder the OKX trade kit is given, see [[Trade Kit Sidecar]]. Created when
+  the kit is first started. It never holds the key.
 - Paths come from `AppPaths` in `src/TradingAgent.Core/AppPaths.cs`.
 
 ## Settings and secrets

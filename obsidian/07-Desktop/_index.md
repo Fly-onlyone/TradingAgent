@@ -10,7 +10,8 @@ tags: [desktop, moc]
 The old app (`backend/`, `frontend/`) stays buildable until the last feature slice is done. Today the
 native app is a **skeleton**: build, data layer, shell behaviour, installer and crash reporting, with
 one page (Diagnostics). The agent core is being added underneath (sessions, model providers, the
-tool-use loop); no screen uses it yet, and there are no trading features.
+tool-use loop, the OKX trade kit with its reading tools); no screen uses it yet, and the agent cannot
+place an order.
 
 ## Why and what
 
@@ -31,6 +32,7 @@ tool-use loop); no screen uses it yet, and there are no trading features.
 
 - [[Agent Runs]]
 - [[Exchange and Risk]]
+- [[Trade Kit Sidecar]]
 
 ## Shell & Release
 

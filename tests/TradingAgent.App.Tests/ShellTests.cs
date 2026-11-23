@@ -4,9 +4,12 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
+using TradingAgent.Agent.Atk;
+using TradingAgent.Agent.Tools;
 using TradingAgent.App.ViewModels;
 using TradingAgent.App.Views;
 using TradingAgent.Core;
+using TradingAgent.Core.Hosting;
 using TradingAgent.Core.Secrets;
 using TradingAgent.Core.Settings;
 using Xunit;
@@ -52,6 +55,24 @@ public sealed class ShellTests : IDisposable
         Assert.True(File.Exists(_paths.DatabaseFile));
         Assert.True(services.GetRequiredService<ISettingsStore>().GetValue(SettingKeys.OkxSandbox));
         Assert.Equal(SecretState.Unset, services.GetRequiredService<ISecretStore>().GetState(SecretNames.OkxApiKey));
+    }
+
+    [Fact]
+    public void The_trade_kit_is_one_service_that_runs_in_the_background_and_feeds_the_tool_host()
+    {
+        using var services = ShellApp.BuildServices(_info, _paths);
+
+        var kit = services.GetRequiredService<AtkService>();
+
+        Assert.Same(kit, Assert.Single(services.GetServices<IToolSource>()));
+        Assert.Contains(kit, services.GetServices<IBackgroundService>());
+        Assert.Equal(AtkState.Stopped, kit.Status.State);
+        // Resolving the graph starts nothing: the app's own tools are there, the kit's are not.
+        var tools = services.GetRequiredService<ToolHost>().Definitions.Select(definition => definition.Name).ToList();
+        Assert.Contains("get_ticker", tools);
+        Assert.DoesNotContain(tools, name => name.StartsWith(AtkToolCatalog.Prefix, StringComparison.Ordinal));
+        Assert.False(Directory.Exists(_paths.TradeKitHomeDirectory));
+        Assert.StartsWith(_paths.DataDirectory, _paths.TradeKitHomeDirectory, StringComparison.Ordinal);
     }
 
     [Fact]

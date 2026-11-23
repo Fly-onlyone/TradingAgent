@@ -27,6 +27,7 @@ tags: [desktop, agent]
 | `ModelCatalog` | The only place that knows model ids. Settings hold a family (`sonnet`); a full id pins a model |
 | `ToolHost` | The one way a tool is called: finds it, runs the gates, runs it with a time limit, always returns an outcome |
 | `IToolGate` | Checks a call before it runs. Fail closed: a gate that throws refuses the call |
+| `IToolSource` | Tools that come and go while the app runs; the tool host asks at the time of each run. The OKX trade kit is one (see [[Trade Kit Sidecar]]) |
 | `QuestionBroker`, `ask_user` | Lets a run ask the user and wait; the open question is stored on the session |
 | `RunRecorder` | Keeps the reply row and its tool calls up to date and publishes the events |
 
