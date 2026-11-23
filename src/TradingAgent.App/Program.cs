@@ -13,6 +13,13 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        // Bridge mode: Claude Code started this exe to reach the tools of the app that is already
+        // running. Nothing of the app itself starts here: no window, no database, no second instance.
+        if (StdioPipeBridge.IsRequested(args))
+        {
+            return StdioPipeBridge.Run(args[1]);
+        }
+
         // Must run first. The installer and updater start this exe with special arguments to run their
         // install, update and uninstall steps; in that case this call does the work and exits the process.
         VelopackApp.Build().OnBeforeUninstallFastCallback(_ => RemoveSystemIntegration()).Run();

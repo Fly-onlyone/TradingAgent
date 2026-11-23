@@ -1,5 +1,8 @@
+using Microsoft.Extensions.Logging;
+using TradingAgent.Agent.Cli;
 using TradingAgent.Agent.Models;
 using TradingAgent.Agent.Tools;
+using TradingAgent.Core;
 using TradingAgent.Core.Agent;
 using TradingAgent.Core.Settings;
 using TradingAgent.Data.Agent;
@@ -31,7 +34,13 @@ public sealed class AgentRuntimeResolver(
     OpenAiModelClient openAi,
     ToolHost tools,
     TranscriptRepository transcript,
-    ISystemPrompt systemPrompt) : IAgentRuntimeResolver
+    ISystemPrompt systemPrompt,
+    ClaudeCli cli,
+    ICliProcessLauncher cliLauncher,
+    AgentSessionRepository sessions,
+    CliRuntimeOptions cliOptions,
+    AppInfo info,
+    ILogger<ClaudeCliRuntime> cliLogger) : IAgentRuntimeResolver
 {
     public ResolvedRuntime Resolve()
     {
@@ -50,12 +59,22 @@ public sealed class AgentRuntimeResolver(
         var authMode = settings.GetValue(SettingKeys.AgentAuthMode) == AgentWire.ApiKey ? AgentWire.ApiKey : AgentWire.Subscription;
         if (authMode == AgentWire.Subscription)
         {
+            // Whether Claude Code is installed and signed in is found out when the run starts, and
+            // told to the user as the run's failure: both can change while the app is open.
             return new ResolvedRuntime(
-                null,
+                new ClaudeCliRuntime(
+                    cli,
+                    cliLauncher,
+                    tools,
+                    systemPrompt,
+                    sessions,
+                    cliOptions,
+                    ModelCatalog.Resolve(provider, configuredModel),
+                    effort,
+                    info.Version,
+                    cliLogger),
                 provider,
-                authMode,
-                "Signing in with a Claude subscription is not available in this version yet. "
-                + "Choose \"API key\" as the sign-in mode in Settings.");
+                authMode);
         }
 
         return new ResolvedRuntime(

@@ -50,12 +50,14 @@ tags: [desktop, agent]
 - Current Claude models reject a thinking budget and sampling parameters; thinking is adaptive and
   its depth is set with the effort level. `agent.thinking_budget` and `agent.thinking_mode` are no
   longer read.
-- Signing in with a Claude subscription has no runtime yet; the resolver says so in the reply.
+- Signing in with a Claude subscription uses another runtime: the Claude Code command line runs the
+  model and reaches the same tool host through a bridge. See [[Claude Code Runtime]].
 
 ## Not verified
 
-No test calls a real model. The clients are tested against recorded stream text; the first call with
-a real key is still to be made.
+No test calls a real model with an API key. The two API clients are tested against recorded stream
+text; the first call with a real key is still to be made. The Claude Code runtime was run for real
+(one tool call and a resumed second run), see [[Claude Code Runtime]].
 
 ## See also
 

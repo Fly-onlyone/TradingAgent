@@ -33,6 +33,7 @@ tool-use loop, the OKX trade kit behind the risk gate); no screen uses it yet.
 - [[Exchange and Risk]]
 - [[Trade Kit Sidecar]]
 - [[Risk Gate]]
+- [[Claude Code Runtime]]
 
 ## Shell & Release
 
