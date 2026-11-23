@@ -12,7 +12,7 @@ dependencies = [
     "python-okx>=0.4.0",
     # MCP client — used by okx_atk.mcp_client to talk to the OKX Agent Trade Kit
     # stdio MCP server from the OpenAI runtime bridge and from server-side ATK tooling.
-    "mcp>=1.0.0,<2.0.0",
+    "mcp>=1.0.0,<3.0.0",
     # MongoDB
     "motor>=3.6.0",
     "beanie>=1.26.0",
@@ -48,7 +48,7 @@ dependencies = [
     "slowapi>=0.1.9",
     # Dev file watcher (used by run.py)
     "watchfiles>=0.20.0",
-    "pandas-stubs~=3.0.0",
+    "pandas-stubs>=3.0,<3.2",
     # Strategy import (PDF + YAML parsing)
     "pymupdf>=1.24.0",
     "pyyaml>=6.0.0",
