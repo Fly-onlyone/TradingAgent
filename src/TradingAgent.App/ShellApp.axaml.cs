@@ -6,6 +6,9 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using TradingAgent.Agent.Models;
+using TradingAgent.Agent.Runs;
+using TradingAgent.Agent.Tools;
 using TradingAgent.App.Hosting;
 using TradingAgent.App.Shell;
 using TradingAgent.App.Telemetry;
@@ -27,6 +30,12 @@ public sealed partial class ShellApp : Application
 {
     /// <summary>How long exit waits for background services (child processes, pollers) to stop.</summary>
     private static readonly TimeSpan _backgroundStopTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// How long a model provider may take to start answering. Answers are streamed, so this is the wait
+    /// for the first byte, which is long when the model thinks before it writes.
+    /// </summary>
+    private static readonly TimeSpan _modelCallTimeout = TimeSpan.FromMinutes(10);
 
     private ServiceProvider? _services;
 
@@ -120,6 +129,27 @@ public sealed partial class ShellApp : Application
         services.AddSingleton<TranscriptRepository>();
         services.AddSingleton<AgentStartupReconciler>();
         services.AddSingleton<IAgentEvents, AgentEventHub>();
+
+        // Agent: model providers, tools and the loop that drives them. Keys are read from the secret
+        // store at the time of each call, so a key saved in Settings works without a restart.
+        services.AddSingleton(_ => new HttpClient { Timeout = _modelCallTimeout });
+        services.AddSingleton(provider => new AnthropicModelClient(
+            provider.GetRequiredService<HttpClient>(),
+            () => provider.GetRequiredService<ISecretStore>().Reveal(SecretNames.AnthropicApiKey),
+            provider.GetRequiredService<TimeProvider>(),
+            provider.GetRequiredService<ILogger<AnthropicModelClient>>()));
+        services.AddSingleton(provider => new OpenAiModelClient(
+            provider.GetRequiredService<HttpClient>(),
+            () => provider.GetRequiredService<ISecretStore>().Reveal(SecretNames.OpenAiApiKey)));
+        services.AddSingleton<QuestionBroker>();
+        services.AddSingleton<ITool, AskUserTool>();
+        services.AddSingleton(provider => new ToolHost(
+            provider.GetServices<ITool>(),
+            provider.GetServices<IToolGate>(),
+            provider.GetRequiredService<ILogger<ToolHost>>()));
+        services.AddSingleton<ISystemPrompt, DefaultSystemPrompt>();
+        services.AddSingleton<IAgentRuntimeResolver, AgentRuntimeResolver>();
+        services.AddSingleton<AgentRunner>();
 
         // Background services, in start order. They stop in the reverse order.
         services.AddSingleton<RetentionService>();

@@ -16,8 +16,12 @@ public static class SettingKeys
     public static readonly SettingKey<string> AgentProvider = new("agent.provider", "anthropic", Json.String);
     public static readonly SettingKey<string> AgentAuthMode = new("agent.auth_mode", "subscription", Json.String);
     public static readonly SettingKey<string> AgentModel = new("agent.model", "sonnet", Json.String);
+    // Carried over from the previous app and no longer read: current models reject a thinking budget and
+    // cannot switch thinking off. Depth of thinking is set with the effort level below.
     public static readonly SettingKey<string> AgentThinkingMode = new("agent.thinking_mode", "adaptive", Json.String);
     public static readonly SettingKey<int> AgentThinkingBudget = new("agent.thinking_budget", 10_000, Json.Int32);
+
+    // low, medium, high, xhigh or max.
     public static readonly SettingKey<string> AgentEffort = new("agent.effort", "high", Json.String);
 
     // Exchange. Sandbox is on until the user deliberately switches to live trading.

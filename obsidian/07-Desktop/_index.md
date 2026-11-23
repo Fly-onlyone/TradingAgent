@@ -9,7 +9,8 @@ tags: [desktop, moc]
 
 The old app (`backend/`, `frontend/`) stays buildable until the last feature slice is done. Today the
 native app is a **skeleton**: build, data layer, shell behaviour, installer and crash reporting, with
-one page (Diagnostics). It has no trading or agent features yet.
+one page (Diagnostics). The agent core is being added underneath (sessions, model providers, the
+tool-use loop); no screen uses it yet, and there are no trading features.
 
 ## Why and what
 
@@ -25,6 +26,10 @@ one page (Diagnostics). It has no trading or agent features yet.
 
 - [[Desktop Data Folder]]
 - [[SQLite Schema Conventions]]
+
+## Agent
+
+- [[Agent Runs]]
 
 ## Shell & Release
 
