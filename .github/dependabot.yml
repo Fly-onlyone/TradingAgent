@@ -1,36 +1,10 @@
 version: 2
 
+# The old app (Python backend, React frontend, Tauri shell) is being replaced by the native app in
+# src/. Its ecosystems (uv, bun, cargo) are not watched any more: their update pull requests were
+# noise for code that is going away. Put them back here if the old app must live longer.
+
 updates:
-  - package-ecosystem: uv
-    directory: /
-    schedule:
-      interval: weekly
-    commit-message:
-      prefix: "deps(backend)"
-    groups:
-      python-deps:
-        patterns: ["*"]
-
-  - package-ecosystem: bun
-    directory: /frontend
-    schedule:
-      interval: weekly
-    commit-message:
-      prefix: "deps(frontend)"
-    groups:
-      js-deps:
-        patterns: ["*"]
-
-  - package-ecosystem: cargo
-    directory: /frontend/src-tauri
-    schedule:
-      interval: weekly
-    commit-message:
-      prefix: "deps(tauri)"
-    groups:
-      rust-deps:
-        patterns: ["*"]
-
   # Versions live in Directory.Packages.props; every project has a packages.lock.json.
   - package-ecosystem: nuget
     directory: /
