@@ -4,8 +4,9 @@ tags: [desktop, data]
 
 # SQLite Schema Conventions
 
-> One SQLite file replaces 25 MongoDB collections. The whole schema is created by
-> `src/TradingAgent.Data/Migrations/0001_initial.sql`.
+> One SQLite file replaces 25 MongoDB collections. The schema is created by the numbered scripts in
+> `src/TradingAgent.Data/Migrations/`: `0001_initial.sql` (everything) and `0002_agent_core.sql`
+> (run state of replies and tool calls, the provider transcript).
 
 ## Conventions
 
@@ -24,14 +25,22 @@ The id width is part of a contract: OKX client order ids are `s<24hex-session>-<
 ## Tables
 
 - **Infrastructure**: `settings`, `secrets`, `meta`, `logs`, `vectors`.
-- **Agent**: `agent_sessions`, `agent_session_messages`, `agent_tool_calls`, `agent_tasks`,
-  `agent_decisions`, `agent_memories`, `notifications`.
+- **Agent**: `agent_sessions`, `agent_session_messages`, `agent_tool_calls`, `agent_transcript`,
+  `agent_tasks`, `agent_decisions`, `agent_memories`, `notifications`.
 - **Trading**: `orders`, `strategies`, `strategy_knowledge`, `strategy_discovery_cycles`,
   `trade_lessons`, `trading_patterns`.
 - **News**: `news_sources`, `news_articles`, `news_article_assets`, `credibility_events`.
 
 `agent_tool_calls` is a child table of a message, so the order mirror can update one tool-call
 bubble by `tool_use_id` instead of rewriting a JSON array.
+
+**Two kinds of history.** `agent_session_messages` and `agent_tool_calls` are what a chat screen
+shows: one assistant message per run, with a `status` (`running`, `complete`, `cancelled`,
+`failed`), and its tool calls with their own (`running`, `succeeded`, `failed`, `denied`).
+`agent_transcript` is what is sent back to the model: the provider's own JSON items, append-only and
+never rebuilt from the display tables, because providers require earlier items to come back
+unchanged. Work that was `running` when the app stopped is marked `failed` at the next start
+(`AgentStartupReconciler`).
 
 ## Search
 

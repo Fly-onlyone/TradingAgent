@@ -6,14 +6,18 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using TradingAgent.App.Hosting;
 using TradingAgent.App.Shell;
 using TradingAgent.App.Telemetry;
 using TradingAgent.App.ViewModels;
 using TradingAgent.Core;
+using TradingAgent.Core.Agent;
+using TradingAgent.Core.Hosting;
 using TradingAgent.Core.Secrets;
 using TradingAgent.Core.Settings;
 using TradingAgent.Core.Shell;
 using TradingAgent.Data;
+using TradingAgent.Data.Agent;
 using TradingAgent.Data.Logging;
 using TradingAgent.Platform.Windows;
 
@@ -21,6 +25,9 @@ namespace TradingAgent.App;
 
 public sealed partial class ShellApp : Application
 {
+    /// <summary>How long exit waits for background services (child processes, pollers) to stop.</summary>
+    private static readonly TimeSpan _backgroundStopTimeout = TimeSpan.FromSeconds(5);
+
     private ServiceProvider? _services;
 
     /// <summary>The single-instance lock taken in <c>Main</c>; null under the headless test platform.</summary>
@@ -41,7 +48,12 @@ public sealed partial class ShellApp : Application
             var schemaVersion = _services.GetRequiredService<Database>().SchemaVersion;
             var buildMode = info.BuildMode;
             LogStarted(logger, info.Version, buildMode, schemaVersion);
-            _services.GetRequiredService<RetentionService>().Start();
+
+            // Before anything can start a run: close what the previous run of the app left half done.
+            _services.GetRequiredService<AgentStartupReconciler>().Reconcile();
+            var background = _services.GetRequiredService<BackgroundServiceHost>();
+            // Not awaited: a slow service must not delay the window. Failures are logged by the host.
+            _ = background.StartAsync();
 
             // After the settings store exists, before the window: start-up problems get reported too.
             var telemetry = _services.GetRequiredService<TelemetryService>();
@@ -70,6 +82,8 @@ public sealed partial class ShellApp : Application
             desktop.Exit += (_, _) =>
             {
                 shell.Dispose();
+                // Blocks the exit for at most the timeout; the host never resumes on this thread.
+                background.StopAsync(_backgroundStopTimeout).GetAwaiter().GetResult();
                 // Disposing the provider flushes the log sinks.
                 _services.Dispose();
             };
@@ -98,8 +112,20 @@ public sealed partial class ShellApp : Application
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(database);
         services.AddSingleton<LogRepository>();
-        services.AddSingleton<RetentionService>();
         services.AddSingleton<ISettingsStore, SqliteSettingsStore>();
+
+        // Agent: sessions, messages, the provider transcript, and the events screens follow them by.
+        services.AddSingleton<AgentSessionRepository>();
+        services.AddSingleton<SessionMessageRepository>();
+        services.AddSingleton<TranscriptRepository>();
+        services.AddSingleton<AgentStartupReconciler>();
+        services.AddSingleton<IAgentEvents, AgentEventHub>();
+
+        // Background services, in start order. They stop in the reverse order.
+        services.AddSingleton<RetentionService>();
+        services.AddSingleton<IBackgroundService>(provider => provider.GetRequiredService<RetentionService>());
+        services.AddSingleton<BackgroundServiceHost>();
+
         services.AddSingleton<ISecretProtector, DpapiSecretProtector>();
         services.AddSingleton<ISecretStore, SqliteSecretStore>();
 
