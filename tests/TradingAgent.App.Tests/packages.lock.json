@@ -456,7 +456,8 @@
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.15, )",
           "OpenAI": "[2.15.0, )",
           "TradingAgent.Core": "[0.1.2, )",
-          "TradingAgent.Data": "[0.1.2, )"
+          "TradingAgent.Data": "[0.1.2, )",
+          "TradingAgent.Exchange": "[0.1.2, )"
         }
       },
       "tradingagent.core": {
@@ -466,6 +467,13 @@
         "type": "Project",
         "dependencies": {
           "Microsoft.Data.Sqlite": "[10.0.15, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[10.0.15, )",
+          "TradingAgent.Core": "[0.1.2, )"
+        }
+      },
+      "tradingagent.exchange": {
+        "type": "Project",
+        "dependencies": {
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.15, )",
           "TradingAgent.Core": "[0.1.2, )"
         }

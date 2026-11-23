@@ -27,6 +27,12 @@ public static class SettingKeys
     // Exchange. Sandbox is on until the user deliberately switches to live trading.
     public static readonly SettingKey<bool> OkxSandbox = new("okx.sandbox", true, Json.Boolean);
 
+    // Risk limits, in percent. The largest position as a share of the account's equity, and the default
+    // distance of a stop loss and a take profit from the entry price.
+    public static readonly SettingKey<double> RiskMaxPositionSizePercent = new("risk.max_position_size_pct", 5.0, Json.Double);
+    public static readonly SettingKey<double> RiskStopLossPercent = new("risk.stop_loss_pct", 2.0, Json.Double);
+    public static readonly SettingKey<double> RiskTakeProfitPercent = new("risk.take_profit_pct", 6.0, Json.Double);
+
     // Safety. A latch: once set, scheduled trading stays paused until the user clears it.
     public static readonly SettingKey<bool> EmergencyStopActive = new("safety.emergency_stop_active", false, Json.Boolean);
 

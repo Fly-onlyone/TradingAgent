@@ -30,6 +30,7 @@ tool-use loop); no screen uses it yet, and there are no trading features.
 ## Agent
 
 - [[Agent Runs]]
+- [[Exchange and Risk]]
 
 ## Shell & Release
 
