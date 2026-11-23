@@ -59,6 +59,13 @@ React 19 + Vite + TanStack (Router/Query) + Zustand + MUI 6, wrapped by Tauri v2
 - [[02-Frontend/animations/_index|animations/]] — Framer Motion variants + spring configs
 - [[02-Frontend/tauri/_index|tauri/]] — Rust shell, IPC, sidecar binary
 
+## 🖥️ Native desktop app (rewrite in progress)
+
+One C# process — .NET 10 + Avalonia 12, Native AOT, SQLite — in `src/` and `tests/`. It will
+replace the backend, the frontend and MongoDB above. Today it is a skeleton without features.
+
+→ [[07-Desktop/_index|Desktop]] — decisions, solution layout, build commands and gotchas, data folder, schema, shell behaviour, release pipeline, crash reporting.
+
 ## 🔌 External Integrations
 
 External systems and libraries the codebase depends on.
@@ -91,5 +98,7 @@ Domain terms used throughout the vault.
 **Frontend developer:** [[CSS Zoom Handling]] → [[ZoomAwareSelect Pattern]] → [[Framer Motion Variants]] → [[02-Frontend/components/_index|components]]
 
 **DevOps / SRE:** [[Background Service Startup]] → [[Sentry Setup]] → [[MongoDB MCP Queries]] → [[Release Please Workflow]]
+
+**Working on the native app:** [[Native Rewrite Decisions]] → [[Desktop Solution Layout]] → [[Desktop Build Gotchas]] → [[SQLite Schema Conventions]]
 
 **Adding a chat-session feature:** [[Chat-Session Checklist]] → [[persist_session_message Pattern]] → [[Subagent Delegation Pattern]] → [[Notification Service]]

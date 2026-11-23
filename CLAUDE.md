@@ -4,7 +4,7 @@ This file provides guidance to Coding agent when working with this project.
 
 ## Documentation Index — read the vault first
 
-Primary documentation source: **[`obsidian/_HOME.md`](obsidian/_HOME.md)** — a 356-note
+Primary documentation source: **[`obsidian/_HOME.md`](obsidian/_HOME.md)** — a 366-note
 Obsidian vault covering architecture, modules, patterns, integrations, and operations.
 Open as an Obsidian vault, or browse the markdown directly.
 
@@ -14,6 +14,7 @@ Pick the zone by what you're about to do:
 |---------------------------------------|--------------------------------------------------------------------------------------------------------------------------|
 | Bug fix in a Python module            | [`obsidian/01-Backend/<module>/_index.md`](obsidian/01-Backend/_index.md)                                                |
 | Bug fix in a React module             | [`obsidian/02-Frontend/<module>/_index.md`](obsidian/02-Frontend/_index.md)                                              |
+| Anything in the native app (`src/`, `tests/`) | [`obsidian/07-Desktop/_index.md`](obsidian/07-Desktop/_index.md)                                                 |
 | New feature touching the agent or RAG | [`obsidian/00-Architecture/`](obsidian/00-Architecture/_index.md) + [`obsidian/04-Patterns/`](obsidian/04-Patterns/_index.md) |
 | Anything chat-session related         | **[`obsidian/04-Patterns/Chat-Session Checklist.md`](obsidian/04-Patterns/Chat-Session%20Checklist.md)** (10-leg list)    |
 | Adding an external dependency         | [`obsidian/03-Integrations/`](obsidian/03-Integrations/_index.md)                                                        |
@@ -32,6 +33,9 @@ Pick the zone by what you're about to do:
 - Backend: FastAPI + Beanie (MongoDB), Python 3.11+, managed by `uv`
 - Frontend: React 19 + Vite + TanStack (Router/Query) + Zustand + MUI 6, managed by `bun`
 - Desktop shell: Tauri v2 wraps the frontend; Python backend runs as a sidecar binary
+- **Native rewrite (in progress)**: one C# process — .NET 10 + Avalonia 12, Native AOT, SQLite — in `src/` + `tests/`
+  (`TradingAgent.slnx`), managed by `dotnet`. Today it is a skeleton with no trading or agent features; the stack
+  above stays the product, and `backend/` + `frontend/` must stay buildable until the rewrite replaces them.
 
 Full stack and module map: [`obsidian/_HOME.md`](obsidian/_HOME.md).
 
@@ -44,8 +48,11 @@ Full stack and module map: [`obsidian/_HOME.md`](obsidian/_HOME.md).
 | Dev server (both) | `uv run python run.py`                                                 |
 | Run tests         | `uv run pytest` / `cd frontend && bun run test`                        |
 | Lint / format     | `uv run ruff check` / `cd frontend && bun run lint && bun run format`  |
+| Native app: build / test | `dotnet build TradingAgent.slnx` / `dotnet test TradingAgent.slnx` |
+| Native app: run / format | `dotnet run --project src/TradingAgent.App` / `dotnet format TradingAgent.slnx` |
 
 Full command table: [`obsidian/05-Operations/Build Commands.md`](obsidian/05-Operations/Build%20Commands.md).
+Native app: [`obsidian/07-Desktop/Desktop Build Commands.md`](obsidian/07-Desktop/Desktop%20Build%20Commands.md).
 
 ## Critical Operational Rules
 
@@ -72,10 +79,28 @@ else is in the vault.
 
 Full Tauri + sidecar reference: [`obsidian/03-Integrations/Tauri v2.md`](obsidian/03-Integrations/Tauri%20v2.md), [`obsidian/02-Frontend/tauri/_index.md`](obsidian/02-Frontend/tauri/_index.md).
 
+## Native Desktop App (`src/`, `tests/`)
+
+The rewrite's decisions are settled — read [`obsidian/07-Desktop/Native Rewrite Decisions.md`](obsidian/07-Desktop/Native%20Rewrite%20Decisions.md) before proposing a different stack, database or scope.
+
+- **Everything must be Native AOT-safe**: compiled bindings, the switch-based `ViewLocator`, source-generated JSON / COM / `[LibraryImport]`, `[LoggerMessage]`. No reflection, no EF Core, no Dapper. Trim and AOT warnings are errors; `dotnet publish` is the gate.
+- **Warnings are errors**, style included. Run `dotnet format TradingAgent.slnx` before committing; CI runs it with `--verify-no-changes`.
+- **SDK and lock files**: `global.json` pins the SDK exactly; every project has `packages.lock.json` and CI restores with `--locked-mode`. After a package, target-framework or SDK change run `dotnet restore` (SDK change: `--force-evaluate`) and commit the lock files.
+- **Project boundaries**: `Core` has no UI and no IO packages; Windows-only code goes in `TradingAgent.Platform.Windows` behind a `Core` interface.
+- **Schema**: one SQLite file, created by numbered scripts in `src/TradingAgent.Data/Migrations/`. Never edit a shipped script — add the next number. Ids are 24 hex characters, times are Unix milliseconds, there is no `user_id` (one local user).
+- **Secrets** go through `ISecretStore` (DPAPI); the UI gets a state and a hint, never the value. **Every log line** passes `Redactor` before any sink.
+- **Data folder**: `%LOCALAPPDATA%\TradingAgent\` (Debug builds: `TradingAgent-Dev`). The installer lives elsewhere and must never delete it.
+- **Sentry privacy is the owner's call**: do not turn on `SendDefaultPii`, add fields, or loosen `SentryScrubber` without being asked. An ordinary build must never upload debug symbols — only `-p:UploadSentrySymbols=true` (release workflow) may.
+- **Publishing from an agent shell** fails with `'vswhere.exe' is not recognized` while `NoDefaultCurrentDirectoryInExePath` is set — clear it first.
+- **Rider**: open `TradingAgent.slnx` as a solution; opened as a folder it does not analyze C#.
+
+Full reference: [`obsidian/07-Desktop/_index.md`](obsidian/07-Desktop/_index.md) — [layout](obsidian/07-Desktop/Desktop%20Solution%20Layout.md), [build gotchas](obsidian/07-Desktop/Desktop%20Build%20Gotchas.md), [schema](obsidian/07-Desktop/SQLite%20Schema%20Conventions.md), [shell](obsidian/07-Desktop/Desktop%20Shell%20Behaviour.md), [release pipeline](obsidian/07-Desktop/Desktop%20Release%20Pipeline.md), [crash reporting](obsidian/07-Desktop/Desktop%20Crash%20Reporting.md).
+
 ## Releases
 
 **Release Please owns** versions (`pyproject.toml`, `frontend/package.json`,
-`frontend/src-tauri/Cargo.toml`, `frontend/src-tauri/tauri.conf.json`) and `CHANGELOG.md`.
+`frontend/src-tauri/Cargo.toml`, `frontend/src-tauri/tauri.conf.json`, `<Version>` in
+`Directory.Build.props`) and `CHANGELOG.md`.
 Don't hand-edit any of them. Source of truth: `.release-please-manifest.json`.
 
 **Conventional commits required** — enforced by `commitlint.yml` + `conventional-pre-commit`.
@@ -102,4 +127,5 @@ Full rule reference: [`obsidian/05-Operations/Ruff Rules.md`](obsidian/05-Operat
 FastAPI=/tiangolo/fastapi, Beanie=/BeanieODM/beanie, Anthropic=/anthropics/anthropic-sdk-python, React=/facebook/react,
 TanStack-Router=/TanStack/router, TanStack-Query=/TanStack/query, MUI=/mui/material-ui, Zustand=/pmndrs/zustand,
 Pydantic=/pydantic/pydantic, Motor=/mongodb/motor, python-okx=/okx/python-okx, OpenAI=/openai/openai-python,
-Biome=/biomejs/biome, Vite=/vitejs/vite, Framer-Motion=/framer/motion
+Biome=/biomejs/biome, Vite=/vitejs/vite, Framer-Motion=/framer/motion,
+Avalonia=/avaloniaui/avalonia, Velopack=/velopack/velopack.docs, Sentry=/getsentry/sentry-docs
