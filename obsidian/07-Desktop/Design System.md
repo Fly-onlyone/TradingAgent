@@ -86,6 +86,25 @@ things brought that to about a tenth of a core with everything moving, and to no
 - A control that animates stops while it cannot be seen (`VisibilityWatch`), and all endless motion
   stops while the window is hidden or minimized (`Endless.IsSuspended`).
 
+### What the look costs
+
+Measured in November 2026 on the development flavour of the Native AOT build, window 1400 × 900
+at 175 % scaling, 143 Hz, after 30 s on the Chat page. Memory is private bytes, the counter of the
+gate in [[Native Rewrite Decisions]].
+
+| State                                      | First frame | Memory   | Processor, one core |
+|--------------------------------------------|-------------|----------|---------------------|
+| Before the redesign                        | 314 ms      | 105 MB   | 0 %                 |
+| Effects off and reduced motion             |             | 136 MB   | 0 %                 |
+| Effects off                                |             | 153 MB   | 5 %                 |
+| Reduced motion (glass blurs, nothing moves)|             | 185 MB   | 0 %                 |
+| Everything on (the default)                | 454 ms      | 199 MB   | 13 %                |
+
+The start gate (one second) holds. The memory gate (120 MB) does not, in any state: the blur of the
+glass costs about 50 MB of off-screen layers, endless motion about 18 MB, fonts and the kit the rest.
+Lowering Skia's GPU cache limit changed nothing. Whether the look is worth it is the owner's call;
+"Background effects" and "Reduced motion" in Settings are the two switches.
+
 ## Glass
 
 `Effects/BackdropBlur` blurs what is behind a control, as `backdrop-filter` did. It asks the Skia
