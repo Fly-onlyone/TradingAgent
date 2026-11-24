@@ -33,6 +33,15 @@ internal sealed class FakeExchange : IOkxReader
     /// <summary>True for a market that rises bar after bar: overbought, at the top of its band.</summary>
     public bool Rising { get; set; }
 
+    /// <summary>True for bars eight percent tall: an average true range above five percent of the price.</summary>
+    public bool Volatile { get; set; }
+
+    /// <summary>Coins already held, by currency, valued in US dollars.</summary>
+    public Dictionary<string, decimal> Holdings { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Open swap positions.</summary>
+    public List<Position> Positions { get; } = [];
+
     /// <summary>When set, reading the price fails with it.</summary>
     public Exception? TickerFailure { get; set; }
 
@@ -64,7 +73,8 @@ internal sealed class FakeExchange : IOkxReader
             var close = Rising
                 ? price * (decimal)Math.Pow(1.005, index - (limit - 1))
                 : price * _calmWave[index % _calmWave.Length];
-            candles.Add(new Candle(index * 3_600_000L, close, close * 1.0005m, close * 0.9995m, close, 10m));
+            var reach = Volatile ? 0.04m : 0.0005m;
+            candles.Add(new Candle(index * 3_600_000L, close, close * (1 + reach), close * (1 - reach), close, 10m));
         }
 
         return Task.FromResult<IReadOnlyList<Candle>>(candles);
@@ -77,7 +87,9 @@ internal sealed class FakeExchange : IOkxReader
     {
         BalanceReads++;
         return BalanceFailure is null
-            ? Task.FromResult(new AccountBalance(Equity, [new AssetBalance("USDT", Equity, Equity, Equity)]))
+            ? Task.FromResult(new AccountBalance(
+                Equity,
+                [new AssetBalance("USDT", Equity, Equity, Equity), .. Holdings.Select(held => new AssetBalance(held.Key, 0, 0, held.Value))]))
             : throw BalanceFailure;
     }
 
@@ -85,7 +97,8 @@ internal sealed class FakeExchange : IOkxReader
 
     public Task<OrderBook> GetOrderBookAsync(string instrumentId, int depth, CancellationToken cancellationToken) => throw new NotSupportedException();
 
-    public Task<IReadOnlyList<Position>> GetPositionsAsync(string? instrumentType, CancellationToken cancellationToken) => throw new NotSupportedException();
+    public Task<IReadOnlyList<Position>> GetPositionsAsync(string? instrumentType, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<Position>>([.. Positions.Where(position => instrumentType is null || position.InstrumentType == instrumentType)]);
 
     /// <summary>Orders that are not finished, by instrument type (<c>SPOT</c>, <c>SWAP</c>).</summary>
     public Dictionary<string, List<OkxOrder>> OpenOrders { get; } = new(StringComparer.Ordinal) { ["SPOT"] = [], ["SWAP"] = [] };

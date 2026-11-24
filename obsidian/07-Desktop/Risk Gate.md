@@ -38,6 +38,9 @@ the answer of the exchange.
    - The size becomes a **value in the quote currency** (table below). What the gate cannot convert,
      it refuses.
    - One tool call places one order: a second attempt under the same tool call is refused.
+   - **Hard limit on one position**: what is already held in the instrument plus this order may not
+     be more than `risk.max_position_size_pct` of the account (default 5 %). Held means the coin's
+     balance for spot, every open position of that swap for a swap; a long and a short are added.
    - `RiskManager` (see [[Exchange and Risk]]) must assess the trade. `Avoid` → refused. A price,
      contract or balance that cannot be read → refused.
    - The gate gives the order **its own client order id** and writes a pending row in `orders`
@@ -83,17 +86,33 @@ Refused, and not shown to the model: amending orders, algo orders, the batch too
 position, and the grid and DCA bots (14 tools; `AtkToolCatalog.IsSupportedWrite`). To add one: write
 its rule in `RiskGate`, add it to the set, add tests.
 
-## Kept from the old app, and open
+## Orders that only reduce a position
 
-- **Size alone never refuses an order.** `RiskManager` refuses at 60 points and size can add 45 at
-  most, so an order of the whole account in a calm market is "caution" and passes. The setting
-  `risk.max_position_size_pct` is a score input, not a cap. This is the old scoring, kept rule for
-  rule; a hard cap is a decision for the owner.
-- **Sells are scored like buys.** A large sell into a falling market can be refused. The old app did
-  the same.
+A spot sell with `tdMode: cash` and a swap order with `reduceOnly: true` skip the position limit and
+the `RiskManager` assessment. Everything else still applies: plain arguments, one order per tool
+call, the gate's client order id, the pending row, emergency stop.
+
+- **Why:** both checks exist to keep exposure from growing. The old gate scored a sell like a buy,
+  so a large sell into a falling market (oversold, at the lower band, volatile) was refused: the way
+  out was shut when it was needed.
+- **Why it is safe:** the exchange enforces "only smaller" for both. A cash sell cannot sell more
+  than is held; a reduce-only order cannot open or grow a position.
+- A spot sell on margin (`cross`, `isolated`) or without `tdMode`, and a swap order without
+  `reduceOnly: true`, can open a short. They are held to the limit and the assessment.
+- No account read is needed for a reducing order, so it works when the balance cannot be read.
+
+## Decided by the owner (2026-11-23)
+
+- **Size alone refuses an order.** Before, `risk.max_position_size_pct` only added points to the
+  score, at most 45 of the 60 that refuse, so an order of 90 % of the account passed in a calm
+  market. It is now a hard limit, as above. The score is unchanged and still applies under the limit.
+- **Reducing orders are let out**, as above.
 
 ## Gotchas
 
+- **The limit is 5 % until there is a Settings screen**: `risk.max_position_size_pct` can only be
+  changed in the database for now. An account that already holds more than that of a coin can buy no
+  more of it through the agent.
 - **No order has been placed with this code, not even in demo.** The tests use a fake exchange, the
   real kit without a key, and real public market data. The first demo order should be watched.
 - `ISettingsStore` returns the default when a stored value is unreadable. For

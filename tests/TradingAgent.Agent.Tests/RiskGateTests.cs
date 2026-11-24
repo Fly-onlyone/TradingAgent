@@ -228,14 +228,16 @@ public sealed partial class RiskGateTests : IDisposable
     [Fact]
     public async Task An_order_the_risk_manager_says_to_avoid_is_refused_and_leaves_no_record()
     {
-        // Over the size limit, bought into a market that is overbought and at the top of its band.
+        // Within the size limit, but close to it, bought into a market that is overbought, at the
+        // top of its band and swinging hard: 15 + 20 + 15 + 20 points.
         _exchange.Rising = true;
+        _exchange.Volatile = true;
 
-        var decision = await Check("spot_place_order", """{"instId":"BTC-USDT","tdMode":"cash","side":"buy","ordType":"market","sz":"2000"}""");
+        var decision = await Check("spot_place_order", """{"instId":"BTC-USDT","tdMode":"cash","side":"buy","ordType":"market","sz":"450"}""");
 
         Assert.False(decision.Allowed);
-        Assert.StartsWith("Risk check: AVOID", decision.Reason, StringComparison.Ordinal);
-        Assert.Contains("exceeds the limit", decision.Reason, StringComparison.Ordinal);
+        Assert.StartsWith("Risk check: AVOID (score 70)", decision.Reason, StringComparison.Ordinal);
+        Assert.Contains("High volatility", decision.Reason, StringComparison.Ordinal);
         Assert.False(_orders.ExistsForToolCall(_context.SessionId, _context.ToolUseId));
     }
 
@@ -247,14 +249,141 @@ public sealed partial class RiskGateTests : IDisposable
         Assert.True((await Check("spot_place_order", """{"instId":"BTC-USDT","tdMode":"cash","side":"buy","ordType":"market","sz":"100"}""")).Allowed);
     }
 
-    [Fact]
-    public async Task Size_alone_never_refuses_an_order_that_is_the_old_apps_rule_kept_as_it_was()
+    // ---- place: the hard limit on one position ----
+
+    [Theory]
+    [InlineData("500", true)]
+    [InlineData("500.01", false)]
+    [InlineData("9000", false)]
+    public async Task An_order_over_the_position_limit_is_refused_however_calm_the_market(string dollars, bool allowed)
     {
-        // 9,000 of 10,000 dollars in one order, in a calm market: 45 points, "caution", allowed.
-        // Kept because the gate's behaviour is defined by the old scoring; see RiskManager.
-        var decision = await Check("spot_place_order", """{"instId":"BTC-USDT","tdMode":"cash","side":"buy","ordType":"market","sz":"9000"}""");
+        // The limit is 5 % of 10,000 dollars. The old gate let an order of 9,000 through here: size
+        // only added points to a score, never enough of them to refuse.
+        var decision = await Check("spot_place_order", $$"""{"instId":"BTC-USDT","tdMode":"cash","side":"buy","ordType":"market","sz":"{{dollars}}"}""");
+
+        Assert.Equal(allowed, decision.Allowed);
+        if (!allowed)
+        {
+            Assert.Contains("Your limit for one position is 5%", decision.Reason, StringComparison.Ordinal);
+            Assert.False(_orders.ExistsForToolCall(_context.SessionId, _context.ToolUseId));
+        }
+    }
+
+    [Theory]
+    [InlineData("100", true)]
+    [InlineData("101", false)]
+    public async Task What_is_already_held_counts_toward_the_limit(string dollars, bool allowed)
+    {
+        // 400 dollars of BTC are held; 100 more is exactly the limit. Ten orders of 4 % must not
+        // become a position of 40 %.
+        _exchange.Holdings["BTC"] = 400m;
+
+        var decision = await Check("spot_place_order", $$"""{"instId":"BTC-USDT","tdMode":"cash","side":"buy","ordType":"market","sz":"{{dollars}}"}""");
+
+        Assert.Equal(allowed, decision.Allowed);
+        if (!allowed)
+        {
+            Assert.Contains("400 USD held, 101 USD ordered", decision.Reason, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task Coins_of_another_kind_do_not_count_toward_this_positions_limit()
+    {
+        _exchange.Holdings["ETH"] = 4000m;
+
+        Assert.True((await Check("spot_place_order", """{"instId":"BTC-USDT","tdMode":"cash","side":"buy","ordType":"market","sz":"500"}""")).Allowed);
+    }
+
+    [Theory]
+    [InlineData("long", 1, false)]
+    [InlineData("short", -1, false)]
+    [InlineData("net", 0, true)]
+    public async Task An_open_swap_position_counts_toward_the_limit_whichever_way_it_points(string side, int contracts, bool allowed)
+    {
+        // One contract of BTC-USDT-SWAP is 0.01 BTC, 500 dollars: the whole limit on its own.
+        _exchange.Positions.Add(new Position("BTC-USDT-SWAP", "SWAP", side, contracts, 49_000m, 50_000m, 0m, 3m));
+        _exchange.Positions.Add(new Position("DOGE-USDT-SWAP", "SWAP", "long", 100m, 0.1m, 0.1m, 0m, 3m));
+
+        var decision = await Check("swap_place_order", """{"instId":"BTC-USDT-SWAP","tdMode":"cross","side":"buy","ordType":"market","sz":"1"}""");
+
+        Assert.Equal(allowed, decision.Allowed);
+    }
+
+    [Fact]
+    public async Task The_limit_is_the_users_setting()
+    {
+        _settings.SetValue(SettingKeys.RiskMaxPositionSizePercent, 20.0);
+
+        Assert.True((await Check("spot_place_order", """{"instId":"BTC-USDT","tdMode":"cash","side":"buy","ordType":"market","sz":"2000"}""", "toolu_a")).Allowed);
+        Assert.False((await Check("spot_place_order", """{"instId":"BTC-USDT","tdMode":"cash","side":"buy","ordType":"market","sz":"2001"}""", "toolu_b")).Allowed);
+    }
+
+    [Fact]
+    public async Task An_account_without_equity_can_open_nothing()
+    {
+        _exchange.Equity = 0;
+
+        var decision = await Check("spot_place_order", """{"instId":"BTC-USDT","tdMode":"cash","side":"buy","ordType":"market","sz":"1"}""");
+
+        Assert.False(decision.Allowed);
+        Assert.Contains("no equity", decision.Reason, StringComparison.Ordinal);
+    }
+
+    // ---- place: orders that only reduce a position ----
+
+    [Theory]
+    // Selling coins that are held, 9,000 dollars of them: far over the limit, and the way out.
+    [InlineData("spot_place_order", """{"instId":"BTC-USDT","tdMode":"cash","side":"sell","ordType":"market","sz":"0.18"}""")]
+    [InlineData("swap_place_order", """{"instId":"BTC-USDT-SWAP","tdMode":"cross","side":"sell","ordType":"market","sz":"18","reduceOnly":true}""")]
+    [InlineData("swap_place_order", """{"instId":"BTC-USDT-SWAP","tdMode":"cross","side":"buy","ordType":"market","sz":"18","reduceOnly":true}""")]
+    public async Task An_order_that_only_reduces_a_position_is_let_out_whatever_its_size_and_the_market(string tool, string input)
+    {
+        // The worst market for a sell by the score: falling would be it; here every rule that can
+        // fire is on, and the account cannot even be read.
+        _exchange.Rising = true;
+        _exchange.Volatile = true;
+        _exchange.BalanceFailure = new OkxException(OkxFailure.Network, "OKX did not answer.");
+
+        var decision = await Check(tool, input);
 
         Assert.True(decision.Allowed);
+        // Recorded and tagged like any other order.
+        var id = decision.Input!.Value.GetProperty("clOrdId").GetString()!;
+        Assert.NotNull(_orders.Find(id));
+        Assert.Equal(0, _exchange.BalanceReads);
+    }
+
+    [Theory]
+    // A spot sell on margin can open a short.
+    [InlineData("spot_place_order", """{"instId":"BTC-USDT","tdMode":"cross","side":"sell","ordType":"market","sz":"0.18"}""")]
+    [InlineData("spot_place_order", """{"instId":"BTC-USDT","tdMode":"isolated","side":"sell","ordType":"market","sz":"0.18"}""")]
+    // Not said to be cash: not taken to be.
+    [InlineData("spot_place_order", """{"instId":"BTC-USDT","side":"sell","ordType":"market","sz":"0.18"}""")]
+    // A buy is never the way out of a spot position.
+    [InlineData("spot_place_order", """{"instId":"BTC-USDT","tdMode":"cash","side":"buy","ordType":"market","sz":"9000","reduceOnly":true}""")]
+    // A swap sell without reduceOnly can open a short; "true" as text is not true.
+    [InlineData("swap_place_order", """{"instId":"BTC-USDT-SWAP","tdMode":"cross","side":"sell","ordType":"market","sz":"18"}""")]
+    [InlineData("swap_place_order", """{"instId":"BTC-USDT-SWAP","tdMode":"cross","side":"sell","ordType":"market","sz":"18","reduceOnly":false}""")]
+    [InlineData("swap_place_order", """{"instId":"BTC-USDT-SWAP","tdMode":"cross","side":"sell","ordType":"market","sz":"18","reduceOnly":"true"}""")]
+    public async Task An_order_that_could_open_a_position_is_held_to_the_limit(string tool, string input)
+    {
+        var decision = await Check(tool, input);
+
+        Assert.False(decision.Allowed);
+        Assert.Contains("Your limit for one position", decision.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Emergency_stop_holds_back_a_reducing_order_too()
+    {
+        // Emergency stop means the agent does nothing but cancel; closing is then the user's own to do.
+        _settings.SetValue(SettingKeys.EmergencyStopActive, true);
+
+        var decision = await Check("spot_place_order", """{"instId":"BTC-USDT","tdMode":"cash","side":"sell","ordType":"market","sz":"0.18"}""");
+
+        Assert.False(decision.Allowed);
+        Assert.Contains("Emergency stop", decision.Reason, StringComparison.Ordinal);
     }
 
     // ---- place: what the size means ----
@@ -306,9 +435,7 @@ public sealed partial class RiskGateTests : IDisposable
     [InlineData("sell", "0.01", "40000", false)]
     public async Task A_limit_order_is_valued_at_the_higher_of_its_price_and_the_market(string side, string size, string price, bool refused)
     {
-        // In a rising market the size rules decide: over the limit a buy scores 80 and a sell 60,
-        // at the limit 50 and 30.
-        _exchange.Rising = true;
+        // Over the position limit only when valued at the higher price.
         var input = $$"""{"instId":"BTC-USDT","side":"{{side}}","ordType":"limit","sz":"{{size}}","px":"{{price}}"}""";
 
         var decision = await Check("spot_place_order", input);
@@ -319,18 +446,20 @@ public sealed partial class RiskGateTests : IDisposable
     [Fact]
     public async Task A_swap_size_is_contracts_and_one_contract_can_be_a_thousand_coins()
     {
-        // 10 contracts of DOGE-USDT-SWAP are 10,000 DOGE: 1,000 dollars at 0.1, not 1 dollar.
-        var decision = await Check("swap_place_order", """{"instId":"DOGE-USDT-SWAP","tdMode":"cross","side":"buy","ordType":"market","sz":"10"}""");
+        // 5 contracts of DOGE-USDT-SWAP are 5,000 DOGE: 500 dollars at 0.1, not 50 cents.
+        var decision = await Check("swap_place_order", """{"instId":"DOGE-USDT-SWAP","tdMode":"cross","side":"buy","ordType":"market","sz":"5"}""");
 
         Assert.True(decision.Allowed);
         var sent = decision.Input!.Value;
         Assert.Equal("base_ccy", sent.GetProperty("tgtCcy").GetString());
-        Assert.Equal(10_000m, _orders.Find(sent.GetProperty("clOrdId").GetString()!)!.Quantity);
+        Assert.Equal(5_000m, _orders.Find(sent.GetProperty("clOrdId").GetString()!)!.Quantity);
+        // One contract more is 600 dollars, over the limit: the contract's size was counted.
+        Assert.False((await Check("swap_place_order", """{"instId":"DOGE-USDT-SWAP","tdMode":"cross","side":"buy","ordType":"market","sz":"6"}""", "toolu_more")).Allowed);
     }
 
     [Theory]
-    // Linear: 10 contracts of 0.01 BTC are 0.1 BTC.
-    [InlineData("BTC-USDT-SWAP", "10", 0.1)]
+    // Linear: 1 contract of 0.01 BTC is 0.01 BTC.
+    [InlineData("BTC-USDT-SWAP", "1", 0.01)]
     // Inverse: 5 contracts of 100 dollars are 500 dollars, 0.01 BTC at 50,000.
     [InlineData("BTC-USD-SWAP", "5", 0.01)]
     public async Task A_swap_is_valued_by_its_contract(string instrument, string contracts, double coins)
@@ -342,11 +471,9 @@ public sealed partial class RiskGateTests : IDisposable
     }
 
     [Fact]
-    public async Task A_swap_order_too_large_for_a_bad_market_is_refused_by_its_real_value()
+    public async Task A_swap_order_that_looks_small_is_refused_by_its_real_value()
     {
         // 10 contracts look small. They are 5,000 dollars, half the account.
-        _exchange.Rising = true;
-
         var decision = await Check("swap_place_order", """{"instId":"BTC-USDT-SWAP","tdMode":"cross","side":"buy","ordType":"market","sz":"10"}""");
 
         Assert.False(decision.Allowed);

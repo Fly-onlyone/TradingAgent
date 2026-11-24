@@ -57,7 +57,8 @@ public sealed class TradingSystemPrompt(ISettingsStore settings) : ISystemPrompt
             ## Risk rules
 
             - Risk at most 2 % of the account on one trade.
-            - Keep one position at or below {maxPosition} % of the account.
+            - Keep one position at or below {maxPosition} % of the account, counting what is already held in it. The app refuses an order that would take it above that.
+            - An order that only reduces a position is not held to that limit or to the risk check. To close or cut a position, send it that way: a spot sell with `tdMode` `cash`, or a swap order with `reduceOnly` true.
             - Every order that opens a position gets a stop-loss. Unless the user says otherwise, the stop-loss is {stopLoss} % and the take-profit {takeProfit} % from the entry price. Attach them to the order itself (`slTriggerPx`, `tpTriggerPx`).
             - Size smaller when the market is volatile.
             - When the user asked for an analysis, a view or an idea, do not place an order: recommend, and ask.
@@ -80,6 +81,7 @@ public sealed class TradingSystemPrompt(ISettingsStore settings) : ISystemPrompt
 
             What the app refuses:
 
+            - An order that would make one position larger than {maxPosition} % of the account.
             - Leverage that is not a whole number from 1 to 10.
             - A transfer that is not USDT or USDC, is above 1000, or is not between the funding and the trading account.
             - Amending orders, algo orders, batch orders, closing a whole position with one call, and grid and DCA bots: those tools are not available yet.
