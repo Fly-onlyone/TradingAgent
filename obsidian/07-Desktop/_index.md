@@ -4,13 +4,11 @@ tags: [desktop, moc]
 
 # Desktop MOC
 
-> The native rewrite: one C# process (Avalonia 12, Native AOT, SQLite) that replaces the Tauri
-> webview, the Python sidecar and MongoDB. Code lives in `src/` and `tests/` at the repository root.
+> The app: one C# process (Avalonia 12, Native AOT, SQLite). Code lives in `src/` and `tests/` at
+> the repository root.
 
-The old app (`backend/`, `frontend/`) stays buildable until the last feature slice is done. Today the
-native app is a **skeleton**: build, data layer, shell behaviour, installer and crash reporting, with
-one page (Diagnostics). The agent core is being added underneath (sessions, model providers, the
-tool-use loop, the OKX trade kit behind the risk gate); no screen uses it yet.
+It replaced the Tauri webview, the Python sidecar and MongoDB, which were removed from the repository
+in November 2026. The other zones of this vault describe that previous app and are history.
 
 ## Why and what
 
@@ -27,6 +25,10 @@ tool-use loop, the OKX trade kit behind the risk gate); no screen uses it yet.
 - [[Desktop Data Folder]]
 - [[SQLite Schema Conventions]]
 
+## Pages
+
+- [[App Pages]]
+
 ## Agent
 
 - [[Agent Runs]]
@@ -35,14 +37,18 @@ tool-use loop, the OKX trade kit behind the risk gate); no screen uses it yet.
 - [[Risk Gate]]
 - [[Order Mirror]]
 - [[Claude Code Runtime]]
+- [[Scheduled Tasks]]
+- [[Knowledge and Search]]
+- [[Trades and Learning]]
 
 ## Shell & Release
 
 - [[Desktop Shell Behaviour]]
 - [[Desktop Release Pipeline]]
 - [[Desktop Crash Reporting]]
+- [[Admin and Backup]]
 
 ## See also
 
 - [[_HOME]]
-- [[05-Operations/_index|Operations]] — the old app's build, release and monitoring notes
+- [[05-Operations/_index|Operations]]: the previous app's build, release and monitoring notes (history)

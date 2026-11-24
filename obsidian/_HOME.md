@@ -4,6 +4,14 @@ tags: [moc, home]
 
 # Trading Agent — Knowledge Vault
 
+> [!important] The app is the native one
+> The code in this repository is the native desktop app. Its notes are in
+> **[[07-Desktop/_index|07-Desktop]]**: start there.
+>
+> Everything below, zones `00` to `06`, describes the **previous app** (Python + React + Tauri +
+> MongoDB), which was removed from the repository in November 2026. Those notes are history: they say
+> why things are the way they are, not what code exists.
+
 A graph-linked tour of the Trading Agent codebase. **Start with the architecture flows**
 to build mental scaffolding, then drill into modules or patterns as needed.
 

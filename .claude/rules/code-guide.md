@@ -1,66 +1,65 @@
 # Code Guide
 
-Non-obvious patterns this codebase requires. Full tables, examples, and rationale
-live in the Obsidian vault — links below.
+Patterns this codebase requires that are not obvious from one file. The reasons are in
+`CLAUDE.md` and the vault.
 
-### CSS Zoom Handling
+### Native AOT
 
-**When**: any frontend component using MUI `<Select>`, `<Menu>`, popovers, or mouse coords.
-**Don't**: use plain MUI `<Select>` or `anchorEl`-based `<Menu>` — always use the zoom-aware variants.
-→ [obsidian/04-Patterns/CSS Zoom Handling.md](../../obsidian/04-Patterns/CSS%20Zoom%20Handling.md)
-([ZoomAwareSelect](../../obsidian/04-Patterns/ZoomAwareSelect%20Pattern.md),
-[useZoomAwareMenu](../../obsidian/04-Patterns/useZoomAwareMenu%20Pattern.md))
+**When**: any new code.
+**Don't**: use reflection-based serializers, `dynamic`, EF Core, Dapper, or a NuGet package that has
+trim warnings. JSON is written with `Utf8JsonWriter` and read with `JsonDocument`; logging uses
+`[LoggerMessage]`; regular expressions use `[GeneratedRegex]`. `dotnet publish` must stay free of
+warnings.
 
-### Frontend Component Animations
+### Exchange writes
 
-**When**: every new React component in `frontend/src/`.
-**Don't**: create ad-hoc spring values — reuse variants from `frontend/src/utils/animations/variants.ts`. Always respect `useReducedMotion()`.
-→ [obsidian/04-Patterns/Framer Motion Variants.md](../../obsidian/04-Patterns/Framer%20Motion%20Variants.md)
+**When**: anything that places, cancels or changes an order, sets leverage or moves funds.
+**Don't**: call OKX yourself or add a write method to `OkxClient`. The one path is
+`AtkService.CallAsync` → `RiskGate` → trade kit. A new kit tool needs an entry in `AtkToolCatalog`;
+a new writing tool also needs a rule in `RiskGate` and a test that the gate refuses what it must.
+→ [Risk Gate](../../obsidian/07-Desktop/Risk%20Gate.md)
 
-### AI Service Auth (Provider + Auth Mode)
+### Runs that may not trade
 
-**When**: any service that calls Claude/Anthropic OR OpenAI APIs.
-**Don't**: instantiate `Anthropic(api_key=...)`, `AsyncAnthropic(...)`, or `openai.OpenAI(...)` directly — always use the `create()` async factory. It resolves `AppSettings.agent_provider` first, then the matching key via `resolve_active_provider_api_key()`. Three runtime configs: Anthropic+API-key, Anthropic+subscription ([`claude-agent-sdk`](../../obsidian/03-Integrations/claude-agent-sdk.md)), or OpenAI+API-key. Never hardcode model IDs — read from settings.
-→ [obsidian/04-Patterns/AI Service Auth.md](../../obsidian/04-Patterns/AI%20Service%20Auth.md)
-+ [create() Factory Pattern](../../obsidian/04-Patterns/create()%20Factory%20Pattern.md),
-[OpenAI API](../../obsidian/03-Integrations/OpenAI%20API.md),
-[OpenAIAgentRunner](../../obsidian/01-Backend/agent/OpenAIAgentRunner.md)
+**When**: a new kind of unattended agent run (a scheduler, a background job).
+**Don't**: rely on the prompt to keep it from trading. Block its session in `SessionWriteBlocks`
+before the run and release it in `finally`.
+→ [Scheduled Tasks](../../obsidian/07-Desktop/Scheduled%20Tasks.md)
 
-### Windows Desktop Toast Notifications
+### Tools
 
-**When**: any feature that sends desktop toasts on Windows.
-**Don't**: use Tauri's notification plugin or `notify_rust` for the icon — use `winotify` from the Python backend with the `TradingAgent` AUMID.
-→ [obsidian/04-Patterns/Windows Toast Notifications.md](../../obsidian/04-Patterns/Windows%20Toast%20Notifications.md)
-+ [AUMID Configuration](../../obsidian/04-Patterns/AUMID%20Configuration.md)
+**When**: adding something the model can call.
+**Do**: implement `ITool`, register it as `ITool` in `ShellApp.BuildServices`, name it in
+`TradingSystemPrompt`. The input comes from a model: every member may be missing or of the wrong
+kind; answer a bad input with `ToolOutcome.Failed` and a sentence the model can act on. A tool that
+reads the web or news returns other people's text: the prompt already says it is not an instruction.
 
-### ATK Trade Tool Hook
+### Repositories
 
-**When**: ATK adds a new write tool (any `place_*`, `cancel_*`, `amend_*`, `set_leverage`, `transfer`, `_create_order`, `_stop_order`).
-**Don't**: let a write tool reach OKX without going through `atk_pretool_hook`. Add its bare name to the matching set in `backend/app/agent/okx_atk/tool_curation.py` (`ATK_PLACE_TOOLS` / `ATK_CANCEL_TOOLS` / `ATK_TRANSFER_TOOLS` / `ATK_LEVERAGE_TOOLS`). Unknown write tools fall through to DENY — that's the contract.
-→ [`backend/app/agent/okx_atk/risk_hook.py`](../../backend/app/agent/okx_atk/risk_hook.py)
+**When**: reading or writing a table.
+**Do**: use the `DatabaseQueries` extensions (`Execute`, `Query`, `First`, `Number`) with named
+parameters. Text typed by a person or a model goes into a full-text query only through
+`FtsQuery.From`. A table that must change gets a new numbered migration.
 
-The hook fires identically for both runtimes:
-- Anthropic: `HookMatcher("mcp__okx__*")` in `trading_agent.py` `ClaudeAgentOptions.hooks`.
-- OpenAI: inline call from `openai_bridge.invoke_atk_tool` before the proxy.
+### Pages and view models
 
-The same `RiskManager.assess_trade_risk` returns scoring (`AVOID|CAUTION|PROCEED`). Hook denies AVOID; CAUTION and PROCEED both allow. For tool-shape-specific gates (transfer USD cap, leverage cap), see the per-category branches in `risk_hook.atk_pretool_hook`.
+**When**: adding a page or a command that waits.
+**Do**: derive from `PageViewModel`, register in `ShellApp.BuildServices` in rail order, add the
+case to `ViewLocator`. Long work: `await Task.Run(...).ConfigureAwait(false)`, then return to the UI
+thread with the `post` action from the constructor. Give inputs an `AutomationProperties.Name`.
+An action that cannot be taken back gets a first step that only asks.
+→ [App Pages](../../obsidian/07-Desktop/App%20Pages.md)
 
-### Chat-Session Features — No UI Gaps
+### Secrets and outside services
 
-**When**: any feature that creates an `AgentSession` or writes `AgentSessionMessage` documents.
-**Don't**: ship without auditing every leg of the 10-point checklist — writing to the DB is necessary but NOT sufficient (live stream, sidebar spinner, in-place updates, completion toast, failure visibility, strategy shadow, etc.).
-→ **[obsidian/04-Patterns/Chat-Session Checklist.md](../../obsidian/04-Patterns/Chat-Session%20Checklist.md)** (read in full before shipping)
-+ [persist_session_message Pattern](../../obsidian/04-Patterns/persist_session_message%20Pattern.md),
-[Chat-Session Lifecycle](../../obsidian/00-Architecture/Chat-Session%20Lifecycle.md)
+**When**: a new key, or a new service the app calls.
+**Do**: store the key through `ISecretStore` under a name in `SecretNames`; show only its state and
+hint. Give the service its own `HttpClient` and send the key to that service's fixed address only.
+Never log a key; `Redactor` is the last line of defence, not the first.
 
-**Subagent rule**: subagents are pure compute, return dicts, do NOT create their own `AgentSession`. The parent's session captures the timeline via tool-call bubbles.
+### Tests
 
-### Native Desktop App — Native AOT, Redaction, Privacy
-
-**When**: any C# code under `src/` or `tests/` (the native rewrite). The patterns above are for the old Python + React app and do not apply there.
-**Don't**: use reflection-based APIs, EF Core or Dapper (Native AOT); log or report text that has not passed `Redactor`; return a secret value to the UI; add a `user_id`; edit a shipped migration script; change Sentry privacy defaults or let an ordinary build upload debug symbols.
-→ [obsidian/07-Desktop/Desktop Solution Layout.md](../../obsidian/07-Desktop/Desktop%20Solution%20Layout.md)
-+ [Desktop Build Gotchas](../../obsidian/07-Desktop/Desktop%20Build%20Gotchas.md),
-[SQLite Schema Conventions](../../obsidian/07-Desktop/SQLite%20Schema%20Conventions.md),
-[Desktop Data Folder](../../obsidian/07-Desktop/Desktop%20Data%20Folder.md),
-[Desktop Crash Reporting](../../obsidian/07-Desktop/Desktop%20Crash%20Reporting.md)
+**When**: any change.
+**Do**: put the test in the test project of the source project. Use a temporary database
+(`TempDatabase`, `KnowledgeHarness`, `AgentHarness`) and a scripted runtime instead of a model. No
+test reaches the network unless it is a live test behind an environment variable.

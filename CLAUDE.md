@@ -4,133 +4,130 @@ This file provides guidance to Coding agent when working with this project.
 
 ## Documentation Index — read the vault first
 
-Primary documentation source: **[`obsidian/_HOME.md`](obsidian/_HOME.md)** — a 366-note
-Obsidian vault covering architecture, modules, patterns, integrations, and operations.
-Open as an Obsidian vault, or browse the markdown directly.
+Primary documentation: **[`obsidian/07-Desktop/_index.md`](obsidian/07-Desktop/_index.md)**, the notes
+on the app in this repository. Open `obsidian/` as an Obsidian vault, or read the markdown directly.
 
-Pick the zone by what you're about to do:
+Zones `00` to `06` of the vault describe the **previous app** (Python + React + Tauri + MongoDB),
+which was removed from the repository in November 2026. They are history: useful to learn why
+something is the way it is, never a description of code that exists.
 
-| Task                                  | Zone to read first                                                                                                       |
-|---------------------------------------|--------------------------------------------------------------------------------------------------------------------------|
-| Bug fix in a Python module            | [`obsidian/01-Backend/<module>/_index.md`](obsidian/01-Backend/_index.md)                                                |
-| Bug fix in a React module             | [`obsidian/02-Frontend/<module>/_index.md`](obsidian/02-Frontend/_index.md)                                              |
-| Anything in the native app (`src/`, `tests/`) | [`obsidian/07-Desktop/_index.md`](obsidian/07-Desktop/_index.md)                                                 |
-| New feature touching the agent or RAG | [`obsidian/00-Architecture/`](obsidian/00-Architecture/_index.md) + [`obsidian/04-Patterns/`](obsidian/04-Patterns/_index.md) |
-| Anything chat-session related         | **[`obsidian/04-Patterns/Chat-Session Checklist.md`](obsidian/04-Patterns/Chat-Session%20Checklist.md)** (10-leg list)    |
-| Adding an external dependency         | [`obsidian/03-Integrations/`](obsidian/03-Integrations/_index.md)                                                        |
-| Build / dev server / release / debug  | [`obsidian/05-Operations/`](obsidian/05-Operations/_index.md)                                                            |
-| Unfamiliar acronym or term            | [`obsidian/06-Glossary/`](obsidian/06-Glossary/_index.md)                                                                |
+| Task                                        | Read first                                                                                   |
+|---------------------------------------------|----------------------------------------------------------------------------------------------|
+| Anything, the first time                    | [Native Rewrite Decisions](obsidian/07-Desktop/Native%20Rewrite%20Decisions.md), [Desktop Solution Layout](obsidian/07-Desktop/Desktop%20Solution%20Layout.md) |
+| A page or the shell                         | [App Pages](obsidian/07-Desktop/App%20Pages.md), [Desktop Shell Behaviour](obsidian/07-Desktop/Desktop%20Shell%20Behaviour.md) |
+| Agent runs, model providers, tools          | [Agent Runs](obsidian/07-Desktop/Agent%20Runs.md), [Claude Code Runtime](obsidian/07-Desktop/Claude%20Code%20Runtime.md) |
+| Anything that can reach the exchange        | [Risk Gate](obsidian/07-Desktop/Risk%20Gate.md), [Trade Kit Sidecar](obsidian/07-Desktop/Trade%20Kit%20Sidecar.md), [Order Mirror](obsidian/07-Desktop/Order%20Mirror.md) |
+| Tasks, memory, strategies, news, search     | [Scheduled Tasks](obsidian/07-Desktop/Scheduled%20Tasks.md), [Knowledge and Search](obsidian/07-Desktop/Knowledge%20and%20Search.md) |
+| Trades, profit and loss, lessons, patterns  | [Trades and Learning](obsidian/07-Desktop/Trades%20and%20Learning.md)                        |
+| Logs, backup, restore, deleting data, email | [Admin and Backup](obsidian/07-Desktop/Admin%20and%20Backup.md)                              |
+| Database tables                             | [SQLite Schema Conventions](obsidian/07-Desktop/SQLite%20Schema%20Conventions.md)            |
+| Build, publish, release, crash reports      | [Desktop Build Commands](obsidian/07-Desktop/Desktop%20Build%20Commands.md), [Desktop Build Gotchas](obsidian/07-Desktop/Desktop%20Build%20Gotchas.md), [Desktop Release Pipeline](obsidian/07-Desktop/Desktop%20Release%20Pipeline.md) |
 
-## External References
-
-- **Notion task board**: See [`docs/NOTION.md`](docs/NOTION.md) for database schema, status values, and properties.
-- **Rule files**: `.claude/rules/architecture.md`, `.claude/rules/code-guide.md`, `.claude/rules/documentation-style.md` — thin pointers into the vault for architecture/patterns/style.
+Rule files: `.claude/rules/architecture.md`, `.claude/rules/code-guide.md`,
+`.claude/rules/documentation-style.md`.
 
 ## Project Overview
 
-**Trading Agent** — full-stack AI-powered cryptocurrency trading platform.
+**Trading Agent**: a Windows desktop app in which an AI agent analyses crypto markets and trades on
+OKX for one person.
 
-- Backend: FastAPI + Beanie (MongoDB), Python 3.11+, managed by `uv`
-- Frontend: React 19 + Vite + TanStack (Router/Query) + Zustand + MUI 6, managed by `bun`
-- Desktop shell: Tauri v2 wraps the frontend; Python backend runs as a sidecar binary
-- **Native rewrite (in progress)**: one C# process — .NET 10 + Avalonia 12, Native AOT, SQLite — in `src/` + `tests/`
-  (`TradingAgent.slnx`), managed by `dotnet`. Today it is a skeleton with no trading or agent features; the stack
-  above stays the product, and `backend/` + `frontend/` must stay buildable until the rewrite replaces them.
+- One process: C# / .NET 10, Avalonia 12, **Native AOT**, one SQLite file. No server, no login.
+- The model runs through an Anthropic or OpenAI API key, or through the user's Claude subscription
+  (the Claude Code CLI runs the model).
+- Orders are placed by the OKX trade kit (a bundled Node program), and only through the app's risk
+  gate.
 
-Full stack and module map: [`obsidian/_HOME.md`](obsidian/_HOME.md).
+| Project                                | Holds                                                                    |
+|----------------------------------------|--------------------------------------------------------------------------|
+| `src/TradingAgent.Core`                | Types, settings keys, interfaces. No UI, no IO packages                  |
+| `src/TradingAgent.Data`                | SQLite: migrations, repositories, logging sinks, notifications, backup   |
+| `src/TradingAgent.Exchange`            | Read-only OKX client, indicators, risk scoring                           |
+| `src/TradingAgent.Agent`               | Model clients, the tool loop, tools, trade kit, risk gate, schedulers    |
+| `src/TradingAgent.Platform.Windows`    | DPAPI, toasts, autostart, job objects                                    |
+| `src/TradingAgent.App`                 | Avalonia UI, composition root (`ShellApp.BuildServices`), shell          |
+| `tests/*`                              | xUnit v3, one project per source project                                 |
+| `build/trade-kit`                      | Pins and the script that bundles the trade kit into a release            |
 
 ## Quickstart commands
 
-| Task              | Command                                                                |
-|-------------------|------------------------------------------------------------------------|
-| Install backend   | `uv sync`                                                              |
-| Install frontend  | `cd frontend && bun install`                                           |
-| Dev server (both) | `uv run python run.py`                                                 |
-| Run tests         | `uv run pytest` / `cd frontend && bun run test`                        |
-| Lint / format     | `uv run ruff check` / `cd frontend && bun run lint && bun run format`  |
-| Native app: build / test | `dotnet build TradingAgent.slnx` / `dotnet test TradingAgent.slnx` |
-| Native app: run / format | `dotnet run --project src/TradingAgent.App` / `dotnet format TradingAgent.slnx` |
+| Task             | Command                                                                              |
+|------------------|--------------------------------------------------------------------------------------|
+| Build            | `dotnet build TradingAgent.slnx`                                                     |
+| Test             | `dotnet test TradingAgent.slnx`                                                      |
+| Run (Debug)      | `dotnet run --project src/TradingAgent.App`                                          |
+| Format           | `dotnet format TradingAgent.slnx`                                                    |
+| Publish (AOT)    | `dotnet publish src/TradingAgent.App -c Release -r win-x64 -o publish`               |
+| Trade kit (dev)  | `npm install -g @okx_ai/okx-trade-mcp@1.3.3`                                         |
 
-Full command table: [`obsidian/05-Operations/Build Commands.md`](obsidian/05-Operations/Build%20Commands.md).
-Native app: [`obsidian/07-Desktop/Desktop Build Commands.md`](obsidian/07-Desktop/Desktop%20Build%20Commands.md).
+## Critical Rules
 
-## Critical Operational Rules
+The decisions of the rewrite are settled. Read
+[Native Rewrite Decisions](obsidian/07-Desktop/Native%20Rewrite%20Decisions.md) before proposing a
+different stack, database or scope.
 
-These are gotchas that silently break builds, ports, or features if forgotten. Everything
-else is in the vault.
+### Build
 
-- **Backend port**: **7001** in dev (`uv run python run.py`); **7000** when launched as the Tauri sidecar (`--serve`). See [`obsidian/05-Operations/Backend Port 7000 vs 7001.md`](obsidian/05-Operations/Backend%20Port%207000%20vs%207001.md).
-- **Windows event loop**: `run.py` and `backend/app/main.py` set `WindowsProactorEventLoopPolicy()` at module level — `SelectorEventLoop` can't spawn subprocesses, which the Claude Agent SDK needs. Set it before any `asyncio.run()` in new entry points.
-- **Dev reload**: uses `watchfiles.watch()` + `subprocess.Popen`, **NOT** `uvicorn --reload` (its `multiprocessing.spawn` children create `SelectorEventLoop` before app code runs). See [`obsidian/05-Operations/Dev Server Architecture.md`](obsidian/05-Operations/Dev%20Server%20Architecture.md).
-- **JWT auth**: frontend interceptor auto-refreshes on 401 before logging out. `change-password` invalidates all prior tokens via `iat` vs `password_changed_at`. Encryption keys come from `SECRETS_ENCRYPTION_KEYS` env var (Fernet). See [`obsidian/00-Architecture/JWT Auth Flow.md`](obsidian/00-Architecture/JWT%20Auth%20Flow.md).
-- **Production debugging**: query MongoDB `logs` collection first (use MongoDB MCP `find` / `aggregate`) before reading code. See [`obsidian/05-Operations/Production Debugging Checklist.md`](obsidian/05-Operations/Production%20Debugging%20Checklist.md).
-- **DB models**: all Beanie `Document` classes must be registered in `backend/app/db/session.py` `document_models` list, or Beanie won't see them.
-- **API router order**: in `backend/app/api/v1/__init__.py`, specific prefixes before generic `/admin`; sub-prefixes (e.g. `/strategies/import`) before parents (`/strategies`).
-- **Strategy import**: `/api/v1/strategies/import/` is a **two-step** extract-then-confirm flow. Saves both `Strategy` + `StrategyKnowledge` with embedding.
-- **Strategy shadow doc**: when a scheduler creates `StrategyKnowledge`, also create a `Strategy` doc owned by a real user. `user_id=None` silently skips the shadow and the Strategies page won't render it.
-- **Aggregations**: use `get_pymongo_collection()`, **not** the deprecated `get_motor_collection`.
-- **LLM provider**: `AppSettings.agent_provider` (enum: `ANTHROPIC` | `OPENAI`) selects the runtime. Anthropic supports dual auth (subscription via [`claude-agent-sdk`](obsidian/03-Integrations/claude-agent-sdk.md) OR API key); OpenAI is API-key only. `openai_api_key` is encrypted in `SECRET_FIELD_NAMES`. The main agent dispatch lives in `backend/app/agent/trading_agent.py`; all side services must use the `create()` factory from [`obsidian/04-Patterns/AI Service Auth.md`](obsidian/04-Patterns/AI%20Service%20Auth.md). Never hardcode model IDs in services.
-- **ATK is the trade execution source of truth**: OKX Agent Trade Kit (Node MCP server `@okx_ai/okx-trade-mcp`) is mounted by both runtimes — Anthropic via `ClaudeAgentOptions.mcp_servers`, OpenAI via `backend/app/agent/okx_atk/openai_bridge.py`. **Never add a write method to `OKXClient`** — it is now READ-only (powers `services.order_mirror` + chart endpoints). The risk gate (`backend/app/agent/okx_atk/risk_hook.py`) is FAIL-CLOSED: it reads `RiskManager.assess_trade_risk().recommendation == "AVOID"` and denies; place tools with no recognized size alias (`SIZE_ALIASES` in `tool_curation.py`) are denied. Add new ATK write tools to one of `ATK_PLACE_TOOLS` / `ATK_CANCEL_TOOLS` / `ATK_TRANSFER_TOOLS` / `ATK_LEVERAGE_TOOLS` or they fail-closed. Sandbox toggle quiesces in-flight writes via `process_manager.is_accepting()` and rewrites `~/.okx/config.toml`. Agent system prompt requires `clOrdId = "s<24hex-session>-<4hex-nonce>"` so the mirror can O(1) update the originating chat-session tool-call bubble. Tauri production bundles ATK as a per-arch sidecar under `frontend/src-tauri/binaries/`; dev uses `npm install -g @okx_ai/okx-trade-mcp@1.3`.
-
-## Tauri (v2) Gotchas
-
-- Windows build deps: Rust (`%USERPROFILE%\.cargo\bin` on PATH) + Visual Studio 2022 Build Tools with C++ workload (`MSVC v143` + Windows SDK).
-- **Do not** use `plugins.shell.scope` in `tauri.conf.json` (v2 ignores it). Keep `plugins.shell` minimal (`open` only). Shell command permissions live in `src-tauri/capabilities/default.json`.
-
-Full Tauri + sidecar reference: [`obsidian/03-Integrations/Tauri v2.md`](obsidian/03-Integrations/Tauri%20v2.md), [`obsidian/02-Frontend/tauri/_index.md`](obsidian/02-Frontend/tauri/_index.md).
-
-## Native Desktop App (`src/`, `tests/`)
-
-The rewrite's decisions are settled — read [`obsidian/07-Desktop/Native Rewrite Decisions.md`](obsidian/07-Desktop/Native%20Rewrite%20Decisions.md) before proposing a different stack, database or scope.
-
-- **Everything must be Native AOT-safe**: compiled bindings, the switch-based `ViewLocator`, source-generated JSON / COM / `[LibraryImport]`, `[LoggerMessage]`. No reflection, no EF Core, no Dapper. Trim and AOT warnings are errors; `dotnet publish` is the gate.
+- **Everything must be Native AOT-safe**: compiled bindings, the switch-based `ViewLocator`, `Utf8JsonWriter` / `JsonDocument` or source-generated JSON, `[LibraryImport]`, `[LoggerMessage]`, `[GeneratedRegex]`. No reflection, no EF Core, no Dapper. Trim and AOT warnings are errors; `dotnet publish` is the gate.
 - **Warnings are errors**, style included. Run `dotnet format TradingAgent.slnx` before committing; CI runs it with `--verify-no-changes`.
 - **SDK and lock files**: `global.json` pins the SDK exactly; every project has `packages.lock.json` and CI restores with `--locked-mode`. After a package, target-framework or SDK change run `dotnet restore` (SDK change: `--force-evaluate`) and commit the lock files.
 - **Project boundaries**: `Core` has no UI and no IO packages; Windows-only code goes in `TradingAgent.Platform.Windows` behind a `Core` interface.
-- **Schema**: one SQLite file, created by numbered scripts in `src/TradingAgent.Data/Migrations/`. Never edit a shipped script — add the next number. Ids are 24 hex characters, times are Unix milliseconds, there is no `user_id` (one local user).
-- **Secrets** go through `ISecretStore` (DPAPI); the UI gets a state and a hint, never the value. **Every log line** passes `Redactor` before any sink.
-- **Every trade write passes `RiskGate`**, called in line by `AtkService.CallAsync` — the only code that talks to the OKX trade kit. Never add a second path to the kit, and never a write method to `OkxClient` / `IOkxReader`. A kit tool exists for the agent only when it is in `AtkToolCatalog`; a writing tool also needs a rule in `RiskGate` and an entry in the supported set, or it is refused. The gate sets the client order id itself: `s` + 24-hex session id + 6 hex, no `-`. The OKX key reaches the kit in its environment only; never write it to `~/.okx/config.toml`. See [risk gate](obsidian/07-Desktop/Risk%20Gate.md), [trade kit](obsidian/07-Desktop/Trade%20Kit%20Sidecar.md).
-- **Claude subscription = the Claude Code CLI runs the model** (`ClaudeCliRuntime`): its own tools off (`--tools ""`), this app as the only tool server, `--permission-mode dontAsk`, never `bypassPermissions`, never `--safe-mode` (it drops our tool server). A subscription runs only after the user confirmed `ClaudeCli.SubscriptionNotice` (`agent.subscription_notice_confirmed`); never set that for the user. The app must never read, store or pass on the subscription sign-in, and the CLI's environment must not hold `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN`. See [Claude Code runtime](obsidian/07-Desktop/Claude%20Code%20Runtime.md).
-- **MCP messages are one line each.** Never paste JSON text into a message with `WriteRawValue`; use `McpClient.WriteJson`. A tool's schema may be written over several lines in the source.
-- **Data folder**: `%LOCALAPPDATA%\TradingAgent\` (Debug builds: `TradingAgent-Dev`). The installer lives elsewhere and must never delete it.
-- **Sentry privacy is the owner's call**: do not turn on `SendDefaultPii`, add fields, or loosen `SentryScrubber` without being asked. An ordinary build must never upload debug symbols — only `-p:UploadSentrySymbols=true` (release workflow) may.
-- **Publishing from an agent shell** fails with `'vswhere.exe' is not recognized` while `NoDefaultCurrentDirectoryInExePath` is set — clear it first.
+- **Publishing from an agent shell** fails with `'vswhere.exe' is not recognized` while `NoDefaultCurrentDirectoryInExePath` is set. Clear it first.
 - **Rider**: open `TradingAgent.slnx` as a solution; opened as a folder it does not analyze C#.
 
-Full reference: [`obsidian/07-Desktop/_index.md`](obsidian/07-Desktop/_index.md) — [layout](obsidian/07-Desktop/Desktop%20Solution%20Layout.md), [build gotchas](obsidian/07-Desktop/Desktop%20Build%20Gotchas.md), [schema](obsidian/07-Desktop/SQLite%20Schema%20Conventions.md), [shell](obsidian/07-Desktop/Desktop%20Shell%20Behaviour.md), [release pipeline](obsidian/07-Desktop/Desktop%20Release%20Pipeline.md), [crash reporting](obsidian/07-Desktop/Desktop%20Crash%20Reporting.md).
+### Data
+
+- **Schema**: one SQLite file, created by numbered scripts in `src/TradingAgent.Data/Migrations/`. Never edit a shipped script; add the next number. Ids are 24 hex characters, times are Unix milliseconds, there is no `user_id` (one local user).
+- **Data folder**: `%LOCALAPPDATA%\TradingAgent\` (Debug builds: `TradingAgent-Dev`). The installer lives elsewhere and must never delete it.
+- **Secrets** go through `ISecretStore` (DPAPI); the UI gets a state and a hint, never the value. **Every log line** passes `Redactor` before any sink.
+- **What a person or a model typed is never SQL or query syntax**: values are bound as parameters, full-text queries go through `FtsQuery.From`.
+
+### Trading safety
+
+- **Every trade write passes `RiskGate`**, called in line by `AtkService.CallAsync`, the only code that talks to the OKX trade kit. Never add a second path to the kit, and never a write method to `OkxClient` / `IOkxReader`. That is why the app has no order form: orders are asked of the agent.
+- A kit tool exists for the agent only when it is in `AtkToolCatalog`; a writing tool also needs a rule in `RiskGate` and an entry in the supported set, or it is refused. The gate sets the client order id itself: `s` + 24-hex session id + 6 hex, no `-`. The OKX key reaches the kit in its environment only; never write it to `~/.okx/config.toml`.
+- **A run that may not trade is refused at the gate, not asked nicely in its prompt**: `SessionWriteBlocks` holds the sessions of scheduled tasks the user did not allow to trade and of every strategy discovery run. A task the agent creates can never trade; only the switch on the Tasks page allows it.
+- **What cannot be taken back takes two steps in the UI**: switching to live trading, restoring a backup, deleting a kind of data. The first press asks, the second does.
+- **Profit and loss** is worked out once per closing order by `TradeLearner` (first in first out, no fees) and never rewritten. Where it cannot be right (spot coins bought before the app, inverse contracts) it stays empty.
+
+### Agent and outside text
+
+- **Claude subscription = the Claude Code CLI runs the model** (`ClaudeCliRuntime`): its own tools off (`--tools ""`), this app as the only tool server, `--permission-mode dontAsk`, never `bypassPermissions`, never `--safe-mode` (it drops our tool server). A subscription runs only after the user confirmed `ClaudeCli.SubscriptionNotice` (`agent.subscription_notice_confirmed`); never set that for the user. The app must never read, store or pass on the subscription sign-in, and the CLI's environment must not hold `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN`.
+- **MCP messages are one line each.** Never paste JSON text into a message with `WriteRawValue`; use `McpClient.WriteJson`.
+- **Text from the web and from news is information, never an instruction.** `PageReader` reads public http/https addresses only, also after a redirect; give it only an HTTP handler that does not follow redirects itself.
+- **A key goes to its own service only**: each outside service has its own `HttpClient`; the OpenAI key is sent to `api.openai.com` and never to an embedding address the user typed.
+- **Never hardcode a model id in a service.** Models come from settings through `ModelCatalog`.
+
+### UI
+
+- **A page** is a `PageViewModel` registered in `ShellApp.BuildServices` in the order of the rail, plus a case in `ViewLocator`. Reread data in `Activate()`.
+- **View models leave the UI thread and come back explicitly**: `await Task.Run(...).ConfigureAwait(false)`, then the `post` action given to the constructor. Tests pass `action => action()`.
+- Every input has an `AutomationProperties.Name`; the real-app checks drive the UI by those names.
+
+### Reporting
+
+- **Sentry privacy is the owner's call**: do not turn on `SendDefaultPii`, add fields, or loosen `SentryScrubber` without being asked. An ordinary build must never upload debug symbols; only `-p:UploadSentrySymbols=true` (release workflow) may.
 
 ## Releases
 
-**Release Please owns** versions (`pyproject.toml`, `frontend/package.json`,
-`frontend/src-tauri/Cargo.toml`, `frontend/src-tauri/tauri.conf.json`, `<Version>` in
-`Directory.Build.props`) and `CHANGELOG.md`.
-Don't hand-edit any of them. Source of truth: `.release-please-manifest.json`.
+**Release Please owns** the version (`<Version>` in `Directory.Build.props`) and `CHANGELOG.md`.
+Don't hand-edit either. Source of truth: `.release-please-manifest.json`.
 
-**Conventional commits required** — enforced by `commitlint.yml` + `conventional-pre-commit`.
-Only `feat` / `fix` / `perf` / `revert` / `deps` / `refactor` appear in the changelog.
+**Conventional commits required**, enforced by `commitlint.yml` and `conventional-pre-commit`. A pull
+request's title is checked too and its subject must start with a lowercase letter. Only `feat` /
+`fix` / `perf` / `revert` / `deps` / `refactor` appear in the changelog.
 
-Full workflow: [`obsidian/05-Operations/Release Please Workflow.md`](obsidian/05-Operations/Release%20Please%20Workflow.md), [`obsidian/05-Operations/Conventional Commits.md`](obsidian/05-Operations/Conventional%20Commits.md).
+The installer is built by `.github/workflows/desktop-package.yml`, which also bundles the trade kit
+(`build/trade-kit/bundle.ps1`). A release attaches it only while the repository variable
+`DESKTOP_RELEASE_ENABLED` is `true`. To update the trade kit, change `build/trade-kit/package.json`,
+its lock file and `AtkCommandResolver.PinnedVersion` together, and rerun the tool inventory test.
 
 ## Sentry
 
-One project under org `fly-theonlyone`: **`trading-agent-desktop`** (platform .NET), used by the native app. Its DSN is not in the repository; builds read it from the `SENTRY_DSN` secret or environment variable.
-
-The projects of the Python + React app, `trading-agent-backend` and `trading-agent-frontend`, were **deleted on 2026-11-23**. Sentry is therefore off in that app: leave `SENTRY_DSN` and `VITE_SENTRY_DSN` unset, and do not re-add a DSN to `backend/.env.example` (that file ships inside desktop builds). The SDK code and the test endpoint `POST /api/v1/admin/sentry-test` are still there but send nothing without a DSN.
-
-Historical setup notes: [`obsidian/03-Integrations/Sentry Backend.md`](obsidian/03-Integrations/Sentry%20Backend.md), [`obsidian/03-Integrations/Sentry Frontend.md`](obsidian/03-Integrations/Sentry%20Frontend.md), [`obsidian/05-Operations/Sentry Setup.md`](obsidian/05-Operations/Sentry%20Setup.md).
-
-## Linting Gotchas
-
-- **Skeleton keys**: Biome enforces `noArrayIndexKey` **even for loading placeholders** — use stable string keys for skeleton rows/cards, not array indexes.
-- **Hook ordering**: Biome enforces `useHookAtTopLevel` — early returns (auth guards) must come **after** all hooks, not before.
-- **PyCharm reformat → Biome**: PyCharm uses spaces; Biome enforces tabs. Always run `biome check --write` **after** any PyCharm `reformat_file`.
-
-Full rule reference: [`obsidian/05-Operations/Ruff Rules.md`](obsidian/05-Operations/Ruff%20Rules.md), [`obsidian/05-Operations/Biome Rules.md`](obsidian/05-Operations/Biome%20Rules.md).
+One project under org `fly-theonlyone`: **`trading-agent-desktop`** (platform .NET). Its DSN is not
+in the repository; builds read it from the `SENTRY_DSN` secret or environment variable. See
+[Desktop Crash Reporting](obsidian/07-Desktop/Desktop%20Crash%20Reporting.md).
 
 ## Context7 IDs
 
-FastAPI=/tiangolo/fastapi, Beanie=/BeanieODM/beanie, Anthropic=/anthropics/anthropic-sdk-python, React=/facebook/react,
-TanStack-Router=/TanStack/router, TanStack-Query=/TanStack/query, MUI=/mui/material-ui, Zustand=/pmndrs/zustand,
-Pydantic=/pydantic/pydantic, Motor=/mongodb/motor, python-okx=/okx/python-okx, OpenAI=/openai/openai-python,
-Biome=/biomejs/biome, Vite=/vitejs/vite, Framer-Motion=/framer/motion,
-Avalonia=/avaloniaui/avalonia, Velopack=/velopack/velopack.docs, Sentry=/getsentry/sentry-docs
+Avalonia=/avaloniaui/avalonia, Velopack=/velopack/velopack.docs, Sentry=/getsentry/sentry-docs,
+Anthropic=/anthropics/anthropic-sdk-python, OpenAI=/openai/openai-python, Ollama=/ollama/ollama

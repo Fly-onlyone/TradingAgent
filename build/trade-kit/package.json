@@ -1,0 +1,9 @@
+{
+  "name": "trading-agent-trade-kit-bundle",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pins the OKX trade kit that is bundled with the app. To update: change the version here and AtkCommandResolver.PinnedVersion together, run `npm install --package-lock-only --ignore-scripts`, and check the tool inventory test.",
+  "dependencies": {
+    "@okx_ai/okx-trade-mcp": "1.3.3"
+  }
+}
