@@ -46,6 +46,8 @@
         </Grid>
         <TextBlock Classes="secondary" TextWrapping="Wrap" Text="{Binding Agent.Notice}"
                    IsVisible="{Binding Agent.Notice, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <Button Content="I have read this. It is my own subscription." Command="{Binding Agent.ConfirmNoticeCommand}"
+                IsVisible="{Binding Agent.NeedsConfirmation}" />
         <StackPanel Orientation="Horizontal" Spacing="8">
           <Button Content="Run test prompt" Command="{Binding Agent.RunTestPromptCommand}" />
           <Button Content="Stop" Command="{Binding Agent.RunTestPromptCancelCommand}" />

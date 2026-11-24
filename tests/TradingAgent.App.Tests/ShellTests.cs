@@ -90,6 +90,7 @@ public sealed class ShellTests : IDisposable
         var settings = services.GetRequiredService<ISettingsStore>();
         settings.SetValue(SettingKeys.AgentProvider, provider);
         settings.SetValue(SettingKeys.AgentAuthMode, authMode);
+        settings.SetValue(SettingKeys.AgentSubscriptionNoticeConfirmed, true);
 
         var resolved = services.GetRequiredService<IAgentRuntimeResolver>().Resolve();
 
@@ -159,6 +160,39 @@ public sealed class ShellTests : IDisposable
 
         Assert.Equal(host.Definitions.Select(definition => definition.Name), listed.Select(tool => tool.Name));
         Assert.Contains(host.Definitions, definition => definition.InputSchemaJson.Contains('\n', StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_subscription_runs_nothing_until_its_notice_is_confirmed_and_stops_when_that_is_taken_back()
+    {
+        using var services = ShellApp.BuildServices(_info, _paths);
+        var settings = services.GetRequiredService<ISettingsStore>();
+        var resolver = services.GetRequiredService<IAgentRuntimeResolver>();
+
+        // A new install: the subscription mode is the default, and nothing is confirmed.
+        var before = resolver.Resolve();
+        settings.SetValue(SettingKeys.AgentSubscriptionNoticeConfirmed, true);
+        var confirmed = resolver.Resolve();
+        settings.Reset(SettingKeys.AgentSubscriptionNoticeConfirmed);
+        var takenBack = resolver.Resolve();
+
+        Assert.Null(before.Runtime);
+        Assert.Equal(ClaudeCli.NoticeNotConfirmed, before.Problem);
+        Assert.IsType<ClaudeCliRuntime>(confirmed.Runtime);
+        Assert.Null(takenBack.Runtime);
+    }
+
+    [Theory]
+    [InlineData("anthropic")]
+    [InlineData("openai")]
+    public void An_api_key_mode_needs_no_confirmation(string provider)
+    {
+        using var services = ShellApp.BuildServices(_info, _paths);
+        var settings = services.GetRequiredService<ISettingsStore>();
+        settings.SetValue(SettingKeys.AgentProvider, provider);
+        settings.SetValue(SettingKeys.AgentAuthMode, "api_key");
+
+        Assert.IsType<ModelLoopRuntime>(services.GetRequiredService<IAgentRuntimeResolver>().Resolve().Runtime);
     }
 
     [Fact]

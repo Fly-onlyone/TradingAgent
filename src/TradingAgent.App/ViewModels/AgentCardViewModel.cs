@@ -73,7 +73,9 @@ internal sealed partial class AgentCardViewModel : ObservableObject
         kit.StatusChanged += (_, _) => _post(ShowTradeKit);
         settings.Changed += (_, e) =>
         {
-            if (e.Key == SettingKeys.AgentProvider.Name || e.Key == SettingKeys.AgentAuthMode.Name)
+            if (e.Key == SettingKeys.AgentProvider.Name
+                || e.Key == SettingKeys.AgentAuthMode.Name
+                || e.Key == SettingKeys.AgentSubscriptionNoticeConfirmed.Name)
             {
                 _post(() => ShowProvider());
             }
@@ -92,6 +94,10 @@ internal sealed partial class AgentCardViewModel : ObservableObject
     /// <summary>Shown only for the subscription mode: what that mode means for the user's sign-in.</summary>
     [ObservableProperty]
     public partial string Notice { get; set; } = string.Empty;
+
+    /// <summary>True while the subscription mode is chosen and its notice is not confirmed: runs are held back.</summary>
+    [ObservableProperty]
+    public partial bool NeedsConfirmation { get; set; }
 
     [ObservableProperty]
     public partial string TradeKit { get; set; } = string.Empty;
@@ -125,6 +131,10 @@ internal sealed partial class AgentCardViewModel : ObservableObject
         var status = await Task.Run(() => _cli.GetStatusAsync(CancellationToken.None)).ConfigureAwait(false);
         _post(() => SignIn = status.Problem ?? $"Claude Code is signed in ({status.AuthMethod ?? "method not reported"}).");
     }
+
+    /// <summary>Records that the user read the subscription notice. Runs with a subscription are possible from now on.</summary>
+    [RelayCommand]
+    public void ConfirmNotice() => _settings.SetValue(SettingKeys.AgentSubscriptionNoticeConfirmed, true);
 
     /// <summary>Sends <see cref="TestPrompt"/> through the real run and shows what comes back.</summary>
     [RelayCommand(IncludeCancelCommand = true)]
@@ -166,13 +176,17 @@ internal sealed partial class AgentCardViewModel : ObservableObject
         {
             Provider = openAi ? "OpenAI, with an API key" : "Anthropic, with an API key";
             Notice = string.Empty;
+            NeedsConfirmation = false;
             SignIn = KeyState(_secrets.GetState(openAi ? SecretNames.OpenAiApiKey : SecretNames.AnthropicApiKey));
             return true;
         }
 
         Provider = "Anthropic, with a Claude subscription (Claude Code runs the model)";
         Notice = ClaudeCli.SubscriptionNotice;
-        SignIn = "Not asked yet. \"Check again\" asks Claude Code whether you are signed in.";
+        NeedsConfirmation = !_settings.GetValue(SettingKeys.AgentSubscriptionNoticeConfirmed);
+        SignIn = NeedsConfirmation
+            ? "Held back until you confirm the notice below."
+            : "Not asked yet. \"Check again\" asks Claude Code whether you are signed in.";
         return false;
     }
 
