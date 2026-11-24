@@ -197,6 +197,17 @@
     <Setter Property="Background" Value="Transparent" />
   </Style>
 
+  <!-- A choice in a popover: a full-width row, as a Material menu item. -->
+  <Style Selector="Button.menuRow">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="Padding" Value="16,6" />
+    <Setter Property="MinHeight" Value="36" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="FontWeight" Value="Normal" />
+  </Style>
+
   <!-- Material paper: the plain translucent surface under a table or a summary. -->
   <Style Selector="Border.paper">
     <Setter Property="Background" Value="{DynamicResource PaperGlassBrush}" />

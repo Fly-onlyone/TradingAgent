@@ -58,13 +58,28 @@ internal static class PageShots
             await Task.Delay(_settle);
             await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
 
-            var size = window.ClientSize;
-            using var bitmap = new RenderTargetBitmap(new PixelSize((int)Math.Ceiling(size.Width), (int)Math.Ceiling(size.Height)), new Vector(96, 96));
-            bitmap.Render(window);
-            var name = string.Create(CultureInfo.InvariantCulture, $"{index + 1:00}-{page.Title.ToLowerInvariant().Replace(' ', '-')}.png");
-            bitmap.Save(Path.Combine(folder, name), PngBitmapEncoderOptions.Default);
+            var name = string.Create(CultureInfo.InvariantCulture, $"{index + 1:00}-{page.Title.ToLowerInvariant().Replace(' ', '-')}");
+            Save(window, Path.Combine(folder, name + ".png"));
+
+            // The chat page opens on an empty chat; a second picture shows the newest chat there is.
+            if (page is ChatViewModel { Sessions.Count: > 0, SelectedSession: null } chat)
+            {
+                chat.SelectedSession = chat.Sessions[0];
+                await Task.Delay(_settle);
+                await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+                Save(window, Path.Combine(folder, name + "-open.png"));
+                chat.SelectedSession = null;
+            }
         }
 
         exit();
+    }
+
+    private static void Save(Window window, string file)
+    {
+        var size = window.ClientSize;
+        using var bitmap = new RenderTargetBitmap(new PixelSize((int)Math.Ceiling(size.Width), (int)Math.Ceiling(size.Height)), new Vector(96, 96));
+        bitmap.Render(window);
+        bitmap.Save(file, PngBitmapEncoderOptions.Default);
     }
 }

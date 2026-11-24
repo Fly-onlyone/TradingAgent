@@ -66,6 +66,9 @@ public sealed partial class ChatView : UserControl
         }
     }
 
+    /// <summary>Closes the list of effort levels once one is chosen; a flyout does not close on a press inside it.</summary>
+    private void OnEffortChosen(object? sender, RoutedEventArgs e) => EffortButton.Flyout?.Hide();
+
     /// <summary>Keeps the newest message in sight while a reply is written.</summary>
     private void OnNewestChanged(object? sender, EventArgs e)
     {

@@ -4,7 +4,6 @@ using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Avalonia.Media.Immutable;
 
 namespace TradingAgent.App.Controls;
 
@@ -23,12 +22,14 @@ public sealed class MarkdownView : StackPanel
     public static readonly StyledProperty<string?> TextProperty =
         AvaloniaProperty.Register<MarkdownView, string?>(nameof(Text));
 
-    private static readonly IBrush _primary = new ImmutableSolidColorBrush(Color.Parse("#F8FAFC"));
-    private static readonly IBrush _secondary = new ImmutableSolidColorBrush(Color.Parse("#B8A894"));
-    private static readonly IBrush _accent = new ImmutableSolidColorBrush(Color.Parse("#F97316"));
-    private static readonly IBrush _codeBackground = new ImmutableSolidColorBrush(Color.Parse("#211B14"));
-    private static readonly IBrush _border = new ImmutableSolidColorBrush(Color.Parse("#26F97316"));
-    private static readonly FontFamily _mono = new("Consolas, Cascadia Mono, monospace");
+    // The colours of the theme in use. Read anew for every drawing, and the text is drawn again when
+    // the theme changes, so a chat follows a theme switch.
+    private IBrush _primary = Brushes.White;
+    private IBrush _secondary = Brushes.Gray;
+    private IBrush _accent = Brushes.Orange;
+    private IBrush _codeBackground = Brushes.Transparent;
+    private IBrush _border = Brushes.Gray;
+    private FontFamily _mono = FontFamily.Default;
 
     static MarkdownView()
     {
@@ -37,7 +38,7 @@ public sealed class MarkdownView : StackPanel
 
     public MarkdownView()
     {
-        Spacing = 6;
+        Spacing = 8;
     }
 
     public string? Text
@@ -68,32 +69,32 @@ public sealed class MarkdownView : StackPanel
         return dot > 0 && dot + 1 < line.Length && line[dot] == '.' && line[dot + 1] == ' ';
     }
 
-    private static SelectableTextBlock NewText() => new()
+    private SelectableTextBlock NewText() => new()
     {
         TextWrapping = TextWrapping.Wrap,
         Foreground = _primary,
         FontSize = 14,
+        LineHeight = 21.98,
         Inlines = [],
     };
 
-    private static Border CodeBlock(string code) => new()
+    private Border CodeBlock(string code) => new()
     {
         Background = _codeBackground,
-        BorderBrush = _border,
-        BorderThickness = new Thickness(1),
         CornerRadius = new CornerRadius(8),
-        Padding = new Thickness(10, 8),
+        Padding = new Thickness(12),
         Child = new SelectableTextBlock
         {
             Text = code,
             FontFamily = _mono,
-            FontSize = 13,
+            FontSize = 12.48,
+            LineHeight = 19.97,
             Foreground = _primary,
             TextWrapping = TextWrapping.Wrap,
         },
     };
 
-    private static Border Table(List<string[]> rows)
+    private Border Table(List<string[]> rows)
     {
         var columns = rows.Count == 0 ? 0 : rows.Max(row => row.Length);
         var grid = new Grid();
@@ -108,17 +109,25 @@ public sealed class MarkdownView : StackPanel
             for (var column = 0; column < rows[row].Length; column++)
             {
                 var text = NewText();
+                text.FontSize = 12;
+                text.LineHeight = 18;
                 if (row == 0)
                 {
-                    text.FontWeight = FontWeight.SemiBold;
+                    text.FontWeight = FontWeight.Bold;
+                }
+                else
+                {
+                    // Figures line up in the table of a reply.
+                    text.FontFamily = _mono;
                 }
 
                 AddInlines(text.Inlines!, rows[row][column]);
                 var cell = new Border
                 {
+                    Background = row == 0 ? _codeBackground : null,
                     BorderBrush = _border,
-                    BorderThickness = new Thickness(0, 0, 0, 1),
-                    Padding = new Thickness(6, 4),
+                    BorderThickness = new Thickness(0, 0, 0, row == rows.Count - 1 ? 0 : 1),
+                    Padding = row == 0 ? new Thickness(12, 8) : new Thickness(12, 6),
                     Child = text,
                 };
                 Grid.SetRow(cell, row);
@@ -133,12 +142,13 @@ public sealed class MarkdownView : StackPanel
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8),
             ClipToBounds = true,
+            Margin = new Thickness(0, 4),
             Child = grid,
         };
     }
 
     /// <summary>Reads <c>`code`</c>, <c>**bold**</c> and <c>*italic*</c>; a marker without its end is shown as it is.</summary>
-    private static void AddInlines(InlineCollection inlines, string text)
+    private void AddInlines(InlineCollection inlines, string text)
     {
         var plain = new StringBuilder();
         void Flush()
@@ -162,8 +172,7 @@ public sealed class MarkdownView : StackPanel
                     inlines.Add(new Run(text.Substring(index + 1, end - index - 1))
                     {
                         FontFamily = _mono,
-                        FontSize = 13,
-                        Foreground = _accent,
+                        FontSize = 11.5,
                         Background = _codeBackground,
                     });
                     index = end + 1;
@@ -199,8 +208,36 @@ public sealed class MarkdownView : StackPanel
         Flush();
     }
 
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        ResourcesChanged += OnResourcesChanged;
+        Rebuild();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        ResourcesChanged -= OnResourcesChanged;
+    }
+
+    private void OnResourcesChanged(object? sender, ResourcesChangedEventArgs e) => Rebuild();
+
+    private void ReadTheme()
+    {
+        IBrush Brush(string key, IBrush fallback) => this.TryFindResource(key, out var found) && found is IBrush brush ? brush : fallback;
+
+        _primary = Brush("TextPrimaryBrush", Brushes.White);
+        _secondary = Brush("TextSecondaryBrush", Brushes.Gray);
+        _accent = Brush("PrimaryBrush", Brushes.Orange);
+        _codeBackground = Brush("ActionHoverBrush", Brushes.Transparent);
+        _border = Brush("DividerBrush", Brushes.Gray);
+        _mono = this.TryFindResource("FontMono", out var font) && font is FontFamily family ? family : FontFamily.Default;
+    }
+
     private void Rebuild()
     {
+        ReadTheme();
         Children.Clear();
         var text = Text;
         if (string.IsNullOrEmpty(text))
@@ -242,9 +279,12 @@ public sealed class MarkdownView : StackPanel
                     level++;
                 }
 
+                // As the previous chat drew them: a first-level heading is small and semibold, the
+                // second a little larger and bold, the others the size of the text and bold.
                 var heading = NewText();
-                heading.FontSize = level <= 2 ? 20 : 16;
-                heading.FontWeight = FontWeight.SemiBold;
+                heading.FontSize = level == 2 ? 16 : 14;
+                heading.LineHeight = level == 2 ? 24 : 21;
+                heading.FontWeight = level == 1 ? FontWeight.SemiBold : FontWeight.Bold;
                 heading.Margin = new Thickness(0, 4, 0, 0);
                 AddInlines(heading.Inlines!, line[level..].TrimStart());
                 Children.Add(heading);
