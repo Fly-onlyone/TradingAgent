@@ -75,5 +75,18 @@ internal static class Program
             .UsePlatformDetect()
             // Menus, select lists and tooltips are drawn inside the window, as in the previous UI, not
             // in windows of their own: their shadows are not cut off and they can open with an animation.
-            .With(new Win32PlatformOptions { OverlayPopups = true });
+            .With(new Win32PlatformOptions
+            {
+                OverlayPopups = true,
+                // DirectComposition first: with it a presented frame costs about half the processor
+                // time it costs with the default (WinUI composition), measured on a 143 Hz display with
+                // the gradient lines and the background moving. The default adds window acrylic and
+                // rendering at the display's rate, and the app uses neither.
+                CompositionMode =
+                [
+                    Win32CompositionMode.DirectComposition,
+                    Win32CompositionMode.WinUIComposition,
+                    Win32CompositionMode.RedirectionSurface,
+                ],
+            });
 }

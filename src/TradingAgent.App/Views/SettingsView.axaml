@@ -178,6 +178,19 @@
                       OnContent="Scheduled tasks finished or failed" OffContent="Scheduled tasks finished or failed" />
       </StackPanel>
 
+      <TextBlock Classes="title" Text="Appearance" />
+      <TextBlock Classes="secondary" FontSize="12" TextWrapping="Wrap"
+                 Text="The theme is chosen with the palette button in the header. Ctrl+B folds the sidebar." />
+      <ToggleSwitch Classes="small" Margin="0" Content="Background effects: drifting colours, particles and blurred glass"
+                    AutomationProperties.Name="Background effects"
+                    IsChecked="{Binding $parent[Window].((vm:MainViewModel)DataContext).EffectsEnabled}" />
+      <ToggleSwitch Classes="small" Margin="0" Content="Reduced motion: no animations"
+                    AutomationProperties.Name="Reduced motion"
+                    IsChecked="{Binding $parent[Window].((vm:MainViewModel)DataContext).ReducedMotion}" />
+      <ToggleSwitch Classes="small" Margin="0" Content="Keep the sidebar open"
+                    AutomationProperties.Name="Keep the sidebar open"
+                    IsChecked="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsSidebarPinned}" />
+
     </StackPanel>
   </ScrollViewer>
 </UserControl>

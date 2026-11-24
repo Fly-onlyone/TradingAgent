@@ -19,7 +19,9 @@ using TradingAgent.Agent.Runs;
 using TradingAgent.Agent.Tasks;
 using TradingAgent.Agent.Tools;
 using TradingAgent.Agent.Web;
+using TradingAgent.App.Effects;
 using TradingAgent.App.Hosting;
+using TradingAgent.App.Motion;
 using TradingAgent.App.Shell;
 using TradingAgent.App.Telemetry;
 using TradingAgent.App.Theme;
@@ -65,6 +67,7 @@ public sealed partial class ShellApp : Application
 
     private ServiceProvider? _services;
     private ResourceDictionary? _theme;
+    private bool _picturesOnly;
 
     /// <summary>The preset the app shows now.</summary>
     public ThemePreset Preset { get; private set; } = ThemePreset.Solar;
@@ -148,6 +151,11 @@ public sealed partial class ShellApp : Application
 
             RegisterIdentity(info, paths, logger);
 
+            // Before the window: it opens in the chosen look, not in the default one.
+            var appearance = _services.GetRequiredService<AppearanceState>();
+            ApplyAppearance(appearance);
+            appearance.Changed += (_, _) => ApplyAppearance(appearance);
+
             // Lives for the whole run; disposed in the Exit handler below.
             var shell = new DesktopShell(
                 this,
@@ -177,12 +185,26 @@ public sealed partial class ShellApp : Application
         base.OnFrameworkInitializationCompleted();
     }
 
+    /// <summary>Puts the choices about the look into effect: preset, animations, blur.</summary>
+    private void ApplyAppearance(AppearanceState appearance)
+    {
+        if (!ReferenceEquals(Preset, appearance.Preset))
+        {
+            ApplyTheme(appearance.Preset);
+        }
+
+        // A picture mode has already switched animations off; the setting must not switch them on again.
+        FrameDriver.IsInstant = appearance.ReducedMotion || PageShots.IsRequested || _picturesOnly;
+        BackdropBlur.IsOn = appearance.EffectsEnabled;
+    }
+
     private void ShowGallery(IClassicDesktopStyleApplicationLifetime lifetime, string[] args)
     {
         var (preset, shotFile) = GalleryWindow.Options(args);
         ApplyTheme(preset);
         // A picture is of the controls at rest: what moves on the render thread would not be in it.
-        Motion.FrameDriver.IsInstant = shotFile is not null;
+        _picturesOnly = shotFile is not null;
+        FrameDriver.IsInstant = _picturesOnly;
         var window = new GalleryWindow();
         lifetime.MainWindow = window;
         if (shotFile is not null)
@@ -424,6 +446,12 @@ public sealed partial class ShellApp : Application
         services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<SettingsViewModel>());
         services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<AdminViewModel>());
         services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<DiagnosticsViewModel>());
+        services.AddSingleton<AppearanceState>();
+        services.AddSingleton(provider => new HeaderViewModel(
+            provider.GetRequiredService<AppearanceState>(),
+            provider.GetRequiredService<ISettingsStore>(),
+            provider.GetRequiredService<AtkService>(),
+            provider.GetRequiredService<IAgentRuntimeResolver>()));
         services.AddSingleton<MainViewModel>();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });
     }

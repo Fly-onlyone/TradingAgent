@@ -1,0 +1,57 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:c="using:TradingAgent.App.Controls"
+                    xmlns:fx="using:TradingAgent.App.Effects">
+
+  <!--
+    The Material dialog of the previous UI: a glass card 444 px wide over a dimmed page that is
+    blurred by 8 px. Title in the small heading style, text in the secondary colour, buttons at the
+    bottom right.
+  -->
+  <ControlTheme x:Key="{x:Type c:Dialog}" TargetType="c:Dialog">
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
+    <Setter Property="FocusAdorner" Value="{x:Null}" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Panel>
+          <fx:BackdropBlur Radius="8" />
+          <Border x:Name="PART_Scrim" Background="{DynamicResource ScrimBrush}" />
+          <Panel x:Name="PART_Paper"
+                 Width="444"
+                 Margin="32"
+                 HorizontalAlignment="Center"
+                 VerticalAlignment="Center">
+            <fx:BackdropBlur Radius="{DynamicResource CardBlur}" CornerRadius="{DynamicResource RadiusCard}" />
+            <Border Background="{DynamicResource GlassCardBrush}"
+                    BorderBrush="{DynamicResource BorderMediumBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{DynamicResource RadiusCard}"
+                    BoxShadow="{DynamicResource DialogShadow}">
+              <DockPanel>
+                <TextBlock DockPanel.Dock="Top"
+                           Classes="h6"
+                           Margin="24,16"
+                           Text="{TemplateBinding Title}" />
+                <ContentPresenter DockPanel.Dock="Bottom"
+                                  Margin="24,8,24,16"
+                                  HorizontalAlignment="Right"
+                                  Content="{TemplateBinding Actions}" />
+                <ContentPresenter x:Name="PART_ContentPresenter"
+                                  Margin="24,0,24,20"
+                                  FontSize="16"
+                                  LineHeight="24"
+                                  TextWrapping="Wrap"
+                                  Foreground="{DynamicResource TextSecondaryBrush}"
+                                  Content="{TemplateBinding Content}"
+                                  ContentTemplate="{TemplateBinding ContentTemplate}" />
+              </DockPanel>
+            </Border>
+          </Panel>
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+</ResourceDictionary>

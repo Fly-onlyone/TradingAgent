@@ -47,6 +47,18 @@ public static class SettingKeys
     public static readonly SettingKey<bool> WindowStartOpen = new("window.start_open", true, Json.Boolean);
     public static readonly SettingKey<WindowPlacement?> MainWindowPlacement = new("window.placement", null, Json.WindowPlacement!);
 
+    // Look. The theme is the id of a preset: solar, glacier, jade or eclipse.
+    public static readonly SettingKey<string> UiTheme = new("ui.theme", "solar", Json.String);
+
+    /// <summary>The drifting colours and the particle network behind the window, and the blur of the glass over them.</summary>
+    public static readonly SettingKey<bool> UiEffectsEnabled = new("ui.effects_enabled", true, Json.Boolean);
+
+    /// <summary>True switches every animation off, whatever Windows is set to.</summary>
+    public static readonly SettingKey<bool> UiReducedMotion = new("ui.reduced_motion", false, Json.Boolean);
+
+    /// <summary>False folds the sidebar to its icons; it opens while the pointer is over it.</summary>
+    public static readonly SettingKey<bool> UiSidebarPinned = new("ui.sidebar_pinned", true, Json.Boolean);
+
     // Crash and performance reporting
     public static readonly SettingKey<bool> TelemetryEnabled = new("telemetry.enabled", true, Json.Boolean);
 

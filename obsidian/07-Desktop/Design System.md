@@ -62,13 +62,29 @@ Things to know:
 | Hover and press                        | XAML `Transitions`, always with an easing from `Tokens/Motion.axaml` |
 | A control coming in                    | `m:Enter.Kind`, or `m:Enter.Children` on a panel for a stagger |
 | A spring, or a drawing that changes every frame | `FrameDriver.Run`                                  |
-| Endless motion (shimmer, pulse, flow)  | `Endless`: runs in the compositor, costs the UI thread nothing |
+| Endless motion (shimmer, pulse, flow)  | `Endless`: one clock, 30 steps a second, moves controls in the compositor |
 | A menu opening                         | `m:Grow.On`                                                 |
 
 `FrameDriver.IsInstant` switches all of it off: every animation jumps to its end. Tests set it, and
 so do the picture modes below.
 
 Not the same as before: a popup has no closing animation.
+
+### What a frame costs
+
+Presenting a frame costs processor time whatever is drawn. Measured on a 143 Hz display, November
+2026: one endless animation at the display's rate kept half a core busy in an idle window. Three
+things brought that to about a tenth of a core with everything moving, and to nothing with
+"Reduced motion" on:
+
+- Endless motion steps 30 times a second (`Endless`), the background 15 times (`EffectsLayer`).
+  Never start an endless animation that runs at the display's rate: no keyframe `Animation` with
+  `IterationCount="Infinite"` in a style, no composition animation that repeats forever.
+- `Program` asks for DirectComposition before the default WinUI composition: a frame costs about
+  half with it. The default adds window acrylic and rendering at the display's rate; the app uses
+  neither.
+- A control that animates stops while it cannot be seen (`VisibilityWatch`), and all endless motion
+  stops while the window is hidden or minimized (`Endless.IsSuspended`).
 
 ## Glass
 

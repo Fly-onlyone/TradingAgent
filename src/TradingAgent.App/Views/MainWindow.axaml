@@ -1,6 +1,8 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:TradingAgent.App.ViewModels"
+        xmlns:c="using:TradingAgent.App.Controls"
+        xmlns:fx="using:TradingAgent.App.Effects"
         x:Class="TradingAgent.App.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Title="{Binding WindowTitle}"
@@ -13,44 +15,386 @@
         FontFamily="{StaticResource FontSans}"
         FontSize="14">
 
-  <Grid RowDefinitions="Auto,Auto,*" ColumnDefinitions="Auto,*">
+  <Window.KeyBindings>
+    <!-- Folds the sidebar to its icons and opens it again, as in the previous UI. -->
+    <KeyBinding Gesture="Ctrl+B" Command="{Binding ToggleSidebarCommand}" />
+  </Window.KeyBindings>
 
-    <Border Grid.Row="0" Grid.ColumnSpan="2" Classes="header" Height="48" Margin="8,8,8,0">
-      <Grid ColumnDefinitions="*,Auto">
-        <TextBlock Grid.Column="0" Classes="title" Text="{Binding WindowTitle}"
-                   VerticalAlignment="Center" Margin="16,0,0,0" />
-        <TextBlock Grid.Column="1" Classes="secondary" Text="{Binding VersionLabel}"
-                   VerticalAlignment="Center" Margin="0,0,16,0" />
+  <Window.Styles>
+    <!--
+      The sidebar. A row is drawn by its template below; the list item around it is only a place for
+      it, so label and line above a row do not light up with it.
+    -->
+    <Style Selector="ListBox#Navigation ListBoxItem" x:DataType="vm:NavItemViewModel">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+      <Setter Property="c:NavPanel.AtBottom" Value="{Binding AtBottom}" />
+    </Style>
+    <Style Selector="ListBox#Navigation ListBoxItem:pointerover, ListBox#Navigation ListBoxItem:selected, ListBox#Navigation ListBoxItem:selected:pointerover">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="ListBox#Navigation Panel.navRow">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="RenderTransform" Value="none" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.2" Easing="{StaticResource EaseCssOut}" />
+          <BrushTransition Property="Background" Duration="0:0:0.2" Easing="{StaticResource EaseCss}" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="ListBox#Navigation ListBoxItem:selected Panel.navRow">
+      <Setter Property="Background" Value="{DynamicResource Primary10Brush}" />
+    </Style>
+    <Style Selector="ListBox#Navigation Panel.navRow:pointerover">
+      <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
+      <Setter Property="RenderTransform" Value="translateX(4px)" />
+    </Style>
+    <Style Selector="ListBox#Navigation ListBoxItem:selected Panel.navRow:pointerover">
+      <Setter Property="Background" Value="{DynamicResource ActiveBrush}" />
+    </Style>
+
+    <Style Selector="ListBox#Navigation PathIcon.navIcon">
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+      <Setter Property="RenderTransform" Value="none" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.2" Easing="{StaticResource EaseCss}" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="ListBox#Navigation ListBoxItem:selected PathIcon.navIcon">
+      <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+    </Style>
+    <Style Selector="ListBox#Navigation Panel.navRow:pointerover PathIcon.navIcon">
+      <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+      <Setter Property="RenderTransform" Value="scale(1.15)" />
+    </Style>
+
+    <Style Selector="ListBox#Navigation TextBlock.navText">
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+    <Style Selector="ListBox#Navigation ListBoxItem:selected TextBlock.navText">
+      <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="ListBox#Navigation ListBoxItem:selected Border.navBar">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <!-- Folded: icons only, in the middle; a line stands for each group label; names show as tooltips. -->
+    <Style Selector="ListBox#Navigation.folded TextBlock.navText, ListBox#Navigation.folded Panel.navGroup">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="ListBox#Navigation.folded StackPanel.navContent">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="12,0" />
+    </Style>
+    <Style Selector="ListBox#Navigation:not(.folded) Panel.navFoldedLine">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="ListBox#Navigation:not(.folded) Panel.navRow">
+      <Setter Property="ToolTip.ServiceEnabled" Value="False" />
+    </Style>
+
+    <!-- The theme selector. -->
+    <Style Selector="FlyoutPresenter.themes">
+      <Setter Property="Background" Value="{DynamicResource GlassCardBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{DynamicResource RadiusCard}" />
+      <Setter Property="Padding" Value="12" />
+      <Setter Property="RenderTransformOrigin" Value="50%,0%" />
+    </Style>
+    <Style Selector="Button.themeTile">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="RenderTransform" Value="none" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.2" Easing="{StaticResource EaseCssOut}" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Button.themeTile:pointerover">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="RenderTransform" Value="scale(1.05)" />
+    </Style>
+    <Style Selector="Button.themeTile:pressed">
+      <Setter Property="RenderTransform" Value="scale(0.95)" />
+    </Style>
+
+    <!-- The emergency buttons fill with their colour under the pointer. -->
+    <Style Selector="Button.icon.error:pointerover">
+      <Setter Property="Background" Value="{DynamicResource ErrorDarkBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource ErrorContrastBrush}" />
+    </Style>
+    <Style Selector="Button.icon.success:pointerover">
+      <Setter Property="Background" Value="{DynamicResource SuccessDarkBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource SuccessContrastBrush}" />
+    </Style>
+  </Window.Styles>
+
+  <Panel>
+
+    <!-- The moving background; everything else lies over it. -->
+    <fx:EffectsLayer Preset="{DynamicResource ThemePreset}" IsOn="{Binding ShowEffects}" />
+
+    <Grid RowDefinitions="52,*" ColumnDefinitions="Auto,*">
+
+      <!-- Header -->
+      <Panel Grid.Row="0" Grid.ColumnSpan="2" ZIndex="2">
+        <fx:BackdropBlur Radius="{DynamicResource SidebarBlur}" />
+        <Border Background="{DynamicResource HeaderBrush}" />
+        <c:GradientFlow Height="1.5"
+                        UseLayoutRounding="False"
+                        VerticalAlignment="Bottom"
+                        Motion="Slide"
+                        Seconds="4"
+                        Stops="{DynamicResource GradientAccentStops}" />
+        <Grid ColumnDefinitions="*,Auto" Margin="24,0">
+          <StackPanel x:Name="Brand"
+                      Orientation="Horizontal"
+                      Spacing="8"
+                      HorizontalAlignment="Left"
+                      VerticalAlignment="Center"
+                      Background="Transparent"
+                      Cursor="Hand"
+                      ToolTip.Tip="{Binding VersionLabel}">
+            <Image Source="/Assets/coin.png" Width="24" Height="24" />
+            <TextBlock Classes="subtitle2 bold"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource GradientPrimaryBrush}"
+                       Text="{Binding WindowTitle}" />
+          </StackPanel>
+
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,8,0" Background="Transparent" ToolTip.Tip="{Binding Header.TradeKitHint}">
+              <c:StatusDot Width="7" Height="7" VerticalAlignment="Center" Status="{Binding Header.TradeKitStatus}" />
+              <TextBlock Classes="caption secondary" VerticalAlignment="Center" Text="Trade kit" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,8,0" Background="Transparent" ToolTip.Tip="{Binding Header.AgentHint}">
+              <c:StatusDot Width="7" Height="7" VerticalAlignment="Center" Status="{Binding Header.AgentStatus}" />
+              <TextBlock Classes="caption secondary" VerticalAlignment="Center" Text="Agent" />
+            </StackPanel>
+
+            <Button x:Name="ThemeButton" Classes="icon" AutomationProperties.Name="Theme" ToolTip.Tip="Theme">
+              <PathIcon Data="{StaticResource IconPaletteOutlined}" />
+              <Button.Flyout>
+                <Flyout Placement="Bottom" VerticalOffset="8" FlyoutPresenterClasses="themes">
+                  <ItemsControl ItemsSource="{Binding Header.Themes}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <UniformGrid Columns="2" ColumnSpacing="8" RowSpacing="8" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:ThemeChoiceViewModel">
+                        <Button Classes="themeTile"
+                                AutomationProperties.Name="{Binding Label}"
+                                Click="OnThemeChosen"
+                                Command="{Binding $parent[ItemsControl].((vm:MainViewModel)DataContext).Header.ChooseThemeCommand}"
+                                CommandParameter="{Binding}">
+                          <Border Width="110"
+                                  Padding="8"
+                                  CornerRadius="{DynamicResource RadiusCard}"
+                                  BorderThickness="1.5"
+                                  Classes.active="{Binding IsActive}">
+                            <Border.Styles>
+                              <Style Selector="Border" x:DataType="vm:ThemeChoiceViewModel">
+                                <Setter Property="Background" Value="{Binding Tint}" />
+                                <Setter Property="BorderBrush" Value="Transparent" />
+                              </Style>
+                              <Style Selector="Border.active" x:DataType="vm:ThemeChoiceViewModel">
+                                <Setter Property="Background" Value="{Binding ActiveTint}" />
+                                <Setter Property="BorderBrush" Value="{Binding Accent}" />
+                              </Style>
+                            </Border.Styles>
+                            <StackPanel Spacing="6">
+                              <Border Height="24" CornerRadius="{DynamicResource RadiusCard}" Background="{Binding Preview}" ClipToBounds="True">
+                                <PathIcon Width="16" Height="16" Foreground="White" Data="{StaticResource IconCheck}" IsVisible="{Binding IsActive}" />
+                              </Border>
+                              <TextBlock FontSize="11.2"
+                                         LetterSpacing="0.336"
+                                         HorizontalAlignment="Center"
+                                         Text="{Binding Label}"
+                                         Classes.active="{Binding IsActive}">
+                                <TextBlock.Styles>
+                                  <Style Selector="TextBlock">
+                                    <Setter Property="FontWeight" Value="Medium" />
+                                    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+                                  </Style>
+                                  <Style Selector="TextBlock.active" x:DataType="vm:ThemeChoiceViewModel">
+                                    <Setter Property="FontWeight" Value="Bold" />
+                                    <Setter Property="Foreground" Value="{Binding Accent}" />
+                                  </Style>
+                                </TextBlock.Styles>
+                              </TextBlock>
+                            </StackPanel>
+                          </Border>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </Flyout>
+              </Button.Flyout>
+            </Button>
+
+            <!-- Each only asks; the answer is given in the dialogs at the end of this file. -->
+            <Button Classes="icon error"
+                    AutomationProperties.Name="Stop all trading"
+                    ToolTip.Tip="Emergency stop: the agent may only cancel orders"
+                    IsVisible="{Binding Header.IsRunning}"
+                    Command="{Binding Header.AskEmergencyCommand}">
+              <PathIcon Data="{StaticResource IconStopCircle}" />
+            </Button>
+            <Button Classes="icon success"
+                    AutomationProperties.Name="Resume trading"
+                    ToolTip.Tip="Resume: lift the emergency stop"
+                    IsVisible="{Binding Header.IsEmergencyStopped}"
+                    Command="{Binding Header.AskEmergencyCommand}">
+              <PathIcon Data="{StaticResource IconPlayCircle}" />
+            </Button>
+          </StackPanel>
+        </Grid>
+      </Panel>
+
+      <!-- Sidebar -->
+      <Panel x:Name="Sidebar"
+             Grid.Row="1" Grid.Column="0"
+             Width="220"
+             Classes.folded="{Binding !IsSidebarExpanded}">
+        <Panel.Styles>
+          <Style Selector="Panel#Sidebar.folded">
+            <Setter Property="Width" Value="56" />
+          </Style>
+        </Panel.Styles>
+        <Panel.Transitions>
+          <Transitions>
+            <DoubleTransition Property="Width" Duration="0:0:0.22" Easing="{StaticResource EaseStandard}" />
+          </Transitions>
+        </Panel.Transitions>
+        <fx:BackdropBlur Radius="{DynamicResource SidebarBlur}" />
+        <Border Background="{DynamicResource SidebarBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                BorderThickness="0,0,1,0" />
+        <ListBox x:Name="Navigation"
+                 Margin="0,4,1,8"
+                 AutomationProperties.Name="Pages"
+                 ItemsSource="{Binding NavItems}"
+                 SelectedItem="{Binding SelectedNavItem}"
+                 Classes.folded="{Binding !IsSidebarExpanded}">
+          <ListBox.ItemsPanel>
+            <ItemsPanelTemplate>
+              <c:NavPanel />
+            </ItemsPanelTemplate>
+          </ListBox.ItemsPanel>
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:NavItemViewModel">
+              <StackPanel>
+                <Separator Margin="0,4" IsVisible="{Binding LineAlways}" />
+                <Panel Classes="navFoldedLine">
+                  <Separator Margin="0,4" IsVisible="{Binding LineWhenFolded}" />
+                </Panel>
+                <Panel Classes="navGroup">
+                  <TextBlock Classes="overline disabled"
+                             FontSize="10.4"
+                             LineHeight="27.66"
+                             Margin="16,4,16,4"
+                             Text="{Binding Group}"
+                             IsVisible="{Binding HasGroup}"
+                             Classes.later="{Binding IsLaterGroup}">
+                    <TextBlock.Styles>
+                      <Style Selector="TextBlock.later">
+                        <Setter Property="Margin" Value="16,12,16,4" />
+                      </Style>
+                    </TextBlock.Styles>
+                  </TextBlock>
+                </Panel>
+                <Panel Classes="navRow"
+                       MinHeight="44"
+                       ToolTip.Tip="{Binding Title}"
+                       ToolTip.Placement="Right"
+                       ToolTip.VerticalOffset="0"
+                       ToolTip.HorizontalOffset="8">
+                  <c:Ripple Fill="{DynamicResource PrimaryBrush}" />
+                  <Border Classes="navBar"
+                          Width="3" Height="24"
+                          HorizontalAlignment="Left"
+                          VerticalAlignment="Center"
+                          CornerRadius="0,4,4,0"
+                          Background="{DynamicResource PrimaryBrush}"
+                          BoxShadow="{DynamicResource NavBarShadow}"
+                          IsVisible="False" />
+                  <StackPanel Classes="navContent" Orientation="Horizontal" Margin="16,0" VerticalAlignment="Center">
+                    <PathIcon Classes="small navIcon" Data="{Binding Glyph}" />
+                    <TextBlock Classes="navText" Margin="16,0,0,0" LineHeight="21" VerticalAlignment="Center" Text="{Binding Title}" />
+                  </StackPanel>
+                </Panel>
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Panel>
+
+      <!-- The page -->
+      <Grid Grid.Row="1" Grid.Column="1" RowDefinitions="Auto,*">
+        <c:Alert Grid.Row="0"
+                 Margin="16,16,16,0"
+                 Severity="Info"
+                 IsVisible="{Binding ShowTelemetryNotice}"
+                 Content="This app sends crash and performance reports to help fix problems. They contain no keys, account data or personal details. You can turn this off on the Diagnostics page.">
+          <c:Alert.Action>
+            <Button Classes="inherit small" Content="OK" Command="{Binding DismissTelemetryNoticeCommand}" />
+          </c:Alert.Action>
+        </c:Alert>
+        <!--
+          A sheet of glass under the pages that are not laid out with cards yet. It goes when the
+          last of them is.
+        -->
+        <Panel Grid.Row="1" Margin="16">
+          <fx:BackdropBlur Radius="{DynamicResource CardBlur}" CornerRadius="{DynamicResource RadiusCard}" />
+          <Border Background="{DynamicResource CardBrush}"
+                  BorderBrush="{DynamicResource BorderSubtleBrush}"
+                  BorderThickness="1"
+                  CornerRadius="{DynamicResource RadiusCard}"
+                  ClipToBounds="True">
+            <ContentControl x:Name="PageHost" Content="{Binding SelectedPage}" />
+          </Border>
+        </Panel>
       </Grid>
-    </Border>
 
-    <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Classes="panel" Margin="8,8,8,0" Padding="16,8"
-            IsVisible="{Binding ShowTelemetryNotice}">
-      <Grid ColumnDefinitions="*,Auto">
-        <TextBlock Grid.Column="0" VerticalAlignment="Center" TextWrapping="Wrap"
-                   Text="This app sends crash and performance reports to help fix problems. They contain no keys, account data or personal details. You can turn this off on the Diagnostics page." />
-        <Button Classes="outlined" Grid.Column="1" Content="OK" Margin="12,0,0,0" Command="{Binding DismissTelemetryNoticeCommand}" />
-      </Grid>
-    </Border>
+    </Grid>
 
-    <Border Grid.Row="2" Grid.Column="0" Classes="panel" Width="208" Margin="8">
-      <ListBox x:Name="Navigation"
-               Classes="navigation"
-               ItemsSource="{Binding Pages}"
-               SelectedItem="{Binding SelectedPage}"
-               Background="Transparent"
-               Margin="6">
-        <ListBox.ItemTemplate>
-          <DataTemplate x:DataType="vm:PageViewModel">
-            <TextBlock Text="{Binding Title}" />
-          </DataTemplate>
-        </ListBox.ItemTemplate>
-      </ListBox>
-    </Border>
+    <!-- The answers to the two emergency buttons of the header. -->
+    <c:Dialog Title="Emergency Stop"
+              IsOpen="{Binding Header.ConfirmingStop}"
+              CloseCommand="{Binding Header.CancelEmergencyCommand}"
+              Content="Stop all trading? While the stop is on, the agent can cancel orders and nothing else: no new orders, no transfers, no leverage changes. It takes effect at once and stays until you resume.">
+      <c:Dialog.Actions>
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Content="Cancel" Command="{Binding Header.CancelEmergencyCommand}" />
+          <Button Classes="contained" Content="Stop All" Command="{Binding Header.ConfirmStopCommand}" />
+        </StackPanel>
+      </c:Dialog.Actions>
+    </c:Dialog>
+    <c:Dialog Title="Resume"
+              IsOpen="{Binding Header.ConfirmingResume}"
+              CloseCommand="{Binding Header.CancelEmergencyCommand}"
+              Content="Lift the emergency stop? The agent may place orders, move funds and change leverage again, within your risk limits.">
+      <c:Dialog.Actions>
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Content="Cancel" Command="{Binding Header.CancelEmergencyCommand}" />
+          <Button Classes="contained" Content="Resume" Command="{Binding Header.ConfirmResumeCommand}" />
+        </StackPanel>
+      </c:Dialog.Actions>
+    </c:Dialog>
 
-    <Border Grid.Row="2" Grid.Column="1" Classes="panel" Margin="0,8,8,8" ClipToBounds="True">
-      <ContentControl x:Name="PageHost" Content="{Binding SelectedPage}" />
-    </Border>
-
-  </Grid>
+  </Panel>
 </Window>

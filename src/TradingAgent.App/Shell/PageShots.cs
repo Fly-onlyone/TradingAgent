@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using TradingAgent.App.Effects;
 using TradingAgent.App.Motion;
 using TradingAgent.App.ViewModels;
 
@@ -26,6 +27,9 @@ internal static class PageShots
 
     private static string? _folder;
 
+    /// <summary>True when the command line asked for pictures of the pages.</summary>
+    public static bool IsRequested => _folder is not null;
+
     public static void Configure(string[] args)
     {
         var index = Array.IndexOf(args, Argument);
@@ -33,6 +37,8 @@ internal static class PageShots
         if (_folder is not null)
         {
             FrameDriver.IsInstant = true;
+            // The moving background is drawn by the compositor and would be missing from a picture.
+            EffectsLayer.DrawStill = true;
         }
     }
 
