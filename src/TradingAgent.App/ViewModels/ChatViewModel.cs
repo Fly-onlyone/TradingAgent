@@ -110,6 +110,7 @@ internal sealed partial class ChatViewModel : PageViewModel, IDisposable
     private readonly Lock _streamLock = new();
     private bool _drawScheduled;
     private string? _questionId;
+    private bool _disposed;
 
     /// <param name="sessions">The chats.</param>
     /// <param name="messages">Their messages.</param>
@@ -132,7 +133,8 @@ internal sealed partial class ChatViewModel : PageViewModel, IDisposable
         _post = post ?? (action => Dispatcher.UIThread.Post(action));
         _subscription = events.Subscribe();
 
-        foreach (var session in sessions.ListRecent(SessionLimit, SessionKind.Chat))
+        // Chats and the runs of scheduled tasks; a helper's own session is part of its parent's.
+        foreach (var session in sessions.ListRecent(SessionLimit).Where(session => session.Kind != SessionKind.Subagent))
         {
             Sessions.Add(ToItem(session));
         }
@@ -180,9 +182,26 @@ internal sealed partial class ChatViewModel : PageViewModel, IDisposable
 
     public void Dispose()
     {
+        // Registered under two types, so the container asks twice.
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
         _closing.Cancel();
         _subscription.Dispose();
         _closing.Dispose();
+    }
+
+    /// <summary>Shows one session, for example the run of a task another page points to.</summary>
+    public void Open(string sessionId)
+    {
+        RefreshSession(sessionId);
+        if (Sessions.FirstOrDefault(session => session.Id == sessionId) is { } item)
+        {
+            SelectedSession = item;
+        }
     }
 
     /// <summary>Opens an empty chat. Nothing is stored until the first message is sent.</summary>
@@ -541,7 +560,7 @@ internal sealed partial class ChatViewModel : PageViewModel, IDisposable
 
     private void RefreshSession(string sessionId)
     {
-        if (_sessions.Get(sessionId) is not { Kind: SessionKind.Chat } session)
+        if (_sessions.Get(sessionId) is not { } session || session.Kind == SessionKind.Subagent)
         {
             return;
         }

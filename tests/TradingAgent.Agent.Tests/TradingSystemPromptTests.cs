@@ -56,8 +56,6 @@ public sealed partial class TradingSystemPromptTests
     [InlineData("extract_strategy_from_url")]
     [InlineData("search_strategies")]
     [InlineData("search_lessons")]
-    [InlineData("save_memory")]
-    [InlineData("create_task")]
     [InlineData("submit_recommendation")]
     [InlineData("mcp__okx__")]
     public void It_promises_no_tool_of_the_old_app_that_does_not_exist_here(string tool)

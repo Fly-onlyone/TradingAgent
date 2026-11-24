@@ -1,0 +1,52 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TradingAgent.App.ViewModels"
+             xmlns:knowledge="using:TradingAgent.Data.Knowledge"
+             x:Class="TradingAgent.App.Views.KnowledgeView"
+             x:DataType="vm:KnowledgeViewModel">
+
+  <Grid ColumnDefinitions="*,380" Margin="24,16">
+
+    <Grid Grid.Column="0" RowDefinitions="Auto,Auto,Auto,*" Margin="0,0,20,0">
+      <TextBlock Grid.Row="0" Classes="pageTitle" Text="{Binding Title}" />
+      <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,12,0,6">
+        <TextBox Grid.Column="0" x:Name="QueryBox" Text="{Binding Query}"
+                 PlaceholderText="Search strategies, trade lessons, patterns, news and memories"
+                 AutomationProperties.Name="Search knowledge" />
+        <Button Grid.Column="1" Content="Search" Margin="8,0,0,0" Classes="accent" IsDefault="True"
+                Command="{Binding SearchCommand}" />
+      </Grid>
+      <TextBlock Grid.Row="2" Classes="secondary" Text="{Binding ResultLine}" Margin="0,0,0,6" />
+      <ListBox Grid.Row="3" Background="Transparent" ItemsSource="{Binding Results}"
+               ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="knowledge:KnowledgeHit">
+            <StackPanel Spacing="3">
+              <StackPanel Orientation="Horizontal" Spacing="10">
+                <TextBlock FontSize="12" Foreground="{StaticResource PrimaryBrush}" Text="{Binding Label}" />
+                <TextBlock FontWeight="SemiBold" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+              <TextBlock Classes="secondary" TextWrapping="Wrap" MaxLines="5" TextTrimming="CharacterEllipsis" Text="{Binding Body}" />
+            </StackPanel>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </Grid>
+
+    <StackPanel Grid.Column="1" Spacing="10">
+      <TextBlock Classes="title" Text="Search by meaning" />
+      <TextBlock Classes="secondary" TextWrapping="Wrap"
+                 Text="With an embedding provider the search also finds texts that mean the same in other words. Without one it finds by words." />
+      <TextBlock Classes="secondary" Text="Provider" />
+      <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Providers}" SelectedItem="{Binding Provider}"
+                AutomationProperties.Name="Embedding provider" />
+      <TextBlock Classes="secondary" FontSize="12" TextWrapping="Wrap" Text="{Binding Hint}" />
+      <TextBlock Classes="secondary" Text="Address (optional)" />
+      <TextBox Text="{Binding BaseUrl}" PlaceholderText="The provider's usual address" AutomationProperties.Name="Embedding address" />
+      <TextBlock Classes="secondary" Text="Model (optional)" />
+      <TextBox Text="{Binding Model}" PlaceholderText="The provider's usual model" AutomationProperties.Name="Embedding model" />
+      <Button Content="Embed now" Command="{Binding IndexNowCommand}" />
+      <SelectableTextBlock Classes="secondary" TextWrapping="Wrap" Text="{Binding Status}" />
+    </StackPanel>
+  </Grid>
+</UserControl>

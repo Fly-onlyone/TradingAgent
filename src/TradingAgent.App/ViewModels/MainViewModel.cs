@@ -12,11 +12,10 @@ internal sealed partial class MainViewModel : ObservableObject
 
     public MainViewModel(
         AppInfo info,
-        DiagnosticsViewModel diagnostics,
+        IEnumerable<PageViewModel> pages,
         ISettingsStore settings,
         TelemetryService telemetry,
-        ChatViewModel? chat = null,
-        SettingsViewModel? settingsPage = null)
+        AppNavigator? navigator = null)
     {
         ArgumentNullException.ThrowIfNull(info);
         ArgumentNullException.ThrowIfNull(settings);
@@ -25,9 +24,13 @@ internal sealed partial class MainViewModel : ObservableObject
         // Told once, and only when this build can report at all.
         ShowTelemetryNotice = telemetry.State != TelemetryState.NotConfigured
             && !settings.GetValue(SettingKeys.TelemetryNoticeDismissed);
-        // The pages in the order of the rail. Chat first: it is what the app is opened for.
-        Pages = [.. new PageViewModel?[] { chat, settingsPage, diagnostics }.OfType<PageViewModel>()];
+        // The pages in the order of the rail, which is the order they are registered in.
+        Pages = [.. pages];
         SelectedPage = Pages[0];
+        if (navigator is not null)
+        {
+            navigator.ChatRequested += OpenChat;
+        }
         WindowTitle = info.IsDevelopmentBuild ? $"{AppInfo.ProductName} (dev)" : AppInfo.ProductName;
         VersionLabel = $"v{info.Version}";
     }
@@ -44,6 +47,17 @@ internal sealed partial class MainViewModel : ObservableObject
     /// <summary>Shows the one-time line telling the user that crash reports are sent.</summary>
     [ObservableProperty]
     public partial bool ShowTelemetryNotice { get; set; }
+
+    partial void OnSelectedPageChanged(PageViewModel value) => value.Activate();
+
+    private void OpenChat(string sessionId)
+    {
+        if (Pages.OfType<ChatViewModel>().FirstOrDefault() is { } chat)
+        {
+            SelectedPage = chat;
+            chat.Open(sessionId);
+        }
+    }
 
     [RelayCommand]
     private void DismissTelemetryNotice()

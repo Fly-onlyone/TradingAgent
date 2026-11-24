@@ -101,6 +101,7 @@ internal sealed partial class SettingsViewModel : PageViewModel
         OkxApiKey = new SecretFieldViewModel(secrets, SecretNames.OkxApiKey, "API key", kit.Reload);
         OkxSecretKey = new SecretFieldViewModel(secrets, SecretNames.OkxSecretKey, "Secret key", kit.Reload);
         OkxPassphrase = new SecretFieldViewModel(secrets, SecretNames.OkxPassphrase, "Passphrase", kit.Reload);
+        BraveKey = new SecretFieldViewModel(secrets, SecretNames.BraveSearchApiKey, "Brave Search API key");
 
         _loading = true;
         Provider = settings.GetValue(SettingKeys.AgentProvider) == AgentWire.OpenAi ? AgentWire.OpenAi : AgentWire.Anthropic;
@@ -117,6 +118,8 @@ internal sealed partial class SettingsViewModel : PageViewModel
         TradeNotifications = settings.GetValue(SettingKeys.NotifyTradeExecutions);
         RiskNotifications = settings.GetValue(SettingKeys.NotifyRiskAlerts);
         TaskNotifications = settings.GetValue(SettingKeys.NotifyTaskCompletions);
+        AutoDiscover = settings.GetValue(SettingKeys.AutoDiscoverEnabled);
+        AutoDiscoverHours = settings.GetValue(SettingKeys.AutoDiscoverIntervalHours);
         _loading = false;
         ShowTradingMode();
     }
@@ -140,6 +143,8 @@ internal sealed partial class SettingsViewModel : PageViewModel
     public SecretFieldViewModel OkxSecretKey { get; }
 
     public SecretFieldViewModel OkxPassphrase { get; }
+
+    public SecretFieldViewModel BraveKey { get; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsAnthropic), nameof(IsOpenAi), nameof(UsesSubscription), nameof(UsesAnthropicKey), nameof(ModelHint))]
@@ -194,6 +199,13 @@ internal sealed partial class SettingsViewModel : PageViewModel
 
     [ObservableProperty]
     public partial bool TaskNotifications { get; set; }
+
+    /// <summary>True while the agent looks for strategies on a schedule.</summary>
+    [ObservableProperty]
+    public partial bool AutoDiscover { get; set; }
+
+    [ObservableProperty]
+    public partial decimal? AutoDiscoverHours { get; set; }
 
     public bool IsAnthropic => Provider == AgentWire.Anthropic;
 
@@ -263,6 +275,16 @@ internal sealed partial class SettingsViewModel : PageViewModel
     partial void OnRiskNotificationsChanged(bool value) => Store(SettingKeys.NotifyRiskAlerts, value);
 
     partial void OnTaskNotificationsChanged(bool value) => Store(SettingKeys.NotifyTaskCompletions, value);
+
+    partial void OnAutoDiscoverChanged(bool value) => Store(SettingKeys.AutoDiscoverEnabled, value);
+
+    partial void OnAutoDiscoverHoursChanged(decimal? value)
+    {
+        if (value is >= 1 and <= 720)
+        {
+            Store(SettingKeys.AutoDiscoverIntervalHours, (int)value.Value);
+        }
+    }
 
     // A percentage outside 0.1 to 100, or an empty box, is not saved: the last good value stays in force.
     partial void OnMaxPositionPercentChanged(decimal? value)

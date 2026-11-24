@@ -1,0 +1,80 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TradingAgent.App.ViewModels"
+             x:Class="TradingAgent.App.Views.TasksView"
+             x:DataType="vm:TasksViewModel">
+
+  <Grid ColumnDefinitions="300,*">
+
+    <Border Grid.Column="0" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="0,0,1,0">
+      <Grid RowDefinitions="Auto,*" Margin="12">
+        <Button Grid.Row="0" Content="New task" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                Command="{Binding NewCommand}" />
+        <ListBox Grid.Row="1" Classes="navigation" Margin="0,10,0,0" Background="Transparent"
+                 ItemsSource="{Binding Tasks}" SelectedItem="{Binding Selected}">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:TaskItemViewModel">
+              <StackPanel Spacing="2">
+                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                <TextBlock Classes="secondary" FontSize="12" Text="{Binding Line}" />
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Grid>
+    </Border>
+
+    <ScrollViewer Grid.Column="1">
+      <StackPanel Margin="24" Spacing="12" MaxWidth="820" HorizontalAlignment="Left">
+        <TextBlock Classes="pageTitle" Text="{Binding Title}" />
+        <TextBlock Classes="secondary" TextWrapping="Wrap"
+                   Text="A task is work the agent does on a schedule, with nobody watching. Each run is a conversation of its own, which you can read in Chat." />
+
+        <TextBlock Classes="secondary" Text="Name" />
+        <TextBox Text="{Binding Name}" AutomationProperties.Name="Task name" />
+
+        <TextBlock Classes="secondary" Text="What the agent should do on each run" />
+        <TextBox Text="{Binding Instructions}" AcceptsReturn="True" TextWrapping="Wrap" Height="150"
+                 AutomationProperties.Name="Task instructions" />
+
+        <TextBlock Classes="secondary" Text="Instruments, separated by commas (optional)" />
+        <TextBox Text="{Binding Symbols}" PlaceholderText="BTC-USDT, ETH-USDT" AutomationProperties.Name="Task instruments" />
+
+        <TextBlock Classes="secondary" Text="Schedule" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <ComboBox Width="140" ItemsSource="{Binding ScheduleKinds}" SelectedItem="{Binding ScheduleKind}"
+                    AutomationProperties.Name="Schedule kind" />
+          <NumericUpDown Width="170" Minimum="5" Maximum="100000" Increment="5" FormatString="0" Value="{Binding Minutes}"
+                         IsVisible="{Binding IsInterval}" AutomationProperties.Name="Minutes between runs" />
+          <TextBlock VerticalAlignment="Center" Classes="secondary" Text="minutes between runs" IsVisible="{Binding IsInterval}" />
+          <TextBox Width="90" Text="{Binding Time}" PlaceholderText="09:00" IsVisible="{Binding IsTimed}"
+                   AutomationProperties.Name="Time of day" />
+          <TextBox Width="260" Text="{Binding Days}" PlaceholderText="mon, wed, fri" IsVisible="{Binding IsWeekly}"
+                   AutomationProperties.Name="Weekdays" />
+        </StackPanel>
+
+        <Border Classes="panel" BorderBrush="{StaticResource BearishBrush}" BorderThickness="1" Padding="16,10">
+          <StackPanel Spacing="4">
+            <ToggleSwitch IsChecked="{Binding TradingEnabled}" AutomationProperties.Name="This task may trade"
+                          OnContent="This task may trade" OffContent="This task may not trade" />
+            <TextBlock Classes="secondary" TextWrapping="Wrap"
+                       Text="While this is off, the app refuses every order, cancel, transfer and leverage change in a run of this task. The risk limits and the emergency stop apply either way." />
+            <ToggleSwitch IsChecked="{Binding AskFirst}" IsVisible="{Binding TradingEnabled}"
+                          AutomationProperties.Name="Ask me before placing an order"
+                          OnContent="The agent asks me before it places an order" OffContent="The agent places orders without asking" />
+          </StackPanel>
+        </Border>
+
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Content="Save" Classes="accent" Command="{Binding SaveCommand}" />
+          <Button Content="Run now" Command="{Binding RunNowCommand}" IsVisible="{Binding HasSelection}" />
+          <Button Content="{Binding PauseLabel}" Command="{Binding TogglePauseCommand}" IsVisible="{Binding HasSelection}" />
+          <Button Content="Open last run" Command="{Binding OpenLastRunCommand}" IsVisible="{Binding HasSelection}" />
+          <Button Content="Delete" Command="{Binding DeleteCommand}" IsVisible="{Binding HasSelection}" />
+        </StackPanel>
+        <TextBlock TextWrapping="Wrap" Text="{Binding Message}" />
+        <TextBlock Classes="secondary" TextWrapping="Wrap" Text="{Binding Info}" />
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

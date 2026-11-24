@@ -110,6 +110,22 @@
                    Text="The largest position is a hard limit: an order that would take one position above it, counting what is already held, is refused. An order that only reduces a position is always let out." />
       </StackPanel>
 
+      <StackPanel Spacing="10">
+        <TextBlock Classes="title" Text="Web search and strategy discovery" />
+        <TextBlock Classes="secondary" TextWrapping="Wrap"
+                   Text="With a Brave Search API key the agent can search the web. Without one it reads the collected news and pages you name." />
+        <ContentControl Content="{Binding BraveKey}" />
+        <ToggleSwitch IsChecked="{Binding AutoDiscover}" AutomationProperties.Name="Look for strategies on a schedule"
+                      OnContent="The agent looks for strategies on a schedule" OffContent="The agent looks for strategies on a schedule" />
+        <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding AutoDiscover}">
+          <TextBlock Classes="secondary" VerticalAlignment="Center" Text="Hours between two searches" />
+          <NumericUpDown Width="140" Minimum="1" Maximum="720" Increment="1" FormatString="0" Value="{Binding AutoDiscoverHours}"
+                         AutomationProperties.Name="Hours between two searches" />
+        </StackPanel>
+        <TextBlock Classes="secondary" TextWrapping="Wrap"
+                   Text="A search is an agent run that uses your model. It reads and saves strategies; the app does not let it trade." />
+      </StackPanel>
+
       <StackPanel Spacing="6">
         <TextBlock Classes="title" Text="Notifications" />
         <ToggleSwitch IsChecked="{Binding DesktopNotifications}" AutomationProperties.Name="Show desktop notifications"

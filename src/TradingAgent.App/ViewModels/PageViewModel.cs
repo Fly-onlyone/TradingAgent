@@ -6,4 +6,9 @@ namespace TradingAgent.App.ViewModels;
 public abstract class PageViewModel : ObservableObject
 {
     public abstract string Title { get; }
+
+    /// <summary>Called when the page is shown, so that it can read anew what changed while it was not.</summary>
+    public virtual void Activate()
+    {
+    }
 }

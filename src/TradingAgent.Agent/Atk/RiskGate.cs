@@ -92,7 +92,8 @@ public sealed partial class RiskGate(
     ISettingsStore settings,
     OrderStubRepository orders,
     TimeProvider time,
-    ILogger<RiskGate> logger) : IAtkGate
+    ILogger<RiskGate> logger,
+    SessionWriteBlocks? blocks = null) : IAtkGate
 {
     /// <summary>Highest leverage the agent may set.</summary>
     public const int MaxLeverage = 10;
@@ -144,6 +145,12 @@ public sealed partial class RiskGate(
         {
             // The gate is asked about writes only. Anything else here is a mistake of the caller's.
             return GateDecision.Deny($"'{toolName}' is not a writing tool this app allows.");
+        }
+
+        // Before every other rule: a session that may not write gets one plain answer, whatever it sent.
+        if (blocks?.ReasonFor(context.SessionId) is { } blocked)
+        {
+            return GateDecision.Deny(blocked);
         }
 
         if (!AtkToolCatalog.IsSupportedWrite(toolName))
