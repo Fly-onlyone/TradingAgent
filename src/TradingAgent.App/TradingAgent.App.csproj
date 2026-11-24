@@ -74,6 +74,7 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
     <PackageReference Include="Sentry" />
+    <PackageReference Include="SkiaSharp" />
     <PackageReference Include="Velopack" />
   </ItemGroup>
 

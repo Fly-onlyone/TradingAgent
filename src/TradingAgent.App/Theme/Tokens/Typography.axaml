@@ -1,0 +1,11 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    The fonts ship with the app (Assets/Fonts, static files: Avalonia reads no variable fonts). The
+    previous UI named the same two families but relied on them being installed.
+  -->
+  <FontFamily x:Key="FontSans">avares://TradingAgent/Assets/Fonts#Inter</FontFamily>
+  <FontFamily x:Key="FontMono">avares://TradingAgent/Assets/Fonts#JetBrains Mono</FontFamily>
+
+</ResourceDictionary>

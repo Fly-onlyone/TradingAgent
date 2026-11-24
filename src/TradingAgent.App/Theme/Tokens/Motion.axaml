@@ -1,0 +1,24 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    Easing curves of the previous UI, as cubic-bezier control points. A transition without an easing
+    is linear in Avalonia, so every transition names one of these.
+  -->
+
+  <!-- CSS keywords, used by the hand-written transitions ("0.2s ease"). -->
+  <SplineEasing x:Key="EaseCss" X1="0.25" Y1="0.1" X2="0.25" Y2="1" />
+  <SplineEasing x:Key="EaseCssIn" X1="0.42" Y1="0" X2="1" Y2="1" />
+  <SplineEasing x:Key="EaseCssOut" X1="0" Y1="0" X2="0.58" Y2="1" />
+  <SplineEasing x:Key="EaseCssInOut" X1="0.42" Y1="0" X2="0.58" Y2="1" />
+
+  <!-- Material UI: what its own components animate with. -->
+  <SplineEasing x:Key="EaseStandard" X1="0.4" Y1="0" X2="0.2" Y2="1" />
+  <SplineEasing x:Key="EaseDecelerate" X1="0" Y1="0" X2="0.2" Y2="1" />
+  <SplineEasing x:Key="EaseAccelerate" X1="0.4" Y1="0" X2="1" Y2="1" />
+  <SplineEasing x:Key="EaseSharp" X1="0.4" Y1="0" X2="0.6" Y2="1" />
+
+  <!-- Overshoots a little: a dialog scaling in. -->
+  <SplineEasing x:Key="EaseBackOut" X1="0.34" Y1="1.56" X2="0.64" Y2="1" />
+
+</ResourceDictionary>

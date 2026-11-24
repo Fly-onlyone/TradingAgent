@@ -1,0 +1,222 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:c="using:TradingAgent.App.Controls"
+                    xmlns:m="using:TradingAgent.App.Motion">
+
+  <!--
+    The outlined Material select of the previous UI. Sizes and label as the text field: 56 px, 40 px
+    with the class "small", c:Field.Label for a floating label. Its list is a Material menu.
+
+    Its outline is the neutral one of the component library (white at 23 %, text colour under the
+    pointer): the previous theme coloured the outline of text fields only.
+  -->
+  <ControlTheme x:Key="{x:Type ComboBox}" TargetType="ComboBox">
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{DynamicResource White23Brush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusBase}" />
+    <Setter Property="PlaceholderForeground" Value="{DynamicResource TextPrimaryBrush}" />
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="Padding" Value="14,16.5,32,16.5" />
+    <Setter Property="MinHeight" Value="56" />
+    <Setter Property="MaxDropDownHeight" Value="504" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusAdorner" Value="{x:Null}" />
+    <!-- The floated label sits half above the field. -->
+    <Setter Property="ClipToBounds" Value="False" />
+    <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+    <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <DataValidationErrors ClipToBounds="False">
+          <Panel>
+            <Border x:Name="Background"
+                    Background="{TemplateBinding Background}"
+                    CornerRadius="{TemplateBinding CornerRadius}" />
+            <c:OutlineNotch x:Name="PART_Outline"
+                            Stroke="{TemplateBinding BorderBrush}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            Label="{Binding #PART_Label}">
+              <c:OutlineNotch.Transitions>
+                <Transitions>
+                  <DoubleTransition Property="GapWidth" Duration="0:0:0.1" Easing="{StaticResource EaseDecelerate}" />
+                </Transitions>
+              </c:OutlineNotch.Transitions>
+            </c:OutlineNotch>
+            <TextBlock x:Name="PlaceholderTextBlock"
+                       HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                       VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                       Margin="{TemplateBinding Padding}"
+                       Opacity="0.5"
+                       LineHeight="23"
+                       Text="{TemplateBinding PlaceholderText}"
+                       Foreground="{TemplateBinding PlaceholderForeground}">
+              <TextBlock.IsVisible>
+                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                  <Binding Path="SelectionBoxItem" RelativeSource="{RelativeSource TemplatedParent}" Converter="{x:Static ObjectConverters.IsNull}" />
+                  <Binding Path="!IsEditable" RelativeSource="{RelativeSource TemplatedParent}" />
+                </MultiBinding>
+              </TextBlock.IsVisible>
+            </TextBlock>
+            <ContentControl x:Name="ContentPresenter"
+                            Content="{TemplateBinding SelectionBoxItem}"
+                            ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                            Margin="{TemplateBinding Padding}"
+                            HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                            IsVisible="{TemplateBinding IsEditable, Converter={x:Static BoolConverters.Not}}" />
+            <TextBox x:Name="PART_EditableTextBox"
+                     Classes="bare"
+                     Margin="{TemplateBinding Padding}"
+                     VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                     Foreground="{TemplateBinding Foreground}"
+                     Text="{TemplateBinding Text, Mode=TwoWay}"
+                     PlaceholderText="{TemplateBinding PlaceholderText}"
+                     IsVisible="{TemplateBinding IsEditable}" />
+            <PathIcon x:Name="DropDownGlyph"
+                      IsHitTestVisible="False"
+                      Margin="0,0,7,0"
+                      HorizontalAlignment="Right"
+                      VerticalAlignment="Center"
+                      Foreground="{DynamicResource TextPrimaryBrush}"
+                      Data="{StaticResource IconArrowDropDown}" />
+            <TextBlock x:Name="PART_Label"
+                       Text="{TemplateBinding (c:Field.Label)}"
+                       IsVisible="{TemplateBinding (c:Field.HasLabel)}"
+                       IsHitTestVisible="False"
+                       HorizontalAlignment="Left"
+                       VerticalAlignment="Top"
+                       FontSize="16"
+                       LineHeight="23"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       RenderTransformOrigin="0,0"
+                       RenderTransform="translate(14px, 16px)">
+              <TextBlock.Transitions>
+                <Transitions>
+                  <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.2" Easing="{StaticResource EaseDecelerate}" />
+                  <BrushTransition Property="Foreground" Duration="0:0:0.2" Easing="{StaticResource EaseDecelerate}" />
+                </Transitions>
+              </TextBlock.Transitions>
+            </TextBlock>
+            <Popup x:Name="PART_Popup"
+                   WindowManagerAddShadowHint="False"
+                   IsOpen="{TemplateBinding IsDropDownOpen, Mode=TwoWay}"
+                   MinWidth="{Binding Bounds.Width, RelativeSource={RelativeSource TemplatedParent}}"
+                   MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                   PlacementTarget="Background"
+                   IsLightDismissEnabled="True"
+                   InheritsTransform="True">
+              <Border x:Name="PopupBorder" Classes="menuPaper" RenderTransformOrigin="50%,0%" m:Grow.On="True">
+                <ScrollViewer HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
+                              VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}"
+                              IsScrollChainingEnabled="False"
+                              IsDeferredScrollingEnabled="{TemplateBinding (ScrollViewer.IsDeferredScrollingEnabled)}">
+                  <ItemsPresenter x:Name="PART_ItemsPresenter"
+                                  Margin="0,8"
+                                  ItemsPanel="{TemplateBinding ItemsPanel}" />
+                </ScrollViewer>
+              </Border>
+            </Popup>
+          </Panel>
+        </DataValidationErrors>
+      </ControlTemplate>
+    </Setter>
+
+    <Style Selector="^:pointerover">
+      <Setter Property="BorderBrush" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+    <Style Selector="^:focus-within, ^:dropdownopen">
+      <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
+      <Style Selector="^ /template/ c|OutlineNotch#PART_Outline">
+        <Setter Property="Thickness" Value="2" />
+      </Style>
+      <Style Selector="^ /template/ TextBlock#PART_Label">
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+      </Style>
+    </Style>
+    <Style Selector="^:dropdownopen /template/ PathIcon#DropDownGlyph">
+      <Setter Property="RenderTransform" Value="rotate(180deg)" />
+    </Style>
+    <Style Selector="^:error">
+      <Setter Property="BorderBrush" Value="{DynamicResource ErrorBrush}" />
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Foreground" Value="{DynamicResource TextDisabledBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ActionDisabledBrush}" />
+      <Setter Property="Background" Value="{DynamicResource InputDisabledBrush}" />
+      <Setter Property="Cursor" Value="Arrow" />
+      <Style Selector="^ /template/ PathIcon#DropDownGlyph">
+        <Setter Property="Foreground" Value="{DynamicResource ActionDisabledBrush}" />
+      </Style>
+    </Style>
+
+    <!-- The label is up while the select has the focus or a value. -->
+    <Style Selector="^[(c|Field.HasLabel)=True] /template/ TextBlock#PlaceholderTextBlock">
+      <Setter Property="Opacity" Value="0" />
+    </Style>
+    <Style Selector="^[(c|Field.HasLabel)=True]:focus-within, ^[(c|Field.HasLabel)=True]:dropdownopen, ^[(c|Field.HasLabel)=True]:not(ComboBox[SelectedIndex=-1])">
+      <Style Selector="^ /template/ TextBlock#PART_Label">
+        <Setter Property="RenderTransform" Value="translate(14px, -9px) scale(0.75)" />
+      </Style>
+      <Style Selector="^ /template/ c|OutlineNotch#PART_Outline">
+        <Setter Property="IsOpen" Value="True" />
+      </Style>
+    </Style>
+
+    <Style Selector="^.small">
+      <Setter Property="Padding" Value="14,8.5,32,8.5" />
+      <Setter Property="MinHeight" Value="40" />
+      <Style Selector="^ /template/ TextBlock#PART_Label">
+        <Setter Property="RenderTransform" Value="translate(14px, 9px)" />
+      </Style>
+      <Style Selector="^[(c|Field.HasLabel)=True]:focus-within /template/ TextBlock#PART_Label, ^[(c|Field.HasLabel)=True]:dropdownopen /template/ TextBlock#PART_Label, ^[(c|Field.HasLabel)=True]:not(ComboBox[SelectedIndex=-1]) /template/ TextBlock#PART_Label">
+        <Setter Property="RenderTransform" Value="translate(14px, -9px) scale(0.75)" />
+      </Style>
+    </Style>
+  </ControlTheme>
+
+  <!-- A row of a Material menu. -->
+  <ControlTheme x:Key="{x:Type ComboBoxItem}" TargetType="ComboBoxItem">
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="Padding" Value="16,6" />
+    <Setter Property="MinHeight" Value="36" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Panel Background="{TemplateBinding Background}">
+          <c:Ripple Fill="{TemplateBinding Foreground}" />
+          <ContentPresenter x:Name="PART_ContentPresenter"
+                            Foreground="{TemplateBinding Foreground}"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            LineHeight="24"
+                            HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                            Padding="{TemplateBinding Padding}" />
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover">
+      <Setter Property="Background" Value="{DynamicResource ActionHoverBrush}" />
+    </Style>
+    <Style Selector="^:selected">
+      <Setter Property="Background" Value="{DynamicResource Primary16Brush}" />
+      <Style Selector="^:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Primary24Brush}" />
+      </Style>
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="0.38" />
+    </Style>
+  </ControlTheme>
+
+</ResourceDictionary>

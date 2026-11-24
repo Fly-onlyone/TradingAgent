@@ -8,9 +8,9 @@
   <Grid ColumnDefinitions="260,*">
 
     <!-- The chats -->
-    <Border Grid.Column="0" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="0,0,1,0">
+    <Border Grid.Column="0" BorderBrush="{DynamicResource BorderMediumBrush}" BorderThickness="0,0,1,0">
       <Grid RowDefinitions="Auto,*" Margin="12">
-        <Button Grid.Row="0" Content="New chat" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+        <Button Classes="outlined" Grid.Row="0" Content="New chat" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                 Command="{Binding NewChatCommand}" />
         <ListBox Grid.Row="1" x:Name="SessionList" Classes="navigation" Margin="0,10,0,0" Background="Transparent"
                  ItemsSource="{Binding Sessions}" SelectedItem="{Binding SelectedSession}">
@@ -18,7 +18,7 @@
             <DataTemplate x:DataType="vm:SessionItemViewModel">
               <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Grid.Column="0" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
-                <TextBlock Grid.Column="1" Text="●" Foreground="{StaticResource PrimaryBrush}" Margin="6,0,0,0"
+                <TextBlock Grid.Column="1" Text="●" Foreground="{DynamicResource PrimaryBrush}" Margin="6,0,0,0"
                            IsVisible="{Binding IsRunning}" ToolTip.Tip="A reply is being written" />
               </Grid>
             </DataTemplate>
@@ -32,7 +32,7 @@
 
       <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
         <TextBlock Grid.Column="0" Classes="pageTitle" Text="{Binding Title}" />
-        <Button Grid.Column="1" Content="Delete chat" Command="{Binding DeleteChatCommand}" />
+        <Button Classes="outlined" Grid.Column="1" Content="Delete chat" Command="{Binding DeleteChatCommand}" />
       </Grid>
 
       <TextBlock Grid.Row="1" Classes="secondary" HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -53,16 +53,16 @@
         </ListBox.Styles>
         <ListBox.ItemTemplate>
           <DataTemplate x:DataType="vm:MessageItemViewModel">
-            <Border CornerRadius="{StaticResource PanelCornerRadius}" Padding="14,10"
+            <Border CornerRadius="{DynamicResource RadiusCard}" Padding="14,10"
                     Classes.user="{Binding IsUser}" Classes.assistant="{Binding IsAssistant}">
               <Border.Styles>
                 <Style Selector="Border.user">
-                  <Setter Property="Background" Value="{StaticResource BorderMediumBrush}" />
+                  <Setter Property="Background" Value="{DynamicResource BorderMediumBrush}" />
                   <Setter Property="HorizontalAlignment" Value="Right" />
                   <Setter Property="MaxWidth" Value="720" />
                 </Style>
                 <Style Selector="Border.assistant">
-                  <Setter Property="Background" Value="{StaticResource AppBackgroundBrush}" />
+                  <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
                   <Setter Property="HorizontalAlignment" Value="Stretch" />
                 </Style>
               </Border.Styles>
@@ -73,17 +73,17 @@
                 <ItemsControl ItemsSource="{Binding ToolCalls}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:ToolCallItemViewModel">
-                      <Border BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
-                              CornerRadius="{StaticResource ControlCornerRadius}" Padding="10,6" Margin="0,0,0,4">
+                      <Border BorderBrush="{DynamicResource BorderMediumBrush}" BorderThickness="1"
+                              CornerRadius="{DynamicResource RadiusBase}" Padding="10,6" Margin="0,0,0,4">
                         <StackPanel Spacing="2">
                           <Grid ColumnDefinitions="*,Auto">
                             <TextBlock Grid.Column="0" FontFamily="Consolas, Cascadia Mono, monospace" FontSize="13"
-                                       Text="{Binding Name}" Foreground="{StaticResource PrimaryBrush}" />
+                                       Text="{Binding Name}" Foreground="{DynamicResource PrimaryBrush}" />
                             <TextBlock Grid.Column="1" Classes="secondary" FontSize="12" Text="{Binding Status}"
                                        Classes.problem="{Binding IsProblem}">
                               <TextBlock.Styles>
                                 <Style Selector="TextBlock.problem">
-                                  <Setter Property="Foreground" Value="{StaticResource BearishBrush}" />
+                                  <Setter Property="Foreground" Value="{DynamicResource BearishBrush}" />
                                 </Style>
                               </TextBlock.Styles>
                             </TextBlock>
@@ -98,7 +98,7 @@
                 </ItemsControl>
                 <controls:MarkdownView Text="{Binding Content}" />
                 <ProgressBar IsIndeterminate="True" Height="2" IsVisible="{Binding IsRunning}" />
-                <TextBlock Foreground="{StaticResource BearishBrush}" TextWrapping="Wrap" Text="{Binding Note}"
+                <TextBlock Foreground="{DynamicResource BearishBrush}" TextWrapping="Wrap" Text="{Binding Note}"
                            IsVisible="{Binding HasNote}" />
                 <TextBlock Classes="secondary" FontSize="11" Text="{Binding Footer}"
                            IsVisible="{Binding Footer, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
@@ -109,7 +109,7 @@
       </ListBox>
 
       <!-- A question the agent is waiting on -->
-      <Border Grid.Row="2" Classes="panel" BorderBrush="{StaticResource PrimaryBrush}" BorderThickness="1"
+      <Border Grid.Row="2" Classes="panel" BorderBrush="{DynamicResource PrimaryBrush}" BorderThickness="1"
               Padding="14,10" Margin="0,8,0,0" IsVisible="{Binding HasQuestion}">
         <StackPanel Spacing="8">
           <TextBlock Classes="secondary" Text="The agent asks" />
@@ -122,7 +122,7 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="x:String">
-                <Button Content="{Binding}" Margin="0,0,8,6"
+                <Button Classes="outlined" Content="{Binding}" Margin="0,0,8,6"
                         Command="{Binding $parent[ItemsControl].((vm:ChatViewModel)DataContext).ChooseOptionCommand}"
                         CommandParameter="{Binding}" />
               </DataTemplate>
@@ -133,12 +133,12 @@
       </Border>
 
       <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto" Margin="0,10,0,0">
-        <TextBox Grid.Column="0" x:Name="DraftBox" AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="160"
+        <TextBox Classes="small" Grid.Column="0" x:Name="DraftBox" AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="160"
                  PlaceholderText="Message the agent. Enter sends, Shift+Enter starts a new line."
                  Text="{Binding Draft}" />
-        <Button Grid.Column="1" Content="Send" Margin="8,0,0,0" VerticalAlignment="Bottom" Classes="accent"
+        <Button Grid.Column="1" Content="Send" Margin="8,0,0,0" VerticalAlignment="Bottom" Classes="contained"
                 Command="{Binding SendCommand}" />
-        <Button Grid.Column="2" Content="Stop" Margin="8,0,0,0" VerticalAlignment="Bottom"
+        <Button Classes="outlined" Grid.Column="2" Content="Stop" Margin="8,0,0,0" VerticalAlignment="Bottom"
                 Command="{Binding StopCommand}" />
       </Grid>
     </Grid>

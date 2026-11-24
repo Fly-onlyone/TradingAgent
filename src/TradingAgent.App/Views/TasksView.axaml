@@ -6,9 +6,9 @@
 
   <Grid ColumnDefinitions="300,*">
 
-    <Border Grid.Column="0" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="0,0,1,0">
+    <Border Grid.Column="0" BorderBrush="{DynamicResource BorderMediumBrush}" BorderThickness="0,0,1,0">
       <Grid RowDefinitions="Auto,*" Margin="12">
-        <Button Grid.Row="0" Content="New task" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+        <Button Classes="outlined" Grid.Row="0" Content="New task" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                 Command="{Binding NewCommand}" />
         <ListBox Grid.Row="1" Classes="navigation" Margin="0,10,0,0" Background="Transparent"
                  ItemsSource="{Binding Tasks}" SelectedItem="{Binding Selected}">
@@ -31,29 +31,29 @@
                    Text="A task is work the agent does on a schedule, with nobody watching. Each run is a conversation of its own, which you can read in Chat." />
 
         <TextBlock Classes="secondary" Text="Name" />
-        <TextBox Text="{Binding Name}" AutomationProperties.Name="Task name" />
+        <TextBox Classes="small" Text="{Binding Name}" AutomationProperties.Name="Task name" />
 
         <TextBlock Classes="secondary" Text="What the agent should do on each run" />
-        <TextBox Text="{Binding Instructions}" AcceptsReturn="True" TextWrapping="Wrap" Height="150"
+        <TextBox Classes="small" Text="{Binding Instructions}" AcceptsReturn="True" TextWrapping="Wrap" Height="150"
                  AutomationProperties.Name="Task instructions" />
 
         <TextBlock Classes="secondary" Text="Instruments, separated by commas (optional)" />
-        <TextBox Text="{Binding Symbols}" PlaceholderText="BTC-USDT, ETH-USDT" AutomationProperties.Name="Task instruments" />
+        <TextBox Classes="small" Text="{Binding Symbols}" PlaceholderText="BTC-USDT, ETH-USDT" AutomationProperties.Name="Task instruments" />
 
         <TextBlock Classes="secondary" Text="Schedule" />
         <StackPanel Orientation="Horizontal" Spacing="8">
-          <ComboBox Width="140" ItemsSource="{Binding ScheduleKinds}" SelectedItem="{Binding ScheduleKind}"
+          <ComboBox Classes="small" Width="140" ItemsSource="{Binding ScheduleKinds}" SelectedItem="{Binding ScheduleKind}"
                     AutomationProperties.Name="Schedule kind" />
-          <NumericUpDown Width="170" Minimum="5" Maximum="100000" Increment="5" FormatString="0" Value="{Binding Minutes}"
+          <NumericUpDown Classes="small" Width="170" Minimum="5" Maximum="100000" Increment="5" FormatString="0" Value="{Binding Minutes}"
                          IsVisible="{Binding IsInterval}" AutomationProperties.Name="Minutes between runs" />
           <TextBlock VerticalAlignment="Center" Classes="secondary" Text="minutes between runs" IsVisible="{Binding IsInterval}" />
-          <TextBox Width="90" Text="{Binding Time}" PlaceholderText="09:00" IsVisible="{Binding IsTimed}"
+          <TextBox Classes="small" Width="90" Text="{Binding Time}" PlaceholderText="09:00" IsVisible="{Binding IsTimed}"
                    AutomationProperties.Name="Time of day" />
-          <TextBox Width="260" Text="{Binding Days}" PlaceholderText="mon, wed, fri" IsVisible="{Binding IsWeekly}"
+          <TextBox Classes="small" Width="260" Text="{Binding Days}" PlaceholderText="mon, wed, fri" IsVisible="{Binding IsWeekly}"
                    AutomationProperties.Name="Weekdays" />
         </StackPanel>
 
-        <Border Classes="panel" BorderBrush="{StaticResource BearishBrush}" BorderThickness="1" Padding="16,10">
+        <Border Classes="panel" BorderBrush="{DynamicResource BearishBrush}" BorderThickness="1" Padding="16,10">
           <StackPanel Spacing="4">
             <ToggleSwitch IsChecked="{Binding TradingEnabled}" AutomationProperties.Name="This task may trade"
                           OnContent="This task may trade" OffContent="This task may not trade" />
@@ -66,11 +66,11 @@
         </Border>
 
         <StackPanel Orientation="Horizontal" Spacing="8">
-          <Button Content="Save" Classes="accent" Command="{Binding SaveCommand}" />
-          <Button Content="Run now" Command="{Binding RunNowCommand}" IsVisible="{Binding HasSelection}" />
-          <Button Content="{Binding PauseLabel}" Command="{Binding TogglePauseCommand}" IsVisible="{Binding HasSelection}" />
-          <Button Content="Open last run" Command="{Binding OpenLastRunCommand}" IsVisible="{Binding HasSelection}" />
-          <Button Content="Delete" Command="{Binding DeleteCommand}" IsVisible="{Binding HasSelection}" />
+          <Button Content="Save" Classes="contained" Command="{Binding SaveCommand}" />
+          <Button Classes="outlined" Content="Run now" Command="{Binding RunNowCommand}" IsVisible="{Binding HasSelection}" />
+          <Button Classes="outlined" Content="{Binding PauseLabel}" Command="{Binding TogglePauseCommand}" IsVisible="{Binding HasSelection}" />
+          <Button Classes="outlined" Content="Open last run" Command="{Binding OpenLastRunCommand}" IsVisible="{Binding HasSelection}" />
+          <Button Classes="outlined" Content="Delete" Command="{Binding DeleteCommand}" IsVisible="{Binding HasSelection}" />
         </StackPanel>
         <TextBlock TextWrapping="Wrap" Text="{Binding Message}" />
         <TextBlock Classes="secondary" TextWrapping="Wrap" Text="{Binding Info}" />

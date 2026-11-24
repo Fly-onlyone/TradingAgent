@@ -1,49 +1,248 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="using:TradingAgent.App.Controls">
 
+  <!--
+    Text styles: the type scale of the previous UI (its Material typography), in pixels. A text takes
+    one by class: h1 to h6, subtitle1, subtitle2, body1, body2, caption, overline. Line height is the
+    size times the ratio the scale gave; letter spacing is in pixels here, not in em.
+  -->
+  <Style Selector=":is(TextBlock).h1">
+    <Setter Property="FontSize" Value="36" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="LineHeight" Value="43.2" />
+    <Setter Property="LetterSpacing" Value="-0.72" />
+  </Style>
+  <Style Selector=":is(TextBlock).h2">
+    <Setter Property="FontSize" Value="32" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="LineHeight" Value="41.6" />
+    <Setter Property="LetterSpacing" Value="-0.32" />
+  </Style>
+  <Style Selector=":is(TextBlock).h3">
+    <Setter Property="FontSize" Value="24" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LineHeight" Value="33.6" />
+  </Style>
+  <Style Selector=":is(TextBlock).h4">
+    <Setter Property="FontSize" Value="18" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LineHeight" Value="25.2" />
+  </Style>
+  <Style Selector=":is(TextBlock).h5">
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LineHeight" Value="24" />
+  </Style>
+  <Style Selector=":is(TextBlock).h6">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LineHeight" Value="21" />
+  </Style>
+  <Style Selector=":is(TextBlock).subtitle1">
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="LineHeight" Value="24" />
+  </Style>
+  <Style Selector=":is(TextBlock).subtitle2">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="LineHeight" Value="21.98" />
+  </Style>
+  <Style Selector=":is(TextBlock).body1">
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="FontWeight" Value="Normal" />
+    <Setter Property="LineHeight" Value="24" />
+  </Style>
+  <Style Selector=":is(TextBlock).body2">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="Normal" />
+    <Setter Property="LineHeight" Value="21.98" />
+  </Style>
+  <Style Selector=":is(TextBlock).caption">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="Normal" />
+    <Setter Property="LineHeight" Value="19.92" />
+  </Style>
+  <!-- The text itself must be written in capitals: there is no text transform. -->
+  <Style Selector=":is(TextBlock).overline">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="LineHeight" Value="31.92" />
+    <Setter Property="LetterSpacing" Value="1.2" />
+  </Style>
+
+  <!-- Weight and family on top of a text style. -->
+  <Style Selector=":is(TextBlock).bold">
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <Style Selector=":is(TextBlock).semibold">
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector=":is(TextBlock).medium">
+    <Setter Property="FontWeight" Value="Medium" />
+  </Style>
+  <Style Selector=":is(TextBlock).mono">
+    <Setter Property="FontFamily" Value="{StaticResource FontMono}" />
+  </Style>
+
+  <!-- Text colours. -->
+  <Style Selector=":is(TextBlock).secondary">
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+  </Style>
+  <Style Selector=":is(TextBlock).disabled">
+    <Setter Property="Foreground" Value="{DynamicResource TextDisabledBrush}" />
+  </Style>
+  <Style Selector=":is(TextBlock).primary">
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+  </Style>
+  <Style Selector=":is(TextBlock).good">
+    <Setter Property="Foreground" Value="{DynamicResource BullishBrush}" />
+  </Style>
+  <Style Selector=":is(TextBlock).bad">
+    <Setter Property="Foreground" Value="{DynamicResource BearishBrush}" />
+  </Style>
+
+  <!-- Controls that draw themselves take their colours here, so they follow the theme. -->
+  <Style Selector="c|Spinner">
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+  </Style>
+  <Style Selector="c|LinearProgress">
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+    <Setter Property="Track" Value="{DynamicResource Muted30Brush}" />
+    <Setter Property="CornerRadius" Value="4" />
+  </Style>
+  <Style Selector="c|Skeleton">
+    <Setter Property="Color" Value="{DynamicResource MutedColor}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusDouble}" />
+  </Style>
+  <Style Selector="c|StatusDot">
+    <Setter Property="Fill" Value="{DynamicResource StatusOfflineBrush}" />
+  </Style>
+  <Style Selector="c|StatusDot[Status=Online]">
+    <Setter Property="Fill" Value="{DynamicResource StatusOnlineBrush}" />
+  </Style>
+  <Style Selector="c|StatusDot[Status=Away]">
+    <Setter Property="Fill" Value="{DynamicResource StatusAwayBrush}" />
+  </Style>
+  <Style Selector="c|StatusDot[Status=Busy]">
+    <Setter Property="Fill" Value="{DynamicResource StatusBusyBrush}" />
+  </Style>
+  <Style Selector="c|StatusDot[Status=Loading]">
+    <Setter Property="Fill" Value="{DynamicResource PrimaryBrush}" />
+  </Style>
+
+  <!-- A tooltip shows after a tenth of a second, centred under what it explains. -->
+  <Style Selector=":is(Control)">
+    <Setter Property="ToolTip.ShowDelay" Value="100" />
+    <Setter Property="ToolTip.Placement" Value="Bottom" />
+    <Setter Property="ToolTip.VerticalOffset" Value="14" />
+  </Style>
+
+  <!--
+    Rows of a table: a list with the class "table". A row has a line under it, lights up a little
+    under the pointer and grows a bar on its left edge; it does not look chosen.
+  -->
+  <Style Selector="ListBox.table ListBoxItem">
+    <Setter Property="Padding" Value="16" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Muted30Brush}" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+  </Style>
+  <Style Selector="ListBox.table.small ListBoxItem">
+    <Setter Property="Padding" Value="16,6" />
+  </Style>
+  <Style Selector="ListBox.table ListBoxItem :is(TextBlock)">
+    <Setter Property="LineHeight" Value="21.98" />
+  </Style>
+  <Style Selector="ListBox.plain ListBoxItem, ListBox.navigation ListBoxItem">
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="FontSize" Value="14" />
+  </Style>
+  <Style Selector="ListBox.table ListBoxItem /template/ Border#PART_Bar">
+    <Setter Property="IsVisible" Value="True" />
+  </Style>
+  <Style Selector="ListBox.table ListBoxItem:pointerover, ListBox.table ListBoxItem:selected, ListBox.table ListBoxItem:selected:pointerover">
+    <Setter Property="Background" Value="{DynamicResource Primary05Brush}" />
+  </Style>
+  <Style Selector="ListBox.table ListBoxItem:selected">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ListBox.table ListBoxItem:pointerover /template/ Border#PART_Bar">
+    <Setter Property="RenderTransform" Value="scaleY(1)" />
+  </Style>
+  <!-- The head of a table: a band over the columns. -->
+  <Style Selector="Border.tableHead">
+    <Setter Property="Background" Value="{DynamicResource TableHeadBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Muted30Brush}" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="Padding" Value="16" />
+  </Style>
+  <Style Selector="Border.tableHead.small">
+    <Setter Property="Padding" Value="16,6" />
+  </Style>
+  <Style Selector="Border.tableHead :is(TextBlock)">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LineHeight" Value="24" />
+  </Style>
+
+  <!-- A list whose rows are only a place for their content: no wash, no choice shown (chat messages). -->
+  <Style Selector="ListBox.plain ListBoxItem">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Focusable" Value="False" />
+  </Style>
+  <Style Selector="ListBox.plain ListBoxItem:pointerover, ListBox.plain ListBoxItem:selected, ListBox.plain ListBoxItem:selected:pointerover">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <!-- Material paper: the plain translucent surface under a table or a summary. -->
+  <Style Selector="Border.paper">
+    <Setter Property="Background" Value="{DynamicResource PaperGlassBrush}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusBase}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource PaperShadow}" />
+  </Style>
+
+  <!-- The surface of a menu, a select list or a popover: Material paper at elevation 8. -->
+  <Style Selector="Border.menuPaper">
+    <Setter Property="Background" Value="{DynamicResource PaperGlassBrush}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusBase}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource Elevation8Shadow}" />
+    <Setter Property="ClipToBounds" Value="False" />
+  </Style>
+
+  <!--
+    Classes of the pages that are not yet laid out with the kit. They go when the last of those pages
+    is ported.
+  -->
   <Style Selector="Border.panel">
-    <Setter Property="Background" Value="{StaticResource PanelBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+    <Setter Property="Background" Value="{DynamicResource PaperBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="{StaticResource PanelCornerRadius}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusCard}" />
   </Style>
-
   <Style Selector="Border.header">
-    <Setter Property="Background" Value="{StaticResource HeaderPanelBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+    <Setter Property="Background" Value="{DynamicResource HeaderBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="{StaticResource PanelCornerRadius}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusCard}" />
   </Style>
-
   <Style Selector="ListBox.navigation ListBoxItem">
-    <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusBase}" />
     <Setter Property="Margin" Value="0,0,0,2" />
+    <Setter Property="Padding" Value="12,9" />
   </Style>
-
-  <Style Selector="TextBlock.title">
+  <Style Selector=":is(TextBlock).title">
     <Setter Property="FontSize" Value="16" />
     <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
-
-  <Style Selector="TextBlock.pageTitle">
+  <Style Selector=":is(TextBlock).pageTitle">
     <Setter Property="FontSize" Value="20" />
     <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
-
-  <Style Selector="TextBlock.secondary">
-    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
-  </Style>
-
-  <Style Selector=":is(TextBlock).good">
-    <Setter Property="Foreground" Value="{StaticResource BullishBrush}" />
-  </Style>
-
-  <Style Selector=":is(TextBlock).bad">
-    <Setter Property="Foreground" Value="{StaticResource BearishBrush}" />
-  </Style>
-
-  <Style Selector="SelectableTextBlock.value">
-    <Setter Property="FontFamily" Value="Cascadia Mono,Consolas,monospace" />
+  <Style Selector=":is(TextBlock).value">
+    <Setter Property="FontFamily" Value="{StaticResource FontMono}" />
   </Style>
 
 </Styles>

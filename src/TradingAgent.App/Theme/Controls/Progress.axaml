@@ -1,0 +1,31 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:c="using:TradingAgent.App.Controls">
+
+  <!--
+    A progress bar draws itself as the Material linear progress. The bar control looks for a part
+    named PART_Indicator and sizes it; that part is kept, unseen, and LinearProgress does the drawing.
+  -->
+  <ControlTheme x:Key="{x:Type ProgressBar}" TargetType="ProgressBar">
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+    <Setter Property="Background" Value="{DynamicResource Muted30Brush}" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="MinHeight" Value="4" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="ProgressBar">
+        <Panel>
+          <Border x:Name="PART_Indicator" IsVisible="False" HorizontalAlignment="Left" />
+          <c:LinearProgress Height="{TemplateBinding Height}"
+                            MinHeight="{TemplateBinding MinHeight}"
+                            Foreground="{TemplateBinding Foreground}"
+                            Track="{TemplateBinding Background}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            Value="{TemplateBinding Percentage}"
+                            IsIndeterminate="{TemplateBinding IsIndeterminate}" />
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+</ResourceDictionary>

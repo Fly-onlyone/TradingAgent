@@ -24,6 +24,14 @@ internal static class Program
         // install, update and uninstall steps; in that case this call does the work and exits the process.
         VelopackApp.Build().OnBeforeUninstallFastCallback(_ => RemoveSystemIntegration()).Run();
 
+        // The component gallery is a look at the controls, not the app: it opens no database, starts no
+        // service and may run beside the app.
+        if (Views.GalleryWindow.IsRequested(args))
+        {
+            ShellApp.GalleryArguments = args;
+            return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        }
+
         var applicationId = AppInfo.ApplicationIdFor(BuildFlavor.IsDevelopment);
 
         using var instance = new SingleInstanceGuard(applicationId);
@@ -36,6 +44,7 @@ internal static class Program
         }
 
         StartupProbe.Configure(args);
+        Shell.PageShots.Configure(args);
         ShellApp.Instance = instance;
         return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
@@ -62,5 +71,9 @@ internal static class Program
 
     // Kept as a separate method: the IDE previewer looks it up by name.
     public static AppBuilder BuildAvaloniaApp() =>
-        AppBuilder.Configure<ShellApp>().UsePlatformDetect();
+        AppBuilder.Configure<ShellApp>()
+            .UsePlatformDetect()
+            // Menus, select lists and tooltips are drawn inside the window, as in the previous UI, not
+            // in windows of their own: their shadows are not cut off and they can open with an animation.
+            .With(new Win32PlatformOptions { OverlayPopups = true });
 }

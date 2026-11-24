@@ -46,12 +46,12 @@
         </Grid>
         <TextBlock Classes="secondary" TextWrapping="Wrap" Text="{Binding Agent.Notice}"
                    IsVisible="{Binding Agent.Notice, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-        <Button Content="I have read this. It is my own subscription." Command="{Binding Agent.ConfirmNoticeCommand}"
+        <Button Classes="outlined" Content="I have read this. It is my own subscription." Command="{Binding Agent.ConfirmNoticeCommand}"
                 IsVisible="{Binding Agent.NeedsConfirmation}" />
         <StackPanel Orientation="Horizontal" Spacing="8">
-          <Button Content="Run test prompt" Command="{Binding Agent.RunTestPromptCommand}" />
-          <Button Content="Stop" Command="{Binding Agent.RunTestPromptCancelCommand}" />
-          <Button Content="Check again" Command="{Binding Agent.RefreshCommand}" />
+          <Button Classes="outlined" Content="Run test prompt" Command="{Binding Agent.RunTestPromptCommand}" />
+          <Button Classes="outlined" Content="Stop" Command="{Binding Agent.RunTestPromptCancelCommand}" />
+          <Button Classes="outlined" Content="Check again" Command="{Binding Agent.RefreshCommand}" />
         </StackPanel>
         <TextBlock Classes="secondary" TextWrapping="Wrap" Text="{Binding Agent.TestStatus}" />
         <SelectableTextBlock Classes="value" TextWrapping="Wrap" Text="{Binding Agent.TestEvents}"
@@ -68,7 +68,7 @@
         <ToggleSwitch IsChecked="{Binding OpenWindowAtStart}"
                       AutomationProperties.Name="Open the window at start"
                       OnContent="Open the window at start" OffContent="Open the window at start" />
-        <Button Content="Send test notification" Command="{Binding SendTestNotificationCommand}" />
+        <Button Classes="outlined" Content="Send test notification" Command="{Binding SendTestNotificationCommand}" />
         <TextBlock Classes="secondary" Text="{Binding ShellStatus}" />
       </StackPanel>
 
@@ -77,15 +77,15 @@
         <ToggleSwitch IsChecked="{Binding ReportingEnabled}"
                       AutomationProperties.Name="Send crash and performance reports"
                       OnContent="Send crash and performance reports" OffContent="Send crash and performance reports" />
-        <Button Content="Send test error" Command="{Binding SendTestErrorCommand}" />
+        <Button Classes="outlined" Content="Send test error" Command="{Binding SendTestErrorCommand}" />
         <TextBlock Classes="secondary" Text="{Binding ReportingStatus}" />
       </StackPanel>
 
       <StackPanel Spacing="10">
         <TextBlock Classes="title" Text="Updates" />
         <StackPanel Orientation="Horizontal" Spacing="8">
-          <Button Content="Check for updates" Command="{Binding CheckForUpdatesCommand}" />
-          <Button Content="Restart to install" Command="{Binding RestartToUpdateCommand}"
+          <Button Classes="outlined" Content="Check for updates" Command="{Binding CheckForUpdatesCommand}" />
+          <Button Classes="outlined" Content="Restart to install" Command="{Binding RestartToUpdateCommand}"
                   IsVisible="{Binding IsUpdateReady}" />
         </StackPanel>
         <TextBlock Classes="secondary" Text="{Binding UpdateStatus}" />

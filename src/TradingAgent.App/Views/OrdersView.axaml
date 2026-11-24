@@ -7,9 +7,9 @@
   <Grid RowDefinitions="Auto,Auto,*" Margin="24,16">
     <Grid Grid.Row="0" ColumnDefinitions="Auto,180,Auto,*">
       <TextBlock Grid.Column="0" Classes="pageTitle" Text="{Binding Title}" VerticalAlignment="Center" Margin="0,0,16,0" />
-      <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding Statuses}" SelectedItem="{Binding Filter}"
+      <ComboBox Classes="small" Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding Statuses}" SelectedItem="{Binding Filter}"
                 AutomationProperties.Name="Status filter" />
-      <Button Grid.Column="2" Content="Ask OKX now" Margin="8,0,0,0" Command="{Binding RefreshCommand}" />
+      <Button Classes="outlined" Grid.Column="2" Content="Ask OKX now" Margin="8,0,0,0" Command="{Binding RefreshCommand}" />
       <TextBlock Grid.Column="3" Classes="secondary" VerticalAlignment="Center" Margin="12,0,0,0" TextWrapping="Wrap"
                  Text="{Binding Status}" />
     </Grid>

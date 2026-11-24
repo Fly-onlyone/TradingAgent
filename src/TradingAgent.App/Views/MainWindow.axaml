@@ -8,8 +8,9 @@
         Width="1400" Height="900"
         MinWidth="1024" MinHeight="700"
         WindowStartupLocation="CenterScreen"
-        Background="{StaticResource AppBackgroundBrush}"
-        Foreground="{StaticResource TextPrimaryBrush}"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource TextPrimaryBrush}"
+        FontFamily="{StaticResource FontSans}"
         FontSize="14">
 
   <Grid RowDefinitions="Auto,Auto,*" ColumnDefinitions="Auto,*">
@@ -28,7 +29,7 @@
       <Grid ColumnDefinitions="*,Auto">
         <TextBlock Grid.Column="0" VerticalAlignment="Center" TextWrapping="Wrap"
                    Text="This app sends crash and performance reports to help fix problems. They contain no keys, account data or personal details. You can turn this off on the Diagnostics page." />
-        <Button Grid.Column="1" Content="OK" Margin="12,0,0,0" Command="{Binding DismissTelemetryNoticeCommand}" />
+        <Button Classes="outlined" Grid.Column="1" Content="OK" Margin="12,0,0,0" Command="{Binding DismissTelemetryNoticeCommand}" />
       </Grid>
     </Border>
 

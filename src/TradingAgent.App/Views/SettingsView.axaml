@@ -9,10 +9,10 @@
     <DataTemplate x:DataType="vm:SecretFieldViewModel">
       <Grid ColumnDefinitions="160,*,Auto,Auto" RowDefinitions="Auto,Auto" Margin="0,0,0,8">
         <TextBlock Grid.Row="0" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="{Binding Label}" />
-        <TextBox Grid.Row="0" Grid.Column="1" PasswordChar="●" PlaceholderText="Type or paste a new value" Text="{Binding Entry}"
+        <TextBox Classes="small" Grid.Row="0" Grid.Column="1" PasswordChar="●" PlaceholderText="Type or paste a new value" Text="{Binding Entry}"
                  AutomationProperties.Name="{Binding Label}" />
-        <Button Grid.Row="0" Grid.Column="2" Content="Save" Margin="8,0,0,0" Command="{Binding SaveCommand}" />
-        <Button Grid.Row="0" Grid.Column="3" Content="Remove" Margin="8,0,0,0" Command="{Binding RemoveCommand}" />
+        <Button Classes="outlined" Grid.Row="0" Grid.Column="2" Content="Save" Margin="8,0,0,0" Command="{Binding SaveCommand}" />
+        <Button Classes="outlined" Grid.Row="0" Grid.Column="3" Content="Remove" Margin="8,0,0,0" Command="{Binding RemoveCommand}" />
         <TextBlock Grid.Row="1" Grid.Column="1" Classes="secondary" FontSize="12" Margin="0,3,0,0" Text="{Binding State}" />
       </Grid>
     </DataTemplate>
@@ -24,7 +24,7 @@
       <TextBlock Classes="pageTitle" Text="{Binding Title}" />
 
       <!-- Emergency stop first: it must be found in a hurry. -->
-      <Border Classes="panel" BorderBrush="{StaticResource BearishBrush}" BorderThickness="1" Padding="16,12">
+      <Border Classes="panel" BorderBrush="{DynamicResource BearishBrush}" BorderThickness="1" Padding="16,12">
         <StackPanel Spacing="6">
           <ToggleSwitch IsChecked="{Binding EmergencyStop}" AutomationProperties.Name="Emergency stop"
                         OnContent="Emergency stop is ON" OffContent="Emergency stop" />
@@ -37,26 +37,26 @@
         <TextBlock Classes="title" Text="Model" />
         <Grid ColumnDefinitions="160,260" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8">
           <TextBlock Grid.Row="0" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="Provider" />
-          <ComboBox Grid.Row="0" Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding Providers}"
+          <ComboBox Classes="small" Grid.Row="0" Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding Providers}"
                     SelectedItem="{Binding Provider}" AutomationProperties.Name="Provider" />
 
           <TextBlock Grid.Row="1" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="Sign-in"
                      IsVisible="{Binding IsAnthropic}" />
-          <ComboBox Grid.Row="1" Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding AuthModes}"
+          <ComboBox Classes="small" Grid.Row="1" Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding AuthModes}"
                     SelectedItem="{Binding AuthMode}" IsVisible="{Binding IsAnthropic}" AutomationProperties.Name="Sign-in" />
 
           <TextBlock Grid.Row="2" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="Model" />
-          <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Model}" AutomationProperties.Name="Model" />
+          <TextBox Classes="small" Grid.Row="2" Grid.Column="1" Text="{Binding Model}" AutomationProperties.Name="Model" />
 
           <TextBlock Grid.Row="3" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="Effort" />
-          <ComboBox Grid.Row="3" Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding Efforts}"
+          <ComboBox Classes="small" Grid.Row="3" Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding Efforts}"
                     SelectedItem="{Binding Effort}" AutomationProperties.Name="Effort" />
         </Grid>
         <TextBlock Classes="secondary" FontSize="12" Text="{Binding ModelHint}" />
 
         <StackPanel Spacing="8" IsVisible="{Binding UsesSubscription}">
           <TextBlock Classes="secondary" TextWrapping="Wrap" Text="{Binding SubscriptionNotice}" />
-          <Button Content="I have read this. It is my own subscription." Command="{Binding ConfirmSubscriptionCommand}"
+          <Button Classes="outlined" Content="I have read this. It is my own subscription." Command="{Binding ConfirmSubscriptionCommand}"
                   IsVisible="{Binding NeedsSubscriptionConfirmation}" />
           <TextBlock Classes="secondary" Text="Confirmed." IsVisible="{Binding SubscriptionConfirmed}" />
         </StackPanel>
@@ -68,19 +68,19 @@
         <TextBlock Classes="title" Text="OKX" />
         <TextBlock TextWrapping="Wrap" Text="{Binding TradingMode}" />
         <StackPanel Orientation="Horizontal" Spacing="8">
-          <Button Content="Switch to live trading…" Command="{Binding AskForLiveCommand}"
+          <Button Classes="outlined" Content="Switch to live trading…" Command="{Binding AskForLiveCommand}"
                   IsVisible="{Binding !IsLive}" />
-          <Button Content="Switch to demo trading" Command="{Binding SwitchToDemoCommand}"
+          <Button Classes="outlined" Content="Switch to demo trading" Command="{Binding SwitchToDemoCommand}"
                   IsVisible="{Binding IsLive}" />
         </StackPanel>
-        <Border Classes="panel" BorderBrush="{StaticResource BearishBrush}" BorderThickness="1" Padding="16,12"
+        <Border Classes="panel" BorderBrush="{DynamicResource BearishBrush}" BorderThickness="1" Padding="16,12"
                 IsVisible="{Binding ConfirmingLive}">
           <StackPanel Spacing="8">
             <TextBlock TextWrapping="Wrap"
                        Text="In live trading the agent's orders, transfers and leverage changes move real money on your OKX account. The saved key must be a key for live trading. The risk limits below and the emergency stop still apply." />
             <StackPanel Orientation="Horizontal" Spacing="8">
-              <Button Content="Yes, switch to live trading" Command="{Binding SwitchToLiveCommand}" />
-              <Button Content="Stay in demo" Command="{Binding CancelLiveCommand}" />
+              <Button Classes="outlined" Content="Yes, switch to live trading" Command="{Binding SwitchToLiveCommand}" />
+              <Button Classes="outlined" Content="Stay in demo" Command="{Binding CancelLiveCommand}" />
             </StackPanel>
           </StackPanel>
         </Border>
@@ -95,15 +95,15 @@
         <TextBlock Classes="title" Text="Risk limits" />
         <Grid ColumnDefinitions="260,160" RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
           <TextBlock Grid.Row="0" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="Largest position, % of the account" />
-          <NumericUpDown Grid.Row="0" Grid.Column="1" Minimum="0.1" Maximum="100" Increment="0.5" FormatString="0.##"
+          <NumericUpDown Classes="small" Grid.Row="0" Grid.Column="1" Minimum="0.1" Maximum="100" Increment="0.5" FormatString="0.##"
                          Value="{Binding MaxPositionPercent}" AutomationProperties.Name="Largest position" />
 
           <TextBlock Grid.Row="1" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="Default stop-loss, % from entry" />
-          <NumericUpDown Grid.Row="1" Grid.Column="1" Minimum="0.1" Maximum="100" Increment="0.5" FormatString="0.##"
+          <NumericUpDown Classes="small" Grid.Row="1" Grid.Column="1" Minimum="0.1" Maximum="100" Increment="0.5" FormatString="0.##"
                          Value="{Binding StopLossPercent}" AutomationProperties.Name="Default stop-loss" />
 
           <TextBlock Grid.Row="2" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="Default take-profit, % from entry" />
-          <NumericUpDown Grid.Row="2" Grid.Column="1" Minimum="0.1" Maximum="100" Increment="0.5" FormatString="0.##"
+          <NumericUpDown Classes="small" Grid.Row="2" Grid.Column="1" Minimum="0.1" Maximum="100" Increment="0.5" FormatString="0.##"
                          Value="{Binding TakeProfitPercent}" AutomationProperties.Name="Default take-profit" />
         </Grid>
         <TextBlock Classes="secondary" TextWrapping="Wrap"
@@ -119,7 +119,7 @@
                       OnContent="The agent looks for strategies on a schedule" OffContent="The agent looks for strategies on a schedule" />
         <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding AutoDiscover}">
           <TextBlock Classes="secondary" VerticalAlignment="Center" Text="Hours between two searches" />
-          <NumericUpDown Width="140" Minimum="1" Maximum="720" Increment="1" FormatString="0" Value="{Binding AutoDiscoverHours}"
+          <NumericUpDown Classes="small" Width="140" Minimum="1" Maximum="720" Increment="1" FormatString="0" Value="{Binding AutoDiscoverHours}"
                          AutomationProperties.Name="Hours between two searches" />
         </StackPanel>
         <TextBlock Classes="secondary" TextWrapping="Wrap"
@@ -130,7 +130,7 @@
         <TextBlock Classes="title" Text="Past price signals" />
         <ToggleSwitch IsChecked="{Binding PatternMining}" AutomationProperties.Name="Measure past signals on a schedule"
                       OnContent="The app measures past signals on a schedule" OffContent="The app measures past signals on a schedule" />
-        <TextBox Text="{Binding PatternSymbols}" PlaceholderText="BTC-USDT, ETH-USDT" IsVisible="{Binding PatternMining}"
+        <TextBox Classes="small" Text="{Binding PatternSymbols}" PlaceholderText="BTC-USDT, ETH-USDT" IsVisible="{Binding PatternMining}"
                  AutomationProperties.Name="Instruments to measure" />
         <TextBlock Classes="secondary" TextWrapping="Wrap"
                    Text="Counts on past prices what followed an oversold or overbought RSI, a break of the 20-bar high and a cross above the 50-bar average. No model is used. The results are on the Trades page and the agent reads them." />
@@ -142,23 +142,23 @@
                       OnContent="Notifications are also sent by email" OffContent="Notifications are also sent by email" />
         <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="8" IsVisible="{Binding EmailEnabled}">
           <TextBlock Grid.Row="0" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="SMTP server" />
-          <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding EmailHost}" PlaceholderText="smtp.example.com" AutomationProperties.Name="SMTP server" />
+          <TextBox Classes="small" Grid.Row="0" Grid.Column="1" Text="{Binding EmailHost}" PlaceholderText="smtp.example.com" AutomationProperties.Name="SMTP server" />
           <TextBlock Grid.Row="1" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="Port" />
-          <NumericUpDown Grid.Row="1" Grid.Column="1" Width="160" HorizontalAlignment="Left" Minimum="1" Maximum="65535" Increment="1"
+          <NumericUpDown Classes="small" Grid.Row="1" Grid.Column="1" Width="160" HorizontalAlignment="Left" Minimum="1" Maximum="65535" Increment="1"
                          FormatString="0" Value="{Binding EmailPort}" AutomationProperties.Name="SMTP port" />
           <TextBlock Grid.Row="2" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="User name" />
-          <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding EmailUser}" AutomationProperties.Name="SMTP user name" />
+          <TextBox Classes="small" Grid.Row="2" Grid.Column="1" Text="{Binding EmailUser}" AutomationProperties.Name="SMTP user name" />
           <TextBlock Grid.Row="3" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="From" />
-          <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding EmailFrom}" PlaceholderText="you@example.com" AutomationProperties.Name="Sender address" />
+          <TextBox Classes="small" Grid.Row="3" Grid.Column="1" Text="{Binding EmailFrom}" PlaceholderText="you@example.com" AutomationProperties.Name="Sender address" />
           <TextBlock Grid.Row="4" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="To" />
-          <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding EmailTo}" PlaceholderText="you@example.com" AutomationProperties.Name="Receiver address" />
+          <TextBox Classes="small" Grid.Row="4" Grid.Column="1" Text="{Binding EmailTo}" PlaceholderText="you@example.com" AutomationProperties.Name="Receiver address" />
         </Grid>
         <StackPanel Spacing="8" IsVisible="{Binding EmailEnabled}">
           <ContentControl Content="{Binding EmailPassword}" />
           <ToggleSwitch IsChecked="{Binding EmailTls}" AutomationProperties.Name="Encrypt the connection"
                         OnContent="The connection is encrypted (STARTTLS)" OffContent="The connection is NOT encrypted" />
           <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Content="Send a test email" Command="{Binding SendTestEmailCommand}" />
+            <Button Classes="outlined" Content="Send a test email" Command="{Binding SendTestEmailCommand}" />
             <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding EmailStatus}" />
           </StackPanel>
           <TextBlock Classes="secondary" TextWrapping="Wrap"
