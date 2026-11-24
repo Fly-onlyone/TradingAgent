@@ -1,0 +1,127 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TradingAgent.App.ViewModels"
+             x:Class="TradingAgent.App.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+
+  <UserControl.DataTemplates>
+    <!-- One key or password. The saved value is never shown. -->
+    <DataTemplate x:DataType="vm:SecretFieldViewModel">
+      <Grid ColumnDefinitions="160,*,Auto,Auto" RowDefinitions="Auto,Auto" Margin="0,0,0,8">
+        <TextBlock Grid.Row="0" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="{Binding Label}" />
+        <TextBox Grid.Row="0" Grid.Column="1" PasswordChar="●" PlaceholderText="Type or paste a new value" Text="{Binding Entry}"
+                 AutomationProperties.Name="{Binding Label}" />
+        <Button Grid.Row="0" Grid.Column="2" Content="Save" Margin="8,0,0,0" Command="{Binding SaveCommand}" />
+        <Button Grid.Row="0" Grid.Column="3" Content="Remove" Margin="8,0,0,0" Command="{Binding RemoveCommand}" />
+        <TextBlock Grid.Row="1" Grid.Column="1" Classes="secondary" FontSize="12" Margin="0,3,0,0" Text="{Binding State}" />
+      </Grid>
+    </DataTemplate>
+  </UserControl.DataTemplates>
+
+  <ScrollViewer>
+    <StackPanel Margin="24" Spacing="24" MaxWidth="900" HorizontalAlignment="Left">
+
+      <TextBlock Classes="pageTitle" Text="{Binding Title}" />
+
+      <!-- Emergency stop first: it must be found in a hurry. -->
+      <Border Classes="panel" BorderBrush="{StaticResource BearishBrush}" BorderThickness="1" Padding="16,12">
+        <StackPanel Spacing="6">
+          <ToggleSwitch IsChecked="{Binding EmergencyStop}" AutomationProperties.Name="Emergency stop"
+                        OnContent="Emergency stop is ON" OffContent="Emergency stop" />
+          <TextBlock Classes="secondary" TextWrapping="Wrap"
+                     Text="While this is on, the agent can cancel orders and nothing else: no new orders, no transfers, no leverage changes. It takes effect at once." />
+        </StackPanel>
+      </Border>
+
+      <StackPanel Spacing="10">
+        <TextBlock Classes="title" Text="Model" />
+        <Grid ColumnDefinitions="160,260" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8">
+          <TextBlock Grid.Row="0" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="Provider" />
+          <ComboBox Grid.Row="0" Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding Providers}"
+                    SelectedItem="{Binding Provider}" AutomationProperties.Name="Provider" />
+
+          <TextBlock Grid.Row="1" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="Sign-in"
+                     IsVisible="{Binding IsAnthropic}" />
+          <ComboBox Grid.Row="1" Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding AuthModes}"
+                    SelectedItem="{Binding AuthMode}" IsVisible="{Binding IsAnthropic}" AutomationProperties.Name="Sign-in" />
+
+          <TextBlock Grid.Row="2" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="Model" />
+          <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Model}" AutomationProperties.Name="Model" />
+
+          <TextBlock Grid.Row="3" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="Effort" />
+          <ComboBox Grid.Row="3" Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding Efforts}"
+                    SelectedItem="{Binding Effort}" AutomationProperties.Name="Effort" />
+        </Grid>
+        <TextBlock Classes="secondary" FontSize="12" Text="{Binding ModelHint}" />
+
+        <StackPanel Spacing="8" IsVisible="{Binding UsesSubscription}">
+          <TextBlock Classes="secondary" TextWrapping="Wrap" Text="{Binding SubscriptionNotice}" />
+          <Button Content="I have read this. It is my own subscription." Command="{Binding ConfirmSubscriptionCommand}"
+                  IsVisible="{Binding NeedsSubscriptionConfirmation}" />
+          <TextBlock Classes="secondary" Text="Confirmed." IsVisible="{Binding SubscriptionConfirmed}" />
+        </StackPanel>
+        <ContentControl Content="{Binding AnthropicKey}" IsVisible="{Binding UsesAnthropicKey}" />
+        <ContentControl Content="{Binding OpenAiKey}" IsVisible="{Binding IsOpenAi}" />
+      </StackPanel>
+
+      <StackPanel Spacing="10">
+        <TextBlock Classes="title" Text="OKX" />
+        <TextBlock TextWrapping="Wrap" Text="{Binding TradingMode}" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Content="Switch to live trading…" Command="{Binding AskForLiveCommand}"
+                  IsVisible="{Binding !IsLive}" />
+          <Button Content="Switch to demo trading" Command="{Binding SwitchToDemoCommand}"
+                  IsVisible="{Binding IsLive}" />
+        </StackPanel>
+        <Border Classes="panel" BorderBrush="{StaticResource BearishBrush}" BorderThickness="1" Padding="16,12"
+                IsVisible="{Binding ConfirmingLive}">
+          <StackPanel Spacing="8">
+            <TextBlock TextWrapping="Wrap"
+                       Text="In live trading the agent's orders, transfers and leverage changes move real money on your OKX account. The saved key must be a key for live trading. The risk limits below and the emergency stop still apply." />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Content="Yes, switch to live trading" Command="{Binding SwitchToLiveCommand}" />
+              <Button Content="Stay in demo" Command="{Binding CancelLiveCommand}" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+        <TextBlock Classes="secondary" TextWrapping="Wrap"
+                   Text="The key of the mode above. It is kept encrypted for your Windows account and handed to the OKX trade kit when it starts; it is not written to a file." />
+        <ContentControl Content="{Binding OkxApiKey}" />
+        <ContentControl Content="{Binding OkxSecretKey}" />
+        <ContentControl Content="{Binding OkxPassphrase}" />
+      </StackPanel>
+
+      <StackPanel Spacing="10">
+        <TextBlock Classes="title" Text="Risk limits" />
+        <Grid ColumnDefinitions="260,160" RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
+          <TextBlock Grid.Row="0" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="Largest position, % of the account" />
+          <NumericUpDown Grid.Row="0" Grid.Column="1" Minimum="0.1" Maximum="100" Increment="0.5" FormatString="0.##"
+                         Value="{Binding MaxPositionPercent}" AutomationProperties.Name="Largest position" />
+
+          <TextBlock Grid.Row="1" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="Default stop-loss, % from entry" />
+          <NumericUpDown Grid.Row="1" Grid.Column="1" Minimum="0.1" Maximum="100" Increment="0.5" FormatString="0.##"
+                         Value="{Binding StopLossPercent}" AutomationProperties.Name="Default stop-loss" />
+
+          <TextBlock Grid.Row="2" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="Default take-profit, % from entry" />
+          <NumericUpDown Grid.Row="2" Grid.Column="1" Minimum="0.1" Maximum="100" Increment="0.5" FormatString="0.##"
+                         Value="{Binding TakeProfitPercent}" AutomationProperties.Name="Default take-profit" />
+        </Grid>
+        <TextBlock Classes="secondary" TextWrapping="Wrap"
+                   Text="The largest position is a hard limit: an order that would take one position above it, counting what is already held, is refused. An order that only reduces a position is always let out." />
+      </StackPanel>
+
+      <StackPanel Spacing="6">
+        <TextBlock Classes="title" Text="Notifications" />
+        <ToggleSwitch IsChecked="{Binding DesktopNotifications}" AutomationProperties.Name="Show desktop notifications"
+                      OnContent="Show desktop notifications" OffContent="Show desktop notifications" />
+        <ToggleSwitch IsChecked="{Binding TradeNotifications}" AutomationProperties.Name="Orders filled, cancelled or not placed"
+                      OnContent="Orders filled, cancelled or not placed" OffContent="Orders filled, cancelled or not placed" />
+        <ToggleSwitch IsChecked="{Binding RiskNotifications}" AutomationProperties.Name="Risk alerts"
+                      OnContent="Risk alerts" OffContent="Risk alerts" />
+        <ToggleSwitch IsChecked="{Binding TaskNotifications}" AutomationProperties.Name="Scheduled tasks finished or failed"
+                      OnContent="Scheduled tasks finished or failed" OffContent="Scheduled tasks finished or failed" />
+      </StackPanel>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

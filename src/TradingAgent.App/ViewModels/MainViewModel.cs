@@ -10,7 +10,13 @@ internal sealed partial class MainViewModel : ObservableObject
 {
     private readonly ISettingsStore _settings;
 
-    public MainViewModel(AppInfo info, DiagnosticsViewModel diagnostics, ISettingsStore settings, TelemetryService telemetry)
+    public MainViewModel(
+        AppInfo info,
+        DiagnosticsViewModel diagnostics,
+        ISettingsStore settings,
+        TelemetryService telemetry,
+        ChatViewModel? chat = null,
+        SettingsViewModel? settingsPage = null)
     {
         ArgumentNullException.ThrowIfNull(info);
         ArgumentNullException.ThrowIfNull(settings);
@@ -19,8 +25,9 @@ internal sealed partial class MainViewModel : ObservableObject
         // Told once, and only when this build can report at all.
         ShowTelemetryNotice = telemetry.State != TelemetryState.NotConfigured
             && !settings.GetValue(SettingKeys.TelemetryNoticeDismissed);
-        Pages = [diagnostics];
-        SelectedPage = diagnostics;
+        // The pages in the order of the rail. Chat first: it is what the app is opened for.
+        Pages = [.. new PageViewModel?[] { chat, settingsPage, diagnostics }.OfType<PageViewModel>()];
+        SelectedPage = Pages[0];
         WindowTitle = info.IsDevelopmentBuild ? $"{AppInfo.ProductName} (dev)" : AppInfo.ProductName;
         VersionLabel = $"v{info.Version}";
     }
