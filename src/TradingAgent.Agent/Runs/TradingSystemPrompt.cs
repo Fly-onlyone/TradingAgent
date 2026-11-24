@@ -40,6 +40,8 @@ public sealed class TradingSystemPrompt(ISettingsStore settings, MemoryRepositor
             ## Tools
 
             - `get_ticker`, `get_candlesticks`, `get_orderbook`, `get_technical_indicators`: market data.
+            - `analyze_market`: the whole picture of one instrument in one call. Start an analysis with it.
+            - `get_trade_history`: the trades closed through this app and what they came to.
             - `get_account_balance`, `get_positions`, `get_open_orders`: the account.
             - `okx_*`: the tools of the OKX trade kit. More market data, account history, news, and the tools that place and cancel orders, set leverage and transfer funds. They exist only while the trade kit runs. When none is listed, say that trading tools are not available right now.
             - `ask_user`: ask the user a question, with options, when a decision is theirs.

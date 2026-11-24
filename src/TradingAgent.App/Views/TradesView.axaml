@@ -1,0 +1,64 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TradingAgent.App.ViewModels"
+             x:Class="TradingAgent.App.Views.TradesView"
+             x:DataType="vm:TradesViewModel">
+
+  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto,Auto" Margin="24,16">
+    <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto,Auto,*">
+      <TextBlock Grid.Column="0" Classes="pageTitle" Text="{Binding Title}" VerticalAlignment="Center" Margin="0,0,16,0" />
+      <Button Grid.Column="1" Content="Work out now" Command="{Binding RefreshCommand}" />
+      <Button Grid.Column="2" Content="Measure past signals" Margin="8,0,0,0" Command="{Binding MineCommand}" />
+      <TextBlock Grid.Column="3" Classes="secondary" VerticalAlignment="Center" Margin="12,0,0,0" TextWrapping="Wrap"
+                 Text="{Binding Status}" />
+    </Grid>
+
+    <StackPanel Grid.Row="1" Spacing="4" Margin="0,12,0,0">
+      <SelectableTextBlock Text="{Binding Summary}" />
+      <TextBlock Classes="secondary" FontSize="12" TextWrapping="Wrap"
+                 Text="Profit and loss is worked out by the app from the fills, first in first out, without fees and funding. It is close to, not equal to, what OKX shows." />
+    </StackPanel>
+
+    <Grid Grid.Row="2" ColumnDefinitions="150,210,90,150,150,150,*" Margin="12,14,12,4">
+      <TextBlock Grid.Column="0" Classes="secondary" FontSize="12" Text="Closed" />
+      <TextBlock Grid.Column="1" Classes="secondary" FontSize="12" Text="Instrument" />
+      <TextBlock Grid.Column="2" Classes="secondary" FontSize="12" Text="Position" />
+      <TextBlock Grid.Column="3" Classes="secondary" FontSize="12" Text="Size" />
+      <TextBlock Grid.Column="4" Classes="secondary" FontSize="12" Text="Entry" />
+      <TextBlock Grid.Column="5" Classes="secondary" FontSize="12" Text="Exit" />
+      <TextBlock Grid.Column="6" Classes="secondary" FontSize="12" Text="Result" />
+    </Grid>
+
+    <ListBox Grid.Row="3" Background="Transparent" ItemsSource="{Binding Trades}">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="vm:RowViewModel">
+          <Grid ColumnDefinitions="150,210,90,150,150,150,*">
+            <TextBlock Grid.Column="0" Classes="secondary" Text="{Binding A}" />
+            <TextBlock Grid.Column="1" Text="{Binding B}" />
+            <TextBlock Grid.Column="2" Text="{Binding C}" />
+            <TextBlock Grid.Column="3" Text="{Binding D}" />
+            <TextBlock Grid.Column="4" Text="{Binding E}" />
+            <TextBlock Grid.Column="5" Text="{Binding F}" />
+            <TextBlock Grid.Column="6" Text="{Binding G}" Classes.good="{Binding IsGood}" Classes.bad="{Binding IsBad}" />
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+
+    <TextBlock Grid.Row="4" Classes="title" Text="What past signals were worth" Margin="0,12,0,6" />
+    <ScrollViewer Grid.Row="5" MaxHeight="220">
+      <ItemsControl ItemsSource="{Binding Patterns}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:RowViewModel">
+            <Grid ColumnDefinitions="360,240,200,*" Margin="12,3">
+              <TextBlock Grid.Column="0" Text="{Binding A}" />
+              <TextBlock Grid.Column="1" Text="{Binding B}" />
+              <TextBlock Grid.Column="2" Text="{Binding C}" Classes.good="{Binding IsGood}" Classes.bad="{Binding IsBad}" />
+              <TextBlock Grid.Column="3" Classes="secondary" Text="{Binding D}" />
+            </Grid>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

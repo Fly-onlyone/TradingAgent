@@ -11,4 +11,9 @@ public abstract class PageViewModel : ObservableObject
     public virtual void Activate()
     {
     }
+
+    /// <summary>Called when another page is shown instead, so that the page can stop what only matters while it is seen.</summary>
+    public virtual void Deactivate()
+    {
+    }
 }

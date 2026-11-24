@@ -1,4 +1,5 @@
 using System.Globalization;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TradingAgent.Agent.Atk;
@@ -6,6 +7,7 @@ using TradingAgent.Agent.Cli;
 using TradingAgent.Core.Agent;
 using TradingAgent.Core.Secrets;
 using TradingAgent.Core.Settings;
+using TradingAgent.Data.Notifications;
 
 namespace TradingAgent.App.ViewModels;
 
@@ -89,11 +91,16 @@ internal sealed partial class SettingsViewModel : PageViewModel
     private readonly ISettingsStore _settings;
     private readonly AtkService _kit;
     private readonly bool _loading;
+    private readonly IEmailSender? _email;
+    private readonly Action<Action> _post;
 
-    public SettingsViewModel(ISettingsStore settings, ISecretStore secrets, AtkService kit)
+    public SettingsViewModel(ISettingsStore settings, ISecretStore secrets, AtkService kit, IEmailSender? email = null, Action<Action>? post = null)
     {
         _settings = settings;
         _kit = kit;
+        _email = email;
+        _post = post ?? (action => Dispatcher.UIThread.Post(action));
+        EmailPassword = new SecretFieldViewModel(secrets, SecretNames.SmtpPassword, "Password");
 
         AnthropicKey = new SecretFieldViewModel(secrets, SecretNames.AnthropicApiKey, "Anthropic API key");
         OpenAiKey = new SecretFieldViewModel(secrets, SecretNames.OpenAiApiKey, "OpenAI API key");
@@ -118,6 +125,15 @@ internal sealed partial class SettingsViewModel : PageViewModel
         TradeNotifications = settings.GetValue(SettingKeys.NotifyTradeExecutions);
         RiskNotifications = settings.GetValue(SettingKeys.NotifyRiskAlerts);
         TaskNotifications = settings.GetValue(SettingKeys.NotifyTaskCompletions);
+        EmailEnabled = settings.GetValue(SettingKeys.EmailEnabled);
+        EmailHost = settings.GetValue(SettingKeys.EmailSmtpHost);
+        EmailPort = settings.GetValue(SettingKeys.EmailSmtpPort);
+        EmailUser = settings.GetValue(SettingKeys.EmailUsername);
+        EmailFrom = settings.GetValue(SettingKeys.EmailFrom);
+        EmailTo = settings.GetValue(SettingKeys.EmailTo);
+        EmailTls = settings.GetValue(SettingKeys.EmailUseTls);
+        PatternMining = settings.GetValue(SettingKeys.PatternMiningEnabled);
+        PatternSymbols = string.Join(", ", settings.GetValue(SettingKeys.PatternMiningSymbols));
         AutoDiscover = settings.GetValue(SettingKeys.AutoDiscoverEnabled);
         AutoDiscoverHours = settings.GetValue(SettingKeys.AutoDiscoverIntervalHours);
         _loading = false;
@@ -145,6 +161,8 @@ internal sealed partial class SettingsViewModel : PageViewModel
     public SecretFieldViewModel OkxPassphrase { get; }
 
     public SecretFieldViewModel BraveKey { get; }
+
+    public SecretFieldViewModel EmailPassword { get; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsAnthropic), nameof(IsOpenAi), nameof(UsesSubscription), nameof(UsesAnthropicKey), nameof(ModelHint))]
@@ -207,6 +225,40 @@ internal sealed partial class SettingsViewModel : PageViewModel
     [ObservableProperty]
     public partial decimal? AutoDiscoverHours { get; set; }
 
+    /// <summary>True while notifications are also sent by email.</summary>
+    [ObservableProperty]
+    public partial bool EmailEnabled { get; set; }
+
+    [ObservableProperty]
+    public partial string EmailHost { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial decimal? EmailPort { get; set; }
+
+    [ObservableProperty]
+    public partial string EmailUser { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string EmailFrom { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string EmailTo { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial bool EmailTls { get; set; }
+
+    /// <summary>What became of the test email.</summary>
+    [ObservableProperty]
+    public partial string EmailStatus { get; set; } = string.Empty;
+
+    /// <summary>True while the app measures on a schedule what past price signals were worth.</summary>
+    [ObservableProperty]
+    public partial bool PatternMining { get; set; }
+
+    /// <summary>The instruments measured, separated by commas. Empty means BTC-USDT and ETH-USDT.</summary>
+    [ObservableProperty]
+    public partial string PatternSymbols { get; set; } = string.Empty;
+
     public bool IsAnthropic => Provider == AgentWire.Anthropic;
 
     public bool IsOpenAi => Provider == AgentWire.OpenAi;
@@ -227,6 +279,30 @@ internal sealed partial class SettingsViewModel : PageViewModel
     {
         _settings.SetValue(SettingKeys.AgentSubscriptionNoticeConfirmed, true);
         SubscriptionConfirmed = true;
+    }
+
+    /// <summary>Sends one email with the settings as they are, to prove they work.</summary>
+    [RelayCommand]
+    public async Task SendTestEmailAsync()
+    {
+        if (_email is null)
+        {
+            return;
+        }
+
+        EmailStatus = "Sending…";
+        string result;
+        try
+        {
+            await Task.Run(() => _email.SendAsync("Trading agent: test email", "This is the test email you asked for in Settings.", CancellationToken.None)).ConfigureAwait(false);
+            result = "Sent. Look in the receiver's inbox.";
+        }
+        catch (EmailException ex)
+        {
+            result = ex.Message;
+        }
+
+        _post(() => EmailStatus = result);
     }
 
     /// <summary>First step toward live trading: shows what it means and changes nothing.</summary>
@@ -275,6 +351,31 @@ internal sealed partial class SettingsViewModel : PageViewModel
     partial void OnRiskNotificationsChanged(bool value) => Store(SettingKeys.NotifyRiskAlerts, value);
 
     partial void OnTaskNotificationsChanged(bool value) => Store(SettingKeys.NotifyTaskCompletions, value);
+
+    partial void OnEmailEnabledChanged(bool value) => Store(SettingKeys.EmailEnabled, value);
+
+    partial void OnEmailHostChanged(string value) => Store(SettingKeys.EmailSmtpHost, value.Trim());
+
+    partial void OnEmailPortChanged(decimal? value)
+    {
+        if (value is >= 1 and <= 65535)
+        {
+            Store(SettingKeys.EmailSmtpPort, (int)value.Value);
+        }
+    }
+
+    partial void OnEmailUserChanged(string value) => Store(SettingKeys.EmailUsername, value.Trim());
+
+    partial void OnEmailFromChanged(string value) => Store(SettingKeys.EmailFrom, value.Trim());
+
+    partial void OnEmailToChanged(string value) => Store(SettingKeys.EmailTo, value.Trim());
+
+    partial void OnEmailTlsChanged(bool value) => Store(SettingKeys.EmailUseTls, value);
+
+    partial void OnPatternMiningChanged(bool value) => Store(SettingKeys.PatternMiningEnabled, value);
+
+    partial void OnPatternSymbolsChanged(string value) =>
+        Store(SettingKeys.PatternMiningSymbols, value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
 
     partial void OnAutoDiscoverChanged(bool value) => Store(SettingKeys.AutoDiscoverEnabled, value);
 

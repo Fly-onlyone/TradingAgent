@@ -1,0 +1,134 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TradingAgent.App.ViewModels"
+             xmlns:admin="using:TradingAgent.Data.Admin"
+             x:Class="TradingAgent.App.Views.AdminView"
+             x:DataType="vm:AdminViewModel">
+
+  <Grid RowDefinitions="Auto,*" Margin="24,16">
+    <TextBlock Grid.Row="0" Classes="pageTitle" Text="{Binding Title}" />
+
+    <TabControl Grid.Row="1" Margin="0,8,0,0">
+
+      <TabItem Header="Log">
+        <Grid RowDefinitions="Auto,*,Auto" Margin="0,8,0,0">
+          <Grid Grid.Row="0" ColumnDefinitions="160,*,Auto">
+            <ComboBox Grid.Column="0" HorizontalAlignment="Stretch" ItemsSource="{Binding LogLevels}" SelectedItem="{Binding LogLevel}"
+                      AutomationProperties.Name="Log level" />
+            <TextBox Grid.Column="1" Margin="8,0,0,0" Text="{Binding LogQuery}" PlaceholderText="Text in the entry"
+                     AutomationProperties.Name="Search the log" />
+            <Button Grid.Column="2" Margin="8,0,0,0" Content="Refresh" Command="{Binding RefreshLogsCommand}" />
+          </Grid>
+          <ListBox Grid.Row="1" Margin="0,8,0,0" Background="Transparent" ItemsSource="{Binding Logs}" SelectedItem="{Binding SelectedLog}">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:LogItemViewModel">
+                <Grid ColumnDefinitions="150,90,200,*">
+                  <TextBlock Grid.Column="0" Classes="secondary" Text="{Binding When}" />
+                  <TextBlock Grid.Column="1" Text="{Binding Level}" Classes.bad="{Binding IsError}" />
+                  <TextBlock Grid.Column="2" Classes="secondary" Text="{Binding Logger}" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Grid.Column="3" Text="{Binding Message}" TextTrimming="CharacterEllipsis" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+          <ScrollViewer Grid.Row="2" MaxHeight="200" Margin="0,8,0,0">
+            <SelectableTextBlock Classes="value" FontSize="12" TextWrapping="Wrap" Text="{Binding LogDetail}" />
+          </ScrollViewer>
+        </Grid>
+      </TabItem>
+
+      <TabItem Header="Database">
+        <Grid RowDefinitions="Auto,Auto,*" Margin="0,8,0,0">
+          <SelectableTextBlock Grid.Row="0" Classes="value" TextWrapping="Wrap" Text="{Binding DatabaseInfo}" />
+          <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="0,10">
+            <Button Content="Check the file" Command="{Binding CheckIntegrityCommand}" />
+            <Button Content="Compact" Command="{Binding CompactCommand}" />
+            <TextBlock VerticalAlignment="Center" Text="{Binding DatabaseStatus}" />
+          </StackPanel>
+          <ScrollViewer Grid.Row="2">
+            <ItemsControl ItemsSource="{Binding Tables}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="admin:TableInfo">
+                  <Grid ColumnDefinitions="320,*" Margin="0,2">
+                    <TextBlock Grid.Column="0" Classes="value" Text="{Binding Name}" />
+                    <TextBlock Grid.Column="1" Text="{Binding Rows}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </Grid>
+      </TabItem>
+
+      <TabItem Header="Backup">
+        <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="0,8,0,0">
+          <TextBlock Grid.Row="0" Classes="secondary" TextWrapping="Wrap"
+                     Text="A backup is a copy of the whole database: chats, tasks, strategies, settings, and your keys, which stay encrypted for your Windows account. A backup can be restored on this Windows account only." />
+          <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="0,10">
+            <Button Content="Back up now" Command="{Binding BackUpCommand}" />
+            <Button Content="Restore the chosen backup…" Command="{Binding AskRestoreCommand}" />
+            <Button Content="Delete the chosen backup" Command="{Binding DeleteBackupCommand}" />
+            <Button Content="Call off the restore" Command="{Binding CancelRestoreCommand}" />
+          </StackPanel>
+          <ListBox Grid.Row="2" Background="Transparent" ItemsSource="{Binding Backups}" SelectedItem="{Binding SelectedBackup}">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:BackupItemViewModel">
+                <Grid ColumnDefinitions="360,*">
+                  <TextBlock Grid.Column="0" Classes="value" Text="{Binding Name}" />
+                  <TextBlock Grid.Column="1" Classes="secondary" Text="{Binding Line}" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+          <StackPanel Grid.Row="3" Spacing="8" Margin="0,8,0,0">
+            <Border Classes="panel" BorderBrush="{StaticResource BearishBrush}" BorderThickness="1" Padding="16,12"
+                    IsVisible="{Binding ConfirmingRestore}">
+              <StackPanel Spacing="8">
+                <TextBlock TextWrapping="Wrap"
+                           Text="When the app next starts, the chosen backup takes the place of the database. Everything newer than the backup is no longer shown. The replaced database is kept in the data folder as trading-agent.db.before-restore." />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button Content="Yes, restore at the next start" Command="{Binding ConfirmRestoreCommand}" />
+                  <Button Content="No" Command="{Binding CancelRestoreCommand}" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+            <TextBlock TextWrapping="Wrap" Text="{Binding BackupStatus}" />
+          </StackPanel>
+        </Grid>
+      </TabItem>
+
+      <TabItem Header="Data">
+        <Grid RowDefinitions="Auto,*,Auto" Margin="0,8,0,0">
+          <TextBlock Grid.Row="0" Classes="secondary" TextWrapping="Wrap"
+                     Text="Delete everything of one kind. This cannot be taken back; make a backup first. Orders are not listed: they are a mirror of what OKX holds." />
+          <ListBox Grid.Row="1" Margin="0,8,0,0" Background="Transparent" ItemsSource="{Binding Categories}"
+                   SelectedItem="{Binding SelectedCategory}">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="admin:DataCategory">
+                <Grid ColumnDefinitions="320,*">
+                  <TextBlock Grid.Column="0" Text="{Binding Label}" />
+                  <TextBlock Grid.Column="1" Classes="secondary" Text="{Binding Rows}" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+          <StackPanel Grid.Row="2" Spacing="8" Margin="0,8,0,0">
+            <Button Content="Delete everything of the chosen kind…" Command="{Binding AskDeleteCommand}" />
+            <Border Classes="panel" BorderBrush="{StaticResource BearishBrush}" BorderThickness="1" Padding="16,12"
+                    IsVisible="{Binding ConfirmingDelete}">
+              <StackPanel Spacing="8">
+                <TextBlock TextWrapping="Wrap" Text="Everything of the chosen kind is deleted now and cannot be brought back, except from a backup." />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button Content="Yes, delete it" Command="{Binding ConfirmDeleteCommand}" />
+                  <Button Content="No" Command="{Binding CancelDeleteCommand}" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+            <TextBlock TextWrapping="Wrap" Text="{Binding DataStatus}" />
+          </StackPanel>
+        </Grid>
+      </TabItem>
+
+    </TabControl>
+  </Grid>
+</UserControl>

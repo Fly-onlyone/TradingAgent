@@ -15,6 +15,11 @@ public sealed class ViewLocator : IDataTemplate
     public Control Build(object? param) => param switch
     {
         ChatViewModel => new ChatView(),
+        DashboardViewModel => new DashboardView(),
+        TradingViewModel => new TradingView(),
+        OrdersViewModel => new OrdersView(),
+        TradesViewModel => new TradesView(),
+        AdminViewModel => new AdminView(),
         TasksViewModel => new TasksView(),
         StrategiesViewModel => new StrategiesView(),
         KnowledgeViewModel => new KnowledgeView(),

@@ -56,7 +56,7 @@ public sealed class ShellTests : IDisposable
         var main = services.GetRequiredService<MainViewModel>();
 
         // Chat first: it is what the app is opened for.
-        Assert.Equal(["Chat", "Tasks", "Strategies", "Knowledge", "Memory", "News", "Settings", "Diagnostics"], main.Pages.Select(page => page.Title));
+        Assert.Equal(["Chat", "Dashboard", "Trading", "Orders", "Trades", "Tasks", "Strategies", "Knowledge", "Memory", "News", "Settings", "Admin", "Diagnostics"], main.Pages.Select(page => page.Title));
         Assert.Same(services.GetRequiredService<ChatViewModel>(), main.SelectedPage);
         Assert.True(File.Exists(_paths.DatabaseFile));
         Assert.True(services.GetRequiredService<ISettingsStore>().GetValue(SettingKeys.OkxSandbox));

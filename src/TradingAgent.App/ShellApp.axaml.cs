@@ -27,6 +27,7 @@ using TradingAgent.Core.Secrets;
 using TradingAgent.Core.Settings;
 using TradingAgent.Core.Shell;
 using TradingAgent.Data;
+using TradingAgent.Data.Admin;
 using TradingAgent.Data.Agent;
 using TradingAgent.Data.Knowledge;
 using TradingAgent.Data.Logging;
@@ -131,6 +132,9 @@ public sealed partial class ShellApp : Application
         ArgumentNullException.ThrowIfNull(info);
         ArgumentNullException.ThrowIfNull(paths);
 
+        // Before the database is opened: a restore the user asked for replaces the file.
+        AdminStore.ApplyPendingRestore(paths);
+
         // Before anything else: the settings store and the database log sink read tables at construction.
         var database = new Database(paths.DatabaseFile);
         database.Initialize();
@@ -233,6 +237,11 @@ public sealed partial class ShellApp : Application
             provider.GetRequiredService<ISettingsStore>(),
             provider.GetRequiredService<TimeProvider>(),
             provider.GetRequiredService<ILogger<NewsCrawler>>()));
+        services.AddSingleton<TradeRepository>();
+        services.AddSingleton<AdminStore>();
+        services.AddSingleton<IEmailSender, SmtpEmailSender>();
+        services.AddSingleton<ITool, AnalyzeMarketTool>();
+        services.AddSingleton<ITool, GetTradeHistoryTool>();
         services.AddSingleton<ITool, SaveMemoryTool>();
         services.AddSingleton<ITool, SearchMemoryTool>();
         services.AddSingleton<ITool, DeleteMemoryTool>();
@@ -281,6 +290,10 @@ public sealed partial class ShellApp : Application
         services.AddSingleton<IBackgroundService>(provider => provider.GetRequiredService<AgentTaskScheduler>());
         services.AddSingleton<StrategyDiscovery>();
         services.AddSingleton<IBackgroundService>(provider => provider.GetRequiredService<StrategyDiscovery>());
+        services.AddSingleton<TradeLearner>();
+        services.AddSingleton<IBackgroundService>(provider => provider.GetRequiredService<TradeLearner>());
+        services.AddSingleton<PatternMiner>();
+        services.AddSingleton<IBackgroundService>(provider => provider.GetRequiredService<PatternMiner>());
         services.AddSingleton<BackgroundServiceHost>();
 
         services.AddSingleton<ISecretProtector, DpapiSecretProtector>();
@@ -313,6 +326,11 @@ public sealed partial class ShellApp : Application
         // The pages, in the order of the navigation rail.
         services.AddSingleton<AppNavigator>();
         services.AddSingleton<ChatViewModel>();
+        services.AddSingleton<DashboardViewModel>();
+        services.AddSingleton<TradingViewModel>();
+        services.AddSingleton<OrdersViewModel>();
+        services.AddSingleton<TradesViewModel>();
+        services.AddSingleton<AdminViewModel>();
         services.AddSingleton<TasksViewModel>();
         services.AddSingleton<StrategiesViewModel>();
         services.AddSingleton<KnowledgeViewModel>();
@@ -321,12 +339,17 @@ public sealed partial class ShellApp : Application
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<DiagnosticsViewModel>();
         services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<ChatViewModel>());
+        services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<DashboardViewModel>());
+        services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<TradingViewModel>());
+        services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<OrdersViewModel>());
+        services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<TradesViewModel>());
         services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<TasksViewModel>());
         services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<StrategiesViewModel>());
         services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<KnowledgeViewModel>());
         services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<MemoryViewModel>());
         services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<NewsViewModel>());
         services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<SettingsViewModel>());
+        services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<AdminViewModel>());
         services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<DiagnosticsViewModel>());
         services.AddSingleton<MainViewModel>();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });

@@ -63,6 +63,15 @@ public static class SettingKeys
     public static readonly SettingKey<bool> NotifyPriceAlerts = new("notifications.price_alerts", true, Json.Boolean);
     public static readonly SettingKey<bool> NotifyAnalysisReady = new("notifications.analysis_ready", true, Json.Boolean);
 
+    // Email copies of notifications, through the user's own SMTP server. The password is a secret.
+    public static readonly SettingKey<bool> EmailEnabled = new("email.enabled", false, Json.Boolean);
+    public static readonly SettingKey<string> EmailSmtpHost = new("email.smtp_host", string.Empty, Json.String);
+    public static readonly SettingKey<int> EmailSmtpPort = new("email.smtp_port", 587, Json.Int32);
+    public static readonly SettingKey<string> EmailUsername = new("email.username", string.Empty, Json.String);
+    public static readonly SettingKey<string> EmailFrom = new("email.from", string.Empty, Json.String);
+    public static readonly SettingKey<string> EmailTo = new("email.to", string.Empty, Json.String);
+    public static readonly SettingKey<bool> EmailUseTls = new("email.use_tls", true, Json.Boolean);
+
     // Chat sessions. Zero keeps sessions forever.
     public static readonly SettingKey<int> SessionRetentionDays = new("sessions.retention_days", 0, Json.Int32);
     public static readonly SettingKey<long?> SessionCleanupLastRunAt = new("sessions.cleanup_last_run_at", null, Json.NullableInt64);

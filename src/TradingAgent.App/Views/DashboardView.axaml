@@ -1,0 +1,122 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TradingAgent.App.ViewModels"
+             x:Class="TradingAgent.App.Views.DashboardView"
+             x:DataType="vm:DashboardViewModel">
+
+  <ScrollViewer>
+    <StackPanel Margin="24" Spacing="18">
+
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Grid.Column="0" Classes="pageTitle" Text="{Binding Title}" />
+        <Button Grid.Column="1" Content="Refresh" Command="{Binding RefreshCommand}" />
+      </Grid>
+
+      <Border Classes="panel" BorderBrush="{StaticResource BearishBrush}" BorderThickness="1" Padding="16,10"
+              IsVisible="{Binding EmergencyStop}">
+        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource BearishBrush}"
+                   Text="Emergency stop is ON: the agent can cancel orders and nothing else. Switch it off in Settings." />
+      </Border>
+
+      <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="12">
+        <Border Grid.Column="0" Classes="panel" Padding="16,12">
+          <StackPanel Spacing="4">
+            <TextBlock Classes="secondary" Text="Account value" />
+            <SelectableTextBlock FontSize="24" FontWeight="SemiBold" Text="{Binding Equity}" />
+            <TextBlock Classes="secondary" FontSize="12" TextWrapping="Wrap" Text="{Binding Status}" />
+          </StackPanel>
+        </Border>
+        <Border Grid.Column="1" Classes="panel" Padding="16,12">
+          <StackPanel Spacing="4">
+            <TextBlock Classes="secondary" Text="Closed trades, 24 h" />
+            <TextBlock FontSize="16" TextWrapping="Wrap" Text="{Binding PnlDay}" />
+          </StackPanel>
+        </Border>
+        <Border Grid.Column="2" Classes="panel" Padding="16,12">
+          <StackPanel Spacing="4">
+            <TextBlock Classes="secondary" Text="Closed trades, 7 days" />
+            <TextBlock FontSize="16" TextWrapping="Wrap" Text="{Binding PnlWeek}" />
+          </StackPanel>
+        </Border>
+        <Border Grid.Column="3" Classes="panel" Padding="16,12">
+          <StackPanel Spacing="4">
+            <TextBlock Classes="secondary" Text="Closed trades, 30 days" />
+            <TextBlock FontSize="16" TextWrapping="Wrap" Text="{Binding PnlMonth}" />
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <TextBlock Classes="secondary" Text="{Binding TaskLine}" />
+
+      <StackPanel Spacing="6" IsVisible="{Binding HasPositions}">
+        <TextBlock Classes="title" Text="Open positions" />
+        <Grid ColumnDefinitions="220,90,130,130,130,130,*">
+          <TextBlock Grid.Column="0" Classes="secondary" FontSize="12" Text="Instrument" />
+          <TextBlock Grid.Column="1" Classes="secondary" FontSize="12" Text="Side" />
+          <TextBlock Grid.Column="2" Classes="secondary" FontSize="12" Text="Size" />
+          <TextBlock Grid.Column="3" Classes="secondary" FontSize="12" Text="Entry" />
+          <TextBlock Grid.Column="4" Classes="secondary" FontSize="12" Text="Mark" />
+          <TextBlock Grid.Column="5" Classes="secondary" FontSize="12" Text="Unrealized" />
+          <TextBlock Grid.Column="6" Classes="secondary" FontSize="12" Text="Leverage" />
+        </Grid>
+        <ItemsControl ItemsSource="{Binding Positions}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:RowViewModel">
+              <Grid ColumnDefinitions="220,90,130,130,130,130,*" Margin="0,3">
+                <TextBlock Grid.Column="0" Text="{Binding A}" />
+                <TextBlock Grid.Column="1" Text="{Binding B}" />
+                <TextBlock Grid.Column="2" Text="{Binding C}" />
+                <TextBlock Grid.Column="3" Text="{Binding D}" />
+                <TextBlock Grid.Column="4" Text="{Binding E}" />
+                <TextBlock Grid.Column="5" Text="{Binding F}" Classes.good="{Binding IsGood}" Classes.bad="{Binding IsBad}" />
+                <TextBlock Grid.Column="6" Text="{Binding G}" />
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+
+      <StackPanel Spacing="6">
+        <TextBlock Classes="title" Text="Holdings" />
+        <Grid ColumnDefinitions="120,180,180,*">
+          <TextBlock Grid.Column="0" Classes="secondary" FontSize="12" Text="Coin" />
+          <TextBlock Grid.Column="1" Classes="secondary" FontSize="12" Text="Amount" />
+          <TextBlock Grid.Column="2" Classes="secondary" FontSize="12" Text="Free" />
+          <TextBlock Grid.Column="3" Classes="secondary" FontSize="12" Text="Value" />
+        </Grid>
+        <ItemsControl ItemsSource="{Binding Assets}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:RowViewModel">
+              <Grid ColumnDefinitions="120,180,180,*" Margin="0,3">
+                <TextBlock Grid.Column="0" Text="{Binding A}" />
+                <TextBlock Grid.Column="1" Text="{Binding B}" />
+                <TextBlock Grid.Column="2" Text="{Binding C}" />
+                <TextBlock Grid.Column="3" Text="{Binding D}" />
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+
+      <StackPanel Spacing="6">
+        <TextBlock Classes="title" Text="Newest orders" />
+        <ItemsControl ItemsSource="{Binding RecentOrders}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:RowViewModel">
+              <Grid ColumnDefinitions="150,200,110,130,200,140,*" Margin="0,3">
+                <TextBlock Grid.Column="0" Classes="secondary" Text="{Binding A}" />
+                <TextBlock Grid.Column="1" Text="{Binding B}" />
+                <TextBlock Grid.Column="2" Text="{Binding C}" />
+                <TextBlock Grid.Column="3" Text="{Binding D}" />
+                <TextBlock Grid.Column="4" Text="{Binding E}" />
+                <TextBlock Grid.Column="5" Text="{Binding F}" />
+                <TextBlock Grid.Column="6" Text="{Binding G}" Classes.good="{Binding IsGood}" Classes.bad="{Binding IsBad}" />
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

@@ -47,7 +47,8 @@ public sealed partial class NotificationService(
     ISettingsStore settings,
     IToastNotifier toasts,
     TimeProvider time,
-    ILogger<NotificationService> logger)
+    ILogger<NotificationService> logger,
+    IEmailSender? email = null)
 {
     /// <summary>How long a second notification with the same key is held back.</summary>
     public static TimeSpan DebounceWindow { get; } = TimeSpan.FromSeconds(30);
@@ -120,7 +121,25 @@ public sealed partial class NotificationService(
         command.Parameters.AddWithValue("$error", (object?)toastError ?? DBNull.Value);
         command.Parameters.AddWithValue("$now", now.ToUnixTimeMilliseconds());
         command.ExecuteNonQuery();
+        if (email is { IsReady: true })
+        {
+            // Not awaited: a slow mail server must not hold up what raised the notification.
+            _ = SendEmailAsync(email, notification);
+        }
+
         return true;
+    }
+
+    private async Task SendEmailAsync(IEmailSender sender, Notification notification)
+    {
+        try
+        {
+            await sender.SendAsync($"Trading agent: {notification.Title}", notification.Body, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (EmailException ex)
+        {
+            LogEmailFailed(logger, ex);
+        }
     }
 
     private static SettingKey<bool> SettingFor(NotificationKind kind) => kind switch
@@ -145,6 +164,9 @@ public sealed partial class NotificationService(
         NotificationKind.AnalysisReady => "analysis_ready",
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
     };
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "The email copy of a notification could not be sent.")]
+    private static partial void LogEmailFailed(ILogger logger, Exception exception);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "A desktop notification could not be shown; it was recorded only.")]
     private static partial void LogToastFailed(ILogger logger, Exception exception);
