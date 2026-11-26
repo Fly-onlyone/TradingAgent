@@ -1,96 +1,142 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:TradingAgent.App.ViewModels"
+             xmlns:c="using:TradingAgent.App.Controls"
+             xmlns:m="using:TradingAgent.App.Motion"
              x:Class="TradingAgent.App.Views.DiagnosticsView"
              x:DataType="vm:DiagnosticsViewModel">
 
-  <ScrollViewer>
-    <StackPanel Margin="24" Spacing="20">
+  <UserControl.Styles>
+    <!-- A value that is copied: a path, a version. It can be selected. -->
+    <Style Selector="SelectableTextBlock.copy">
+      <Setter Property="FontFamily" Value="{StaticResource FontMono}" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="TextAlignment" Value="Right" />
+    </Style>
+    <Style Selector="Border.code">
+      <Setter Property="Padding" Value="12" />
+      <Setter Property="CornerRadius" Value="{DynamicResource RadiusBase}" />
+      <Setter Property="Background" Value="{DynamicResource ActionHoverBrush}" />
+    </Style>
+  </UserControl.Styles>
 
-      <TextBlock Classes="pageTitle" Text="{Binding Title}" />
+  <Grid RowDefinitions="Auto,*">
+    <c:SectionHeader Title="Diagnostics" Subtitle="What is running, where its files are, and the switches of the desktop shell" />
 
-      <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="10">
-        <TextBlock Grid.Row="0" Grid.Column="0" Classes="secondary" Text="Version" />
-        <SelectableTextBlock Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding Version}" />
+    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" Margin="0,0,-16,0">
+      <StackPanel Margin="0,0,16,0" Spacing="24">
 
-        <TextBlock Grid.Row="1" Grid.Column="0" Classes="secondary" Text="Build" />
-        <SelectableTextBlock Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding Build}" />
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="24">
+          <c:Card Padding="16,16,16,8" m:Enter.Kind="Reveal">
+            <StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+                <PathIcon VerticalAlignment="Center" Foreground="{DynamicResource PrimaryBrush}" Data="{StaticResource IconStorage}" />
+                <TextBlock Classes="h6" Text="Application" />
+              </StackPanel>
+              <c:MetricRow Label="Version">
+                <SelectableTextBlock Classes="copy" Text="{Binding Version}" />
+              </c:MetricRow>
+              <c:MetricRow Label="Build">
+                <SelectableTextBlock Classes="copy" Text="{Binding Build}" />
+              </c:MetricRow>
+              <c:MetricRow Label="Runtime">
+                <SelectableTextBlock Classes="copy" Text="{Binding Runtime}" />
+              </c:MetricRow>
+              <c:MetricRow Label="Data folder">
+                <SelectableTextBlock Classes="copy" Text="{Binding DataFolder}" />
+              </c:MetricRow>
+              <c:MetricRow Label="Database">
+                <SelectableTextBlock Classes="copy" Text="{Binding DatabaseFile}" />
+              </c:MetricRow>
+              <c:MetricRow Label="Schema">
+                <SelectableTextBlock Classes="copy" Text="{Binding Schema}" />
+              </c:MetricRow>
+              <c:MetricRow Classes="last" Label="Logs">
+                <SelectableTextBlock Classes="copy" Text="{Binding LogFolder}" />
+              </c:MetricRow>
+            </StackPanel>
+          </c:Card>
 
-        <TextBlock Grid.Row="2" Grid.Column="0" Classes="secondary" Text="Runtime" />
-        <SelectableTextBlock Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding Runtime}" />
-
-        <TextBlock Grid.Row="3" Grid.Column="0" Classes="secondary" Text="Data folder" />
-        <SelectableTextBlock Grid.Row="3" Grid.Column="1" Classes="value" Text="{Binding DataFolder}" />
-
-        <TextBlock Grid.Row="4" Grid.Column="0" Classes="secondary" Text="Database" />
-        <SelectableTextBlock Grid.Row="4" Grid.Column="1" Classes="value" Text="{Binding DatabaseFile}" />
-
-        <TextBlock Grid.Row="5" Grid.Column="0" Classes="secondary" Text="Schema" />
-        <SelectableTextBlock Grid.Row="5" Grid.Column="1" Classes="value" Text="{Binding Schema}" />
-
-        <TextBlock Grid.Row="6" Grid.Column="0" Classes="secondary" Text="Logs" />
-        <SelectableTextBlock Grid.Row="6" Grid.Column="1" Classes="value" Text="{Binding LogFolder}" />
-      </Grid>
-
-      <StackPanel Spacing="10" IsVisible="{Binding Agent, Converter={x:Static ObjectConverters.IsNotNull}}">
-        <TextBlock Classes="title" Text="Agent" />
-        <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
-          <TextBlock Grid.Row="0" Grid.Column="0" Classes="secondary" Text="Model" />
-          <SelectableTextBlock Grid.Row="0" Grid.Column="1" Classes="value" TextWrapping="Wrap" Text="{Binding Agent.Provider}" />
-
-          <TextBlock Grid.Row="1" Grid.Column="0" Classes="secondary" Text="Sign-in" />
-          <SelectableTextBlock Grid.Row="1" Grid.Column="1" Classes="value" TextWrapping="Wrap" Text="{Binding Agent.SignIn}" />
-
-          <TextBlock Grid.Row="2" Grid.Column="0" Classes="secondary" Text="OKX trade kit" />
-          <SelectableTextBlock Grid.Row="2" Grid.Column="1" Classes="value" TextWrapping="Wrap" Text="{Binding Agent.TradeKit}" />
+          <c:Card Grid.Column="1" Padding="16,16,16,24" m:Enter.Kind="Reveal" m:Enter.Delay="0.1"
+                  IsVisible="{Binding Agent, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+                <PathIcon VerticalAlignment="Center" Foreground="{DynamicResource PrimaryBrush}" Data="{StaticResource IconSmartToy}" />
+                <TextBlock Classes="h6" Text="Agent" />
+              </StackPanel>
+              <c:MetricRow Label="Model">
+                <SelectableTextBlock Classes="copy" Text="{Binding Agent.Provider}" />
+              </c:MetricRow>
+              <c:MetricRow Label="Sign-in">
+                <SelectableTextBlock Classes="copy" Text="{Binding Agent.SignIn}" />
+              </c:MetricRow>
+              <c:MetricRow Classes="last" Label="OKX trade kit">
+                <SelectableTextBlock Classes="copy" Text="{Binding Agent.TradeKit}" />
+              </c:MetricRow>
+              <StackPanel Spacing="12" Margin="0,12,0,0">
+                <c:Alert Severity="Info" Content="{Binding Agent.Notice}"
+                         IsVisible="{Binding Agent.Notice, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                <Button Classes="outlined" HorizontalAlignment="Left" Content="I have read this. It is my own subscription."
+                        Command="{Binding Agent.ConfirmNoticeCommand}" IsVisible="{Binding Agent.NeedsConfirmation}" />
+                <WrapPanel>
+                  <Button Classes="contained" Margin="0,0,8,8" Content="Run test prompt" Command="{Binding Agent.RunTestPromptCommand}" />
+                  <Button Classes="outlined inherit" Margin="0,0,8,8" Content="Stop" Command="{Binding Agent.RunTestPromptCancelCommand}" />
+                  <Button Classes="outlined" Margin="0,0,0,8" Content="Check again" Command="{Binding Agent.RefreshCommand}" />
+                </WrapPanel>
+                <TextBlock Classes="body2 secondary" TextWrapping="Wrap" Text="{Binding Agent.TestStatus}" />
+                <Border Classes="code" IsVisible="{Binding Agent.TestEvents, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                  <SelectableTextBlock Classes="mono" FontSize="12" TextWrapping="Wrap" Text="{Binding Agent.TestEvents}" />
+                </Border>
+                <Border Classes="code" IsVisible="{Binding Agent.TestAnswer, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                  <SelectableTextBlock Classes="mono" FontSize="12" TextWrapping="Wrap" Text="{Binding Agent.TestAnswer}" />
+                </Border>
+              </StackPanel>
+            </StackPanel>
+          </c:Card>
         </Grid>
-        <TextBlock Classes="secondary" TextWrapping="Wrap" Text="{Binding Agent.Notice}"
-                   IsVisible="{Binding Agent.Notice, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-        <Button Classes="outlined" Content="I have read this. It is my own subscription." Command="{Binding Agent.ConfirmNoticeCommand}"
-                IsVisible="{Binding Agent.NeedsConfirmation}" />
-        <StackPanel Orientation="Horizontal" Spacing="8">
-          <Button Classes="outlined" Content="Run test prompt" Command="{Binding Agent.RunTestPromptCommand}" />
-          <Button Classes="outlined" Content="Stop" Command="{Binding Agent.RunTestPromptCancelCommand}" />
-          <Button Classes="outlined" Content="Check again" Command="{Binding Agent.RefreshCommand}" />
-        </StackPanel>
-        <TextBlock Classes="secondary" TextWrapping="Wrap" Text="{Binding Agent.TestStatus}" />
-        <SelectableTextBlock Classes="value" TextWrapping="Wrap" Text="{Binding Agent.TestEvents}"
-                             IsVisible="{Binding Agent.TestEvents, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-        <SelectableTextBlock Classes="value" TextWrapping="Wrap" Text="{Binding Agent.TestAnswer}"
-                             IsVisible="{Binding Agent.TestAnswer, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-      </StackPanel>
 
-      <StackPanel Spacing="10">
-        <TextBlock Classes="title" Text="Desktop shell" />
-        <ToggleSwitch IsChecked="{Binding StartWithWindows}"
-                      AutomationProperties.Name="Start with Windows"
-                      OnContent="Start with Windows" OffContent="Start with Windows" />
-        <ToggleSwitch IsChecked="{Binding OpenWindowAtStart}"
-                      AutomationProperties.Name="Open the window at start"
-                      OnContent="Open the window at start" OffContent="Open the window at start" />
-        <Button Classes="outlined" Content="Send test notification" Command="{Binding SendTestNotificationCommand}" />
-        <TextBlock Classes="secondary" Text="{Binding ShellStatus}" />
-      </StackPanel>
+        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="24" m:Enter.Kind="Reveal" m:Enter.Delay="0.2">
+          <c:Card Padding="16,16,16,24">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="h6" Margin="0,0,0,4" Text="Desktop shell" />
+              <ToggleSwitch IsChecked="{Binding StartWithWindows}"
+                            AutomationProperties.Name="Start with Windows"
+                            OnContent="Start with Windows" OffContent="Start with Windows" />
+              <ToggleSwitch IsChecked="{Binding OpenWindowAtStart}"
+                            AutomationProperties.Name="Open the window at start"
+                            OnContent="Open the window at start" OffContent="Open the window at start" />
+              <Button Classes="outlined" HorizontalAlignment="Left" Margin="0,8,0,0" Content="Send test notification"
+                      Command="{Binding SendTestNotificationCommand}" />
+              <TextBlock Classes="caption secondary" TextWrapping="Wrap" Text="{Binding ShellStatus}" />
+            </StackPanel>
+          </c:Card>
 
-      <StackPanel Spacing="10">
-        <TextBlock Classes="title" Text="Crash reporting" />
-        <ToggleSwitch IsChecked="{Binding ReportingEnabled}"
-                      AutomationProperties.Name="Send crash and performance reports"
-                      OnContent="Send crash and performance reports" OffContent="Send crash and performance reports" />
-        <Button Classes="outlined" Content="Send test error" Command="{Binding SendTestErrorCommand}" />
-        <TextBlock Classes="secondary" Text="{Binding ReportingStatus}" />
-      </StackPanel>
+          <c:Card Grid.Column="1" Padding="16,16,16,24">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="h6" Margin="0,0,0,4" Text="Crash reporting" />
+              <ToggleSwitch IsChecked="{Binding ReportingEnabled}"
+                            AutomationProperties.Name="Send crash and performance reports"
+                            OnContent="Send crash and performance reports" OffContent="Send crash and performance reports" />
+              <Button Classes="outlined" HorizontalAlignment="Left" Margin="0,8,0,0" Content="Send test error" Command="{Binding SendTestErrorCommand}" />
+              <TextBlock Classes="caption secondary" TextWrapping="Wrap" Text="{Binding ReportingStatus}" />
+            </StackPanel>
+          </c:Card>
 
-      <StackPanel Spacing="10">
-        <TextBlock Classes="title" Text="Updates" />
-        <StackPanel Orientation="Horizontal" Spacing="8">
-          <Button Classes="outlined" Content="Check for updates" Command="{Binding CheckForUpdatesCommand}" />
-          <Button Classes="outlined" Content="Restart to install" Command="{Binding RestartToUpdateCommand}"
-                  IsVisible="{Binding IsUpdateReady}" />
-        </StackPanel>
-        <TextBlock Classes="secondary" Text="{Binding UpdateStatus}" />
-      </StackPanel>
+          <c:Card Grid.Column="2" Padding="16,16,16,24">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="h6" Margin="0,0,0,4" Text="Updates" />
+              <WrapPanel>
+                <Button Classes="outlined" Margin="0,0,8,8" Content="Check for updates" Command="{Binding CheckForUpdatesCommand}" />
+                <Button Classes="contained" Margin="0,0,0,8" Content="Restart to install" Command="{Binding RestartToUpdateCommand}"
+                        IsVisible="{Binding IsUpdateReady}" />
+              </WrapPanel>
+              <TextBlock Classes="caption secondary" TextWrapping="Wrap" Text="{Binding UpdateStatus}" />
+            </StackPanel>
+          </c:Card>
+        </Grid>
 
-    </StackPanel>
-  </ScrollViewer>
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
 </UserControl>

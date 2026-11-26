@@ -142,8 +142,6 @@ internal sealed partial class DashboardViewModel : PageViewModel
 
     public override string Title => "Dashboard";
 
-    public override bool UsesCards => true;
-
     public ObservableCollection<HoldingRow> Assets { get; } = [];
 
     public ObservableCollection<PositionRow> Positions { get; } = [];
@@ -403,8 +401,6 @@ internal sealed partial class TradingViewModel : PageViewModel, IDisposable
 
     public override string Title => "Trading";
 
-    public override bool UsesCards => true;
-
     public IReadOnlyList<string> Timeframes { get; } = ["1m", "5m", "15m", "1H", "4H", "1D", "1W"];
 
     /// <summary>Trend, RSI, averages and ATR on the chosen timeframe, one figure a row.</summary>
@@ -648,8 +644,6 @@ internal sealed partial class OrdersViewModel : PageViewModel
 
     public override string Title => "Orders";
 
-    public override bool UsesCards => true;
-
     public ObservableCollection<OrderItem> Orders { get; } = [];
 
     public IReadOnlyList<string> Statuses { get; } = [AllStatuses, "open", "partially_filled", "filled", "cancelled", "rejected", "expired"];
@@ -748,8 +742,6 @@ internal sealed partial class TradesViewModel : PageViewModel
     }
 
     public override string Title => "Trades";
-
-    public override bool UsesCards => true;
 
     public ObservableCollection<TradeRow> Trades { get; } = [];
 

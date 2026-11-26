@@ -354,34 +354,8 @@
             <Button Classes="inherit small" Content="OK" Command="{Binding DismissTelemetryNoticeCommand}" />
           </c:Alert.Action>
         </c:Alert>
-        <!--
-          A sheet of glass under the pages that are not laid out with cards yet. It goes when the
-          last of them is.
-        -->
-        <Panel Grid.Row="1" Margin="16">
-          <fx:BackdropBlur Radius="{DynamicResource CardBlur}" CornerRadius="{DynamicResource RadiusCard}"
-                           IsVisible="{Binding !SelectedPage.UsesCards}" />
-          <Border x:Name="Sheet"
-                  BorderThickness="1"
-                  CornerRadius="{DynamicResource RadiusCard}"
-                  Classes.cards="{Binding SelectedPage.UsesCards}">
-            <Border.Styles>
-              <Style Selector="Border#Sheet">
-                <Setter Property="Background" Value="{DynamicResource CardBrush}" />
-                <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
-                <Setter Property="ClipToBounds" Value="True" />
-              </Style>
-              <!-- A page of cards stands on the background itself, 24 px from the edges. -->
-              <Style Selector="Border#Sheet.cards">
-                <Setter Property="Background" Value="Transparent" />
-                <Setter Property="BorderBrush" Value="Transparent" />
-                <Setter Property="ClipToBounds" Value="False" />
-                <Setter Property="Padding" Value="7" />
-              </Style>
-            </Border.Styles>
-            <ContentControl x:Name="PageHost" ClipToBounds="False" Content="{Binding SelectedPage}" />
-          </Border>
-        </Panel>
+        <!-- A page stands on the background itself, 24 px from the edges; its cards are the glass. -->
+        <ContentControl x:Name="PageHost" Grid.Row="1" Margin="24" ClipToBounds="False" Content="{Binding SelectedPage}" />
       </Grid>
 
     </Grid>

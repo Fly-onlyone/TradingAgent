@@ -45,6 +45,8 @@ the base of controls the kit does not cover yet.
 | `c:EmptyState`                  | icon, `Title`, `Description`; `compact` inside a card                    |
 | `c:MetricTile`                  | `Kind` = `Kpi`, `Delta` or `Trend`; `Tone`; `IsRolling`; `IsLoading`     |
 | `c:MetricRow`                   | a line of a summary card; `last` has no rule under it                    |
+| `c:Dialog`                      | a question over the page: `Title`, `IsOpen`, `Actions`, `CloseCommand`   |
+| `TabControl`                    | `divided` draws the rule under the tabs                                  |
 
 Drawn by hand, in `Controls`: `Sparkline`, `RollingDigits`, `RangeBar`, `SeriesChart` (the equity
 line and the bars of the Trades page) and `CandleChart`. They read their colours from the theme when

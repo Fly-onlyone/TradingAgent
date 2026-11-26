@@ -332,8 +332,6 @@ internal sealed partial class ChatViewModel : PageViewModel, IDisposable
     /// <summary>The title of the open chat, under the heading; a hint while none is open.</summary>
     public string Subtitle => SelectedSession?.Title ?? "New chat";
 
-    public override bool UsesCards => true;
-
     public override void Activate()
     {
         base.Activate();
