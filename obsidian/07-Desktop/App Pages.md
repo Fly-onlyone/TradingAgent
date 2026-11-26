@@ -70,17 +70,33 @@ the run's state. After a restart it shows what the database holds. Streamed text
 times a second, because drawing Markdown (`Controls/MarkdownView`) is the expensive part. The list
 shows chats and the runs of [[Scheduled Tasks]].
 
+The page is laid out as the agent page of the previous UI: a card with the chats under day
+headings, and a card with the messages. A reply shows who wrote it and when, three hopping dots
+until its first text, a caret while text comes in, and its tool calls as lines that open to
+arguments and result. The cards of an empty chat and the pills under the box send their words as a
+message. The effort level in the bar under the box is the setting `agent.effort`.
+
+Not ported, because the app has no data for them: the Decisions tab, charts inside a reply, the
+thinking-mode menu, renaming a chat.
+
+## Pages with cards
+
+A page laid out with glass cards overrides `PageViewModel.UsesCards`. The window then leaves out the
+sheet of glass it puts under the pages that are not ported yet. Chat is the first such page.
+
+## Checking the real app
+
+Every input has an `AutomationProperties.Name`, and so has every button that shows only an icon
+(Send, Stop, New chat, Delete chat). A script can start the published app, choose a page of the
+sidebar, type and press through UI Automation, and take a picture of the window.
+`TradingAgent.exe --page-shots <folder>` takes a picture of every page without a script. A feature
+is not called done on tests alone when it has a screen.
+
 ## What cannot be taken back
 
 Switching to live trading (Settings), restoring a backup and deleting a kind of data (Admin) take
 two presses: the first shows what it means and changes nothing, the second does it. A test of each
 proves the first step changes nothing.
-
-## Checking the real app
-
-Every input has an `AutomationProperties.Name`. A script can start the published app, choose a page
-of the rail, type and press through UI Automation, and take a picture of the window. A feature is
-not called done on tests alone when it has a screen.
 
 ## See also
 

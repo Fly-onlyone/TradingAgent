@@ -23,6 +23,14 @@ public sealed class Skeleton : Border
     public static readonly StyledProperty<Color> ColorProperty =
         AvaloniaProperty.Register<Skeleton, Color>(nameof(Color));
 
+    /// <summary>The opacity of the block; 0.2 for a placeholder.</summary>
+    public static readonly StyledProperty<double> FaintOpacityProperty =
+        AvaloniaProperty.Register<Skeleton, double>(nameof(FaintOpacity), 0.2);
+
+    /// <summary>The opacity of the middle of the band; 0.5 for a placeholder.</summary>
+    public static readonly StyledProperty<double> StrongOpacityProperty =
+        AvaloniaProperty.Register<Skeleton, double>(nameof(StrongOpacity), 0.5);
+
     private static readonly Easing _easeInOut = new SplineEasing(0.42, 0, 0.58, 1);
 
     private readonly Border _band = new() { HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
@@ -32,6 +40,8 @@ public sealed class Skeleton : Border
     {
         ClipToBoundsProperty.OverrideDefaultValue<Skeleton>(true);
         ColorProperty.Changed.AddClassHandler<Skeleton>((skeleton, _) => skeleton.Paint());
+        FaintOpacityProperty.Changed.AddClassHandler<Skeleton>((skeleton, _) => skeleton.Paint());
+        StrongOpacityProperty.Changed.AddClassHandler<Skeleton>((skeleton, _) => skeleton.Paint());
     }
 
     public Skeleton()
@@ -43,6 +53,18 @@ public sealed class Skeleton : Border
     {
         get => GetValue(ColorProperty);
         set => SetValue(ColorProperty, value);
+    }
+
+    public double FaintOpacity
+    {
+        get => GetValue(FaintOpacityProperty);
+        set => SetValue(FaintOpacityProperty, value);
+    }
+
+    public double StrongOpacity
+    {
+        get => GetValue(StrongOpacityProperty);
+        set => SetValue(StrongOpacityProperty, value);
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -67,8 +89,8 @@ public sealed class Skeleton : Border
 
     private void Paint()
     {
-        var faint = ThemeBuilder.Alpha(Color, 0.2);
-        var strong = ThemeBuilder.Alpha(Color, 0.5);
+        var faint = ThemeBuilder.Alpha(Color, FaintOpacity);
+        var strong = ThemeBuilder.Alpha(Color, StrongOpacity);
         _band.Background = new LinearGradientBrush
         {
             // One tile is two block widths: two fifths of the band.

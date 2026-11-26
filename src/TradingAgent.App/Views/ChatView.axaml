@@ -1,146 +1,551 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:TradingAgent.App.ViewModels"
-             xmlns:controls="using:TradingAgent.App.Controls"
+             xmlns:c="using:TradingAgent.App.Controls"
+             xmlns:m="using:TradingAgent.App.Motion"
              x:Class="TradingAgent.App.Views.ChatView"
              x:DataType="vm:ChatViewModel">
 
-  <Grid ColumnDefinitions="260,*">
+  <UserControl.Styles>
+    <!-- A chat in the list: rounded, with its icon in the primary colour when chosen. -->
+    <Style Selector="ListBox#SessionList ListBoxItem">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox#SessionList ListBoxItem:pointerover, ListBox#SessionList ListBoxItem:selected, ListBox#SessionList ListBoxItem:selected:pointerover">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox#SessionList Border.sessionRow">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="CornerRadius" Value="{DynamicResource RadiusBase}" />
+      <Setter Property="Padding" Value="16,8" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="Background" Duration="0:0:0.15" Easing="{StaticResource EaseStandard}" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="ListBox#SessionList Border.sessionRow:pointerover">
+      <Setter Property="Background" Value="{DynamicResource ActionHoverBrush}" />
+    </Style>
+    <Style Selector="ListBox#SessionList ListBoxItem:selected Border.sessionRow">
+      <Setter Property="Background" Value="{DynamicResource Primary16Brush}" />
+    </Style>
+    <Style Selector="ListBox#SessionList PathIcon.sessionIcon">
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+    </Style>
+    <Style Selector="ListBox#SessionList ListBoxItem:selected PathIcon.sessionIcon">
+      <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+    </Style>
+    <Style Selector="ListBox#SessionList ListBoxItem:selected TextBlock.sessionTitle">
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <!-- A message: the agent's on the left with a line of the secondary colour, the user's on the right. -->
+    <Style Selector="Border.avatar">
+      <Setter Property="Width" Value="36" />
+      <Setter Property="Height" Value="36" />
+      <Setter Property="CornerRadius" Value="18" />
+      <Setter Property="VerticalAlignment" Value="Top" />
+      <Setter Property="Background" Value="{DynamicResource SecondaryBrush}" />
+    </Style>
+    <Style Selector="Border.avatar.user">
+      <Setter Property="Background" Value="{DynamicResource PrimaryBrush}" />
+      <Setter Property="Grid.Column" Value="2" />
+    </Style>
+    <Style Selector="StackPanel.messageBody.user">
+      <Setter Property="HorizontalAlignment" Value="Right" />
+    </Style>
+    <Style Selector="StackPanel.messageHead.user">
+      <Setter Property="HorizontalAlignment" Value="Right" />
+    </Style>
+    <Style Selector="Border.bubble">
+      <Setter Property="Padding" Value="16" />
+      <Setter Property="Grid.ColumnSpan" Value="2" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="Background" Value="{DynamicResource PaperGlassBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource SecondaryBrush}" />
+      <Setter Property="BorderThickness" Value="2,0,0,0" />
+      <Setter Property="CornerRadius" Value="{DynamicResource RadiusBubbleAssistant}" />
+      <Setter Property="BoxShadow" Value="{DynamicResource PaperShadow}" />
+    </Style>
+    <Style Selector="Border.bubble.user">
+      <Setter Property="Grid.Column" Value="1" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="Background" Value="{DynamicResource Primary15Brush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
+      <Setter Property="BorderThickness" Value="0,0,2,0" />
+      <Setter Property="CornerRadius" Value="{DynamicResource RadiusBubbleUser}" />
+    </Style>
+
+    <!-- The line of a tool call is a button that opens and closes what is under it. -->
+    <Style Selector="Button.toolHead">
+      <Setter Property="Padding" Value="12,6" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="FontWeight" Value="Normal" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="Button.toolHead:pointerover">
+      <Setter Property="Background" Value="{DynamicResource ActionHoverBrush}" />
+    </Style>
+
+    <!-- The box to type in: its border takes the primary colour while the text has the focus. -->
+    <Style Selector="Border.inputCard">
+      <Setter Property="Background" Value="{DynamicResource White05Brush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource White10Brush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="16" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="BorderBrush" Duration="0:0:0.2" Easing="{StaticResource EaseCss}" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Border.inputCard:focus-within">
+      <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
+    </Style>
+
+    <!-- Round buttons to send and to stop. -->
+    <Style Selector="Button.send">
+      <Setter Property="Width" Value="34" />
+      <Setter Property="Height" Value="34" />
+      <Setter Property="MinWidth" Value="34" />
+      <Setter Property="MinHeight" Value="34" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="17" />
+      <Setter Property="Background" Value="{DynamicResource PrimaryBrush}" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.send:pointerover">
+      <Setter Property="Background" Value="{DynamicResource PrimaryDarkBrush}" />
+    </Style>
+    <Style Selector="Button.send:disabled">
+      <Setter Property="Background" Value="{DynamicResource ActionDisabledBackgroundBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource ActionDisabledBrush}" />
+    </Style>
+    <Style Selector="Button.send.stop">
+      <Setter Property="Background" Value="{DynamicResource ErrorBrush}" />
+    </Style>
+    <Style Selector="Button.send.stop:pointerover">
+      <Setter Property="Background" Value="{DynamicResource ErrorDarkBrush}" />
+    </Style>
+
+    <!-- A pill: a small outlined button with fully round ends. -->
+    <Style Selector="Button.pill">
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Padding" Value="12,2" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+    </Style>
+    <Style Selector="Button.pill:pointerover">
+      <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+      <Setter Property="Background" Value="{DynamicResource ActionHoverBrush}" />
+    </Style>
+
+    <!-- A setting of the reply in the bar under the text: a small quiet button. -->
+    <Style Selector="Button.inputOption">
+      <Setter Property="Padding" Value="8,4" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="FontSize" Value="12.8" />
+      <Setter Property="FontWeight" Value="Medium" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+    </Style>
+    <Style Selector="Button.inputOption:pointerover">
+      <Setter Property="Background" Value="{DynamicResource ActionHoverBrush}" />
+    </Style>
+
+    <!-- A card of the empty chat: lifts and glows under the pointer. -->
+    <Style Selector="Button.quickCard">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="FontWeight" Value="Normal" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+      <Setter Property="RenderTransform" Value="none" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.2" Easing="{StaticResource EaseCss}" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Button.quickCard:pointerover">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="RenderTransform" Value="translateY(-2px)" />
+    </Style>
+    <Style Selector="Button.quickCard:disabled">
+      <Setter Property="Opacity" Value="0.6" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid ColumnDefinitions="300,*" ColumnSpacing="16">
 
     <!-- The chats -->
-    <Border Grid.Column="0" BorderBrush="{DynamicResource BorderMediumBrush}" BorderThickness="0,0,1,0">
-      <Grid RowDefinitions="Auto,*" Margin="12">
-        <Button Classes="outlined" Grid.Row="0" Content="New chat" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                Command="{Binding NewChatCommand}" />
-        <ListBox Grid.Row="1" x:Name="SessionList" Classes="navigation" Margin="0,10,0,0" Background="Transparent"
-                 ItemsSource="{Binding Sessions}" SelectedItem="{Binding SelectedSession}">
+    <c:Card Grid.Column="0">
+      <DockPanel>
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="16,12,8,12">
+          <TextBlock Classes="subtitle1 semibold" VerticalAlignment="Center" Text="Chat History" />
+          <Button Grid.Column="1" Classes="icon primary small"
+                  AutomationProperties.Name="New chat"
+                  ToolTip.Tip="New chat"
+                  Command="{Binding NewChatCommand}">
+            <PathIcon Classes="small" Data="{StaticResource IconAdd}" />
+          </Button>
+        </Grid>
+        <Separator DockPanel.Dock="Top" />
+        <TextBlock DockPanel.Dock="Bottom" Classes="caption secondary" Margin="16,8" Text="{Binding SessionsLabel}" />
+        <ListBox x:Name="SessionList"
+                 Margin="8,4"
+                 AutomationProperties.Name="Chats"
+                 ItemsSource="{Binding Sessions}"
+                 SelectedItem="{Binding SelectedSession}">
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="vm:SessionItemViewModel">
-              <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Grid.Column="0" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
-                <TextBlock Grid.Column="1" Text="●" Foreground="{DynamicResource PrimaryBrush}" Margin="6,0,0,0"
-                           IsVisible="{Binding IsRunning}" ToolTip.Tip="A reply is being written" />
+              <StackPanel>
+                <TextBlock Classes="caption secondary"
+                           Margin="8,10,8,4"
+                           LetterSpacing="0.5"
+                           Text="{Binding Group}"
+                           IsVisible="{Binding HasGroup}" />
+                <Border Classes="sessionRow">
+                  <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                    <PathIcon Classes="small sessionIcon" VerticalAlignment="Center" Data="{StaticResource IconChatBubbleOutline}" />
+                    <StackPanel Grid.Column="1">
+                      <TextBlock Classes="body2 sessionTitle" TextTrimming="CharacterEllipsis" Text="{Binding Title}" />
+                      <TextBlock Classes="caption secondary" Text="{Binding MessagesLabel}" />
+                    </StackPanel>
+                    <c:Spinner Grid.Column="2" Width="14" Height="14" Thickness="5" VerticalAlignment="Center"
+                               IsVisible="{Binding IsRunning}"
+                               ToolTip.Tip="A reply is being written" />
+                  </Grid>
+                </Border>
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </DockPanel>
+    </c:Card>
+
+    <!-- The chosen chat -->
+    <c:Card Grid.Column="1">
+      <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
+
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" Margin="16,12">
+          <PathIcon VerticalAlignment="Center" Foreground="{DynamicResource PrimaryBrush}" Data="{StaticResource IconSmartToy}" />
+          <StackPanel Grid.Column="1">
+            <TextBlock Classes="h6" Text="Trading agent" />
+            <TextBlock Classes="caption secondary" TextTrimming="CharacterEllipsis" Text="{Binding Subtitle}" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+            <c:Chip Classes="outlined small success" Content="Ready" IsVisible="{Binding !IsRunning}">
+              <c:Chip.Icon>
+                <PathIcon Data="{StaticResource IconCheckCircle}" />
+              </c:Chip.Icon>
+            </c:Chip>
+            <c:Chip Classes="outlined small info" Content="Thinking" IsVisible="{Binding IsRunning}">
+              <c:Chip.Icon>
+                <c:Spinner Width="12" Height="12" Thickness="5" Margin="4,0,0,0" Foreground="{DynamicResource InfoBrush}" />
+              </c:Chip.Icon>
+            </c:Chip>
+            <ToggleButton Classes="iconToggle"
+                          AutomationProperties.Name="Open every tool call"
+                          ToolTip.Tip="Open every tool call"
+                          IsChecked="{Binding ExpandAllTools}">
+              <PathIcon Classes="small" Data="{StaticResource IconUnfoldMore}" />
+            </ToggleButton>
+            <ToggleButton Classes="iconToggle"
+                          AutomationProperties.Name="Show reasoning"
+                          ToolTip.Tip="Show the agent's reasoning"
+                          IsChecked="{Binding ShowThinking}">
+              <PathIcon Classes="small" Data="{StaticResource IconPsychology}" />
+            </ToggleButton>
+            <Button Classes="icon small"
+                    AutomationProperties.Name="Delete chat"
+                    ToolTip.Tip="Delete chat"
+                    Command="{Binding DeleteChatCommand}">
+              <PathIcon Classes="small" Data="{StaticResource IconDeleteOutline}" />
+            </Button>
+          </StackPanel>
+        </Grid>
+        <Separator Grid.Row="1" />
+
+        <!-- An empty chat: what the agent is, and four things to start with. -->
+        <StackPanel Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="500" IsVisible="{Binding IsEmpty}">
+          <PathIcon Width="48" Height="48" Opacity="0.6" Margin="0,0,0,16" Foreground="{DynamicResource PrimaryBrush}" Data="{StaticResource IconSmartToy}" />
+          <TextBlock Classes="h6" HorizontalAlignment="Center" Margin="0,0,0,8" Text="Trading agent" />
+          <TextBlock Classes="body2 secondary" TextAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,32"
+                     Text="Ask about a market, your account or a trade. The agent looks things up with its tools and places an order only when you ask for one." />
+          <ItemsControl ItemsSource="{Binding QuickActions}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <UniformGrid Columns="2" ColumnSpacing="16" RowSpacing="16" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:QuickAction">
+                <Button Classes="quickCard"
+                        AutomationProperties.Name="{Binding Title}"
+                        Command="{Binding $parent[ItemsControl].((vm:ChatViewModel)DataContext).RunQuickActionCommand}"
+                        CommandParameter="{Binding Title}">
+                  <c:Card Padding="16">
+                    <StackPanel>
+                      <PathIcon Width="32" Height="32" Margin="0,0,0,4" Foreground="{DynamicResource PrimaryBrush}" Data="{Binding Glyph}" />
+                      <TextBlock Classes="body2 semibold" HorizontalAlignment="Center" Text="{Binding Title}" />
+                      <TextBlock Classes="caption secondary" HorizontalAlignment="Center" Text="{Binding Description}" />
+                    </StackPanel>
+                  </c:Card>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <ListBox Grid.Row="2" x:Name="MessageList"
+                 Classes="plain"
+                 Padding="16,16,16,0"
+                 AutomationProperties.Name="Messages"
+                 ItemsSource="{Binding Messages}"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:MessageItemViewModel">
+              <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" Margin="0,0,0,16" m:Enter.Kind="Message">
+                <Border Classes="avatar" Classes.user="{Binding IsUser}">
+                  <Panel>
+                    <PathIcon Classes="small" Foreground="White" Data="{StaticResource IconSmartToy}" IsVisible="{Binding IsAssistant}" />
+                    <PathIcon Classes="small" Foreground="White" Data="{StaticResource IconPerson}" IsVisible="{Binding IsUser}" />
+                  </Panel>
+                </Border>
+                <StackPanel Grid.Column="1" Spacing="4">
+                  <StackPanel Classes="messageHead" Classes.user="{Binding IsUser}" Orientation="Horizontal" Spacing="8">
+                    <TextBlock Classes="caption semibold" Text="{Binding Author}" />
+                    <TextBlock Classes="caption secondary" Text="{Binding Time}" />
+                  </StackPanel>
+
+                  <!-- A bubble is at most four fifths of the row: two of these three columns. -->
+                  <Grid ColumnDefinitions="*,3*,*">
+                    <Border Classes="bubble" Classes.user="{Binding IsUser}">
+                      <StackPanel Spacing="8">
+                        <Border Padding="12" CornerRadius="{DynamicResource RadiusBase}" Background="{DynamicResource ActionHoverBrush}">
+                          <Border.IsVisible>
+                            <MultiBinding Converter="{x:Static BoolConverters.And}">
+                              <Binding Path="HasThinking" />
+                              <Binding Path="$parent[ListBox].((vm:ChatViewModel)DataContext).ShowThinking" />
+                            </MultiBinding>
+                          </Border.IsVisible>
+                          <SelectableTextBlock Classes="secondary" FontSize="12.8" LineHeight="20.48" TextWrapping="Wrap" Text="{Binding Thinking}" />
+                        </Border>
+
+                        <StackPanel Orientation="Horizontal" Spacing="12" IsVisible="{Binding IsWaiting}">
+                          <c:ThinkingDots VerticalAlignment="Center" Margin="0,8,0,0" Fill="{DynamicResource PrimaryBrush}" />
+                          <TextBlock Classes="caption secondary" VerticalAlignment="Center" Text="Thinking..." />
+                        </StackPanel>
+                        <c:Skeleton Height="2" CornerRadius="1" MinWidth="160"
+                                    Color="{DynamicResource PrimaryColor}" FaintOpacity="0" StrongOpacity="0.4"
+                                    IsVisible="{Binding IsWaiting}" />
+
+                        <c:MarkdownView Text="{Binding Content}" IsVisible="{Binding Content, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                        <c:BlinkCaret Background="{DynamicResource PrimaryBrush}" IsVisible="{Binding IsStreaming}" />
+
+                        <TextBlock Classes="body2" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" Text="{Binding Note}"
+                                   IsVisible="{Binding HasNote}" />
+                      </StackPanel>
+                    </Border>
+                  </Grid>
+
+                  <!-- The tools the agent used for this reply. -->
+                  <StackPanel Spacing="4" Margin="0,4,0,0" IsVisible="{Binding HasTools}">
+                    <TextBlock Classes="caption secondary" Text="{Binding ToolsLabel}" />
+                    <ItemsControl ItemsSource="{Binding ToolCalls}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <StackPanel Spacing="4" />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ToolCallItemViewModel">
+                          <Border Background="{DynamicResource BackgroundBrush}"
+                                  BorderBrush="{DynamicResource DividerBrush}"
+                                  BorderThickness="1"
+                                  CornerRadius="{DynamicResource RadiusBase}"
+                                  ClipToBounds="True">
+                            <StackPanel>
+                              <Button Classes="toolHead inherit"
+                                      AutomationProperties.Name="{Binding Label}"
+                                      Command="{Binding ToggleCommand}">
+                                <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" ColumnSpacing="8">
+                                  <Panel Width="16" Height="16" VerticalAlignment="Center">
+                                    <PathIcon Width="16" Height="16" Foreground="{DynamicResource ErrorBrush}" Data="{StaticResource IconErrorOutline}" IsVisible="{Binding IsProblem}" />
+                                    <PathIcon Width="16" Height="16" Foreground="{DynamicResource SuccessBrush}" Data="{StaticResource IconCheckCircleOutline}" IsVisible="{Binding IsSucceeded}" />
+                                    <PathIcon Width="16" Height="16" Foreground="{DynamicResource SecondaryBrush}" Data="{StaticResource IconBuild}" IsVisible="{Binding IsRunning}" />
+                                  </Panel>
+                                  <TextBlock Grid.Column="1" Classes="caption semibold" VerticalAlignment="Center" Text="{Binding Label}" />
+                                  <TextBlock Grid.Column="2" Classes="mono secondary" FontSize="11.2" VerticalAlignment="Center"
+                                             TextTrimming="CharacterEllipsis" Text="{Binding KeyArgument}" />
+                                  <c:Chip Grid.Column="3" Classes="outlined small" Height="20" FontSize="10.4" Padding="6,0"
+                                          Content="{Binding Duration}" IsVisible="{Binding HasDuration}" />
+                                  <Panel Grid.Column="4" Width="18" Height="18" VerticalAlignment="Center">
+                                    <PathIcon Width="18" Height="18" Foreground="{DynamicResource TextSecondaryBrush}" Data="{StaticResource IconExpandMore}" IsVisible="{Binding !IsExpanded}" />
+                                    <PathIcon Width="18" Height="18" Foreground="{DynamicResource TextSecondaryBrush}" Data="{StaticResource IconExpandLess}" IsVisible="{Binding IsExpanded}" />
+                                  </Panel>
+                                </Grid>
+                              </Button>
+                              <StackPanel IsVisible="{Binding IsExpanded}">
+                                <Separator />
+                                <StackPanel Margin="12,8,12,10" Spacing="4">
+                                  <TextBlock Classes="caption secondary" Text="Arguments" />
+                                  <Border Padding="8" CornerRadius="{DynamicResource RadiusBase}" Background="{DynamicResource ActionHoverBrush}">
+                                    <SelectableTextBlock Classes="mono" FontSize="11.52" TextWrapping="Wrap" Text="{Binding Arguments}" />
+                                  </Border>
+                                  <TextBlock Classes="caption secondary" Margin="0,4,0,0" Text="Result" />
+                                  <SelectableTextBlock FontSize="12.8" TextWrapping="Wrap" Text="{Binding Summary}"
+                                                       Classes.bad="{Binding IsProblem}" />
+                                  <TextBlock Classes="caption secondary" Text="{Binding Status}" />
+                                </StackPanel>
+                              </StackPanel>
+                            </StackPanel>
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+
+                  <TextBlock Classes="caption disabled" Text="{Binding Footer}"
+                             IsVisible="{Binding Footer, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                </StackPanel>
               </Grid>
             </DataTemplate>
           </ListBox.ItemTemplate>
         </ListBox>
-      </Grid>
-    </Border>
 
-    <!-- The chosen chat -->
-    <Grid Grid.Column="1" RowDefinitions="Auto,*,Auto,Auto" Margin="16,12,16,12">
+        <!-- A question the agent is waiting on -->
+        <Border Grid.Row="3"
+                Margin="16,0,16,8" Padding="16"
+                BorderBrush="{DynamicResource PrimaryBrush}" BorderThickness="1"
+                CornerRadius="{DynamicResource RadiusDouble}"
+                IsVisible="{Binding HasQuestion}">
+          <StackPanel Spacing="12">
+            <c:Chip Classes="outlined small primary" Content="Agent Question">
+              <c:Chip.Icon>
+                <PathIcon Data="{StaticResource IconQuestionMark}" />
+              </c:Chip.Icon>
+            </c:Chip>
+            <TextBlock Classes="body1 medium" TextWrapping="Wrap" Text="{Binding Question}" />
+            <ItemsControl ItemsSource="{Binding QuestionOptions}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="x:String">
+                  <Button Classes="outlined" Content="{Binding}" Margin="0,0,8,8" CornerRadius="{DynamicResource RadiusDouble}"
+                          Command="{Binding $parent[ItemsControl].((vm:ChatViewModel)DataContext).ChooseOptionCommand}"
+                          CommandParameter="{Binding}" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Classes="caption secondary" Text="Or type your own answer below." />
+          </StackPanel>
+        </Border>
 
-      <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
-        <TextBlock Grid.Column="0" Classes="pageTitle" Text="{Binding Title}" />
-        <Button Classes="outlined" Grid.Column="1" Content="Delete chat" Command="{Binding DeleteChatCommand}" />
-      </Grid>
-
-      <TextBlock Grid.Row="1" Classes="secondary" HorizontalAlignment="Center" VerticalAlignment="Center"
-                 TextWrapping="Wrap" MaxWidth="460" TextAlignment="Center"
-                 Text="Ask about a market, your account or a trade. The agent looks things up with its tools and places an order only when you ask for one."
-                 IsVisible="{Binding IsEmpty}" />
-
-      <ListBox Grid.Row="1" x:Name="MessageList" Background="Transparent" ItemsSource="{Binding Messages}"
-               ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-        <ListBox.Styles>
-          <Style Selector="ListBoxItem">
-            <Setter Property="Padding" Value="0,5" />
-            <Setter Property="Focusable" Value="False" />
-          </Style>
-          <Style Selector="ListBoxItem:selected /template/ ContentPresenter, ListBoxItem:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="Transparent" />
-          </Style>
-        </ListBox.Styles>
-        <ListBox.ItemTemplate>
-          <DataTemplate x:DataType="vm:MessageItemViewModel">
-            <Border CornerRadius="{DynamicResource RadiusCard}" Padding="14,10"
-                    Classes.user="{Binding IsUser}" Classes.assistant="{Binding IsAssistant}">
-              <Border.Styles>
-                <Style Selector="Border.user">
-                  <Setter Property="Background" Value="{DynamicResource BorderMediumBrush}" />
-                  <Setter Property="HorizontalAlignment" Value="Right" />
-                  <Setter Property="MaxWidth" Value="720" />
-                </Style>
-                <Style Selector="Border.assistant">
-                  <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
-                  <Setter Property="HorizontalAlignment" Value="Stretch" />
-                </Style>
-              </Border.Styles>
-              <StackPanel Spacing="8">
-                <Expander Header="Reasoning" IsVisible="{Binding HasThinking}" HorizontalAlignment="Stretch">
-                  <SelectableTextBlock Classes="secondary" TextWrapping="Wrap" Text="{Binding Thinking}" />
-                </Expander>
-                <ItemsControl ItemsSource="{Binding ToolCalls}">
-                  <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:ToolCallItemViewModel">
-                      <Border BorderBrush="{DynamicResource BorderMediumBrush}" BorderThickness="1"
-                              CornerRadius="{DynamicResource RadiusBase}" Padding="10,6" Margin="0,0,0,4">
-                        <StackPanel Spacing="2">
-                          <Grid ColumnDefinitions="*,Auto">
-                            <TextBlock Grid.Column="0" FontFamily="Consolas, Cascadia Mono, monospace" FontSize="13"
-                                       Text="{Binding Name}" Foreground="{DynamicResource PrimaryBrush}" />
-                            <TextBlock Grid.Column="1" Classes="secondary" FontSize="12" Text="{Binding Status}"
-                                       Classes.problem="{Binding IsProblem}">
-                              <TextBlock.Styles>
-                                <Style Selector="TextBlock.problem">
-                                  <Setter Property="Foreground" Value="{DynamicResource BearishBrush}" />
-                                </Style>
-                              </TextBlock.Styles>
-                            </TextBlock>
-                          </Grid>
-                          <SelectableTextBlock Classes="secondary" FontSize="12" TextWrapping="Wrap" Text="{Binding Arguments}" />
-                          <SelectableTextBlock FontSize="12" TextWrapping="Wrap" Text="{Binding Summary}"
-                                               IsVisible="{Binding Summary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                        </StackPanel>
-                      </Border>
-                    </DataTemplate>
-                  </ItemsControl.ItemTemplate>
-                </ItemsControl>
-                <controls:MarkdownView Text="{Binding Content}" />
-                <ProgressBar IsIndeterminate="True" Height="2" IsVisible="{Binding IsRunning}" />
-                <TextBlock Foreground="{DynamicResource BearishBrush}" TextWrapping="Wrap" Text="{Binding Note}"
-                           IsVisible="{Binding HasNote}" />
-                <TextBlock Classes="secondary" FontSize="11" Text="{Binding Footer}"
-                           IsVisible="{Binding Footer, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <!-- The box to type in -->
+        <StackPanel Grid.Row="4" Margin="16,8,16,16" Spacing="12">
+          <Border Classes="inputCard">
+            <StackPanel>
+              <TextBox x:Name="DraftBox"
+                       Classes="bare"
+                       Padding="16,16,16,8"
+                       FontSize="15.2"
+                       MinHeight="44" MaxHeight="120"
+                       AcceptsReturn="True" TextWrapping="Wrap"
+                       VerticalContentAlignment="Top"
+                       AutomationProperties.Name="Message"
+                       PlaceholderText="Ask the trading agent..."
+                       Text="{Binding Draft}" />
+              <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" ColumnSpacing="4" Margin="12,4,12,12">
+                <Button Classes="inputOption" IsHitTestVisible="False" Focusable="False"
+                        AutomationProperties.Name="Model"
+                        ToolTip.Tip="The model is chosen on the Settings page">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Border Width="8" Height="8" CornerRadius="4" VerticalAlignment="Center" Background="{DynamicResource SecondaryLightBrush}" />
+                    <TextBlock Text="{Binding Model}" />
+                  </StackPanel>
+                </Button>
+                <Button x:Name="EffortButton" Grid.Column="1" Classes="inputOption" AutomationProperties.Name="Effort" ToolTip.Tip="How hard the model thinks">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Border Width="8" Height="8" CornerRadius="4" VerticalAlignment="Center" Background="{DynamicResource WarningBrush}" />
+                    <TextBlock Text="{Binding Effort}" />
+                    <PathIcon Width="16" Height="16" Data="{StaticResource IconKeyboardArrowDown}" />
+                  </StackPanel>
+                  <Button.Flyout>
+                    <Flyout Placement="TopEdgeAlignedLeft">
+                      <ItemsControl Margin="0,8" MinWidth="120" ItemsSource="{Binding Efforts}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="x:String">
+                            <Button Classes="inherit menuRow" Content="{Binding}"
+                                    Click="OnEffortChosen"
+                                    Command="{Binding $parent[ItemsControl].((vm:ChatViewModel)DataContext).ChooseEffortCommand}"
+                                    CommandParameter="{Binding}" />
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </Flyout>
+                  </Button.Flyout>
+                </Button>
+                <Button Grid.Column="3" Classes="send"
+                        AutomationProperties.Name="Send"
+                        ToolTip.Tip="Send"
+                        IsVisible="{Binding !IsRunning}"
+                        Command="{Binding SendCommand}">
+                  <PathIcon Width="18" Height="18" Data="{StaticResource IconSend}" />
+                </Button>
+                <Button Grid.Column="4" Classes="send stop"
+                        AutomationProperties.Name="Stop"
+                        ToolTip.Tip="Stop the reply"
+                        IsVisible="{Binding IsRunning}"
+                        Command="{Binding StopCommand}">
+                  <PathIcon Width="18" Height="18" Data="{StaticResource IconStop}" />
+                </Button>
+              </Grid>
+            </StackPanel>
+          </Border>
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Classes="pill" AutomationProperties.Name="Analyze" Command="{Binding RunQuickActionCommand}" CommandParameter="Analyze the market">
+              <StackPanel Orientation="Horizontal" Spacing="4">
+                <PathIcon Width="16" Height="16" Data="{StaticResource IconShowChart}" />
+                <TextBlock Text="Analyze" />
               </StackPanel>
-            </Border>
-          </DataTemplate>
-        </ListBox.ItemTemplate>
-      </ListBox>
-
-      <!-- A question the agent is waiting on -->
-      <Border Grid.Row="2" Classes="panel" BorderBrush="{DynamicResource PrimaryBrush}" BorderThickness="1"
-              Padding="14,10" Margin="0,8,0,0" IsVisible="{Binding HasQuestion}">
-        <StackPanel Spacing="8">
-          <TextBlock Classes="secondary" Text="The agent asks" />
-          <TextBlock TextWrapping="Wrap" Text="{Binding Question}" />
-          <ItemsControl ItemsSource="{Binding QuestionOptions}">
-            <ItemsControl.ItemsPanel>
-              <ItemsPanelTemplate>
-                <WrapPanel />
-              </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="x:String">
-                <Button Classes="outlined" Content="{Binding}" Margin="0,0,8,6"
-                        Command="{Binding $parent[ItemsControl].((vm:ChatViewModel)DataContext).ChooseOptionCommand}"
-                        CommandParameter="{Binding}" />
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-          <TextBlock Classes="secondary" FontSize="12" Text="Or type your own answer below." />
+            </Button>
+            <Button Classes="pill" AutomationProperties.Name="Recommend" Command="{Binding RunQuickActionCommand}" CommandParameter="Recommend a trade">
+              <StackPanel Orientation="Horizontal" Spacing="4">
+                <PathIcon Width="16" Height="16" Data="{StaticResource IconLightbulb}" />
+                <TextBlock Text="Recommend" />
+              </StackPanel>
+            </Button>
+            <Button Classes="pill" AutomationProperties.Name="Strategies" Command="{Binding RunQuickActionCommand}" CommandParameter="Review my strategies">
+              <StackPanel Orientation="Horizontal" Spacing="4">
+                <PathIcon Width="16" Height="16" Data="{StaticResource IconTune}" />
+                <TextBlock Text="Strategies" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
         </StackPanel>
-      </Border>
 
-      <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto" Margin="0,10,0,0">
-        <TextBox Classes="small" Grid.Column="0" x:Name="DraftBox" AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="160"
-                 PlaceholderText="Message the agent. Enter sends, Shift+Enter starts a new line."
-                 Text="{Binding Draft}" />
-        <Button Grid.Column="1" Content="Send" Margin="8,0,0,0" VerticalAlignment="Bottom" Classes="contained"
-                Command="{Binding SendCommand}" />
-        <Button Classes="outlined" Grid.Column="2" Content="Stop" Margin="8,0,0,0" VerticalAlignment="Bottom"
-                Command="{Binding StopCommand}" />
       </Grid>
-    </Grid>
+    </c:Card>
   </Grid>
 </UserControl>
