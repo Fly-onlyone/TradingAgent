@@ -6,7 +6,7 @@
 
   <Grid ColumnDefinitions="320,*">
 
-    <Border Grid.Column="0" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="0,0,1,0">
+    <Border Grid.Column="0" BorderBrush="{DynamicResource BorderMediumBrush}" BorderThickness="0,0,1,0">
       <ListBox Classes="navigation" Margin="12" Background="Transparent"
                ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}">
         <ListBox.ItemTemplate>
@@ -34,14 +34,14 @@
           <SelectableTextBlock TextWrapping="Wrap" Text="{Binding Details}" />
           <StackPanel Orientation="Horizontal" Spacing="8">
             <TextBlock Classes="secondary" VerticalAlignment="Center" Text="Your rating, 1 to 5" />
-            <NumericUpDown Width="130" Minimum="1" Maximum="5" Increment="1" FormatString="0.#" Value="{Binding Rating}"
+            <NumericUpDown Classes="small" Width="130" Minimum="1" Maximum="5" Increment="1" FormatString="0.#" Value="{Binding Rating}"
                            AutomationProperties.Name="Rating" />
           </StackPanel>
-          <TextBox Text="{Binding Notes}" PlaceholderText="Notes on how it did for you" AcceptsReturn="True" TextWrapping="Wrap"
+          <TextBox Classes="small" Text="{Binding Notes}" PlaceholderText="Notes on how it did for you" AcceptsReturn="True" TextWrapping="Wrap"
                    Height="70" AutomationProperties.Name="Rating notes" />
           <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Content="Save rating" Command="{Binding SaveRatingCommand}" />
-            <Button Content="Delete strategy" Command="{Binding DeleteCommand}" />
+            <Button Classes="outlined" Content="Save rating" Command="{Binding SaveRatingCommand}" />
+            <Button Classes="outlined" Content="Delete strategy" Command="{Binding DeleteCommand}" />
           </StackPanel>
         </StackPanel>
 
@@ -50,23 +50,23 @@
           <TextBlock Classes="title" Text="Read a strategy from a page or a text" />
           <TextBlock Classes="secondary" TextWrapping="Wrap"
                      Text="Paste a web address or the text of a strategy. The agent reads it in a conversation of its own and saves it when its rules are clear." />
-          <TextBox Text="{Binding ImportText}" AcceptsReturn="True" TextWrapping="Wrap" Height="80"
+          <TextBox Classes="small" Text="{Binding ImportText}" AcceptsReturn="True" TextWrapping="Wrap" Height="80"
                    PlaceholderText="https://… or the strategy in words" AutomationProperties.Name="Strategy to import" />
           <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Content="Have the agent read it" Command="{Binding ImportCommand}" />
-            <Button Content="Look for strategies now" Command="{Binding DiscoverCommand}"
+            <Button Classes="outlined" Content="Have the agent read it" Command="{Binding ImportCommand}" />
+            <Button Classes="outlined" Content="Look for strategies now" Command="{Binding DiscoverCommand}"
                     ToolTip.Tip="The agent searches the collected news and the web. Discovery on a schedule is switched on in Settings." />
           </StackPanel>
         </StackPanel>
 
         <StackPanel Spacing="8">
           <TextBlock Classes="title" Text="Write one yourself" />
-          <TextBox Text="{Binding NewName}" PlaceholderText="Name" AutomationProperties.Name="New strategy name" />
-          <TextBox Text="{Binding NewDescription}" PlaceholderText="What it is and when it works" AcceptsReturn="True"
+          <TextBox Classes="small" Text="{Binding NewName}" PlaceholderText="Name" AutomationProperties.Name="New strategy name" />
+          <TextBox Classes="small" Text="{Binding NewDescription}" PlaceholderText="What it is and when it works" AcceptsReturn="True"
                    TextWrapping="Wrap" Height="70" AutomationProperties.Name="New strategy description" />
-          <TextBox Text="{Binding NewRules}" PlaceholderText="Entry rules, in words or as JSON" AcceptsReturn="True"
+          <TextBox Classes="small" Text="{Binding NewRules}" PlaceholderText="Entry rules, in words or as JSON" AcceptsReturn="True"
                    TextWrapping="Wrap" Height="70" AutomationProperties.Name="New strategy rules" />
-          <Button Content="Add strategy" Command="{Binding AddCommand}" />
+          <Button Classes="outlined" Content="Add strategy" Command="{Binding AddCommand}" />
         </StackPanel>
       </StackPanel>
     </ScrollViewer>

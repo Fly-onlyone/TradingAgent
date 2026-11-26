@@ -1,0 +1,269 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="using:TradingAgent.App.Controls"
+        xmlns:fx="using:TradingAgent.App.Effects"
+        x:Class="TradingAgent.App.Views.GalleryWindow"
+        Title="Trading agent: component gallery"
+        Width="1400" Height="900"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource TextPrimaryBrush}"
+        FontFamily="{StaticResource FontSans}"
+        FontSize="14">
+
+  <ScrollViewer>
+    <Border x:Name="Page" Background="{DynamicResource BackgroundBrush}" Padding="24">
+    <StackPanel Spacing="32">
+
+      <StackPanel Spacing="8">
+        <TextBlock Classes="overline secondary" Text="TEXT" />
+        <WrapPanel>
+          <StackPanel Width="520" Spacing="4">
+            <TextBlock Classes="h1" Text="h1 Portfolio 1,234.56" />
+            <TextBlock Classes="h2" Text="h2 Portfolio 1,234.56" />
+            <TextBlock Classes="h3" Text="h3 Portfolio 1,234.56" />
+            <TextBlock Classes="h4" Text="h4 Portfolio 1,234.56" />
+            <TextBlock Classes="h5" Text="h5 Portfolio 1,234.56" />
+            <TextBlock Classes="h6" Text="h6 Portfolio 1,234.56" />
+          </StackPanel>
+          <StackPanel Width="520" Spacing="4">
+            <TextBlock Classes="subtitle1" Text="subtitle1 The quick brown fox jumps over the lazy dog" />
+            <TextBlock Classes="subtitle2" Text="subtitle2 The quick brown fox jumps over the lazy dog" />
+            <TextBlock Classes="body1" Text="body1 The quick brown fox jumps over the lazy dog" />
+            <TextBlock Classes="body2 secondary" Text="body2 The quick brown fox jumps over the lazy dog" />
+            <TextBlock Classes="caption secondary" Text="caption The quick brown fox jumps over the lazy dog" />
+            <TextBlock Classes="overline disabled" Text="OVERLINE GROUP LABEL" />
+            <TextBlock Classes="h3 mono bold" Text="12,345.67 USDT" />
+          </StackPanel>
+        </WrapPanel>
+      </StackPanel>
+
+      <StackPanel Spacing="12">
+        <TextBlock Classes="overline secondary" Text="BUTTONS" />
+        <StackPanel Orientation="Horizontal" Spacing="16">
+          <Button Classes="contained" Content="Contained" />
+          <Button Classes="contained" Content="Disabled" IsEnabled="False" />
+          <Button Classes="contained">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <PathIcon Classes="small" Data="{StaticResource IconSmartToy}" />
+              <TextBlock Text="Ask Agent" />
+            </StackPanel>
+          </Button>
+          <Button Classes="outlined" Content="Outlined" />
+          <Button Classes="outlined error" Content="Delete" />
+          <Button Classes="outlined" Content="Disabled" IsEnabled="False" />
+          <Button Content="Text" />
+          <Button Classes="inherit" Content="Inherit" />
+          <Button Classes="small outlined" Content="Small" />
+          <Button Content="Disabled" IsEnabled="False" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="16">
+          <Button Classes="icon" AutomationProperties.Name="Notifications">
+            <PathIcon Data="{StaticResource IconNotifications}" />
+          </Button>
+          <Button Classes="icon primary" AutomationProperties.Name="Add">
+            <PathIcon Data="{StaticResource IconAdd}" />
+          </Button>
+          <Button Classes="icon error" AutomationProperties.Name="Stop">
+            <PathIcon Data="{StaticResource IconStopCircle}" />
+          </Button>
+          <Button Classes="icon small" AutomationProperties.Name="More">
+            <PathIcon Classes="small" Data="{StaticResource IconMoreVert}" />
+          </Button>
+          <Button Classes="icon" IsEnabled="False" AutomationProperties.Name="Settings">
+            <PathIcon Data="{StaticResource IconSettings}" />
+          </Button>
+        </StackPanel>
+      </StackPanel>
+
+      <StackPanel Spacing="16">
+        <TextBlock Classes="overline secondary" Text="INPUTS" />
+        <StackPanel Orientation="Horizontal" Spacing="16">
+          <TextBox Width="220" c:Field.Label="Symbol" />
+          <TextBox Width="220" c:Field.Label="Symbol" Text="BTC-USDT" />
+          <TextBox Width="220" PlaceholderText="Search memories" />
+          <TextBox Width="220" c:Field.Label="Disabled" Text="Read only" IsEnabled="False" />
+          <TextBox Classes="small" Width="200" c:Field.Label="Small" Text="1h" />
+          <TextBox Classes="small" Width="200" PlaceholderText="Search">
+            <TextBox.InnerLeftContent>
+              <PathIcon Classes="small" Data="{StaticResource IconSearch}" />
+            </TextBox.InnerLeftContent>
+          </TextBox>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="16">
+          <ComboBox Width="220" c:Field.Label="Timeframe" SelectedIndex="1">
+            <ComboBoxItem Content="15m" />
+            <ComboBoxItem Content="1H" />
+            <ComboBoxItem Content="4H" />
+          </ComboBox>
+          <ComboBox Width="220" c:Field.Label="Status" />
+          <ComboBox Classes="small" Width="180" PlaceholderText="All" />
+          <ComboBox Classes="small" Width="180" SelectedIndex="0" IsEnabled="False">
+            <ComboBoxItem Content="Disabled" />
+          </ComboBox>
+          <TextBox Width="260" Height="104" AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top"
+                   c:Field.Label="Notes" Text="Several lines of text&#10;in one field." />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="16">
+          <NumericUpDown Width="200" c:Field.Label="Max position %" Value="5" Increment="0.5" />
+          <NumericUpDown Classes="small" Width="160" Value="30" />
+          <NumericUpDown Width="200" c:Field.Label="Disabled" Value="2" IsEnabled="False" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="24" Margin="11,0,0,0">
+          <ToggleSwitch Content="Reduced Motion" />
+          <ToggleSwitch Content="Background Effects" IsChecked="True" />
+          <ToggleSwitch Content="Disabled" IsEnabled="False" />
+          <ToggleSwitch Content="Disabled on" IsChecked="True" IsEnabled="False" />
+          <ToggleSwitch Classes="small" Content="Small" IsChecked="True" />
+          <CheckBox Content="Unchecked" />
+          <CheckBox Content="Checked" IsChecked="True" />
+          <CheckBox Content="Disabled" IsChecked="True" IsEnabled="False" />
+        </StackPanel>
+      </StackPanel>
+
+      <StackPanel Spacing="16">
+        <TextBlock Classes="overline secondary" Text="SURFACES" />
+        <StackPanel Orientation="Horizontal" Spacing="24">
+          <c:Card Width="300" Padding="16">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="h6" Text="Glass card" />
+              <TextBlock Classes="body2 secondary" TextWrapping="Wrap" Text="Tint over glass, accent line on top, glow inside." />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <c:Chip Content="Filled" />
+                <c:Chip Classes="small" Content="Small" />
+                <c:Chip Classes="outlined small success" Content="Saved">
+                  <c:Chip.Icon>
+                    <PathIcon Data="{StaticResource IconCheckCircleOutline}" />
+                  </c:Chip.Icon>
+                </c:Chip>
+              </StackPanel>
+            </StackPanel>
+          </c:Card>
+          <Border Classes="paper" Width="260" Padding="16">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="h6" Text="Paper" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <c:Chip Classes="outlined" Content="Default" />
+                <c:Chip Classes="outlined error" Content="Failed" />
+                <c:Chip Classes="outlined warning small" Content="Low" />
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="12">
+                <c:StatusDot Status="Online" VerticalAlignment="Center" />
+                <TextBlock Classes="caption secondary" Text="Trade kit" />
+                <c:StatusDot Status="Offline" VerticalAlignment="Center" />
+                <TextBlock Classes="caption secondary" Text="Agent" />
+                <c:StatusDot Status="Busy" VerticalAlignment="Center" />
+                <c:StatusDot Status="Away" VerticalAlignment="Center" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+          <StackPanel Width="360" Spacing="8">
+            <c:Alert Severity="Info" Content="Reports contain no keys or account data." />
+            <c:Alert Severity="Success" Content="Backup saved." />
+            <c:Alert Severity="Warning" Content="The exchange did not answer." />
+            <c:Alert Severity="Error" Content="Emergency stop is ON." />
+          </StackPanel>
+          <StackPanel Width="340" Spacing="8">
+            <c:Alert Classes="filled" Severity="Success" Content="Order filled: BTC-USDT" />
+            <c:Alert Classes="filled" Severity="Error" Content="The order was refused." />
+            <c:Alert Classes="filled" Severity="Info" Content="A task finished." />
+          </StackPanel>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="24">
+          <c:Spinner />
+          <c:Spinner IsIndeterminate="False" Value="70" Width="64" Height="64" Thickness="5" Track="{DynamicResource Primary16Brush}" />
+          <StackPanel Width="240" Spacing="12" VerticalAlignment="Center">
+            <ProgressBar Value="40" />
+            <ProgressBar IsIndeterminate="True" />
+            <c:LinearProgress Value="72" Height="8" />
+          </StackPanel>
+          <c:Skeleton Width="240" Height="100" />
+          <c:Skeleton Width="240" Height="40" CornerRadius="{DynamicResource RadiusBase}" />
+        </StackPanel>
+      </StackPanel>
+
+      <StackPanel Spacing="16">
+        <TextBlock Classes="overline secondary" Text="GLASS" />
+        <Panel Width="900" Height="220" HorizontalAlignment="Left">
+          <Canvas>
+            <Ellipse Canvas.Left="40" Canvas.Top="20" Width="180" Height="180" Fill="{DynamicResource PrimaryBrush}" />
+            <Ellipse Canvas.Left="330" Canvas.Top="60" Width="140" Height="140" Fill="{DynamicResource SecondaryBrush}" />
+            <Rectangle Canvas.Left="600" Canvas.Top="30" Width="220" Height="12" Fill="{DynamicResource AccentBrush}" />
+            <TextBlock Canvas.Left="560" Canvas.Top="90" Classes="h2" Text="Sharp text behind" />
+          </Canvas>
+          <Panel Width="320" Height="160" HorizontalAlignment="Left" Margin="120,30,0,0">
+            <fx:BackdropBlur Radius="16" CornerRadius="{DynamicResource RadiusCard}" />
+            <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource BorderMediumBrush}" BorderThickness="1" CornerRadius="{DynamicResource RadiusCard}">
+              <TextBlock Classes="h6" Margin="16" Text="blur(16px) under a card" />
+            </Border>
+          </Panel>
+          <Panel Width="300" Height="160" HorizontalAlignment="Right" Margin="0,30,20,0">
+            <fx:BackdropBlur Radius="28" CornerRadius="{DynamicResource RadiusCard}" />
+            <Border Background="{DynamicResource SidebarBrush}" CornerRadius="{DynamicResource RadiusCard}">
+              <TextBlock Classes="h6" Margin="16" Text="blur(28px) under the sidebar colour" />
+            </Border>
+          </Panel>
+        </Panel>
+      </StackPanel>
+
+      <StackPanel Spacing="16">
+        <TextBlock Classes="overline secondary" Text="TABS AND LISTS" />
+        <StackPanel Orientation="Horizontal" Spacing="24">
+          <c:Card Width="460">
+            <TabControl Classes="divided" Padding="16">
+              <TabItem Header="Open Orders">
+                <TextBlock Classes="body2 secondary" Text="Content of the first tab." />
+              </TabItem>
+              <TabItem Header="Order History">
+                <TextBlock Classes="body2 secondary" Text="Content of the second tab." />
+              </TabItem>
+              <TabItem Header="Positions" IsEnabled="False" />
+            </TabControl>
+          </c:Card>
+          <c:Card Width="420">
+            <StackPanel>
+              <Border Classes="tableHead small">
+                <Grid ColumnDefinitions="*,90,110">
+                  <TextBlock Text="Instrument" />
+                  <TextBlock Grid.Column="1" Text="Side" />
+                  <TextBlock Grid.Column="2" Text="Price" TextAlignment="Right" />
+                </Grid>
+              </Border>
+              <ListBox Classes="table small">
+                <ListBoxItem>
+                  <Grid ColumnDefinitions="*,90,110">
+                    <TextBlock Text="BTC-USDT-SWAP" />
+                    <TextBlock Grid.Column="1" Classes="good" Text="buy" />
+                    <TextBlock Grid.Column="2" Classes="mono" Text="97,412.5" TextAlignment="Right" />
+                  </Grid>
+                </ListBoxItem>
+                <ListBoxItem>
+                  <Grid ColumnDefinitions="*,90,110">
+                    <TextBlock Text="ETH-USDT" />
+                    <TextBlock Grid.Column="1" Classes="bad" Text="sell" />
+                    <TextBlock Grid.Column="2" Classes="mono" Text="3,512.08" TextAlignment="Right" />
+                  </Grid>
+                </ListBoxItem>
+              </ListBox>
+            </StackPanel>
+          </c:Card>
+          <c:Card Width="240">
+            <ListBox SelectedIndex="1" Height="130">
+              <ListBoxItem Content="Morning scan" />
+              <ListBoxItem Content="Risk check" />
+              <ListBoxItem Content="Weekly review" />
+              <ListBoxItem Content="News digest" />
+              <ListBoxItem Content="Pattern mining" />
+            </ListBox>
+          </c:Card>
+          <StackPanel Width="160" Spacing="12">
+            <Separator />
+            <TextBlock Classes="caption secondary" Text="Divider above" />
+          </StackPanel>
+        </StackPanel>
+      </StackPanel>
+
+    </StackPanel>
+    </Border>
+  </ScrollViewer>
+</Window>

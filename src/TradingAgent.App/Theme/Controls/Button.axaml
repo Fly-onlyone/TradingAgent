@@ -1,0 +1,321 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:c="using:TradingAgent.App.Controls">
+
+  <!--
+    The Material button of the previous UI.
+
+    Variant, by class: none = text, "outlined", "contained".
+    Colour, by class: none = primary, "secondary", "success", "error", "warning", "info", "inherit".
+    Size, by class: "small", "large". Every size has the same padding, as it had there.
+    "icon" makes a round icon button; add "small" for the 30 px one.
+
+    A contained button is always the primary gradient: the previous theme painted it over the colour.
+  -->
+  <ControlTheme x:Key="{x:Type Button}" TargetType="Button">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusBase}" />
+    <Setter Property="Padding" Value="16,8" />
+    <Setter Property="MinWidth" Value="64" />
+    <!-- One line of 14 px text at line height 1.75, plus the padding. -->
+    <Setter Property="MinHeight" Value="40.5" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusAdorner" Value="{x:Null}" />
+    <!-- A templated control cuts off what its template draws outside it; the shadow lies outside. -->
+    <Setter Property="ClipToBounds" Value="False" />
+    <Setter Property="RenderTransform" Value="none" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Panel>
+          <Border x:Name="PART_FocusRing"
+                  CornerRadius="{TemplateBinding CornerRadius}"
+                  BoxShadow="{DynamicResource FocusRingShadow}"
+                  IsVisible="False" />
+          <Border x:Name="PART_Surface"
+                  Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="{TemplateBinding CornerRadius}"
+                  BoxShadow="{DynamicResource ButtonNoShadow}">
+            <Border.Transitions>
+              <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.25" Easing="{StaticResource EaseStandard}" />
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.25" Easing="{StaticResource EaseStandard}" />
+              </Transitions>
+            </Border.Transitions>
+            <Panel>
+              <c:Ripple x:Name="PART_Ripple"
+                        Fill="{TemplateBinding Foreground}"
+                        CornerRadius="{TemplateBinding CornerRadius}" />
+              <ContentPresenter x:Name="PART_ContentPresenter"
+                                Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}"
+                                Padding="{TemplateBinding Padding}"
+                                RecognizesAccessKey="True"
+                                HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+            </Panel>
+          </Border>
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+
+    <Style Selector="^:focus-visible /template/ Border#PART_FocusRing">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <!-- Text and outlined: a wash of the button's own colour under the pointer. -->
+    <Style Selector="^:pointerover">
+      <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Foreground" Value="{DynamicResource ActionDisabledBrush}" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Cursor" Value="Arrow" />
+    </Style>
+
+    <Style Selector="^.small">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="MinHeight" Value="38.75" />
+    </Style>
+    <Style Selector="^.large">
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="MinHeight" Value="42.25" />
+    </Style>
+
+    <Style Selector="^.outlined">
+      <Setter Property="BorderThickness" Value="2" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Primary50Brush}" />
+      <Setter Property="MinHeight" Value="44.5" />
+      <Style Selector="^:pointerover">
+        <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
+      </Style>
+      <Style Selector="^:disabled">
+        <Setter Property="BorderBrush" Value="{DynamicResource ActionDisabledBackgroundBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="MinHeight" Value="42.5" />
+      </Style>
+      <Style Selector="^.small">
+        <Setter Property="MinHeight" Value="42.75" />
+      </Style>
+    </Style>
+
+    <!-- Colours of text and outlined buttons. -->
+    <Style Selector="^.secondary">
+      <Setter Property="Foreground" Value="{DynamicResource SecondaryBrush}" />
+      <Style Selector="^:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Secondary08Brush}" />
+      </Style>
+      <Style Selector="^.outlined">
+        <Setter Property="BorderBrush" Value="{DynamicResource Secondary50Brush}" />
+        <Style Selector="^:pointerover">
+          <Setter Property="BorderBrush" Value="{DynamicResource SecondaryBrush}" />
+        </Style>
+      </Style>
+    </Style>
+    <Style Selector="^.success">
+      <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}" />
+      <Style Selector="^:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Success08Brush}" />
+      </Style>
+      <Style Selector="^.outlined">
+        <Setter Property="BorderBrush" Value="{DynamicResource Success50Brush}" />
+        <Style Selector="^:pointerover">
+          <Setter Property="BorderBrush" Value="{DynamicResource SuccessBrush}" />
+        </Style>
+      </Style>
+    </Style>
+    <Style Selector="^.error">
+      <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
+      <Style Selector="^:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Error08Brush}" />
+      </Style>
+      <Style Selector="^.outlined">
+        <Setter Property="BorderBrush" Value="{DynamicResource Error50Brush}" />
+        <Style Selector="^:pointerover">
+          <Setter Property="BorderBrush" Value="{DynamicResource ErrorBrush}" />
+        </Style>
+      </Style>
+    </Style>
+    <Style Selector="^.warning">
+      <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+      <Style Selector="^:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Warning08Brush}" />
+      </Style>
+      <Style Selector="^.outlined">
+        <Setter Property="BorderBrush" Value="{DynamicResource Warning50Brush}" />
+        <Style Selector="^:pointerover">
+          <Setter Property="BorderBrush" Value="{DynamicResource WarningBrush}" />
+        </Style>
+      </Style>
+    </Style>
+    <Style Selector="^.info">
+      <Setter Property="Foreground" Value="{DynamicResource InfoBrush}" />
+      <Style Selector="^:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Info08Brush}" />
+      </Style>
+      <Style Selector="^.outlined">
+        <Setter Property="BorderBrush" Value="{DynamicResource Info50Brush}" />
+        <Style Selector="^:pointerover">
+          <Setter Property="BorderBrush" Value="{DynamicResource InfoBrush}" />
+        </Style>
+      </Style>
+    </Style>
+    <Style Selector="^.inherit">
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+      <Style Selector="^:pointerover">
+        <Setter Property="Background" Value="{DynamicResource ActionHoverBrush}" />
+      </Style>
+      <Style Selector="^.outlined">
+        <Setter Property="BorderBrush" Value="{DynamicResource TextPrimaryBrush}" />
+      </Style>
+    </Style>
+    <Style Selector="^.outlined:disabled, ^.secondary:disabled, ^.success:disabled, ^.error:disabled, ^.warning:disabled, ^.info:disabled, ^.inherit:disabled">
+      <Setter Property="Foreground" Value="{DynamicResource ActionDisabledBrush}" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <!-- Contained: the glassy primary gradient, lifting under the pointer and sinking when pressed. -->
+    <Style Selector="^.contained">
+      <Setter Property="Background" Value="{DynamicResource ButtonBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource PrimaryContrastBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Primary30Brush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="MinHeight" Value="42.5" />
+      <Style Selector="^.small">
+        <Setter Property="MinHeight" Value="40.75" />
+      </Style>
+      <Setter Property="Transitions">
+        <Transitions>
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.2" Easing="{StaticResource EaseCss}" />
+        </Transitions>
+      </Setter>
+      <Style Selector="^ /template/ Border#PART_Surface">
+        <Setter Property="BoxShadow" Value="{DynamicResource ButtonShadow}" />
+        <Setter Property="Transitions">
+          <Transitions>
+            <BrushTransition Property="Background" Duration="0:0:0.2" Easing="{StaticResource EaseCss}" />
+            <BrushTransition Property="BorderBrush" Duration="0:0:0.2" Easing="{StaticResource EaseCss}" />
+            <BoxShadowsTransition Property="BoxShadow" Duration="0:0:0.2" Easing="{StaticResource EaseCss}" />
+          </Transitions>
+        </Setter>
+      </Style>
+      <Style Selector="^:pointerover">
+        <Setter Property="Background" Value="{DynamicResource ButtonHoverBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Primary50Brush}" />
+        <Setter Property="RenderTransform" Value="translateY(-1px)" />
+        <Style Selector="^ /template/ Border#PART_Surface">
+          <Setter Property="BoxShadow" Value="{DynamicResource ButtonHoverShadow}" />
+        </Style>
+      </Style>
+      <Style Selector="^:pressed">
+        <Setter Property="Background" Value="{DynamicResource ButtonPressedBrush}" />
+        <Setter Property="RenderTransform" Value="scale(0.97)" />
+        <Setter Property="Transitions">
+          <Transitions>
+            <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.1" Easing="{StaticResource EaseCss}" />
+          </Transitions>
+        </Setter>
+        <Style Selector="^ /template/ Border#PART_Surface">
+          <Setter Property="BoxShadow" Value="{DynamicResource ButtonPressedShadow}" />
+          <Setter Property="Transitions">
+            <Transitions>
+              <BrushTransition Property="Background" Duration="0:0:0.1" Easing="{StaticResource EaseCss}" />
+              <BoxShadowsTransition Property="BoxShadow" Duration="0:0:0.1" Easing="{StaticResource EaseCss}" />
+            </Transitions>
+          </Setter>
+        </Style>
+      </Style>
+      <Style Selector="^:disabled">
+        <Setter Property="Background" Value="{DynamicResource ButtonDisabledBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Muted10Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource White38Brush}" />
+        <Setter Property="RenderTransform" Value="none" />
+        <Style Selector="^ /template/ Border#PART_Surface">
+          <Setter Property="BoxShadow" Value="{DynamicResource ButtonNoShadow}" />
+        </Style>
+      </Style>
+    </Style>
+
+    <!-- Icon button: round, the ripple starts in its middle. -->
+    <Style Selector="^.icon">
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Padding" Value="8" />
+      <Setter Property="MinWidth" Value="40" />
+      <Setter Property="MinHeight" Value="40" />
+      <Setter Property="Width" Value="40" />
+      <Setter Property="Height" Value="40" />
+      <Style Selector="^ /template/ c|Ripple#PART_Ripple">
+        <Setter Property="IsCentered" Value="True" />
+      </Style>
+      <Style Selector="^ /template/ Border#PART_Surface">
+        <Setter Property="Transitions">
+          <Transitions>
+            <BrushTransition Property="Background" Duration="0:0:0.15" Easing="{StaticResource EaseStandard}" />
+          </Transitions>
+        </Setter>
+      </Style>
+      <Style Selector="^:pointerover">
+        <Setter Property="Background" Value="{DynamicResource ActionHoverBrush}" />
+      </Style>
+      <Style Selector="^.small">
+        <Setter Property="Padding" Value="5" />
+        <Setter Property="MinWidth" Value="30" />
+        <Setter Property="MinHeight" Value="30" />
+        <Setter Property="Width" Value="30" />
+        <Setter Property="Height" Value="30" />
+      </Style>
+      <Style Selector="^.primary">
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+        <Style Selector="^:pointerover">
+          <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
+        </Style>
+      </Style>
+      <Style Selector="^.error">
+        <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
+      </Style>
+      <Style Selector="^.success">
+        <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}" />
+      </Style>
+      <Style Selector="^:disabled">
+        <Setter Property="Foreground" Value="{DynamicResource ActionDisabledBrush}" />
+        <Setter Property="Background" Value="Transparent" />
+      </Style>
+    </Style>
+  </ControlTheme>
+
+  <!-- An icon takes the colour of the text around it and the size of a Material icon. -->
+  <ControlTheme x:Key="{x:Type PathIcon}" TargetType="PathIcon">
+    <Setter Property="Width" Value="24" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Viewbox Width="{TemplateBinding Width}" Height="{TemplateBinding Height}">
+          <!-- The icons are drawn on a 24 x 24 grid; the canvas keeps that grid whatever the glyph covers. -->
+          <Canvas Width="24" Height="24">
+            <Path Fill="{TemplateBinding Foreground}" Data="{TemplateBinding Data}" />
+          </Canvas>
+        </Viewbox>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^.small">
+      <Setter Property="Width" Value="20" />
+      <Setter Property="Height" Value="20" />
+    </Style>
+    <Style Selector="^.large">
+      <Setter Property="Width" Value="35" />
+      <Setter Property="Height" Value="35" />
+    </Style>
+  </ControlTheme>
+
+</ResourceDictionary>

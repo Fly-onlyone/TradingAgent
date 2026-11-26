@@ -9,11 +9,11 @@
 
     <Grid Grid.Row="0" ColumnDefinitions="Auto,200,110,Auto,*">
       <TextBlock Grid.Column="0" Classes="pageTitle" Text="{Binding Title}" VerticalAlignment="Center" Margin="0,0,16,0" />
-      <TextBox Grid.Column="1" Text="{Binding Symbol}" PlaceholderText="BTC-USDT" AutomationProperties.Name="Instrument" />
-      <ComboBox Grid.Column="2" Margin="8,0,0,0" HorizontalAlignment="Stretch" ItemsSource="{Binding Timeframes}"
+      <TextBox Classes="small" Grid.Column="1" Text="{Binding Symbol}" PlaceholderText="BTC-USDT" AutomationProperties.Name="Instrument" />
+      <ComboBox Classes="small" Grid.Column="2" Margin="8,0,0,0" HorizontalAlignment="Stretch" ItemsSource="{Binding Timeframes}"
                 SelectedItem="{Binding Timeframe}" AutomationProperties.Name="Timeframe" />
-      <Button Grid.Column="3" Content="Show" Margin="8,0,0,0" IsDefault="True" Command="{Binding LoadCommand}" />
-      <TextBlock Grid.Column="4" Foreground="{StaticResource BearishBrush}" VerticalAlignment="Center" Margin="12,0,0,0"
+      <Button Classes="outlined" Grid.Column="3" Content="Show" Margin="8,0,0,0" IsDefault="True" Command="{Binding LoadCommand}" />
+      <TextBlock Grid.Column="4" Foreground="{DynamicResource BearishBrush}" VerticalAlignment="Center" Margin="12,0,0,0"
                  TextTrimming="CharacterEllipsis" Text="{Binding Status}" />
     </Grid>
 
@@ -23,7 +23,7 @@
       <TextBlock Classes="secondary" VerticalAlignment="Bottom" Margin="0,0,0,3" Text="{Binding Day}" />
     </StackPanel>
 
-    <Border Grid.Row="2" Background="{StaticResource AppBackgroundBrush}" CornerRadius="{StaticResource ControlCornerRadius}"
+    <Border Grid.Row="2" Background="{DynamicResource BackgroundBrush}" CornerRadius="{DynamicResource RadiusBase}"
             ClipToBounds="True">
       <controls:CandleChart Candles="{Binding Candles}" />
     </Border>

@@ -15,6 +15,8 @@
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.15" />
     <PackageVersion Include="OpenAI" Version="2.15.0" />
     <PackageVersion Include="Sentry" Version="7.0.1" />
+    <!-- The version Avalonia.Skia brings; named so the app can draw the backdrop blur on the same canvas. -->
+    <PackageVersion Include="SkiaSharp" Version="3.119.4" />
     <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.15" />
     <!-- Keep in step with the vpk tool version in the packaging workflows. -->
     <PackageVersion Include="Velopack" Version="1.2.161" />

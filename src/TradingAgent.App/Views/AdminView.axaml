@@ -13,11 +13,11 @@
       <TabItem Header="Log">
         <Grid RowDefinitions="Auto,*,Auto" Margin="0,8,0,0">
           <Grid Grid.Row="0" ColumnDefinitions="160,*,Auto">
-            <ComboBox Grid.Column="0" HorizontalAlignment="Stretch" ItemsSource="{Binding LogLevels}" SelectedItem="{Binding LogLevel}"
+            <ComboBox Classes="small" Grid.Column="0" HorizontalAlignment="Stretch" ItemsSource="{Binding LogLevels}" SelectedItem="{Binding LogLevel}"
                       AutomationProperties.Name="Log level" />
-            <TextBox Grid.Column="1" Margin="8,0,0,0" Text="{Binding LogQuery}" PlaceholderText="Text in the entry"
+            <TextBox Classes="small" Grid.Column="1" Margin="8,0,0,0" Text="{Binding LogQuery}" PlaceholderText="Text in the entry"
                      AutomationProperties.Name="Search the log" />
-            <Button Grid.Column="2" Margin="8,0,0,0" Content="Refresh" Command="{Binding RefreshLogsCommand}" />
+            <Button Classes="outlined" Grid.Column="2" Margin="8,0,0,0" Content="Refresh" Command="{Binding RefreshLogsCommand}" />
           </Grid>
           <ListBox Grid.Row="1" Margin="0,8,0,0" Background="Transparent" ItemsSource="{Binding Logs}" SelectedItem="{Binding SelectedLog}">
             <ListBox.ItemTemplate>
@@ -41,8 +41,8 @@
         <Grid RowDefinitions="Auto,Auto,*" Margin="0,8,0,0">
           <SelectableTextBlock Grid.Row="0" Classes="value" TextWrapping="Wrap" Text="{Binding DatabaseInfo}" />
           <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="0,10">
-            <Button Content="Check the file" Command="{Binding CheckIntegrityCommand}" />
-            <Button Content="Compact" Command="{Binding CompactCommand}" />
+            <Button Classes="outlined" Content="Check the file" Command="{Binding CheckIntegrityCommand}" />
+            <Button Classes="outlined" Content="Compact" Command="{Binding CompactCommand}" />
             <TextBlock VerticalAlignment="Center" Text="{Binding DatabaseStatus}" />
           </StackPanel>
           <ScrollViewer Grid.Row="2">
@@ -65,10 +65,10 @@
           <TextBlock Grid.Row="0" Classes="secondary" TextWrapping="Wrap"
                      Text="A backup is a copy of the whole database: chats, tasks, strategies, settings, and your keys, which stay encrypted for your Windows account. A backup can be restored on this Windows account only." />
           <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="0,10">
-            <Button Content="Back up now" Command="{Binding BackUpCommand}" />
-            <Button Content="Restore the chosen backup…" Command="{Binding AskRestoreCommand}" />
-            <Button Content="Delete the chosen backup" Command="{Binding DeleteBackupCommand}" />
-            <Button Content="Call off the restore" Command="{Binding CancelRestoreCommand}" />
+            <Button Classes="outlined" Content="Back up now" Command="{Binding BackUpCommand}" />
+            <Button Classes="outlined" Content="Restore the chosen backup…" Command="{Binding AskRestoreCommand}" />
+            <Button Classes="outlined" Content="Delete the chosen backup" Command="{Binding DeleteBackupCommand}" />
+            <Button Classes="outlined" Content="Call off the restore" Command="{Binding CancelRestoreCommand}" />
           </StackPanel>
           <ListBox Grid.Row="2" Background="Transparent" ItemsSource="{Binding Backups}" SelectedItem="{Binding SelectedBackup}">
             <ListBox.ItemTemplate>
@@ -81,14 +81,14 @@
             </ListBox.ItemTemplate>
           </ListBox>
           <StackPanel Grid.Row="3" Spacing="8" Margin="0,8,0,0">
-            <Border Classes="panel" BorderBrush="{StaticResource BearishBrush}" BorderThickness="1" Padding="16,12"
+            <Border Classes="panel" BorderBrush="{DynamicResource BearishBrush}" BorderThickness="1" Padding="16,12"
                     IsVisible="{Binding ConfirmingRestore}">
               <StackPanel Spacing="8">
                 <TextBlock TextWrapping="Wrap"
                            Text="When the app next starts, the chosen backup takes the place of the database. Everything newer than the backup is no longer shown. The replaced database is kept in the data folder as trading-agent.db.before-restore." />
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                  <Button Content="Yes, restore at the next start" Command="{Binding ConfirmRestoreCommand}" />
-                  <Button Content="No" Command="{Binding CancelRestoreCommand}" />
+                  <Button Classes="outlined" Content="Yes, restore at the next start" Command="{Binding ConfirmRestoreCommand}" />
+                  <Button Classes="outlined" Content="No" Command="{Binding CancelRestoreCommand}" />
                 </StackPanel>
               </StackPanel>
             </Border>
@@ -113,14 +113,14 @@
             </ListBox.ItemTemplate>
           </ListBox>
           <StackPanel Grid.Row="2" Spacing="8" Margin="0,8,0,0">
-            <Button Content="Delete everything of the chosen kind…" Command="{Binding AskDeleteCommand}" />
-            <Border Classes="panel" BorderBrush="{StaticResource BearishBrush}" BorderThickness="1" Padding="16,12"
+            <Button Classes="outlined" Content="Delete everything of the chosen kind…" Command="{Binding AskDeleteCommand}" />
+            <Border Classes="panel" BorderBrush="{DynamicResource BearishBrush}" BorderThickness="1" Padding="16,12"
                     IsVisible="{Binding ConfirmingDelete}">
               <StackPanel Spacing="8">
                 <TextBlock TextWrapping="Wrap" Text="Everything of the chosen kind is deleted now and cannot be brought back, except from a backup." />
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                  <Button Content="Yes, delete it" Command="{Binding ConfirmDeleteCommand}" />
-                  <Button Content="No" Command="{Binding CancelDeleteCommand}" />
+                  <Button Classes="outlined" Content="Yes, delete it" Command="{Binding ConfirmDeleteCommand}" />
+                  <Button Classes="outlined" Content="No" Command="{Binding CancelDeleteCommand}" />
                 </StackPanel>
               </StackPanel>
             </Border>

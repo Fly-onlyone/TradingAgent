@@ -9,12 +9,12 @@
 
       <Grid ColumnDefinitions="*,Auto">
         <TextBlock Grid.Column="0" Classes="pageTitle" Text="{Binding Title}" />
-        <Button Grid.Column="1" Content="Refresh" Command="{Binding RefreshCommand}" />
+        <Button Classes="outlined" Grid.Column="1" Content="Refresh" Command="{Binding RefreshCommand}" />
       </Grid>
 
-      <Border Classes="panel" BorderBrush="{StaticResource BearishBrush}" BorderThickness="1" Padding="16,10"
+      <Border Classes="panel" BorderBrush="{DynamicResource BearishBrush}" BorderThickness="1" Padding="16,10"
               IsVisible="{Binding EmergencyStop}">
-        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource BearishBrush}"
+        <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource BearishBrush}"
                    Text="Emergency stop is ON: the agent can cancel orders and nothing else. Switch it off in Settings." />
       </Border>
 

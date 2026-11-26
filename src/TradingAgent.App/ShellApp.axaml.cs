@@ -1,8 +1,11 @@
 using System.Runtime.InteropServices;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform;
+using Avalonia.Styling;
+using Avalonia.Themes.Fluent;
 using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -19,7 +22,9 @@ using TradingAgent.Agent.Web;
 using TradingAgent.App.Hosting;
 using TradingAgent.App.Shell;
 using TradingAgent.App.Telemetry;
+using TradingAgent.App.Theme;
 using TradingAgent.App.ViewModels;
+using TradingAgent.App.Views;
 using TradingAgent.Core;
 using TradingAgent.Core.Agent;
 using TradingAgent.Core.Hosting;
@@ -59,15 +64,65 @@ public sealed partial class ShellApp : Application
     private static readonly TimeSpan _webTimeout = TimeSpan.FromSeconds(30);
 
     private ServiceProvider? _services;
+    private ResourceDictionary? _theme;
+
+    /// <summary>The preset the app shows now.</summary>
+    public ThemePreset Preset { get; private set; } = ThemePreset.Solar;
 
     /// <summary>The single-instance lock taken in <c>Main</c>; null under the headless test platform.</summary>
     internal static SingleInstanceGuard? Instance { get; set; }
 
-    public override void Initialize() => AvaloniaXamlLoader.Load(this);
+    /// <summary>The command line when it asks for the component gallery instead of the app; otherwise null.</summary>
+    internal static string[]? GalleryArguments { get; set; }
+
+    public override void Initialize()
+    {
+        AvaloniaXamlLoader.Load(this);
+        // Without the database: a window built before the settings are read, as in a test, still has its colours.
+        ApplyTheme(ThemePreset.Solar);
+    }
+
+    /// <summary>
+    /// Changes the look of the running app to a preset. Views read colours, shadows and corner radii
+    /// with <c>DynamicResource</c>, so they follow at once.
+    /// </summary>
+    public void ApplyTheme(ThemePreset preset)
+    {
+        ArgumentNullException.ThrowIfNull(preset);
+        var next = ThemeBuilder.Build(preset);
+        var merged = Resources.MergedDictionaries;
+        var at = _theme is null ? -1 : merged.IndexOf(_theme);
+        if (at >= 0)
+        {
+            merged[at] = next;
+        }
+        else
+        {
+            merged.Add(next);
+        }
+
+        _theme = next;
+        Preset = preset;
+
+        // Controls that still use a stock Fluent template take their accent from the preset too.
+        if (Styles.OfType<FluentTheme>().FirstOrDefault() is { } fluent)
+        {
+            fluent.Palettes[ThemeVariant.Dark] = new ColorPaletteResources
+            {
+                Accent = preset.Primary.Main,
+                RegionColor = preset.Background,
+                ErrorText = preset.Error.Main,
+            };
+        }
+    }
 
     public override void OnFrameworkInitializationCompleted()
     {
-        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        if (GalleryArguments is { } galleryArguments && ApplicationLifetime is IClassicDesktopStyleApplicationLifetime galleryLifetime)
+        {
+            ShowGallery(galleryLifetime, galleryArguments);
+        }
+        else if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var paths = AppPaths.ForCurrentUser(BuildFlavor.IsDevelopment);
             paths.EnsureCreated();
@@ -120,6 +175,24 @@ public sealed partial class ShellApp : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private void ShowGallery(IClassicDesktopStyleApplicationLifetime lifetime, string[] args)
+    {
+        var (preset, shotFile) = GalleryWindow.Options(args);
+        ApplyTheme(preset);
+        // A picture is of the controls at rest: what moves on the render thread would not be in it.
+        Motion.FrameDriver.IsInstant = shotFile is not null;
+        var window = new GalleryWindow();
+        lifetime.MainWindow = window;
+        if (shotFile is not null)
+        {
+            window.Opened += async (_, _) =>
+            {
+                await window.SaveAsync(shotFile);
+                lifetime.Shutdown();
+            };
+        }
     }
 
     /// <summary>

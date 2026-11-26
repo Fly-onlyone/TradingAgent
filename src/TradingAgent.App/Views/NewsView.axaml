@@ -9,9 +9,9 @@
     <Grid Grid.Column="0" RowDefinitions="Auto,Auto,*,Auto" Margin="0,0,20,0">
       <TextBlock Grid.Row="0" Classes="pageTitle" Text="{Binding Title}" />
       <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" Margin="0,12,0,8">
-        <TextBox Grid.Column="0" Text="{Binding Query}" PlaceholderText="Search, or a ticker such as BTC"
+        <TextBox Classes="small" Grid.Column="0" Text="{Binding Query}" PlaceholderText="Search, or a ticker such as BTC"
                  AutomationProperties.Name="Search news" />
-        <Button Grid.Column="1" Content="Refresh" Margin="8,0,0,0" Command="{Binding RefreshCommand}" />
+        <Button Classes="outlined" Grid.Column="1" Content="Refresh" Margin="8,0,0,0" Command="{Binding RefreshCommand}" />
         <TextBlock Grid.Column="2" Classes="secondary" VerticalAlignment="Center" Margin="12,0,0,0" Text="{Binding Status}" />
       </Grid>
       <ListBox Grid.Row="2" Background="Transparent" ItemsSource="{Binding Articles}" SelectedItem="{Binding Selected}"
@@ -29,7 +29,7 @@
         <StackPanel Spacing="8">
           <TextBlock FontWeight="SemiBold" TextWrapping="Wrap" Text="{Binding Selected.Title}" />
           <SelectableTextBlock Classes="secondary" TextWrapping="Wrap" MaxHeight="150" Text="{Binding Selected.Summary}" />
-          <Button Content="Open in the browser" Command="{Binding OpenCommand}" />
+          <Button Classes="outlined" Content="Open in the browser" Command="{Binding OpenCommand}" />
         </StackPanel>
       </Border>
     </Grid>
@@ -47,7 +47,7 @@
                   <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
                   <TextBlock Classes="secondary" FontSize="12" Text="{Binding Line}" TextWrapping="Wrap" />
                 </StackPanel>
-                <Button Grid.Column="2" Content="Remove" Command="{Binding RemoveCommand}" VerticalAlignment="Center" />
+                <Button Classes="outlined" Grid.Column="2" Content="Remove" Command="{Binding RemoveCommand}" VerticalAlignment="Center" />
               </Grid>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
@@ -55,9 +55,9 @@
       </ScrollViewer>
       <StackPanel Grid.Row="2" Spacing="8" Margin="0,8,0,0">
         <TextBlock Classes="secondary" Text="Add a source by its RSS or Atom feed" />
-        <TextBox Text="{Binding NewSourceName}" PlaceholderText="Name" AutomationProperties.Name="Source name" />
-        <TextBox Text="{Binding NewSourceUrl}" PlaceholderText="https://example.com/feed" AutomationProperties.Name="Feed address" />
-        <Button Content="Add source" Command="{Binding AddSourceCommand}" />
+        <TextBox Classes="small" Text="{Binding NewSourceName}" PlaceholderText="Name" AutomationProperties.Name="Source name" />
+        <TextBox Classes="small" Text="{Binding NewSourceUrl}" PlaceholderText="https://example.com/feed" AutomationProperties.Name="Feed address" />
+        <Button Classes="outlined" Content="Add source" Command="{Binding AddSourceCommand}" />
       </StackPanel>
     </Grid>
   </Grid>

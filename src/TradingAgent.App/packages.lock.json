@@ -80,6 +80,15 @@
         "resolved": "7.0.1",
         "contentHash": "4hyExeUWArJdiO6VlmwCUHgWPosvasauNpgB6pVP7swuwyahWHRqgWHKwj3t5h18wFezIMte6BmI4dqEzl1TYw=="
       },
+      "SkiaSharp": {
+        "type": "Direct",
+        "requested": "[3.119.4, )",
+        "resolved": "3.119.4",
+        "contentHash": "53NOSUZ1Us+91Sm0uCkIivh/k7jOowRErZT2sIWwPFN9mLUvdxnE6rS4sWo4255+Rd2MWUSF+j0NMZHD6Cke+Q==",
+        "dependencies": {
+          "SkiaSharp.NativeAssets.Win32": "3.119.4"
+        }
+      },
       "Velopack": {
         "type": "Direct",
         "requested": "[1.2.161, )",
@@ -262,14 +271,6 @@
         "type": "Transitive",
         "resolved": "10.0.15",
         "contentHash": "NjzLiZ1/bYx8VwLqHxNnCfDTQQbCY7P1dwT7JM5FiANiaSfI6UKHi0/sla+jyRbOIbPAMJkhWQ/9pH3tMf+IrQ=="
-      },
-      "SkiaSharp": {
-        "type": "Transitive",
-        "resolved": "3.119.4",
-        "contentHash": "53NOSUZ1Us+91Sm0uCkIivh/k7jOowRErZT2sIWwPFN9mLUvdxnE6rS4sWo4255+Rd2MWUSF+j0NMZHD6Cke+Q==",
-        "dependencies": {
-          "SkiaSharp.NativeAssets.Win32": "3.119.4"
-        }
       },
       "SkiaSharp.NativeAssets.Linux": {
         "type": "Transitive",

@@ -1,0 +1,208 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:c="using:TradingAgent.App.Controls">
+
+  <!--
+    The Material switch of the previous UI: a 34 x 14 track and a 20 px thumb in a 58 x 38 box, with
+    its label to the right. The class "small" gives the 40 x 24 one.
+
+    Content is the label. OnContent and OffContent stay empty unless a view sets them; they show
+    after the label.
+  -->
+  <ControlTheme x:Key="{x:Type ToggleSwitch}" TargetType="ToggleSwitch">
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="OnContent" Value="{x:Null}" />
+    <Setter Property="OffContent" Value="{x:Null}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusAdorner" Value="{x:Null}" />
+    <!-- The switch box has 12 px of room around its track; the label of the previous UI pulled it back by 11. -->
+    <Setter Property="Margin" Value="-11,0,16,0" />
+    <Setter Property="KnobTransitions">
+      <Transitions>
+        <DoubleTransition Property="Canvas.Left" Duration="0:0:0.15" Easing="{StaticResource EaseStandard}" />
+      </Transitions>
+    </Setter>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Grid Background="{TemplateBinding Background}" ColumnDefinitions="Auto,Auto,Auto">
+          <Panel x:Name="SwitchBox" Width="58" Height="38" TemplatedControl.IsTemplateFocusTarget="True">
+            <Border x:Name="Track"
+                    Width="34" Height="14" CornerRadius="7"
+                    Background="White" Opacity="0.3">
+              <Border.Transitions>
+                <Transitions>
+                  <BrushTransition Property="Background" Duration="0:0:0.15" Easing="{StaticResource EaseStandard}" />
+                  <DoubleTransition Property="Opacity" Duration="0:0:0.15" Easing="{StaticResource EaseStandard}" />
+                </Transitions>
+              </Border.Transitions>
+            </Border>
+            <!-- The control moves the thumb by the width of this canvas: 20 px. -->
+            <Canvas x:Name="PART_SwitchKnob" Width="20" Height="38" HorizontalAlignment="Left">
+              <Panel x:Name="PART_MovingKnobs" Width="38" Height="38">
+                <Border x:Name="Halo" CornerRadius="19" Background="Transparent" />
+                <Border x:Name="Thumb"
+                        Width="20" Height="20" CornerRadius="10"
+                        Background="#E0E0E0"
+                        BoxShadow="{DynamicResource Elevation1Shadow}">
+                  <Border.Transitions>
+                    <Transitions>
+                      <BrushTransition Property="Background" Duration="0:0:0.15" Easing="{StaticResource EaseStandard}" />
+                    </Transitions>
+                  </Border.Transitions>
+                </Border>
+              </Panel>
+            </Canvas>
+          </Panel>
+          <ContentPresenter x:Name="PART_ContentPresenter"
+                            Grid.Column="1"
+                            LineHeight="24"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            RecognizesAccessKey="True" />
+          <Panel Grid.Column="2" VerticalAlignment="{TemplateBinding VerticalContentAlignment}">
+            <ContentPresenter x:Name="PART_OffContentPresenter"
+                              LineHeight="24"
+                              Content="{TemplateBinding OffContent}"
+                              ContentTemplate="{TemplateBinding OffContentTemplate}" />
+            <ContentPresenter x:Name="PART_OnContentPresenter"
+                              LineHeight="24"
+                              Content="{TemplateBinding OnContent}"
+                              ContentTemplate="{TemplateBinding OnContentTemplate}" />
+          </Panel>
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+
+    <Style Selector="^:pointerover /template/ Border#Halo">
+      <Setter Property="Background" Value="{DynamicResource ActionHoverBrush}" />
+    </Style>
+    <Style Selector="^:focus-visible /template/ Border#Halo">
+      <Setter Property="Background" Value="{DynamicResource ActionSelectedBrush}" />
+    </Style>
+
+    <Style Selector="^:unchecked /template/ ContentPresenter#PART_OnContentPresenter">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="^:checked /template/ ContentPresenter#PART_OffContentPresenter">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="^:checked">
+      <Style Selector="^ /template/ Border#Thumb">
+        <Setter Property="Background" Value="{DynamicResource PrimaryBrush}" />
+      </Style>
+      <Style Selector="^ /template/ Border#Track">
+        <Setter Property="Background" Value="{DynamicResource PrimaryBrush}" />
+        <Setter Property="Opacity" Value="0.5" />
+      </Style>
+      <Style Selector="^:pointerover /template/ Border#Halo">
+        <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
+      </Style>
+    </Style>
+
+    <Style Selector="^:disabled">
+      <Setter Property="Foreground" Value="{DynamicResource TextDisabledBrush}" />
+      <Setter Property="Cursor" Value="Arrow" />
+      <Style Selector="^ /template/ Border#Thumb">
+        <Setter Property="Background" Value="#757575" />
+      </Style>
+      <Style Selector="^ /template/ Border#Track">
+        <Setter Property="Opacity" Value="0.2" />
+      </Style>
+      <Style Selector="^:checked /template/ Border#Thumb">
+        <Setter Property="Background" Value="{DynamicResource SwitchDisabledCheckedBrush}" />
+      </Style>
+    </Style>
+
+    <Style Selector="^.small">
+      <Setter Property="FontSize" Value="14" />
+      <Style Selector="^ /template/ Panel#SwitchBox">
+        <Setter Property="Width" Value="40" />
+        <Setter Property="Height" Value="24" />
+      </Style>
+      <Style Selector="^ /template/ Border#Track">
+        <Setter Property="Width" Value="26" />
+        <Setter Property="Height" Value="10" />
+        <Setter Property="CornerRadius" Value="5" />
+      </Style>
+      <Style Selector="^ /template/ Canvas#PART_SwitchKnob">
+        <Setter Property="Width" Value="16" />
+        <Setter Property="Height" Value="24" />
+      </Style>
+      <Style Selector="^ /template/ Panel#PART_MovingKnobs">
+        <Setter Property="Width" Value="24" />
+        <Setter Property="Height" Value="24" />
+      </Style>
+      <Style Selector="^ /template/ Border#Halo">
+        <Setter Property="CornerRadius" Value="12" />
+      </Style>
+      <Style Selector="^ /template/ Border#Thumb">
+        <Setter Property="Width" Value="16" />
+        <Setter Property="Height" Value="16" />
+        <Setter Property="CornerRadius" Value="8" />
+      </Style>
+    </Style>
+  </ControlTheme>
+
+  <!-- The Material checkbox: a 24 px box in a 42 px touch area, its label to the right. -->
+  <ControlTheme x:Key="{x:Type CheckBox}" TargetType="CheckBox">
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusAdorner" Value="{x:Null}" />
+    <Setter Property="Margin" Value="-11,0,16,0" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Grid Background="{TemplateBinding Background}" ColumnDefinitions="Auto,Auto">
+          <Panel Width="42" Height="42">
+            <Border x:Name="Halo" CornerRadius="21" Background="Transparent" />
+            <c:Ripple IsCentered="True" CornerRadius="21" Fill="{DynamicResource PrimaryBrush}" />
+            <PathIcon x:Name="Box"
+                      Foreground="{DynamicResource TextSecondaryBrush}"
+                      Data="{StaticResource IconCheckBoxOutlineBlank}" />
+          </Panel>
+          <ContentPresenter x:Name="PART_ContentPresenter"
+                            Grid.Column="1"
+                            LineHeight="24"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            RecognizesAccessKey="True" />
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover /template/ Border#Halo">
+      <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
+    </Style>
+    <Style Selector="^:focus-visible /template/ Border#Halo">
+      <Setter Property="Background" Value="{DynamicResource Primary12Brush}" />
+    </Style>
+    <Style Selector="^:checked /template/ PathIcon#Box">
+      <Setter Property="Data" Value="{StaticResource IconCheckBox}" />
+      <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+    </Style>
+    <Style Selector="^:indeterminate /template/ PathIcon#Box">
+      <Setter Property="Data" Value="{StaticResource IconIndeterminateCheckBox}" />
+      <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Foreground" Value="{DynamicResource TextDisabledBrush}" />
+      <Setter Property="Cursor" Value="Arrow" />
+      <Style Selector="^ /template/ PathIcon#Box">
+        <Setter Property="Foreground" Value="{DynamicResource ActionDisabledBrush}" />
+      </Style>
+    </Style>
+  </ControlTheme>
+
+</ResourceDictionary>

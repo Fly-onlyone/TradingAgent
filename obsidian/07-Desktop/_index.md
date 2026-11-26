@@ -28,6 +28,7 @@ in November 2026. The other zones of this vault describe that previous app and a
 ## Pages
 
 - [[App Pages]]
+- [[Design System]]
 
 ## Agent
 

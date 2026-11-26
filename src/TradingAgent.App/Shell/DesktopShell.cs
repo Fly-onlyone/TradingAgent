@@ -62,6 +62,8 @@ internal sealed partial class DesktopShell(
         if (settings.GetValue(SettingKeys.WindowStartOpen))
         {
             _window.Opened += (_, _) => telemetry.CompleteStartup();
+            // Does nothing unless the command line asked for pictures of the pages.
+            _window.Opened += (_, _) => _ = PageShots.RunAsync(_window, mainViewModel, Exit);
             _window.Show();
         }
         else

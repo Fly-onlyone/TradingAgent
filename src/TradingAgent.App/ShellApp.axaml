@@ -8,24 +8,24 @@
     <app:ViewLocator />
   </Application.DataTemplates>
 
+  <!--
+    The colours, shadows and corner radii are not here: ThemeBuilder works them out from the chosen
+    preset and ShellApp.ApplyTheme merges them in. Every reference to them is a DynamicResource.
+  -->
   <Application.Resources>
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>
-        <MergeResourceInclude Source="/Theme/Palette.axaml" />
+        <MergeResourceInclude Source="/Theme/Tokens/Typography.axaml" />
+        <MergeResourceInclude Source="/Theme/Tokens/Motion.axaml" />
+        <MergeResourceInclude Source="/Theme/Tokens/Icons.axaml" />
+        <MergeResourceInclude Source="/Theme/Kit.axaml" />
       </ResourceDictionary.MergedDictionaries>
     </ResourceDictionary>
   </Application.Resources>
 
   <Application.Styles>
-    <FluentTheme>
-      <FluentTheme.Palettes>
-        <!-- "Solar" preset of the previous UI. Only the dark variant exists. -->
-        <ColorPaletteResources x:Key="Dark"
-                               Accent="#F97316"
-                               RegionColor="#211B14"
-                               ErrorText="#EF4444" />
-      </FluentTheme.Palettes>
-    </FluentTheme>
+    <!-- The base for controls the kit has no theme for. Its palette follows the preset (ShellApp.ApplyTheme). -->
+    <FluentTheme />
     <StyleInclude Source="/Theme/Styles.axaml" />
   </Application.Styles>
 

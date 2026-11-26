@@ -1,0 +1,85 @@
+---
+tags: [desktop, ui, theme]
+---
+
+# Design System
+
+> The look of the app is the look of the previous UI (React, Material UI 6, framer-motion), rebuilt
+> for Avalonia. Code: `src/TradingAgent.App/Theme`, `Controls`, `Motion`, `Effects`.
+
+The source of every number is the old frontend, last present at commit `9582f8a` under `frontend/`
+(`git show 9582f8a:frontend/src/theme/presets.ts`). No theme package is used: the Material packages
+for Avalonia differ from Material UI in ripple, shadows, icons and text field, so the kit is written
+by hand.
+
+## Presets
+
+Four looks, dark only: Solar (default), Glacier, Jade, Eclipse. `ThemePreset` holds their base
+values. `ThemeBuilder.Build` works out everything else (translucent surfaces, gradients, shadows,
+corner radii) as the old palette and component files did, and returns one resource dictionary.
+`ShellApp.ApplyTheme` swaps that dictionary.
+
+- Every reference to a theme resource is a `DynamicResource`. A `StaticResource` would not follow a
+  theme switch. A test fails when a view asks for a key the builder does not make.
+- Key names: `PrimaryBrush` and `PrimaryColor`, `Primary15Brush` (the colour at 15 %), `CardBrush`,
+  `CardShadow`, `RadiusBase`, `RadiusCard`.
+- Shadows are CSS values. `ThemeBuilder.CssBlur` converts the blur, because Avalonia and a browser
+  turn a blur radius into softness differently.
+- Two states of one shadow have the same layers in the same order, or the transition between them
+  jumps.
+
+## Kit
+
+`Theme/Kit.axaml` merges one file per control from `Theme/Controls`. A theme there replaces the
+Fluent theme of the same control, because application resources are searched first. Fluent stays as
+the base of controls the kit does not cover yet.
+
+| Control                         | Classes                                                                  |
+|---------------------------------|--------------------------------------------------------------------------|
+| `Button`                        | none = text, `outlined`, `contained`; colours; `small`; `icon`           |
+| `TextBox`, `ComboBox`, `NumericUpDown` | 56 px, `small` = 40 px; `c:Field.Label` gives a floating label    |
+| `ListBox`                       | `table` (rows with a hover bar), `plain` (rows without any state)        |
+| `c:Card`, `c:Chip`, `c:Alert`   | `outlined`, `small`, colours on a chip; `filled` on an alert             |
+| `TextBlock`                     | `h1` to `h6`, `subtitle1/2`, `body1/2`, `caption`, `overline`, `mono`    |
+
+Things to know:
+
+- A templated control clips its template. A theme whose template draws outside the control (a
+  shadow, a floated label) sets `ClipToBounds` to false.
+- Contained buttons and filled chips are always primary coloured. The old theme painted over the
+  colour, and the port keeps that.
+- Icons are Material Icons as path data in `Theme/Tokens/Icons.axaml`, keyed `Icon<Name>`, taken from
+  `@mui/icons-material` 6. Add one by copying its path there.
+- Fonts ship in `Assets/Fonts`: Inter 3.19 and JetBrains Mono, static files. The old UI named both
+  but relied on them being installed.
+- Menus, select lists and tooltips are drawn inside the window (`OverlayPopups`), so shadows are not
+  cut and they can animate.
+
+## Motion
+
+| Need                                   | Use                                                         |
+|----------------------------------------|-------------------------------------------------------------|
+| Hover and press                        | XAML `Transitions`, always with an easing from `Tokens/Motion.axaml` |
+| A control coming in                    | `m:Enter.Kind`, or `m:Enter.Children` on a panel for a stagger |
+| A spring, or a drawing that changes every frame | `FrameDriver.Run`                                  |
+| Endless motion (shimmer, pulse, flow)  | `Endless`: runs in the compositor, costs the UI thread nothing |
+| A menu opening                         | `m:Grow.On`                                                 |
+
+`FrameDriver.IsInstant` switches all of it off: every animation jumps to its end. Tests set it, and
+so do the picture modes below.
+
+Not the same as before: a popup has no closing animation.
+
+## Glass
+
+`Effects/BackdropBlur` blurs what is behind a control, as `backdrop-filter` did. It asks the Skia
+canvas for a layer that starts as a blurred copy of the frame. Checked in a real window and in the
+Native AOT build. Without a Skia canvas (a headless test) it does nothing.
+
+## Looking at it
+
+- `TradingAgent.exe --gallery [--theme jade]` opens every control of the kit on one page.
+- `--gallery --shot file.png` saves that page as a picture and exits.
+- `--page-shots folder` opens the real app, saves a picture of each page and exits.
+
+The pictures are drawn into a bitmap, so they do not need a visible window.

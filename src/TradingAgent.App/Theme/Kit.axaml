@@ -1,0 +1,22 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    The component kit: one control theme per file, each written out in full. A theme here replaces
+    the Fluent one of the same control, because application resources are searched before those of
+    a theme in Application.Styles.
+  -->
+  <ResourceDictionary.MergedDictionaries>
+    <MergeResourceInclude Source="/Theme/Controls/Button.axaml" />
+    <MergeResourceInclude Source="/Theme/Controls/TextBox.axaml" />
+    <MergeResourceInclude Source="/Theme/Controls/ComboBox.axaml" />
+    <MergeResourceInclude Source="/Theme/Controls/Toggles.axaml" />
+    <MergeResourceInclude Source="/Theme/Controls/Surfaces.axaml" />
+    <MergeResourceInclude Source="/Theme/Controls/Progress.axaml" />
+    <MergeResourceInclude Source="/Theme/Controls/Navigation.axaml" />
+    <MergeResourceInclude Source="/Theme/Controls/Scroll.axaml" />
+    <MergeResourceInclude Source="/Theme/Controls/Popups.axaml" />
+    <MergeResourceInclude Source="/Theme/Controls/NumberBox.axaml" />
+  </ResourceDictionary.MergedDictionaries>
+
+</ResourceDictionary>
