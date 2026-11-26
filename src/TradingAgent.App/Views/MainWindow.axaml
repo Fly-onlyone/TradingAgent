@@ -3,6 +3,7 @@
         xmlns:vm="using:TradingAgent.App.ViewModels"
         xmlns:c="using:TradingAgent.App.Controls"
         xmlns:fx="using:TradingAgent.App.Effects"
+        xmlns:m="using:TradingAgent.App.Motion"
         x:Class="TradingAgent.App.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Title="{Binding WindowTitle}"
@@ -101,6 +102,42 @@
       <Setter Property="ToolTip.ServiceEnabled" Value="False" />
     </Style>
 
+    <!-- The list under the bell. -->
+    <Style Selector="FlyoutPresenter.notifications">
+      <Setter Property="Background" Value="{DynamicResource GlassCardBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{DynamicResource RadiusCard}" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Width" Value="340" />
+      <Setter Property="MaxHeight" Value="420" />
+      <Setter Property="RenderTransformOrigin" Value="100%,0%" />
+    </Style>
+    <Style Selector="Border.notification">
+      <Setter Property="Padding" Value="16,10" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
+    </Style>
+    <Style Selector="Border.notification:pointerover">
+      <Setter Property="Background" Value="{DynamicResource Primary05Brush}" />
+    </Style>
+    <Style Selector="Border.notification.read">
+      <Setter Property="Opacity" Value="0.6" />
+    </Style>
+    <!-- The count on the bell: a red pill on its upper right corner. -->
+    <Style Selector="Border.badge">
+      <Setter Property="MinWidth" Value="20" />
+      <Setter Property="Height" Value="20" />
+      <Setter Property="Padding" Value="6,0" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Background" Value="{DynamicResource ErrorBrush}" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="VerticalAlignment" Value="Top" />
+      <Setter Property="Margin" Value="0,-8,-10,0" />
+      <Setter Property="IsHitTestVisible" Value="False" />
+    </Style>
+
     <!-- The theme selector. -->
     <Style Selector="FlyoutPresenter.themes">
       <Setter Property="Background" Value="{DynamicResource GlassCardBrush}" />
@@ -183,6 +220,75 @@
               <c:StatusDot Width="7" Height="7" VerticalAlignment="Center" Status="{Binding Header.AgentStatus}" />
               <TextBlock Classes="caption secondary" VerticalAlignment="Center" Text="Agent" />
             </StackPanel>
+
+            <Button x:Name="BellButton" Classes="icon" AutomationProperties.Name="Notifications" ToolTip.Tip="Notifications"
+                    IsVisible="{Binding Header.Notifications, Converter={x:Static ObjectConverters.IsNotNull}}">
+              <Panel>
+                <PathIcon Data="{StaticResource IconNotifications}" />
+                <Border Classes="badge" IsVisible="{Binding Header.Notifications.HasUnread, FallbackValue=False}">
+                  <TextBlock FontSize="12" FontWeight="Medium" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"
+                             Text="{Binding Header.Notifications.BadgeText}" />
+                </Border>
+              </Panel>
+              <Button.Flyout>
+                <Flyout Placement="BottomEdgeAlignedRight" VerticalOffset="8" FlyoutPresenterClasses="notifications" Opened="OnNotificationsOpened">
+                  <Panel>
+                  <!-- 24 px of CSS blur behind the list, so the page under it does not show through as text. -->
+                  <fx:BackdropBlur Radius="39.84" CornerRadius="{DynamicResource RadiusCard}" />
+                  <DockPanel>
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="16,8,8,8">
+                      <TextBlock Classes="subtitle2 bold" VerticalAlignment="Center" Text="Notifications" />
+                      <Button Grid.Column="1" Classes="icon small"
+                              AutomationProperties.Name="Mark all as read"
+                              ToolTip.Tip="Mark all as read"
+                              IsVisible="{Binding Header.Notifications.HasUnread, FallbackValue=False}"
+                              Command="{Binding Header.Notifications.MarkAllReadCommand}">
+                        <PathIcon Classes="small" Data="{StaticResource IconDeleteSweep}" />
+                      </Button>
+                    </Grid>
+                    <Border DockPanel.Dock="Top" Height="1" Background="{DynamicResource BorderSubtleBrush}" />
+                    <Panel>
+                      <StackPanel Margin="0,48" HorizontalAlignment="Center"
+                                  IsVisible="{Binding !Header.Notifications.HasItems, FallbackValue=True}">
+                        <PathIcon Width="40" Height="40" Margin="0,0,0,8" Opacity="0.4"
+                                  Foreground="{DynamicResource TextSecondaryBrush}" Data="{StaticResource IconNotificationsNone}" />
+                        <TextBlock Classes="body2 secondary" HorizontalAlignment="Center" Text="No notifications" />
+                      </StackPanel>
+                      <ScrollViewer MaxHeight="360" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding Header.Notifications.Items}">
+                          <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                              <StackPanel m:Enter.Children="Cascade" />
+                            </ItemsPanelTemplate>
+                          </ItemsControl.ItemsPanel>
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:NotificationItemViewModel">
+                              <Border Classes="notification" Classes.read="{Binding IsRead}">
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                                  <Panel Width="20" Height="20" Margin="0,2,0,0" VerticalAlignment="Top">
+                                    <PathIcon Width="20" Height="20" Foreground="{DynamicResource SuccessBrush}" Data="{StaticResource IconCheckCircleOutline}" IsVisible="{Binding IsSuccess}" />
+                                    <PathIcon Width="20" Height="20" Foreground="{DynamicResource ErrorBrush}" Data="{StaticResource IconErrorOutline}" IsVisible="{Binding IsError}" />
+                                    <PathIcon Width="20" Height="20" Foreground="{DynamicResource WarningBrush}" Data="{StaticResource IconWarningAmber}" IsVisible="{Binding IsWarning}" />
+                                    <PathIcon Width="20" Height="20" Foreground="{DynamicResource InfoBrush}" Data="{StaticResource IconInfoOutlined}" IsVisible="{Binding IsInfo}" />
+                                  </Panel>
+                                  <StackPanel Grid.Column="1">
+                                    <TextBlock Classes="body2 semibold" TextTrimming="CharacterEllipsis" Text="{Binding Title}" />
+                                    <TextBlock Classes="caption secondary" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
+                                               Text="{Binding Body}" IsVisible="{Binding HasBody}" />
+                                    <TextBlock Classes="caption disabled" FontSize="10.4" Text="{Binding When}" />
+                                  </StackPanel>
+                                </Grid>
+                              </Border>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </ScrollViewer>
+                    </Panel>
+                  </DockPanel>
+                  </Panel>
+                </Flyout>
+              </Button.Flyout>
+            </Button>
 
             <Button x:Name="ThemeButton" Classes="icon" AutomationProperties.Name="Theme" ToolTip.Tip="Theme">
               <PathIcon Data="{StaticResource IconPaletteOutlined}" />
@@ -361,6 +467,42 @@
     </Grid>
 
     <!-- The answers to the two emergency buttons of the header. -->
+    <!-- A notification that has just come in: for five seconds in the lower right corner, a newer one above an older. -->
+    <ItemsControl x:Name="Toasts" Width="360" Margin="24" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                  ItemsSource="{Binding Header.Notifications.Toasts}">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <ReversibleStackPanel ReverseOrder="True" Spacing="12" />
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:ToastViewModel">
+          <Border CornerRadius="{DynamicResource RadiusBase}" ClipToBounds="True" m:Enter.Kind="Toast">
+            <Panel>
+              <!-- A filled alert is tinted glass; over a page it needs what is behind it blurred to be read. -->
+              <fx:BackdropBlur Radius="39.84" CornerRadius="{DynamicResource RadiusBase}" />
+              <c:Alert Classes="filled" Severity="{Binding Severity}">
+                <c:Alert.Action>
+                  <Button Classes="icon small" Foreground="White"
+                          AutomationProperties.Name="Close"
+                          Command="{Binding $parent[ItemsControl].((vm:MainViewModel)DataContext).Header.Notifications.DismissCommand}"
+                          CommandParameter="{Binding}">
+                    <PathIcon Classes="small" Data="{StaticResource IconClose}" />
+                  </Button>
+                </c:Alert.Action>
+                <StackPanel>
+                  <TextBlock FontWeight="Bold" TextWrapping="Wrap" Text="{Binding Title}" />
+                  <TextBlock FontSize="14" Margin="0,4,0,0" Opacity="0.9" TextWrapping="Wrap" MaxLines="4" TextTrimming="CharacterEllipsis"
+                             Text="{Binding Body}" IsVisible="{Binding HasBody}" />
+                </StackPanel>
+              </c:Alert>
+              <c:Countdown VerticalAlignment="Bottom" Fill="#4DFFFFFF" />
+            </Panel>
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
     <c:Dialog Title="Emergency Stop"
               IsOpen="{Binding Header.ConfirmingStop}"
               CloseCommand="{Binding Header.CancelEmergencyCommand}"

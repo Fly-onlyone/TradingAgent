@@ -6,6 +6,7 @@ using Avalonia.Threading;
 using TradingAgent.App.Effects;
 using TradingAgent.App.Motion;
 using TradingAgent.App.ViewModels;
+using TradingAgent.Data.Notifications;
 
 namespace TradingAgent.App.Shell;
 
@@ -72,7 +73,30 @@ internal static class PageShots
             }
         }
 
+        await BellAsync(window, main, folder);
         exit();
+    }
+
+    /// <summary>
+    /// A last picture with the list under the bell open and a message in the corner. The message is a
+    /// sample that is only shown, never stored; the list is what this installation holds.
+    /// </summary>
+    private static async Task BellAsync(Window window, MainViewModel main, string folder)
+    {
+        if (main.Header.Notifications is not { } notifications || window.FindControl<Button>("BellButton") is not { Flyout: { } list } bell)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        notifications.Toasts.Add(new ToastViewModel(new StoredNotification("sample-1", "risk_alert", "Risk check", "The order was held back: it would take the position above the limit.", now, false)));
+        notifications.Toasts.Add(new ToastViewModel(new StoredNotification("sample-2", "trade_executed", "Order filled", "Bought 0.05 BTC-USDT at 97,412.50.", now, false)));
+        list.ShowAt(bell);
+        await Task.Delay(_settle);
+        await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+        Save(window, Path.Combine(folder, string.Create(CultureInfo.InvariantCulture, $"{main.Pages.Count + 1:00}-bell.png")));
+        list.Hide();
+        notifications.Toasts.Clear();
     }
 
     private static void Save(Window window, string file)

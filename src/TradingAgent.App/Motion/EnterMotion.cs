@@ -39,6 +39,8 @@ public enum EnterKind
 
     /// <summary>Only fades in: the parent of a staggered group.</summary>
     Fade,
+
+    Toast,
 }
 
 /// <summary>
@@ -72,6 +74,7 @@ public sealed record EnterMotion(double X = 0, double Y = 0, double Scale = 1, S
         EnterKind.Reveal => new EnterMotion(Y: 40, Spring: Motion.Spring.Page),
         EnterKind.Message => new EnterMotion(Y: 10, Seconds: 0.2, Easing: _tween),
         EnterKind.Fade => new EnterMotion(Seconds: 0.3, Easing: _defaultFade),
+        EnterKind.Toast => new EnterMotion(X: 80, Scale: 0.85, Spring: Motion.Spring.Toast),
         _ => null,
     };
 
