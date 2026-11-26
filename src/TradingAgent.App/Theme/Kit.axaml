@@ -17,6 +17,7 @@
     <MergeResourceInclude Source="/Theme/Controls/Scroll.axaml" />
     <MergeResourceInclude Source="/Theme/Controls/Popups.axaml" />
     <MergeResourceInclude Source="/Theme/Controls/NumberBox.axaml" />
+    <MergeResourceInclude Source="/Theme/Controls/Dialog.axaml" />
   </ResourceDictionary.MergedDictionaries>
 
 </ResourceDictionary>

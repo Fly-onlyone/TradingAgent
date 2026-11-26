@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
+using TradingAgent.App.Motion;
 using TradingAgent.App.ViewModels;
 using TradingAgent.App.Views;
 
@@ -12,7 +13,7 @@ namespace TradingAgent.App;
 /// </remarks>
 public sealed class ViewLocator : IDataTemplate
 {
-    public Control Build(object? param) => param switch
+    public Control Build(object? param) => Entering(param switch
     {
         ChatViewModel => new ChatView(),
         DashboardViewModel => new DashboardView(),
@@ -28,7 +29,14 @@ public sealed class ViewLocator : IDataTemplate
         SettingsViewModel => new SettingsView(),
         DiagnosticsViewModel => new DiagnosticsView(),
         _ => new TextBlock { Text = $"No view is registered for {param?.GetType().Name ?? "null"}." },
-    };
+    });
 
     public bool Match(object? data) => data is PageViewModel;
+
+    /// <summary>Makes the view rise into place when it is shown, as a page of the previous UI did.</summary>
+    private static Control Entering(Control view)
+    {
+        Enter.SetKind(view, EnterKind.Page);
+        return view;
+    }
 }

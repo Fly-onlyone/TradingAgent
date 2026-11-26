@@ -4,23 +4,52 @@ tags: [desktop, ui, pages]
 
 # App Pages
 
-> The window is a navigation rail and one page. Code: `src/TradingAgent.App/ViewModels`,
-> `src/TradingAgent.App/Views`, registration in `ShellApp.BuildServices`.
+> The window is a header, a sidebar and one page, over a moving background. Code:
+> `src/TradingAgent.App/ViewModels`, `src/TradingAgent.App/Views`, registration in
+> `ShellApp.BuildServices`. The look is in [[Design System]].
 
-## The rail
+## The sidebar
 
-In this order: Chat, Dashboard, Trading, Orders, Trades, Tasks, Strategies, Knowledge, Memory, News,
-Settings, Admin, Diagnostics. The app opens on Chat.
+The pages stand in groups, as in the previous UI:
 
-The order of the rail is the order the pages are registered as `PageViewModel` in
-`ShellApp.BuildServices`. A page needs three things:
+| Group        | Pages                               |
+|--------------|-------------------------------------|
+| Core         | Chat, Dashboard                     |
+| Monitor      | Trading, Orders, Trades             |
+| Intelligence | Strategies, Knowledge, Memory, News |
+| System       | Tasks, Diagnostics                  |
+| Admin        | Admin (at the bottom)               |
+|              | Settings (at the bottom)            |
+
+The app opens on Chat. The groups and icons are a table in `MainViewModel.Arrange`. A page that has
+no place in the table still gets a row, so it can always be reached.
+
+The sidebar is 220 px wide. Unpinned (Ctrl+B, or the switch in Settings) it folds to 56 px of icons
+and opens while the pointer is over it. Every row keeps its name for UI Automation when folded.
+
+A page needs four things:
 
 1. a view model that derives from `PageViewModel` (`Title`, and `Activate()` to read anew what
    changed while the page was not shown; `Deactivate()` to stop what only matters while it is seen);
 2. a view, and its case in the switch of `ViewLocator` (no reflection: Native AOT);
-3. two registrations: the view model itself, and the same instance as `PageViewModel`.
+3. two registrations: the view model itself, and the same instance as `PageViewModel`;
+4. its group and icon in `MainViewModel.Arrange`.
 
-A page is a singleton and lives as long as the app.
+A page is a singleton and lives as long as the app. Its view is built anew each time it is shown and
+rises into place (`ViewLocator` sets the enter animation).
+
+## The header
+
+`HeaderViewModel`: the state of the trade kit and of the agent as two dots, the theme selector, and
+the emergency stop. The stop button only opens a question (`Dialog`); the answer sets
+`safety.emergency_stop_active`, the same latch as the switch on the Settings page. Resuming asks too.
+
+## The background
+
+`EffectsLayer` draws drifting colour blobs and a particle network under everything, on the render
+thread. It starts after the first frame, stops while the window is hidden or minimized, and is off
+with "Background effects" off or "Reduced motion" on. The choices are in `AppearanceState`
+(settings `ui.theme`, `ui.effects_enabled`, `ui.reduced_motion`, `ui.sidebar_pinned`).
 
 ## Threads
 

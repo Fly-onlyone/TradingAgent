@@ -60,6 +60,9 @@ public static class ThemeBuilder
         var tint = Alpha(primary, preset.CardTintOpacity);
         var glow = Alpha(primary, preset.SectionGlowOpacity);
 
+        // The preset itself, for what draws from its raw values: the moving background.
+        resources["ThemePreset"] = preset;
+
         AddTone(resources, "Primary", preset.Primary);
         AddTone(resources, "Secondary", preset.Secondary);
         AddTone(resources, "Accent", preset.Accent);

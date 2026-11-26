@@ -62,13 +62,48 @@ Things to know:
 | Hover and press                        | XAML `Transitions`, always with an easing from `Tokens/Motion.axaml` |
 | A control coming in                    | `m:Enter.Kind`, or `m:Enter.Children` on a panel for a stagger |
 | A spring, or a drawing that changes every frame | `FrameDriver.Run`                                  |
-| Endless motion (shimmer, pulse, flow)  | `Endless`: runs in the compositor, costs the UI thread nothing |
+| Endless motion (shimmer, pulse, flow)  | `Endless`: one clock, 30 steps a second, moves controls in the compositor |
 | A menu opening                         | `m:Grow.On`                                                 |
 
 `FrameDriver.IsInstant` switches all of it off: every animation jumps to its end. Tests set it, and
 so do the picture modes below.
 
 Not the same as before: a popup has no closing animation.
+
+### What a frame costs
+
+Presenting a frame costs processor time whatever is drawn. Measured on a 143 Hz display, November
+2026: one endless animation at the display's rate kept half a core busy in an idle window. Three
+things brought that to about a tenth of a core with everything moving, and to nothing with
+"Reduced motion" on:
+
+- Endless motion steps 30 times a second (`Endless`), the background 15 times (`EffectsLayer`).
+  Never start an endless animation that runs at the display's rate: no keyframe `Animation` with
+  `IterationCount="Infinite"` in a style, no composition animation that repeats forever.
+- `Program` asks for DirectComposition before the default WinUI composition: a frame costs about
+  half with it. The default adds window acrylic and rendering at the display's rate; the app uses
+  neither.
+- A control that animates stops while it cannot be seen (`VisibilityWatch`), and all endless motion
+  stops while the window is hidden or minimized (`Endless.IsSuspended`).
+
+### What the look costs
+
+Measured in November 2026 on the development flavour of the Native AOT build, window 1400 × 900
+at 175 % scaling, 143 Hz, after 30 s on the Chat page. Memory is private bytes, the counter of the
+gate in [[Native Rewrite Decisions]].
+
+| State                                      | First frame | Memory   | Processor, one core |
+|--------------------------------------------|-------------|----------|---------------------|
+| Before the redesign                        | 314 ms      | 105 MB   | 0 %                 |
+| Effects off and reduced motion             |             | 136 MB   | 0 %                 |
+| Effects off                                |             | 153 MB   | 5 %                 |
+| Reduced motion (glass blurs, nothing moves)|             | 185 MB   | 0 %                 |
+| Everything on (the default)                | 454 ms      | 199 MB   | 13 %                |
+
+The start gate (one second) holds. The memory gate (120 MB) does not, in any state: the blur of the
+glass costs about 50 MB of off-screen layers, endless motion about 18 MB, fonts and the kit the rest.
+Lowering Skia's GPU cache limit changed nothing. Whether the look is worth it is the owner's call;
+"Background effects" and "Reduced motion" in Settings are the two switches.
 
 ## Glass
 

@@ -1,59 +1,101 @@
-using System.Numerics;
+using System.Diagnostics;
 using Avalonia;
-using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Rendering.Composition;
-using Avalonia.Rendering.Composition.Animations;
+using Avalonia.Threading;
 
 namespace TradingAgent.App.Motion;
 
 /// <summary>
-/// Endless motion: a shimmer sliding by, a gradient flowing, a dot pulsing, a spinner turning.
+/// Endless motion: a shimmer sliding by, a gradient flowing, a dot pulsing, the background drifting.
 /// </summary>
 /// <remarks>
-/// These run in the compositor, on the render thread: once started they cost the UI thread nothing,
-/// however long they run. They move, scale, turn or fade a whole control; a drawing that changes its
-/// shape every frame cannot be done this way. With animations off nothing starts and the control
-/// stays as it is drawn.
+/// <para>
+/// All of it runs off one clock that ticks 30 times a second, not once per frame of the display.
+/// Measured on a 143 Hz display: presenting a frame costs the same whatever is drawn, so a single
+/// endless animation that ran at the display's rate kept half a processor core busy in an idle
+/// window. These motions are slow and soft; 30 steps a second look the same and cost a fifth.
+/// </para>
+/// <para>
+/// A step only moves, scales or fades a control in the compositor: nothing is laid out or drawn
+/// again. The clock stops when nothing is registered, while <see cref="IsSuspended"/> is true (the
+/// window is hidden) and while animations are off.
+/// </para>
 /// </remarks>
 public static class Endless
 {
+    /// <summary>Steps per second of every endless motion.</summary>
+    public const double StepsPerSecond = 30;
+
     private static readonly Easing _linear = new LinearEasing();
+    private static readonly List<Entry> _entries = [];
+    private static readonly Stopwatch _clock = Stopwatch.StartNew();
+    private static DispatcherTimer? _timer;
+    private static bool _suspended;
+
+    /// <summary>True stops every endless motion where it is: nobody can see the window.</summary>
+    public static bool IsSuspended
+    {
+        get => _suspended;
+        set
+        {
+            _suspended = value;
+            UpdateTimer();
+        }
+    }
+
+    /// <summary>
+    /// Calls <paramref name="step"/> 30 times a second with the seconds passed since this call, until
+    /// the returned handle is disposed. With animations off it is never called.
+    /// </summary>
+    public static IDisposable Every(Action<double> step)
+    {
+        ArgumentNullException.ThrowIfNull(step);
+        if (FrameDriver.IsInstant)
+        {
+            return Stopped.Instance;
+        }
+
+        var entry = new Entry(step, _clock.Elapsed.TotalSeconds);
+        _entries.Add(entry);
+        UpdateTimer();
+        return entry;
+    }
 
     /// <summary>
     /// Moves <paramref name="visual"/> through the given horizontal offsets, one after the other at
-    /// even steps of time, then starts again. Each step uses <paramref name="easing"/>.
+    /// even steps of time, then starts again. Each part uses <paramref name="easing"/>.
     /// </summary>
     public static IDisposable SlideX(Visual visual, TimeSpan duration, Easing? easing, params double[] offsets)
     {
         ArgumentNullException.ThrowIfNull(offsets);
-        if (FrameDriver.IsInstant || offsets.Length < 2 || ElementComposition.GetElementVisual(visual) is not { } composition)
+        if (offsets.Length < 2 || ElementComposition.GetElementVisual(visual) is not { } composition)
         {
             return Stopped.Instance;
         }
 
-        var animation = composition.Compositor.CreateVector3KeyFrameAnimation();
-        for (var index = 0; index < offsets.Length; index++)
-        {
-            animation.InsertKeyFrame((float)index / (offsets.Length - 1), new Vector3((float)offsets[index], 0, 0), easing ?? _linear);
-        }
-
-        return Start(composition, "Translation", animation, duration);
+        return Run(
+            composition,
+            seconds => composition.Translation = new Vector3D(Along(offsets, seconds, duration, easing), 0, 0),
+            () => composition.Translation = default);
     }
 
-    /// <summary>Turns <paramref name="visual"/> around its middle, once per <paramref name="period"/>.</summary>
-    public static IDisposable Spin(Visual visual, TimeSpan period)
+    /// <summary>
+    /// Moves <paramref name="visual"/> up and down through the given vertical offsets, at even steps
+    /// of time, then starts again.
+    /// </summary>
+    public static IDisposable BobY(Visual visual, TimeSpan duration, Easing? easing, TimeSpan delay, params double[] offsets)
     {
-        if (FrameDriver.IsInstant || ElementComposition.GetElementVisual(visual) is not { } composition)
+        ArgumentNullException.ThrowIfNull(offsets);
+        if (offsets.Length < 2 || ElementComposition.GetElementVisual(visual) is not { } composition)
         {
             return Stopped.Instance;
         }
 
-        Centre(visual, composition);
-        var animation = composition.Compositor.CreateScalarKeyFrameAnimation();
-        animation.InsertKeyFrame(0, 0, _linear);
-        animation.InsertKeyFrame(1, MathF.Tau, _linear);
-        return Start(composition, "RotationAngle", animation, period);
+        return Run(
+            composition,
+            seconds => composition.Translation = new Vector3D(0, Along(offsets, Math.Max(0, seconds - delay.TotalSeconds), duration, easing), 0),
+            () => composition.Translation = default);
     }
 
     /// <summary>
@@ -64,121 +106,128 @@ public static class Endless
     {
         ArgumentNullException.ThrowIfNull(scales);
         ArgumentNullException.ThrowIfNull(opacities);
-        if (FrameDriver.IsInstant || ElementComposition.GetElementVisual(visual) is not { } composition)
+        if (ElementComposition.GetElementVisual(visual) is not { } composition)
         {
             return Stopped.Instance;
         }
 
-        Centre(visual, composition);
-        var compositor = composition.Compositor;
-        var handles = new List<IDisposable>(2);
-        if (scales.Length >= 2)
-        {
-            var scale = compositor.CreateVector3KeyFrameAnimation();
-            for (var index = 0; index < scales.Length; index++)
+        return Run(
+            composition,
+            seconds =>
             {
-                var value = (float)scales[index];
-                scale.InsertKeyFrame((float)index / (scales.Length - 1), new Vector3(value, value, 1), easing ?? _linear);
-            }
+                var time = Math.Max(0, seconds - delay.TotalSeconds);
+                if (scales.Length >= 2)
+                {
+                    var scale = Along(scales, time, duration, easing);
+                    composition.CenterPoint = new Vector3D(visual.Bounds.Width / 2, visual.Bounds.Height / 2, 0);
+                    composition.Scale = new Vector3D(scale, scale, 1);
+                }
 
-            scale.DelayTime = delay;
-            handles.Add(Start(composition, "Scale", scale, duration));
-        }
-
-        if (opacities.Length >= 2)
-        {
-            var opacity = compositor.CreateScalarKeyFrameAnimation();
-            for (var index = 0; index < opacities.Length; index++)
+                if (opacities.Length >= 2)
+                {
+                    composition.Opacity = (float)Along(opacities, time, duration, easing);
+                }
+            },
+            () =>
             {
-                opacity.InsertKeyFrame((float)index / (opacities.Length - 1), (float)opacities[index], easing ?? _linear);
-            }
-
-            opacity.DelayTime = delay;
-            handles.Add(Start(composition, "Opacity", opacity, duration));
-        }
-
-        return new Several(handles);
+                composition.Scale = new Vector3D(1, 1, 1);
+                composition.Opacity = (float)visual.Opacity;
+            });
     }
 
-    /// <summary>
-    /// Moves <paramref name="visual"/> up and down through the given vertical offsets, at even steps
-    /// of time, then starts again.
-    /// </summary>
-    public static IDisposable BobY(Visual visual, TimeSpan duration, Easing? easing, TimeSpan delay, params double[] offsets)
+    /// <summary>The value at a moment of a round through <paramref name="keys"/>, which are spread evenly over the round.</summary>
+    public static double Along(double[] keys, double seconds, TimeSpan round, Easing? easing)
     {
-        ArgumentNullException.ThrowIfNull(offsets);
-        if (FrameDriver.IsInstant || offsets.Length < 2 || ElementComposition.GetElementVisual(visual) is not { } composition)
+        ArgumentNullException.ThrowIfNull(keys);
+        if (keys.Length == 1 || round <= TimeSpan.Zero)
+        {
+            return keys[0];
+        }
+
+        var parts = keys.Length - 1;
+        var position = seconds % round.TotalSeconds / round.TotalSeconds * parts;
+        var part = Math.Min((int)position, parts - 1);
+        return keys[part] + ((keys[part + 1] - keys[part]) * (easing ?? _linear).Ease(position - part));
+    }
+
+    private static Entry Run(CompositionVisual composition, Action<double> step, Action reset)
+    {
+        if (FrameDriver.IsInstant)
         {
             return Stopped.Instance;
         }
 
-        var animation = composition.Compositor.CreateVector3KeyFrameAnimation();
-        for (var index = 0; index < offsets.Length; index++)
+        var entry = new Entry(
+            seconds =>
+            {
+                if (!composition.IsDisposed)
+                {
+                    step(seconds);
+                }
+            },
+            _clock.Elapsed.TotalSeconds,
+            () =>
+            {
+                // Put the control back as it is drawn.
+                if (!composition.IsDisposed)
+                {
+                    reset();
+                }
+            });
+        _entries.Add(entry);
+        UpdateTimer();
+        return entry;
+    }
+
+    private static void UpdateTimer()
+    {
+        var needed = _entries.Count > 0 && !_suspended && !FrameDriver.IsInstant;
+        if (needed && _timer is null)
         {
-            animation.InsertKeyFrame((float)index / (offsets.Length - 1), new Vector3(0, (float)offsets[index], 0), easing ?? _linear);
+            _timer = new DispatcherTimer(TimeSpan.FromSeconds(1 / StepsPerSecond), DispatcherPriority.Normal, OnTick);
+            _timer.Start();
+        }
+        else if (!needed && _timer is not null)
+        {
+            _timer.Stop();
+            _timer = null;
+        }
+    }
+
+    private static void OnTick(object? sender, EventArgs e)
+    {
+        if (FrameDriver.IsInstant)
+        {
+            // Switched off while running.
+            UpdateTimer();
+            return;
         }
 
-        animation.DelayTime = delay;
-        return Start(composition, "Translation", animation, duration);
+        var now = _clock.Elapsed.TotalSeconds;
+        foreach (var entry in _entries.ToArray())
+        {
+            entry.Step(now - entry.Start);
+        }
     }
 
-    private static void Centre(Visual visual, CompositionVisual composition) =>
-        composition.CenterPoint = new Vector3D(visual.Bounds.Width / 2, visual.Bounds.Height / 2, 0);
-
-    private static Running Start(CompositionVisual composition, string property, KeyFrameAnimation animation, TimeSpan duration)
+    private class Entry(Action<double> step, double start, Action? reset = null) : IDisposable
     {
-        animation.Duration = duration;
-        animation.IterationBehavior = AnimationIterationBehavior.Forever;
-        composition.StartAnimation(property, animation);
-        return new Running(composition, property);
-    }
+        public Action<double> Step { get; } = step;
 
-    private sealed class Running(CompositionVisual composition, string property) : IDisposable
-    {
+        public double Start { get; } = start;
+
         public void Dispose()
         {
-            if (composition.IsDisposed)
+            if (_entries.Remove(this))
             {
-                return;
-            }
-
-            composition.StopAnimation(property);
-            // Stopping leaves the value where the animation was; put the control back as it is drawn.
-            switch (property)
-            {
-                case "Translation":
-                    composition.Translation = default;
-                    break;
-                case "RotationAngle":
-                    composition.RotationAngle = 0;
-                    break;
-                case "Scale":
-                    composition.Scale = new Vector3D(1, 1, 1);
-                    break;
-                case "Opacity":
-                    composition.Opacity = 1;
-                    break;
+                reset?.Invoke();
+                UpdateTimer();
             }
         }
     }
 
-    private sealed class Several(List<IDisposable> handles) : IDisposable
-    {
-        public void Dispose()
-        {
-            foreach (var handle in handles)
-            {
-                handle.Dispose();
-            }
-        }
-    }
-
-    private sealed class Stopped : IDisposable
+    private sealed class Stopped() : Entry(_ => { }, 0)
     {
         public static Stopped Instance { get; } = new();
-
-        public void Dispose()
-        {
-        }
     }
 }

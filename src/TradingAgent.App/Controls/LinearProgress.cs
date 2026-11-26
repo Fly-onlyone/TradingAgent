@@ -40,6 +40,7 @@ public sealed class LinearProgress : Control
     private static readonly Easing _second = new SplineEasing(0.165, 0.84, 0.44, 1);
 
     private IDisposable? _frames;
+    private IDisposable? _visibility;
     private double _seconds;
 
     static LinearProgress()
@@ -116,12 +117,15 @@ public sealed class LinearProgress : Control
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
+        _visibility = VisibilityWatch.Subscribe(this, Restart);
         Restart();
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnDetachedFromVisualTree(e);
+        _visibility?.Dispose();
+        _visibility = null;
         _frames?.Dispose();
         _frames = null;
     }
@@ -142,7 +146,8 @@ public sealed class LinearProgress : Control
     {
         _frames?.Dispose();
         _frames = null;
-        if (!IsIndeterminate || !this.IsAttachedToVisualTree())
+        // Hidden, it asks for no frames; the watch above starts it again when it shows.
+        if (!IsIndeterminate || !this.IsAttachedToVisualTree() || !IsEffectivelyVisible)
         {
             InvalidateVisual();
             return;
