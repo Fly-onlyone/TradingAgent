@@ -44,6 +44,20 @@ rises into place (`ViewLocator` sets the enter animation).
 the emergency stop. The stop button only opens a question (`Dialog`); the answer sets
 `safety.emergency_stop_active`, the same latch as the switch on the Settings page. Resuming asks too.
 
+### The bell
+
+`NotificationsViewModel` (`HeaderViewModel.Notifications`) reads what `NotificationService` stored.
+
+- The bell shows how many notifications were not looked at, "99+" above 99.
+- Its list holds the newest 50, the ones looked at fainter. It is read anew each time it opens.
+- "Mark all as read" sets `read_at`. It deletes nothing: deleting notifications is a kind of data
+  on the Admin page and takes two steps.
+- A notification that comes in while the app runs (`NotificationService.Raised`) also stands in the
+  lower right corner of the window for five seconds, three at most, a newer one above an older.
+
+This is apart from the Windows toast ([[Desktop Shell Behaviour]]), which shows when the window is
+hidden too. A kind of notification that is switched off in Settings is neither stored nor shown.
+
 ## The background
 
 `EffectsLayer` draws drifting colour blobs and a particle network under everything, on the render

@@ -44,5 +44,8 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>Closes the theme selector once a theme is chosen; a flyout does not close on a press inside it.</summary>
+    /// <summary>The list under the bell is read anew each time it opens.</summary>
+    private void OnNotificationsOpened(object? sender, EventArgs e) => (DataContext as MainViewModel)?.Header.Notifications?.Open();
+
     private void OnThemeChosen(object? sender, RoutedEventArgs e) => ThemeButton.Flyout?.Hide();
 }

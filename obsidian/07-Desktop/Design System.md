@@ -46,6 +46,7 @@ the base of controls the kit does not cover yet.
 | `c:MetricTile`                  | `Kind` = `Kpi`, `Delta` or `Trend`; `Tone`; `IsRolling`; `IsLoading`     |
 | `c:MetricRow`                   | a line of a summary card; `last` has no rule under it                    |
 | `c:Dialog`                      | a question over the page: `Title`, `IsOpen`, `Actions`, `CloseCommand`   |
+| `c:Countdown`                   | the bar that runs out along the bottom of a message in the corner        |
 | `TabControl`                    | `divided` draws the rule under the tabs                                  |
 
 Drawn by hand, in `Controls`: `Sparkline`, `RollingDigits`, `RangeBar`, `SeriesChart` (the equity

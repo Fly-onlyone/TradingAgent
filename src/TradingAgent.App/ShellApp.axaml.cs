@@ -447,11 +447,15 @@ public sealed partial class ShellApp : Application
         services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<AdminViewModel>());
         services.AddSingleton<PageViewModel>(provider => provider.GetRequiredService<DiagnosticsViewModel>());
         services.AddSingleton<AppearanceState>();
+        services.AddSingleton(provider => new NotificationsViewModel(
+            provider.GetRequiredService<NotificationService>(),
+            provider.GetRequiredService<TimeProvider>()));
         services.AddSingleton(provider => new HeaderViewModel(
             provider.GetRequiredService<AppearanceState>(),
             provider.GetRequiredService<ISettingsStore>(),
             provider.GetRequiredService<AtkService>(),
-            provider.GetRequiredService<IAgentRuntimeResolver>()));
+            provider.GetRequiredService<IAgentRuntimeResolver>(),
+            notifications: provider.GetRequiredService<NotificationsViewModel>()));
         services.AddSingleton<MainViewModel>();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });
     }

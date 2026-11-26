@@ -94,12 +94,16 @@ internal sealed partial class HeaderViewModel : ObservableObject
     private readonly IAgentRuntimeResolver? _runtimes;
     private readonly Action<Action> _post;
 
+    /// <summary>The bell and the messages in the corner. Not there in a test that has no notifications.</summary>
+    public NotificationsViewModel? Notifications { get; }
+
     public HeaderViewModel(
         AppearanceState appearance,
         ISettingsStore settings,
         AtkService? kit = null,
         IAgentRuntimeResolver? runtimes = null,
-        Action<Action>? post = null)
+        Action<Action>? post = null,
+        NotificationsViewModel? notifications = null)
     {
         ArgumentNullException.ThrowIfNull(appearance);
         ArgumentNullException.ThrowIfNull(settings);
@@ -109,6 +113,7 @@ internal sealed partial class HeaderViewModel : ObservableObject
         _runtimes = runtimes;
         _post = post ?? (action => Dispatcher.UIThread.Post(action));
 
+        Notifications = notifications;
         Themes = [.. ThemePreset.All.Select(preset => new ThemeChoiceViewModel(preset))];
         MarkActiveTheme();
         IsEmergencyStopped = settings.GetValue(SettingKeys.EmergencyStopActive);

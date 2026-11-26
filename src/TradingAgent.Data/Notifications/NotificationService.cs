@@ -42,6 +42,11 @@ public sealed record Notification(
 /// A kind the user switched off writes nothing at all. With desktop notifications switched off the
 /// row is still written (a screen can list it) and no toast is shown.
 /// </remarks>
+/// <summary>A notification as it is stored: what the bell in the header lists.</summary>
+/// <param name="Type">The stored name of its kind, for example <c>risk_alert</c>.</param>
+/// <param name="CreatedAt">Unix milliseconds.</param>
+public sealed record StoredNotification(string Id, string Type, string Title, string Body, long CreatedAt, bool IsRead);
+
 public sealed partial class NotificationService(
     Database database,
     ISettingsStore settings,
@@ -57,6 +62,31 @@ public sealed partial class NotificationService(
     private readonly Dictionary<string, DateTimeOffset> _lastByKey = new(StringComparer.Ordinal);
 
     /// <summary>Records and shows a notification. Returns false when a setting or the debounce dropped it.</summary>
+    /// <summary>
+    /// Raised after a notification was stored, on the thread that raised the notification. The
+    /// window shows it as a message in its corner and counts it on the bell.
+    /// </summary>
+    public event Action<StoredNotification>? Raised;
+
+    /// <summary>The newest notifications, newest first.</summary>
+    public IReadOnlyList<StoredNotification> ListRecent(int limit) =>
+        database.Query(
+            "SELECT id, notification_type, title, body, created_at, read_at IS NOT NULL FROM notifications ORDER BY created_at DESC, id DESC LIMIT $limit;",
+            reader => new StoredNotification(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetInt64(4), reader.GetBoolean(5)),
+            ("$limit", limit));
+
+    /// <summary>How many notifications the user has not looked at yet.</summary>
+    public int CountUnread() => (int)database.Number("SELECT count(*) FROM notifications WHERE read_at IS NULL;");
+
+    /// <summary>
+    /// Marks every notification as looked at. Nothing is deleted: deleting notifications is a step of
+    /// its own on the Admin page.
+    /// </summary>
+    public void MarkAllRead() =>
+        database.Execute(
+            "UPDATE notifications SET read_at = $now, status = CASE WHEN status IN ('pending', 'delivered') THEN 'read' ELSE status END WHERE read_at IS NULL;",
+            ("$now", time.GetUtcNow().ToUnixTimeMilliseconds()));
+
     public bool Notify(Notification notification)
     {
         ArgumentNullException.ThrowIfNull(notification);
@@ -110,7 +140,8 @@ public sealed partial class NotificationService(
             INSERT INTO notifications (id, title, body, notification_type, order_id, session_id, status, delivered_at, delivery_error, created_at)
             VALUES ($id, $title, $body, $type, $order, $session, $status, $delivered, $error, $now);
             """;
-        command.Parameters.AddWithValue("$id", Ids.NewId(now));
+        var id = Ids.NewId(now);
+        command.Parameters.AddWithValue("$id", id);
         command.Parameters.AddWithValue("$title", notification.Title);
         command.Parameters.AddWithValue("$body", notification.Body);
         command.Parameters.AddWithValue("$type", TypeName(notification.Kind));
@@ -121,6 +152,7 @@ public sealed partial class NotificationService(
         command.Parameters.AddWithValue("$error", (object?)toastError ?? DBNull.Value);
         command.Parameters.AddWithValue("$now", now.ToUnixTimeMilliseconds());
         command.ExecuteNonQuery();
+        Raised?.Invoke(new StoredNotification(id, TypeName(notification.Kind), notification.Title, notification.Body, now.ToUnixTimeMilliseconds(), IsRead: false));
         if (email is { IsReady: true })
         {
             // Not awaited: a slow mail server must not hold up what raised the notification.
