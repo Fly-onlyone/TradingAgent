@@ -105,10 +105,32 @@ tables, export of trades. The old Trading page had tabs for holdings, positions 
 they are on the Dashboard and the Orders page, and the Trading page has the price chart instead.
 The charts cannot be scrolled and have no crosshair.
 
-## Pages with cards
+## Tasks, Strategies, Knowledge, Memory, News
 
-A page laid out with glass cards overrides `PageViewModel.UsesCards`. The window then leaves out the
-sheet of glass it puts under the pages that are not ported yet. Chat is the first such page.
+| Page       | Shows                                                                                  |
+|------------|----------------------------------------------------------------------------------------|
+| Tasks      | The tasks in a card on the left. For the chosen one: a bar of actions, four tiles (runs, success rate, next run, last run) and the form in three tabs: General, Schedule, Trading |
+| Strategies | The library on the left; the chosen strategy, "Read a strategy" and "Write one yourself" as cards |
+| Knowledge  | Search and results in one card, "Search by meaning" beside it                            |
+| Memory     | Search, category filter and the memories in one card, "Add or correct" beside it         |
+| News       | The articles and the chosen one on the left, the sources with their switches on the right |
+
+The old Tasks page had one task; this app has many, so the list is new. Its tile for the success
+rate was a ring and the one for the next run counted down; here both are figures.
+
+## Settings, Admin, Diagnostics
+
+Settings has the emergency stop above everything, then four tabs: Agent & Exchange, Automation,
+Notifications, Appearance. Appearance has the four themes and the three switches of the look. Admin
+keeps its four tabs; restoring a backup and deleting a kind of data ask in a `Dialog` over the page.
+Diagnostics, which the previous UI did not have, shows its facts as cards of label and value.
+
+## How a page is laid out
+
+Every page stands on the background, 24 px from the edges of its area, and is made of glass cards
+(`c:Card`). It starts with a `c:SectionHeader`. A page that scrolls puts its scroll bar in the
+margin: `ScrollViewer Margin="0,0,-16,0"` around content with `Margin="0,0,16,0"`. A list that can
+be empty has a `c:EmptyState` beside it.
 
 ## Checking the real app
 

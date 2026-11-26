@@ -1,196 +1,290 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:TradingAgent.App.ViewModels"
+             xmlns:c="using:TradingAgent.App.Controls"
+             xmlns:m="using:TradingAgent.App.Motion"
              x:Class="TradingAgent.App.Views.SettingsView"
              x:DataType="vm:SettingsViewModel">
 
   <UserControl.DataTemplates>
     <!-- One key or password. The saved value is never shown. -->
     <DataTemplate x:DataType="vm:SecretFieldViewModel">
-      <Grid ColumnDefinitions="160,*,Auto,Auto" RowDefinitions="Auto,Auto" Margin="0,0,0,8">
-        <TextBlock Grid.Row="0" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="{Binding Label}" />
-        <TextBox Classes="small" Grid.Row="0" Grid.Column="1" PasswordChar="●" PlaceholderText="Type or paste a new value" Text="{Binding Entry}"
-                 AutomationProperties.Name="{Binding Label}" />
-        <Button Classes="outlined" Grid.Row="0" Grid.Column="2" Content="Save" Margin="8,0,0,0" Command="{Binding SaveCommand}" />
-        <Button Classes="outlined" Grid.Row="0" Grid.Column="3" Content="Remove" Margin="8,0,0,0" Command="{Binding RemoveCommand}" />
-        <TextBlock Grid.Row="1" Grid.Column="1" Classes="secondary" FontSize="12" Margin="0,3,0,0" Text="{Binding State}" />
-      </Grid>
+      <StackPanel Margin="0,0,0,4">
+        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+          <TextBox Classes="small" c:Field.Label="{Binding Label}" PasswordChar="●" PlaceholderText="Type or paste a new value"
+                   Text="{Binding Entry}" AutomationProperties.Name="{Binding Label}" />
+          <Button Classes="outlined" Grid.Column="1" Content="Save" Command="{Binding SaveCommand}" />
+          <Button Classes="outlined inherit" Grid.Column="2" Content="Remove" Command="{Binding RemoveCommand}" />
+        </Grid>
+        <TextBlock Classes="caption secondary" Margin="14,4,0,0" Text="{Binding State}" />
+      </StackPanel>
     </DataTemplate>
   </UserControl.DataTemplates>
 
-  <ScrollViewer>
-    <StackPanel Margin="24" Spacing="24" MaxWidth="900" HorizontalAlignment="Left">
+  <UserControl.Styles>
+    <!-- A group of settings inside a tab: a heading, then its lines. -->
+    <Style Selector="StackPanel.group">
+      <Setter Property="Spacing" Value="16" />
+    </Style>
+    <Style Selector="TextBlock.hint">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="LineHeight" Value="20.02" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="MaxWidth" Value="860" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+    </Style>
+  </UserControl.Styles>
 
-      <TextBlock Classes="pageTitle" Text="{Binding Title}" />
+  <Grid RowDefinitions="Auto,Auto,*">
+    <c:SectionHeader Title="Settings" Subtitle="The model, the exchange, the limits of the agent, and how the app looks" />
 
-      <!-- Emergency stop first: it must be found in a hurry. -->
-      <Border Classes="panel" BorderBrush="{DynamicResource BearishBrush}" BorderThickness="1" Padding="16,12">
-        <StackPanel Spacing="6">
-          <ToggleSwitch IsChecked="{Binding EmergencyStop}" AutomationProperties.Name="Emergency stop"
-                        OnContent="Emergency stop is ON" OffContent="Emergency stop" />
-          <TextBlock Classes="secondary" TextWrapping="Wrap"
-                     Text="While this is on, the agent can cancel orders and nothing else: no new orders, no transfers, no leverage changes. It takes effect at once." />
-        </StackPanel>
-      </Border>
+    <!-- Emergency stop first: it must be found in a hurry. -->
+    <Border Grid.Row="1" Margin="0,0,0,16" Padding="16,10"
+            CornerRadius="{DynamicResource RadiusCard}"
+            Background="{DynamicResource Error08Brush}"
+            BorderBrush="{DynamicResource Error50Brush}" BorderThickness="1">
+      <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
+        <ToggleSwitch VerticalAlignment="Center" IsChecked="{Binding EmergencyStop}" AutomationProperties.Name="Emergency stop"
+                      OnContent="Emergency stop is ON" OffContent="Emergency stop" />
+        <TextBlock Grid.Column="1" Classes="body2 secondary" VerticalAlignment="Center" TextWrapping="Wrap"
+                   Text="While this is on, the agent can cancel orders and nothing else: no new orders, no transfers, no leverage changes. It takes effect at once." />
+      </Grid>
+    </Border>
 
-      <StackPanel Spacing="10">
-        <TextBlock Classes="title" Text="Model" />
-        <Grid ColumnDefinitions="160,260" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8">
-          <TextBlock Grid.Row="0" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="Provider" />
-          <ComboBox Classes="small" Grid.Row="0" Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding Providers}"
-                    SelectedItem="{Binding Provider}" AutomationProperties.Name="Provider" />
+    <c:Card Grid.Row="2" m:Enter.Kind="Reveal">
+      <TabControl Classes="divided" Padding="0">
 
-          <TextBlock Grid.Row="1" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="Sign-in"
-                     IsVisible="{Binding IsAnthropic}" />
-          <ComboBox Classes="small" Grid.Row="1" Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding AuthModes}"
-                    SelectedItem="{Binding AuthMode}" IsVisible="{Binding IsAnthropic}" AutomationProperties.Name="Sign-in" />
+        <TabItem Header="Agent &amp; Exchange">
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="24" Spacing="32">
 
-          <TextBlock Grid.Row="2" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="Model" />
-          <TextBox Classes="small" Grid.Row="2" Grid.Column="1" Text="{Binding Model}" AutomationProperties.Name="Model" />
+              <StackPanel Classes="group">
+                <TextBlock Classes="h6" Text="Model" />
+                <WrapPanel>
+                  <ComboBox Width="260" Margin="0,0,16,12" c:Field.Label="Provider" ItemsSource="{Binding Providers}"
+                            SelectedItem="{Binding Provider}" AutomationProperties.Name="Provider" />
+                  <ComboBox Width="260" Margin="0,0,16,12" c:Field.Label="Sign-in" ItemsSource="{Binding AuthModes}"
+                            SelectedItem="{Binding AuthMode}" IsVisible="{Binding IsAnthropic}" AutomationProperties.Name="Sign-in" />
+                  <TextBox Width="260" Margin="0,0,16,12" c:Field.Label="Model" Text="{Binding Model}" AutomationProperties.Name="Model" />
+                  <ComboBox Width="180" Margin="0,0,0,12" c:Field.Label="Effort" ItemsSource="{Binding Efforts}"
+                            SelectedItem="{Binding Effort}" AutomationProperties.Name="Effort" />
+                </WrapPanel>
+                <TextBlock Classes="caption secondary" Margin="0,-12,0,0" TextWrapping="Wrap" Text="{Binding ModelHint}" />
 
-          <TextBlock Grid.Row="3" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="Effort" />
-          <ComboBox Classes="small" Grid.Row="3" Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding Efforts}"
-                    SelectedItem="{Binding Effort}" AutomationProperties.Name="Effort" />
-        </Grid>
-        <TextBlock Classes="secondary" FontSize="12" Text="{Binding ModelHint}" />
+                <c:Alert Severity="Info" MaxWidth="860" HorizontalAlignment="Left" IsVisible="{Binding UsesSubscription}" Content="{Binding SubscriptionNotice}" />
+                <StackPanel Orientation="Horizontal" Spacing="12" IsVisible="{Binding UsesSubscription}">
+                  <Button Classes="outlined" Content="I have read this. It is my own subscription." Command="{Binding ConfirmSubscriptionCommand}"
+                          IsVisible="{Binding NeedsSubscriptionConfirmation}" />
+                  <c:Chip Classes="outlined small success" Content="Confirmed." IsVisible="{Binding SubscriptionConfirmed}">
+                    <c:Chip.Icon>
+                      <PathIcon Data="{StaticResource IconCheckCircle}" />
+                    </c:Chip.Icon>
+                  </c:Chip>
+                </StackPanel>
+                <ContentControl Content="{Binding AnthropicKey}" IsVisible="{Binding UsesAnthropicKey}" />
+                <ContentControl Content="{Binding OpenAiKey}" IsVisible="{Binding IsOpenAi}" />
+              </StackPanel>
 
-        <StackPanel Spacing="8" IsVisible="{Binding UsesSubscription}">
-          <TextBlock Classes="secondary" TextWrapping="Wrap" Text="{Binding SubscriptionNotice}" />
-          <Button Classes="outlined" Content="I have read this. It is my own subscription." Command="{Binding ConfirmSubscriptionCommand}"
-                  IsVisible="{Binding NeedsSubscriptionConfirmation}" />
-          <TextBlock Classes="secondary" Text="Confirmed." IsVisible="{Binding SubscriptionConfirmed}" />
-        </StackPanel>
-        <ContentControl Content="{Binding AnthropicKey}" IsVisible="{Binding UsesAnthropicKey}" />
-        <ContentControl Content="{Binding OpenAiKey}" IsVisible="{Binding IsOpenAi}" />
-      </StackPanel>
+              <Separator />
 
-      <StackPanel Spacing="10">
-        <TextBlock Classes="title" Text="OKX" />
-        <TextBlock TextWrapping="Wrap" Text="{Binding TradingMode}" />
-        <StackPanel Orientation="Horizontal" Spacing="8">
-          <Button Classes="outlined" Content="Switch to live trading…" Command="{Binding AskForLiveCommand}"
-                  IsVisible="{Binding !IsLive}" />
-          <Button Classes="outlined" Content="Switch to demo trading" Command="{Binding SwitchToDemoCommand}"
-                  IsVisible="{Binding IsLive}" />
-        </StackPanel>
-        <Border Classes="panel" BorderBrush="{DynamicResource BearishBrush}" BorderThickness="1" Padding="16,12"
-                IsVisible="{Binding ConfirmingLive}">
-          <StackPanel Spacing="8">
-            <TextBlock TextWrapping="Wrap"
-                       Text="In live trading the agent's orders, transfers and leverage changes move real money on your OKX account. The saved key must be a key for live trading. The risk limits below and the emergency stop still apply." />
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <Button Classes="outlined" Content="Yes, switch to live trading" Command="{Binding SwitchToLiveCommand}" />
-              <Button Classes="outlined" Content="Stay in demo" Command="{Binding CancelLiveCommand}" />
+              <StackPanel Classes="group">
+                <TextBlock Classes="h6" Text="OKX" />
+                <StackPanel Orientation="Horizontal" Spacing="16">
+                  <TextBlock Classes="body1 medium" VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding TradingMode}" />
+                  <Button Classes="outlined error" Content="Switch to live trading…" Command="{Binding AskForLiveCommand}"
+                          IsVisible="{Binding !IsLive}" />
+                  <Button Classes="outlined" Content="Switch to demo trading" Command="{Binding SwitchToDemoCommand}"
+                          IsVisible="{Binding IsLive}" />
+                </StackPanel>
+                <!-- The first press only asks; the second switches. -->
+                <Border Padding="16" MaxWidth="860" HorizontalAlignment="Left"
+                        CornerRadius="{DynamicResource RadiusCard}"
+                        Background="{DynamicResource Error08Brush}"
+                        BorderBrush="{DynamicResource Error50Brush}" BorderThickness="1"
+                        IsVisible="{Binding ConfirmingLive}">
+                  <StackPanel Spacing="12">
+                    <TextBlock Classes="body2" TextWrapping="Wrap"
+                               Text="In live trading the agent's orders, transfers and leverage changes move real money on your OKX account. The saved key must be a key for live trading. The risk limits below and the emergency stop still apply." />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Button Classes="contained error" Content="Yes, switch to live trading" Command="{Binding SwitchToLiveCommand}" />
+                      <Button Classes="outlined inherit" Content="Stay in demo" Command="{Binding CancelLiveCommand}" />
+                    </StackPanel>
+                  </StackPanel>
+                </Border>
+                <TextBlock Classes="hint"
+                           Text="The key of the mode above. It is kept encrypted for your Windows account and handed to the OKX trade kit when it starts; it is not written to a file." />
+                <ContentControl Content="{Binding OkxApiKey}" />
+                <ContentControl Content="{Binding OkxSecretKey}" />
+                <ContentControl Content="{Binding OkxPassphrase}" />
+              </StackPanel>
+
+              <Separator />
+
+              <StackPanel Classes="group">
+                <TextBlock Classes="h6" Text="Risk limits" />
+                <WrapPanel>
+                  <NumericUpDown Width="280" Margin="0,0,16,12" c:Field.Label="Largest position, % of the account"
+                                 Minimum="0.1" Maximum="100" Increment="0.5" FormatString="0.##"
+                                 Value="{Binding MaxPositionPercent}" AutomationProperties.Name="Largest position" />
+                  <NumericUpDown Width="260" Margin="0,0,16,12" c:Field.Label="Default stop-loss, % from entry"
+                                 Minimum="0.1" Maximum="100" Increment="0.5" FormatString="0.##"
+                                 Value="{Binding StopLossPercent}" AutomationProperties.Name="Default stop-loss" />
+                  <NumericUpDown Width="260" Margin="0,0,0,12" c:Field.Label="Default take-profit, % from entry"
+                                 Minimum="0.1" Maximum="100" Increment="0.5" FormatString="0.##"
+                                 Value="{Binding TakeProfitPercent}" AutomationProperties.Name="Default take-profit" />
+                </WrapPanel>
+                <TextBlock Classes="hint" Margin="0,-12,0,0"
+                           Text="The largest position is a hard limit: an order that would take one position above it, counting what is already held, is refused. An order that only reduces a position is always let out." />
+              </StackPanel>
             </StackPanel>
-          </StackPanel>
-        </Border>
-        <TextBlock Classes="secondary" TextWrapping="Wrap"
-                   Text="The key of the mode above. It is kept encrypted for your Windows account and handed to the OKX trade kit when it starts; it is not written to a file." />
-        <ContentControl Content="{Binding OkxApiKey}" />
-        <ContentControl Content="{Binding OkxSecretKey}" />
-        <ContentControl Content="{Binding OkxPassphrase}" />
-      </StackPanel>
+          </ScrollViewer>
+        </TabItem>
 
-      <StackPanel Spacing="10">
-        <TextBlock Classes="title" Text="Risk limits" />
-        <Grid ColumnDefinitions="260,160" RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
-          <TextBlock Grid.Row="0" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="Largest position, % of the account" />
-          <NumericUpDown Classes="small" Grid.Row="0" Grid.Column="1" Minimum="0.1" Maximum="100" Increment="0.5" FormatString="0.##"
-                         Value="{Binding MaxPositionPercent}" AutomationProperties.Name="Largest position" />
+        <TabItem Header="Automation">
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="24" Spacing="32">
+              <StackPanel Classes="group">
+                <TextBlock Classes="h6" Text="Web search and strategy discovery" />
+                <TextBlock Classes="hint"
+                           Text="With a Brave Search API key the agent can search the web. Without one it reads the collected news and pages you name." />
+                <ContentControl Content="{Binding BraveKey}" />
+                <ToggleSwitch IsChecked="{Binding AutoDiscover}" AutomationProperties.Name="Look for strategies on a schedule"
+                              OnContent="The agent looks for strategies on a schedule" OffContent="The agent looks for strategies on a schedule" />
+                <NumericUpDown Width="260" HorizontalAlignment="Left" c:Field.Label="Hours between two searches"
+                               Minimum="1" Maximum="720" Increment="1" FormatString="0" Value="{Binding AutoDiscoverHours}"
+                               IsVisible="{Binding AutoDiscover}" AutomationProperties.Name="Hours between two searches" />
+                <TextBlock Classes="hint"
+                           Text="A search is an agent run that uses your model. It reads and saves strategies; the app does not let it trade." />
+              </StackPanel>
 
-          <TextBlock Grid.Row="1" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="Default stop-loss, % from entry" />
-          <NumericUpDown Classes="small" Grid.Row="1" Grid.Column="1" Minimum="0.1" Maximum="100" Increment="0.5" FormatString="0.##"
-                         Value="{Binding StopLossPercent}" AutomationProperties.Name="Default stop-loss" />
+              <Separator />
 
-          <TextBlock Grid.Row="2" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="Default take-profit, % from entry" />
-          <NumericUpDown Classes="small" Grid.Row="2" Grid.Column="1" Minimum="0.1" Maximum="100" Increment="0.5" FormatString="0.##"
-                         Value="{Binding TakeProfitPercent}" AutomationProperties.Name="Default take-profit" />
-        </Grid>
-        <TextBlock Classes="secondary" TextWrapping="Wrap"
-                   Text="The largest position is a hard limit: an order that would take one position above it, counting what is already held, is refused. An order that only reduces a position is always let out." />
-      </StackPanel>
+              <StackPanel Classes="group">
+                <TextBlock Classes="h6" Text="Past price signals" />
+                <ToggleSwitch IsChecked="{Binding PatternMining}" AutomationProperties.Name="Measure past signals on a schedule"
+                              OnContent="The app measures past signals on a schedule" OffContent="The app measures past signals on a schedule" />
+                <TextBox Width="420" HorizontalAlignment="Left" c:Field.Label="Instruments to measure" Text="{Binding PatternSymbols}"
+                         PlaceholderText="BTC-USDT, ETH-USDT" IsVisible="{Binding PatternMining}"
+                         AutomationProperties.Name="Instruments to measure" />
+                <TextBlock Classes="hint"
+                           Text="Counts on past prices what followed an oversold or overbought RSI, a break of the 20-bar high and a cross above the 50-bar average. No model is used. The results are on the Trades page and the agent reads them." />
+              </StackPanel>
+            </StackPanel>
+          </ScrollViewer>
+        </TabItem>
 
-      <StackPanel Spacing="10">
-        <TextBlock Classes="title" Text="Web search and strategy discovery" />
-        <TextBlock Classes="secondary" TextWrapping="Wrap"
-                   Text="With a Brave Search API key the agent can search the web. Without one it reads the collected news and pages you name." />
-        <ContentControl Content="{Binding BraveKey}" />
-        <ToggleSwitch IsChecked="{Binding AutoDiscover}" AutomationProperties.Name="Look for strategies on a schedule"
-                      OnContent="The agent looks for strategies on a schedule" OffContent="The agent looks for strategies on a schedule" />
-        <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding AutoDiscover}">
-          <TextBlock Classes="secondary" VerticalAlignment="Center" Text="Hours between two searches" />
-          <NumericUpDown Classes="small" Width="140" Minimum="1" Maximum="720" Increment="1" FormatString="0" Value="{Binding AutoDiscoverHours}"
-                         AutomationProperties.Name="Hours between two searches" />
-        </StackPanel>
-        <TextBlock Classes="secondary" TextWrapping="Wrap"
-                   Text="A search is an agent run that uses your model. It reads and saves strategies; the app does not let it trade." />
-      </StackPanel>
+        <TabItem Header="Notifications">
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="24" Spacing="32">
+              <StackPanel Classes="group" Spacing="4">
+                <TextBlock Classes="h6" Margin="0,0,0,12" Text="Notifications" />
+                <ToggleSwitch IsChecked="{Binding DesktopNotifications}" AutomationProperties.Name="Show desktop notifications"
+                              OnContent="Show desktop notifications" OffContent="Show desktop notifications" />
+                <ToggleSwitch IsChecked="{Binding TradeNotifications}" AutomationProperties.Name="Orders filled, cancelled or not placed"
+                              OnContent="Orders filled, cancelled or not placed" OffContent="Orders filled, cancelled or not placed" />
+                <ToggleSwitch IsChecked="{Binding RiskNotifications}" AutomationProperties.Name="Risk alerts"
+                              OnContent="Risk alerts" OffContent="Risk alerts" />
+                <ToggleSwitch IsChecked="{Binding TaskNotifications}" AutomationProperties.Name="Scheduled tasks finished or failed"
+                              OnContent="Scheduled tasks finished or failed" OffContent="Scheduled tasks finished or failed" />
+              </StackPanel>
 
-      <StackPanel Spacing="10">
-        <TextBlock Classes="title" Text="Past price signals" />
-        <ToggleSwitch IsChecked="{Binding PatternMining}" AutomationProperties.Name="Measure past signals on a schedule"
-                      OnContent="The app measures past signals on a schedule" OffContent="The app measures past signals on a schedule" />
-        <TextBox Classes="small" Text="{Binding PatternSymbols}" PlaceholderText="BTC-USDT, ETH-USDT" IsVisible="{Binding PatternMining}"
-                 AutomationProperties.Name="Instruments to measure" />
-        <TextBlock Classes="secondary" TextWrapping="Wrap"
-                   Text="Counts on past prices what followed an oversold or overbought RSI, a break of the 20-bar high and a cross above the 50-bar average. No model is used. The results are on the Trades page and the agent reads them." />
-      </StackPanel>
+              <Separator />
 
-      <StackPanel Spacing="10">
-        <TextBlock Classes="title" Text="Email" />
-        <ToggleSwitch IsChecked="{Binding EmailEnabled}" AutomationProperties.Name="Send notifications by email too"
-                      OnContent="Notifications are also sent by email" OffContent="Notifications are also sent by email" />
-        <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="8" IsVisible="{Binding EmailEnabled}">
-          <TextBlock Grid.Row="0" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="SMTP server" />
-          <TextBox Classes="small" Grid.Row="0" Grid.Column="1" Text="{Binding EmailHost}" PlaceholderText="smtp.example.com" AutomationProperties.Name="SMTP server" />
-          <TextBlock Grid.Row="1" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="Port" />
-          <NumericUpDown Classes="small" Grid.Row="1" Grid.Column="1" Width="160" HorizontalAlignment="Left" Minimum="1" Maximum="65535" Increment="1"
-                         FormatString="0" Value="{Binding EmailPort}" AutomationProperties.Name="SMTP port" />
-          <TextBlock Grid.Row="2" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="User name" />
-          <TextBox Classes="small" Grid.Row="2" Grid.Column="1" Text="{Binding EmailUser}" AutomationProperties.Name="SMTP user name" />
-          <TextBlock Grid.Row="3" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="From" />
-          <TextBox Classes="small" Grid.Row="3" Grid.Column="1" Text="{Binding EmailFrom}" PlaceholderText="you@example.com" AutomationProperties.Name="Sender address" />
-          <TextBlock Grid.Row="4" Grid.Column="0" Classes="secondary" VerticalAlignment="Center" Text="To" />
-          <TextBox Classes="small" Grid.Row="4" Grid.Column="1" Text="{Binding EmailTo}" PlaceholderText="you@example.com" AutomationProperties.Name="Receiver address" />
-        </Grid>
-        <StackPanel Spacing="8" IsVisible="{Binding EmailEnabled}">
-          <ContentControl Content="{Binding EmailPassword}" />
-          <ToggleSwitch IsChecked="{Binding EmailTls}" AutomationProperties.Name="Encrypt the connection"
-                        OnContent="The connection is encrypted (STARTTLS)" OffContent="The connection is NOT encrypted" />
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Classes="outlined" Content="Send a test email" Command="{Binding SendTestEmailCommand}" />
-            <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding EmailStatus}" />
-          </StackPanel>
-          <TextBlock Classes="secondary" TextWrapping="Wrap"
-                     Text="Most providers use port 587 with STARTTLS and want an app password, not your normal one. An email holds the notification's text, which can name an instrument and an amount." />
-        </StackPanel>
-      </StackPanel>
+              <StackPanel Classes="group">
+                <TextBlock Classes="h6" Text="Email" />
+                <ToggleSwitch IsChecked="{Binding EmailEnabled}" AutomationProperties.Name="Send notifications by email too"
+                              OnContent="Notifications are also sent by email" OffContent="Notifications are also sent by email" />
+                <StackPanel Spacing="16" IsVisible="{Binding EmailEnabled}">
+                  <WrapPanel>
+                    <TextBox Width="420" Margin="0,0,16,12" c:Field.Label="SMTP server" Text="{Binding EmailHost}" PlaceholderText="smtp.example.com"
+                             AutomationProperties.Name="SMTP server" />
+                    <NumericUpDown Width="180" Margin="0,0,0,12" c:Field.Label="Port" Minimum="1" Maximum="65535" Increment="1"
+                                   FormatString="0" Value="{Binding EmailPort}" AutomationProperties.Name="SMTP port" />
+                  </WrapPanel>
+                  <TextBox c:Field.Label="User name" Margin="0,-12,0,0" Text="{Binding EmailUser}" AutomationProperties.Name="SMTP user name" />
+                  <WrapPanel>
+                    <TextBox Width="420" Margin="0,0,16,12" c:Field.Label="From" Text="{Binding EmailFrom}" PlaceholderText="you@example.com"
+                             AutomationProperties.Name="Sender address" />
+                    <TextBox Width="420" Margin="0,0,0,12" c:Field.Label="To" Text="{Binding EmailTo}" PlaceholderText="you@example.com"
+                             AutomationProperties.Name="Receiver address" />
+                  </WrapPanel>
+                  <ContentControl Margin="0,-12,0,0" Content="{Binding EmailPassword}" />
+                  <ToggleSwitch IsChecked="{Binding EmailTls}" AutomationProperties.Name="Encrypt the connection"
+                                OnContent="The connection is encrypted (STARTTLS)" OffContent="The connection is NOT encrypted" />
+                  <StackPanel Orientation="Horizontal" Spacing="12">
+                    <Button Classes="outlined" Content="Send a test email" Command="{Binding SendTestEmailCommand}" />
+                    <TextBlock Classes="body2" VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding EmailStatus}" />
+                  </StackPanel>
+                  <TextBlock Classes="hint"
+                             Text="Most providers use port 587 with STARTTLS and want an app password, not your normal one. An email holds the notification's text, which can name an instrument and an amount." />
+                </StackPanel>
+              </StackPanel>
+            </StackPanel>
+          </ScrollViewer>
+        </TabItem>
 
-      <StackPanel Spacing="6">
-        <TextBlock Classes="title" Text="Notifications" />
-        <ToggleSwitch IsChecked="{Binding DesktopNotifications}" AutomationProperties.Name="Show desktop notifications"
-                      OnContent="Show desktop notifications" OffContent="Show desktop notifications" />
-        <ToggleSwitch IsChecked="{Binding TradeNotifications}" AutomationProperties.Name="Orders filled, cancelled or not placed"
-                      OnContent="Orders filled, cancelled or not placed" OffContent="Orders filled, cancelled or not placed" />
-        <ToggleSwitch IsChecked="{Binding RiskNotifications}" AutomationProperties.Name="Risk alerts"
-                      OnContent="Risk alerts" OffContent="Risk alerts" />
-        <ToggleSwitch IsChecked="{Binding TaskNotifications}" AutomationProperties.Name="Scheduled tasks finished or failed"
-                      OnContent="Scheduled tasks finished or failed" OffContent="Scheduled tasks finished or failed" />
-      </StackPanel>
+        <TabItem Header="Appearance">
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="24" Spacing="32">
+              <StackPanel Classes="group">
+                <TextBlock Classes="h6" Text="Theme" />
+                <ItemsControl ItemsSource="{Binding $parent[Window].((vm:MainViewModel)DataContext).Header.Themes}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Orientation="Horizontal" Spacing="12" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ThemeChoiceViewModel">
+                      <Button Classes="themeTile"
+                              AutomationProperties.Name="{Binding Label}"
+                              Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).Header.ChooseThemeCommand}"
+                              CommandParameter="{Binding}">
+                        <Border Width="150" Padding="10" CornerRadius="{DynamicResource RadiusCard}" BorderThickness="1.5"
+                                Classes.active="{Binding IsActive}">
+                          <Border.Styles>
+                            <Style Selector="Border" x:DataType="vm:ThemeChoiceViewModel">
+                              <Setter Property="Background" Value="{Binding Tint}" />
+                              <Setter Property="BorderBrush" Value="Transparent" />
+                            </Style>
+                            <Style Selector="Border.active" x:DataType="vm:ThemeChoiceViewModel">
+                              <Setter Property="Background" Value="{Binding ActiveTint}" />
+                              <Setter Property="BorderBrush" Value="{Binding Accent}" />
+                            </Style>
+                          </Border.Styles>
+                          <StackPanel Spacing="8">
+                            <Border Height="48" CornerRadius="{DynamicResource RadiusCard}" Background="{Binding Preview}" ClipToBounds="True">
+                              <PathIcon Width="20" Height="20" Foreground="White" Data="{StaticResource IconCheck}" IsVisible="{Binding IsActive}" />
+                            </Border>
+                            <TextBlock Classes="caption medium" HorizontalAlignment="Center" Text="{Binding Label}" />
+                          </StackPanel>
+                        </Border>
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Classes="hint" Text="The theme can also be chosen with the palette button in the header. Ctrl+B folds the sidebar." />
+              </StackPanel>
 
-      <TextBlock Classes="title" Text="Appearance" />
-      <TextBlock Classes="secondary" FontSize="12" TextWrapping="Wrap"
-                 Text="The theme is chosen with the palette button in the header. Ctrl+B folds the sidebar." />
-      <ToggleSwitch Classes="small" Margin="0" Content="Background effects: drifting colours, particles and blurred glass"
-                    AutomationProperties.Name="Background effects"
-                    IsChecked="{Binding $parent[Window].((vm:MainViewModel)DataContext).EffectsEnabled}" />
-      <ToggleSwitch Classes="small" Margin="0" Content="Reduced motion: no animations"
-                    AutomationProperties.Name="Reduced motion"
-                    IsChecked="{Binding $parent[Window].((vm:MainViewModel)DataContext).ReducedMotion}" />
-      <ToggleSwitch Classes="small" Margin="0" Content="Keep the sidebar open"
-                    AutomationProperties.Name="Keep the sidebar open"
-                    IsChecked="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsSidebarPinned}" />
+              <Separator />
 
-    </StackPanel>
-  </ScrollViewer>
+              <StackPanel Classes="group" Spacing="4">
+                <TextBlock Classes="h6" Margin="0,0,0,12" Text="Effects" />
+                <ToggleSwitch Content="Background effects: drifting colours, particles and blurred glass"
+                              AutomationProperties.Name="Background effects"
+                              IsChecked="{Binding $parent[Window].((vm:MainViewModel)DataContext).EffectsEnabled}" />
+                <ToggleSwitch Content="Reduced motion: no animations"
+                              AutomationProperties.Name="Reduced motion"
+                              IsChecked="{Binding $parent[Window].((vm:MainViewModel)DataContext).ReducedMotion}" />
+                <ToggleSwitch Content="Keep the sidebar open"
+                              AutomationProperties.Name="Keep the sidebar open"
+                              IsChecked="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsSidebarPinned}" />
+              </StackPanel>
+            </StackPanel>
+          </ScrollViewer>
+        </TabItem>
+      </TabControl>
+    </c:Card>
+  </Grid>
 </UserControl>

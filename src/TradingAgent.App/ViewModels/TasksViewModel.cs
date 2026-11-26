@@ -4,6 +4,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TradingAgent.Agent.Tasks;
+using TradingAgent.App.Controls;
 using TradingAgent.Core.Tasks;
 using TradingAgent.Data.Tasks;
 
@@ -43,6 +44,15 @@ internal sealed class TaskItemViewModel(AgentTask source, bool running)
         running ? "running now"
         : Source.Status != AgentTask.Active ? Source.Status
         : $"next {Display.Time(Source.NextRunAt)}";
+
+    public bool IsRunning => running;
+
+    public bool IsPaused => !running && Source.Status == AgentTask.Paused;
+
+    /// <summary>True for a task that stopped for good: it finished or it failed.</summary>
+    public bool IsOver => !running && Source.Status is AgentTask.Completed or AgentTask.Failed;
+
+    public bool MayTrade => Source.TradingEnabled;
 }
 
 /// <summary>The Tasks page: the work the agent does on a schedule, and a form to make and change it.</summary>
@@ -118,6 +128,53 @@ internal sealed partial class TasksViewModel : PageViewModel, IDisposable
 
     [ObservableProperty]
     public partial bool HasSelection { get; set; }
+
+    /// <summary>How often the chosen task has run.</summary>
+    [ObservableProperty]
+    public partial string RunCount { get; set; } = "0";
+
+    [ObservableProperty]
+    public partial string RunLine { get; set; } = string.Empty;
+
+    /// <summary>The share of its runs that finished, as "75%", or a dash before the first run.</summary>
+    [ObservableProperty]
+    public partial string SuccessRate { get; set; } = "—";
+
+    [ObservableProperty]
+    public partial string SuccessLine { get; set; } = "No runs yet";
+
+    [ObservableProperty]
+    public partial MetricTone SuccessTone { get; set; } = MetricTone.Neutral;
+
+    [ObservableProperty]
+    public partial string NextRun { get; set; } = "—";
+
+    [ObservableProperty]
+    public partial string NextLine { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string LastRun { get; set; } = "—";
+
+    [ObservableProperty]
+    public partial string LastLine { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial MetricTone LastTone { get; set; } = MetricTone.Neutral;
+
+    /// <summary>The state of the chosen task in a word: active, paused, completed, failed.</summary>
+    [ObservableProperty]
+    public partial string StatusLabel { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial bool IsActiveTask { get; set; }
+
+    [ObservableProperty]
+    public partial bool HasTasks { get; set; }
+
+    /// <summary>The head of the form: the name of the chosen task, or that a new one is written.</summary>
+    public string FormTitle => HasSelection ? Name : "New task";
+
+    public string TradingState => TradingEnabled ? "On" : "Off";
 
     public bool IsInterval => ScheduleKind == TaskSchedule.Interval;
 
@@ -306,11 +363,45 @@ internal sealed partial class TasksViewModel : PageViewModel, IDisposable
                 : Days;
         }
 
+        ShowFigures(task);
         Info = string.Create(
             CultureInfo.CurrentCulture,
             $"{task.Status}. {task.RunCount} runs, {task.SuccessCount} finished, {task.FailureCount} failed. Last run {Display.Time(task.LastRunAt)}; next {Display.Time(task.NextRunAt)}.")
             + (task.LastError is { } error ? $" Last error: {error}" : string.Empty);
     }
+
+    partial void OnHasSelectionChanged(bool value) => OnPropertyChanged(nameof(FormTitle));
+
+    partial void OnNameChanged(string value) => OnPropertyChanged(nameof(FormTitle));
+
+    partial void OnTradingEnabledChanged(bool value) => OnPropertyChanged(nameof(TradingState));
+
+    /// <summary>The four tiles over the form: runs, how many finished, the next run, the last one.</summary>
+    private void ShowFigures(AgentTask task)
+    {
+        var rate = task.RunCount == 0 ? 0 : (int)Math.Round(task.SuccessCount * 100.0 / task.RunCount);
+        RunCount = task.RunCount.ToString(CultureInfo.CurrentCulture);
+        RunLine = task.RunCount == 0 ? "Not run yet" : $"{task.SuccessCount} finished, {task.FailureCount} failed";
+        SuccessRate = task.RunCount == 0 ? "—" : string.Create(CultureInfo.CurrentCulture, $"{rate}%");
+        SuccessLine = task.RunCount == 0 ? "No runs yet" : $"{task.SuccessCount} ok · {task.FailureCount} fail";
+        // As the previous UI coloured it: green from 80 %, amber from 50 %, red below.
+        SuccessTone = task.RunCount == 0 ? MetricTone.Neutral : rate >= 80 ? MetricTone.Success : rate >= 50 ? MetricTone.Warning : MetricTone.Error;
+        var active = task.Status == AgentTask.Active;
+        // A tile has room for a time; the day goes on the line under it.
+        NextRun = active && task.NextRunAt is { } next ? Clock(next) : "—";
+        NextLine = !active ? task.Status : task.NextRunAt is { } due ? Day(due) : "Not scheduled";
+        LastRun = task.LastRunAt is { } last ? Clock(last) : "—";
+        LastLine = task.LastRunAt is not { } ran ? "Never" : task.LastError is { } error ? error : Day(ran);
+        LastTone = task.LastRunAt is null ? MetricTone.Neutral : task.LastError is null ? MetricTone.Success : MetricTone.Error;
+        StatusLabel = task.Status;
+        IsActiveTask = active;
+    }
+
+    private static string Clock(long unixMs) =>
+        DateTimeOffset.FromUnixTimeMilliseconds(unixMs).ToLocalTime().ToString("HH:mm", CultureInfo.CurrentCulture);
+
+    private static string Day(long unixMs) =>
+        DateTimeOffset.FromUnixTimeMilliseconds(unixMs).ToLocalTime().ToString("ddd d MMM", CultureInfo.CurrentCulture);
 
     private void OnTasksChanged(object? sender, EventArgs e) => _post(Reload);
 
@@ -322,6 +413,8 @@ internal sealed partial class TasksViewModel : PageViewModel, IDisposable
         {
             Tasks.Add(new TaskItemViewModel(task, _scheduler.IsRunning(task.Id)));
         }
+
+        HasTasks = Tasks.Count > 0;
 
         if (keep is not null && Tasks.FirstOrDefault(item => item.Source.Id == keep) is { } same)
         {

@@ -1,80 +1,168 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:TradingAgent.App.ViewModels"
+             xmlns:c="using:TradingAgent.App.Controls"
+             xmlns:m="using:TradingAgent.App.Motion"
              x:Class="TradingAgent.App.Views.TasksView"
              x:DataType="vm:TasksViewModel">
 
-  <Grid ColumnDefinitions="300,*">
-
-    <Border Grid.Column="0" BorderBrush="{DynamicResource BorderMediumBrush}" BorderThickness="0,0,1,0">
-      <Grid RowDefinitions="Auto,*" Margin="12">
-        <Button Classes="outlined" Grid.Row="0" Content="New task" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                Command="{Binding NewCommand}" />
-        <ListBox Grid.Row="1" Classes="navigation" Margin="0,10,0,0" Background="Transparent"
-                 ItemsSource="{Binding Tasks}" SelectedItem="{Binding Selected}">
-          <ListBox.ItemTemplate>
-            <DataTemplate x:DataType="vm:TaskItemViewModel">
-              <StackPanel Spacing="2">
-                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-                <TextBlock Classes="secondary" FontSize="12" Text="{Binding Line}" />
-              </StackPanel>
-            </DataTemplate>
-          </ListBox.ItemTemplate>
-        </ListBox>
-      </Grid>
-    </Border>
-
-    <ScrollViewer Grid.Column="1">
-      <StackPanel Margin="24" Spacing="12" MaxWidth="820" HorizontalAlignment="Left">
-        <TextBlock Classes="pageTitle" Text="{Binding Title}" />
-        <TextBlock Classes="secondary" TextWrapping="Wrap"
-                   Text="A task is work the agent does on a schedule, with nobody watching. Each run is a conversation of its own, which you can read in Chat." />
-
-        <TextBlock Classes="secondary" Text="Name" />
-        <TextBox Classes="small" Text="{Binding Name}" AutomationProperties.Name="Task name" />
-
-        <TextBlock Classes="secondary" Text="What the agent should do on each run" />
-        <TextBox Classes="small" Text="{Binding Instructions}" AcceptsReturn="True" TextWrapping="Wrap" Height="150"
-                 AutomationProperties.Name="Task instructions" />
-
-        <TextBlock Classes="secondary" Text="Instruments, separated by commas (optional)" />
-        <TextBox Classes="small" Text="{Binding Symbols}" PlaceholderText="BTC-USDT, ETH-USDT" AutomationProperties.Name="Task instruments" />
-
-        <TextBlock Classes="secondary" Text="Schedule" />
+  <Grid RowDefinitions="Auto,*">
+    <c:SectionHeader Title="Tasks"
+                     Subtitle="Work the agent does on a schedule, with nobody watching. Each run is a conversation of its own, which you can read in Chat.">
+      <Button Classes="contained" AutomationProperties.Name="New task" Command="{Binding NewCommand}">
         <StackPanel Orientation="Horizontal" Spacing="8">
-          <ComboBox Classes="small" Width="140" ItemsSource="{Binding ScheduleKinds}" SelectedItem="{Binding ScheduleKind}"
-                    AutomationProperties.Name="Schedule kind" />
-          <NumericUpDown Classes="small" Width="170" Minimum="5" Maximum="100000" Increment="5" FormatString="0" Value="{Binding Minutes}"
-                         IsVisible="{Binding IsInterval}" AutomationProperties.Name="Minutes between runs" />
-          <TextBlock VerticalAlignment="Center" Classes="secondary" Text="minutes between runs" IsVisible="{Binding IsInterval}" />
-          <TextBox Classes="small" Width="90" Text="{Binding Time}" PlaceholderText="09:00" IsVisible="{Binding IsTimed}"
-                   AutomationProperties.Name="Time of day" />
-          <TextBox Classes="small" Width="260" Text="{Binding Days}" PlaceholderText="mon, wed, fri" IsVisible="{Binding IsWeekly}"
-                   AutomationProperties.Name="Weekdays" />
+          <PathIcon Width="20" Height="20" Margin="-4,0,0,0" Data="{StaticResource IconAdd}" />
+          <TextBlock Text="New task" />
         </StackPanel>
+      </Button>
+    </c:SectionHeader>
 
-        <Border Classes="panel" BorderBrush="{DynamicResource BearishBrush}" BorderThickness="1" Padding="16,10">
-          <StackPanel Spacing="4">
-            <ToggleSwitch IsChecked="{Binding TradingEnabled}" AutomationProperties.Name="This task may trade"
-                          OnContent="This task may trade" OffContent="This task may not trade" />
-            <TextBlock Classes="secondary" TextWrapping="Wrap"
-                       Text="While this is off, the app refuses every order, cancel, transfer and leverage change in a run of this task. The risk limits and the emergency stop apply either way." />
-            <ToggleSwitch IsChecked="{Binding AskFirst}" IsVisible="{Binding TradingEnabled}"
-                          AutomationProperties.Name="Ask me before placing an order"
-                          OnContent="The agent asks me before it places an order" OffContent="The agent places orders without asking" />
+    <Grid Grid.Row="1" ColumnDefinitions="300,*" ColumnSpacing="24">
+
+      <!-- The tasks -->
+      <c:Card m:Enter.Kind="SlideFromLeft">
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Top" Classes="subtitle1 semibold" Margin="16,12" Text="Scheduled tasks" />
+          <Separator DockPanel.Dock="Top" />
+          <Panel>
+            <ListBox Margin="8" AutomationProperties.Name="Tasks"
+                     ItemsSource="{Binding Tasks}" SelectedItem="{Binding Selected}"
+                     IsVisible="{Binding HasTasks}">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:TaskItemViewModel">
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <StackPanel>
+                      <TextBlock Classes="body2 medium" TextTrimming="CharacterEllipsis" Text="{Binding Name}" />
+                      <TextBlock Classes="caption secondary" TextTrimming="CharacterEllipsis" Text="{Binding Line}" />
+                    </StackPanel>
+                    <Panel Grid.Column="1" VerticalAlignment="Center">
+                      <c:Spinner Width="14" Height="14" Thickness="5" IsVisible="{Binding IsRunning}" />
+                      <c:Chip Classes="outlined small warning" Content="paused" IsVisible="{Binding IsPaused}" />
+                      <c:Chip Classes="outlined small" Content="{Binding Source.Status}" IsVisible="{Binding IsOver}" />
+                    </Panel>
+                  </Grid>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+            <c:EmptyState Classes="compact" IsVisible="{Binding !HasTasks}"
+                          Icon="{StaticResource IconSchedule}"
+                          Title="No tasks yet"
+                          Description="Write one on the right, or ask the agent in Chat to set one up." />
+          </Panel>
+        </DockPanel>
+      </c:Card>
+
+      <!-- The chosen task, or a new one -->
+      <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Disabled" Margin="0,0,-16,0">
+        <StackPanel Margin="0,0,16,0" Spacing="16">
+
+          <!-- What can be done with the chosen task -->
+          <Border Padding="12,8"
+                  CornerRadius="{DynamicResource RadiusDouble}"
+                  Background="{DynamicResource Primary05Brush}"
+                  BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1"
+                  IsVisible="{Binding HasSelection}">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+              <WrapPanel>
+                <Button Classes="contained small" Margin="0,0,8,0" AutomationProperties.Name="Run now" Command="{Binding RunNowCommand}">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <PathIcon Width="18" Height="18" Margin="-2,0,0,0" Data="{StaticResource IconPlayArrow}" />
+                    <TextBlock Text="Run now" />
+                  </StackPanel>
+                </Button>
+                <Button Classes="outlined small" Margin="0,0,8,0" Content="{Binding PauseLabel}" Command="{Binding TogglePauseCommand}" />
+                <Button Classes="outlined small" Margin="0,0,8,0" AutomationProperties.Name="Open last run" Command="{Binding OpenLastRunCommand}">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <PathIcon Width="18" Height="18" Margin="-2,0,0,0" Data="{StaticResource IconChatBubbleOutline}" />
+                    <TextBlock Text="Open last run" />
+                  </StackPanel>
+                </Button>
+                <Button Classes="outlined small error" Content="Delete" Command="{Binding DeleteCommand}" />
+              </WrapPanel>
+              <c:Chip Grid.Column="1" Classes="small" VerticalAlignment="Center" Content="{Binding StatusLabel}" />
+            </Grid>
+          </Border>
+
+          <UniformGrid Columns="4" ColumnSpacing="16" IsVisible="{Binding HasSelection}" m:Enter.Children="Cascade">
+            <c:MetricTile Label="Total Runs" Kind="Kpi" IsRolling="True"
+                          Icon="{StaticResource IconAutorenew}"
+                          Value="{Binding RunCount}"
+                          Subtitle="{Binding RunLine}" />
+            <c:MetricTile Label="Success Rate" Kind="Trend"
+                          Icon="{StaticResource IconCheckCircle}"
+                          Tone="{Binding SuccessTone}"
+                          Value="{Binding SuccessRate}"
+                          Subtitle="{Binding SuccessLine}" />
+            <c:MetricTile Label="Next Run" Kind="Trend"
+                          Icon="{StaticResource IconSchedule}"
+                          Value="{Binding NextRun}"
+                          Subtitle="{Binding NextLine}" />
+            <c:MetricTile Label="Last Run" Kind="Trend"
+                          Icon="{StaticResource IconHistory}"
+                          Tone="{Binding LastTone}"
+                          Value="{Binding LastRun}"
+                          Subtitle="{Binding LastLine}" />
+          </UniformGrid>
+
+          <c:Card m:Enter.Kind="Reveal">
+            <StackPanel>
+              <TextBlock Classes="h6" Margin="16,16,16,0" TextTrimming="CharacterEllipsis" Text="{Binding FormTitle}" />
+              <TabControl Classes="divided" Padding="16,24,16,16">
+                <TabItem Header="General">
+                  <StackPanel Spacing="20">
+                    <TextBox c:Field.Label="Name" Text="{Binding Name}" AutomationProperties.Name="Task name" />
+                    <TextBox c:Field.Label="What the agent should do on each run" Text="{Binding Instructions}"
+                             AcceptsReturn="True" TextWrapping="Wrap" Height="170" VerticalContentAlignment="Top"
+                             AutomationProperties.Name="Task instructions" />
+                    <TextBox c:Field.Label="Instruments, separated by commas (optional)" Text="{Binding Symbols}"
+                             PlaceholderText="BTC-USDT, ETH-USDT" AutomationProperties.Name="Task instruments" />
+                  </StackPanel>
+                </TabItem>
+                <TabItem Header="Schedule">
+                  <StackPanel Spacing="12">
+                    <StackPanel Orientation="Horizontal" Spacing="16">
+                      <ComboBox Width="180" c:Field.Label="Runs" ItemsSource="{Binding ScheduleKinds}" SelectedItem="{Binding ScheduleKind}"
+                                AutomationProperties.Name="Schedule kind" />
+                      <NumericUpDown Width="220" c:Field.Label="Minutes between runs" Minimum="5" Maximum="100000" Increment="5" FormatString="0"
+                                     Value="{Binding Minutes}" IsVisible="{Binding IsInterval}" AutomationProperties.Name="Minutes between runs" />
+                      <TextBox Width="140" c:Field.Label="Time of day" Text="{Binding Time}" PlaceholderText="09:00" IsVisible="{Binding IsTimed}"
+                               AutomationProperties.Name="Time of day" />
+                      <TextBox Width="300" c:Field.Label="Weekdays" Text="{Binding Days}" PlaceholderText="mon, wed, fri" IsVisible="{Binding IsWeekly}"
+                               AutomationProperties.Name="Weekdays" />
+                    </StackPanel>
+                    <TextBlock Classes="caption secondary" TextWrapping="Wrap"
+                               Text="Times are in the time zone of this computer. A task runs every 5 minutes at most." />
+                  </StackPanel>
+                </TabItem>
+                <TabItem>
+                  <TabItem.Header>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <TextBlock VerticalAlignment="Center" Text="Trading" />
+                      <c:Chip Classes="outlined small" Height="18" FontSize="10.4" Padding="6,0" VerticalAlignment="Center"
+                              Classes.success="{Binding TradingEnabled}" Content="{Binding TradingState}" />
+                    </StackPanel>
+                  </TabItem.Header>
+                  <StackPanel Spacing="12">
+                    <c:Alert Severity="Warning"
+                             Content="While trading is off, the app refuses every order, cancel, transfer and leverage change in a run of this task. The risk limits and the emergency stop apply either way." />
+                    <ToggleSwitch IsChecked="{Binding TradingEnabled}" AutomationProperties.Name="This task may trade"
+                                  OnContent="This task may trade" OffContent="This task may not trade" />
+                    <ToggleSwitch IsChecked="{Binding AskFirst}" IsVisible="{Binding TradingEnabled}"
+                                  AutomationProperties.Name="Ask me before placing an order"
+                                  OnContent="The agent asks me before it places an order" OffContent="The agent places orders without asking" />
+                  </StackPanel>
+                </TabItem>
+              </TabControl>
+            </StackPanel>
+          </c:Card>
+
+          <StackPanel Orientation="Horizontal" Spacing="16">
+            <Button Classes="contained" Content="Save" Command="{Binding SaveCommand}" />
+            <TextBlock Classes="body2" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="700" Text="{Binding Message}" />
           </StackPanel>
-        </Border>
-
-        <StackPanel Orientation="Horizontal" Spacing="8">
-          <Button Content="Save" Classes="contained" Command="{Binding SaveCommand}" />
-          <Button Classes="outlined" Content="Run now" Command="{Binding RunNowCommand}" IsVisible="{Binding HasSelection}" />
-          <Button Classes="outlined" Content="{Binding PauseLabel}" Command="{Binding TogglePauseCommand}" IsVisible="{Binding HasSelection}" />
-          <Button Classes="outlined" Content="Open last run" Command="{Binding OpenLastRunCommand}" IsVisible="{Binding HasSelection}" />
-          <Button Classes="outlined" Content="Delete" Command="{Binding DeleteCommand}" IsVisible="{Binding HasSelection}" />
+          <TextBlock Classes="caption secondary" TextWrapping="Wrap" Text="{Binding Info}" />
         </StackPanel>
-        <TextBlock TextWrapping="Wrap" Text="{Binding Message}" />
-        <TextBlock Classes="secondary" TextWrapping="Wrap" Text="{Binding Info}" />
-      </StackPanel>
-    </ScrollViewer>
+      </ScrollViewer>
+    </Grid>
   </Grid>
 </UserControl>

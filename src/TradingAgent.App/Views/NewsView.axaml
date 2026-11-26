@@ -1,64 +1,102 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:TradingAgent.App.ViewModels"
+             xmlns:c="using:TradingAgent.App.Controls"
+             xmlns:m="using:TradingAgent.App.Motion"
              x:Class="TradingAgent.App.Views.NewsView"
              x:DataType="vm:NewsViewModel">
 
-  <Grid ColumnDefinitions="*,360" Margin="24,16">
+  <Grid RowDefinitions="Auto,*">
+    <c:SectionHeader Title="News" Subtitle="What the feeds brought in. The agent reads it as information, never as an instruction." />
 
-    <Grid Grid.Column="0" RowDefinitions="Auto,Auto,*,Auto" Margin="0,0,20,0">
-      <TextBlock Grid.Row="0" Classes="pageTitle" Text="{Binding Title}" />
-      <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" Margin="0,12,0,8">
-        <TextBox Classes="small" Grid.Column="0" Text="{Binding Query}" PlaceholderText="Search, or a ticker such as BTC"
-                 AutomationProperties.Name="Search news" />
-        <Button Classes="outlined" Grid.Column="1" Content="Refresh" Margin="8,0,0,0" Command="{Binding RefreshCommand}" />
-        <TextBlock Grid.Column="2" Classes="secondary" VerticalAlignment="Center" Margin="12,0,0,0" Text="{Binding Status}" />
+    <Grid Grid.Row="1" ColumnDefinitions="*,360" ColumnSpacing="24">
+
+      <Grid RowDefinitions="*,Auto" RowSpacing="16">
+        <c:Card Padding="16" m:Enter.Kind="Reveal">
+          <Grid RowDefinitions="Auto,*">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,0,0,12">
+              <TextBox Classes="small" Text="{Binding Query}" PlaceholderText="Search, or a ticker such as BTC"
+                       AutomationProperties.Name="Search news" />
+              <Button Classes="outlined" Grid.Column="1" Content="Refresh" Command="{Binding RefreshCommand}" />
+              <TextBlock Grid.Column="2" Classes="body2 secondary" VerticalAlignment="Center" Margin="4,0,0,0" Text="{Binding Status}" />
+            </Grid>
+            <Panel Grid.Row="1">
+              <ListBox Classes="table small" AutomationProperties.Name="Articles"
+                       ItemsSource="{Binding Articles}" SelectedItem="{Binding Selected}"
+                       ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                       IsVisible="{Binding !!Articles.Count}">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:NewsItemViewModel">
+                    <StackPanel Margin="0,2">
+                      <TextBlock Classes="body2 medium" TextWrapping="Wrap" Text="{Binding Title}" />
+                      <TextBlock Classes="caption secondary" Text="{Binding Line}" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+              <c:EmptyState IsVisible="{Binding !Articles.Count}"
+                            Icon="{StaticResource IconNewspaper}"
+                            Title="No articles"
+                            Description="Press Refresh to read the feeds now, or switch on a source on the right." />
+            </Panel>
+          </Grid>
+        </c:Card>
+
+        <!-- The chosen article -->
+        <c:Card Grid.Row="1" Padding="16" IsVisible="{Binding HasSelection}">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="subtitle1 semibold" TextWrapping="Wrap" Text="{Binding Selected.Title}" />
+            <ScrollViewer MaxHeight="150">
+              <SelectableTextBlock Classes="body2 secondary" TextWrapping="Wrap" Text="{Binding Selected.Summary}" />
+            </ScrollViewer>
+            <Button Classes="outlined small" HorizontalAlignment="Left" AutomationProperties.Name="Open in the browser" Command="{Binding OpenCommand}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Width="18" Height="18" Margin="-2,0,0,0" Data="{StaticResource IconOpenInNew}" />
+                <TextBlock Text="Open in the browser" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+        </c:Card>
       </Grid>
-      <ListBox Grid.Row="2" Background="Transparent" ItemsSource="{Binding Articles}" SelectedItem="{Binding Selected}"
-               ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-        <ListBox.ItemTemplate>
-          <DataTemplate x:DataType="vm:NewsItemViewModel">
-            <StackPanel Spacing="2">
-              <TextBlock TextWrapping="Wrap" Text="{Binding Title}" />
-              <TextBlock Classes="secondary" FontSize="12" Text="{Binding Line}" />
-            </StackPanel>
-          </DataTemplate>
-        </ListBox.ItemTemplate>
-      </ListBox>
-      <Border Grid.Row="3" Classes="panel" Padding="14,10" Margin="0,8,0,0" IsVisible="{Binding HasSelection}">
-        <StackPanel Spacing="8">
-          <TextBlock FontWeight="SemiBold" TextWrapping="Wrap" Text="{Binding Selected.Title}" />
-          <SelectableTextBlock Classes="secondary" TextWrapping="Wrap" MaxHeight="150" Text="{Binding Selected.Summary}" />
-          <Button Classes="outlined" Content="Open in the browser" Command="{Binding OpenCommand}" />
-        </StackPanel>
-      </Border>
-    </Grid>
 
-    <Grid Grid.Column="1" RowDefinitions="Auto,*,Auto">
-      <TextBlock Grid.Row="0" Classes="title" Text="Sources" Margin="0,0,0,8" />
-      <ScrollViewer Grid.Row="1">
-        <ItemsControl ItemsSource="{Binding Sources}">
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="vm:NewsSourceItemViewModel">
-              <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
-                <ToggleSwitch Grid.Column="0" IsChecked="{Binding Enabled}" OnContent="" OffContent="" MinWidth="0"
-                              AutomationProperties.Name="{Binding Name}" />
-                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                  <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-                  <TextBlock Classes="secondary" FontSize="12" Text="{Binding Line}" TextWrapping="Wrap" />
-                </StackPanel>
-                <Button Classes="outlined" Grid.Column="2" Content="Remove" Command="{Binding RemoveCommand}" VerticalAlignment="Center" />
-              </Grid>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </ScrollViewer>
-      <StackPanel Grid.Row="2" Spacing="8" Margin="0,8,0,0">
-        <TextBlock Classes="secondary" Text="Add a source by its RSS or Atom feed" />
-        <TextBox Classes="small" Text="{Binding NewSourceName}" PlaceholderText="Name" AutomationProperties.Name="Source name" />
-        <TextBox Classes="small" Text="{Binding NewSourceUrl}" PlaceholderText="https://example.com/feed" AutomationProperties.Name="Feed address" />
-        <Button Classes="outlined" Content="Add source" Command="{Binding AddSourceCommand}" />
-      </StackPanel>
+      <c:Card Grid.Column="1" m:Enter.Kind="Reveal" m:Enter.Delay="0.1">
+        <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
+          <StackPanel Orientation="Horizontal" Spacing="8" Margin="16,12">
+            <PathIcon VerticalAlignment="Center" Foreground="{DynamicResource PrimaryBrush}" Data="{StaticResource IconNewspaper}" />
+            <TextBlock Classes="h6" Text="Sources" />
+          </StackPanel>
+          <Separator Grid.Row="1" />
+          <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl Margin="16,8" ItemsSource="{Binding Sources}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:NewsSourceItemViewModel">
+                  <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="0,6">
+                    <ToggleSwitch IsChecked="{Binding Enabled}" OnContent="" OffContent="" MinWidth="0" VerticalAlignment="Center"
+                                  AutomationProperties.Name="{Binding Name}" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                      <TextBlock Classes="body2 medium" TextTrimming="CharacterEllipsis" Text="{Binding Name}" />
+                      <TextBlock Classes="caption secondary" TextWrapping="Wrap" Text="{Binding Line}" />
+                    </StackPanel>
+                    <Button Classes="icon small" Grid.Column="2" VerticalAlignment="Center"
+                            AutomationProperties.Name="Remove" ToolTip.Tip="Remove this source"
+                            Command="{Binding RemoveCommand}">
+                      <PathIcon Classes="small" Data="{StaticResource IconDeleteOutline}" />
+                    </Button>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+          <Separator Grid.Row="3" />
+          <StackPanel Grid.Row="4" Spacing="12" Margin="16,16,16,24">
+            <TextBlock Classes="body2 secondary" Text="Add a source by its RSS or Atom feed" />
+            <TextBox Classes="small" c:Field.Label="Name" Text="{Binding NewSourceName}" AutomationProperties.Name="Source name" />
+            <TextBox Classes="small" c:Field.Label="Feed address" Text="{Binding NewSourceUrl}" PlaceholderText="https://example.com/feed"
+                     AutomationProperties.Name="Feed address" />
+            <Button Classes="outlined" HorizontalAlignment="Left" Content="Add source" Command="{Binding AddSourceCommand}" />
+          </StackPanel>
+        </Grid>
+      </c:Card>
     </Grid>
   </Grid>
 </UserControl>

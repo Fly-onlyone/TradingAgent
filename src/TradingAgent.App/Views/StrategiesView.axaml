@@ -1,74 +1,107 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:TradingAgent.App.ViewModels"
+             xmlns:c="using:TradingAgent.App.Controls"
+             xmlns:m="using:TradingAgent.App.Motion"
              x:Class="TradingAgent.App.Views.StrategiesView"
              x:DataType="vm:StrategiesViewModel">
 
-  <Grid ColumnDefinitions="320,*">
+  <Grid RowDefinitions="Auto,*">
+    <c:SectionHeader Title="Strategies" Subtitle="The strategies the agent knows. It trades by the ones that are switched on." />
 
-    <Border Grid.Column="0" BorderBrush="{DynamicResource BorderMediumBrush}" BorderThickness="0,0,1,0">
-      <ListBox Classes="navigation" Margin="12" Background="Transparent"
-               ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}">
-        <ListBox.ItemTemplate>
-          <DataTemplate x:DataType="vm:StrategyItemViewModel">
-            <StackPanel Spacing="2">
-              <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-              <TextBlock Classes="secondary" FontSize="12" Text="{Binding Line}" TextTrimming="CharacterEllipsis" />
-            </StackPanel>
-          </DataTemplate>
-        </ListBox.ItemTemplate>
-      </ListBox>
-    </Border>
+    <Grid Grid.Row="1" ColumnDefinitions="340,*" ColumnSpacing="24">
 
-    <ScrollViewer Grid.Column="1">
-      <StackPanel Margin="24" Spacing="18" MaxWidth="860" HorizontalAlignment="Left">
-        <TextBlock Classes="pageTitle" Text="{Binding Title}" />
-        <TextBlock TextWrapping="Wrap" Text="{Binding Message}"
+      <!-- The library -->
+      <c:Card m:Enter.Kind="SlideFromLeft">
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Top" Classes="subtitle1 semibold" Margin="16,12" Text="Library" />
+          <Separator DockPanel.Dock="Top" />
+          <Panel>
+            <ListBox Margin="8" AutomationProperties.Name="Strategies"
+                     ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}"
+                     IsVisible="{Binding !!Items.Count}">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:StrategyItemViewModel">
+                  <StackPanel>
+                    <TextBlock Classes="body2 medium" TextTrimming="CharacterEllipsis" Text="{Binding Name}" />
+                    <TextBlock Classes="caption secondary" TextTrimming="CharacterEllipsis" Text="{Binding Line}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+            <c:EmptyState Classes="compact" IsVisible="{Binding !Items.Count}"
+                          Icon="{StaticResource IconLightbulb}"
+                          Title="No strategies yet"
+                          Description="Have the agent read one from a page, or write one yourself." />
+          </Panel>
+        </DockPanel>
+      </c:Card>
+
+      <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Disabled" Margin="0,0,-16,0">
+        <StackPanel Margin="0,0,16,0" Spacing="24">
+
+          <c:Alert Severity="Info" Content="{Binding Message}"
                    IsVisible="{Binding Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
-        <!-- The chosen strategy -->
-        <StackPanel Spacing="10" IsVisible="{Binding HasSelection}">
-          <TextBlock Classes="title" Text="{Binding Selected.Name}" TextWrapping="Wrap" />
-          <ToggleSwitch IsChecked="{Binding IsActive}" AutomationProperties.Name="The agent trades by this strategy"
-                        OnContent="The agent trades by this strategy" OffContent="Not in use" />
-          <SelectableTextBlock TextWrapping="Wrap" Text="{Binding Details}" />
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <TextBlock Classes="secondary" VerticalAlignment="Center" Text="Your rating, 1 to 5" />
-            <NumericUpDown Classes="small" Width="130" Minimum="1" Maximum="5" Increment="1" FormatString="0.#" Value="{Binding Rating}"
-                           AutomationProperties.Name="Rating" />
-          </StackPanel>
-          <TextBox Classes="small" Text="{Binding Notes}" PlaceholderText="Notes on how it did for you" AcceptsReturn="True" TextWrapping="Wrap"
-                   Height="70" AutomationProperties.Name="Rating notes" />
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Classes="outlined" Content="Save rating" Command="{Binding SaveRatingCommand}" />
-            <Button Classes="outlined" Content="Delete strategy" Command="{Binding DeleteCommand}" />
-          </StackPanel>
-        </StackPanel>
+          <!-- The chosen strategy -->
+          <c:Card Padding="16,16,16,24" IsVisible="{Binding HasSelection}" m:Enter.Kind="Reveal">
+            <StackPanel Spacing="16">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                <TextBlock Classes="h6" TextWrapping="Wrap" VerticalAlignment="Center" Text="{Binding Selected.Name}" />
+                <ToggleSwitch Grid.Column="1" IsChecked="{Binding IsActive}" AutomationProperties.Name="The agent trades by this strategy"
+                              OnContent="The agent trades by this strategy" OffContent="Not in use" />
+              </Grid>
+              <Border Padding="12" CornerRadius="{DynamicResource RadiusBase}" Background="{DynamicResource ActionHoverBrush}">
+                <SelectableTextBlock Classes="body2" TextWrapping="Wrap" Text="{Binding Details}" />
+              </Border>
+              <StackPanel Orientation="Horizontal" Spacing="16">
+                <NumericUpDown Classes="small" Width="180" c:Field.Label="Your rating, 1 to 5" Minimum="1" Maximum="5" Increment="1" FormatString="0.#"
+                               Value="{Binding Rating}" AutomationProperties.Name="Rating" />
+              </StackPanel>
+              <TextBox c:Field.Label="Notes on how it did for you" Text="{Binding Notes}" AcceptsReturn="True" TextWrapping="Wrap"
+                       Height="90" VerticalContentAlignment="Top" AutomationProperties.Name="Rating notes" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Classes="contained" Content="Save rating" Command="{Binding SaveRatingCommand}" />
+                <Button Classes="outlined error" Content="Delete strategy" Command="{Binding DeleteCommand}" />
+              </StackPanel>
+            </StackPanel>
+          </c:Card>
 
-        <!-- Ways to get more -->
-        <StackPanel Spacing="8">
-          <TextBlock Classes="title" Text="Read a strategy from a page or a text" />
-          <TextBlock Classes="secondary" TextWrapping="Wrap"
-                     Text="Paste a web address or the text of a strategy. The agent reads it in a conversation of its own and saves it when its rules are clear." />
-          <TextBox Classes="small" Text="{Binding ImportText}" AcceptsReturn="True" TextWrapping="Wrap" Height="80"
-                   PlaceholderText="https://… or the strategy in words" AutomationProperties.Name="Strategy to import" />
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Classes="outlined" Content="Have the agent read it" Command="{Binding ImportCommand}" />
-            <Button Classes="outlined" Content="Look for strategies now" Command="{Binding DiscoverCommand}"
-                    ToolTip.Tip="The agent searches the collected news and the web. Discovery on a schedule is switched on in Settings." />
-          </StackPanel>
-        </StackPanel>
+          <!-- Ways to get more -->
+          <c:Card Padding="16,16,16,24" m:Enter.Kind="Reveal" m:Enter.Delay="0.1">
+            <StackPanel Spacing="12">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <PathIcon VerticalAlignment="Center" Foreground="{DynamicResource PrimaryBrush}" Data="{StaticResource IconAutoAwesome}" />
+                <TextBlock Classes="h6" Text="Read a strategy from a page or a text" />
+              </StackPanel>
+              <TextBlock Classes="body2 secondary" TextWrapping="Wrap"
+                         Text="Paste a web address or the text of a strategy. The agent reads it in a conversation of its own and saves it when its rules are clear." />
+              <TextBox Text="{Binding ImportText}" AcceptsReturn="True" TextWrapping="Wrap" Height="100" VerticalContentAlignment="Top"
+                       PlaceholderText="https://… or the strategy in words" AutomationProperties.Name="Strategy to import" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Classes="contained" Content="Have the agent read it" Command="{Binding ImportCommand}" />
+                <Button Classes="outlined" Content="Look for strategies now" Command="{Binding DiscoverCommand}"
+                        ToolTip.Tip="The agent searches the collected news and the web. Discovery on a schedule is switched on in Settings." />
+              </StackPanel>
+            </StackPanel>
+          </c:Card>
 
-        <StackPanel Spacing="8">
-          <TextBlock Classes="title" Text="Write one yourself" />
-          <TextBox Classes="small" Text="{Binding NewName}" PlaceholderText="Name" AutomationProperties.Name="New strategy name" />
-          <TextBox Classes="small" Text="{Binding NewDescription}" PlaceholderText="What it is and when it works" AcceptsReturn="True"
-                   TextWrapping="Wrap" Height="70" AutomationProperties.Name="New strategy description" />
-          <TextBox Classes="small" Text="{Binding NewRules}" PlaceholderText="Entry rules, in words or as JSON" AcceptsReturn="True"
-                   TextWrapping="Wrap" Height="70" AutomationProperties.Name="New strategy rules" />
-          <Button Classes="outlined" Content="Add strategy" Command="{Binding AddCommand}" />
+          <c:Card Padding="16,16,16,24" m:Enter.Kind="Reveal" m:Enter.Delay="0.2">
+            <StackPanel Spacing="16">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <PathIcon VerticalAlignment="Center" Foreground="{DynamicResource PrimaryBrush}" Data="{StaticResource IconEdit}" />
+                <TextBlock Classes="h6" Text="Write one yourself" />
+              </StackPanel>
+              <TextBox c:Field.Label="Name" Text="{Binding NewName}" AutomationProperties.Name="New strategy name" />
+              <TextBox c:Field.Label="What it is and when it works" Text="{Binding NewDescription}" AcceptsReturn="True"
+                       TextWrapping="Wrap" Height="90" VerticalContentAlignment="Top" AutomationProperties.Name="New strategy description" />
+              <TextBox c:Field.Label="Entry rules, in words or as JSON" Text="{Binding NewRules}" AcceptsReturn="True"
+                       TextWrapping="Wrap" Height="90" VerticalContentAlignment="Top" AutomationProperties.Name="New strategy rules" />
+              <Button Classes="outlined" HorizontalAlignment="Left" Content="Add strategy" Command="{Binding AddCommand}" />
+            </StackPanel>
+          </c:Card>
         </StackPanel>
-      </StackPanel>
-    </ScrollViewer>
+      </ScrollViewer>
+    </Grid>
   </Grid>
 </UserControl>

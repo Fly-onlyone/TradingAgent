@@ -174,7 +174,6 @@ public sealed class ChatLookTests : IDisposable
         Assert.Contains("Stop", names);
         Assert.Contains("New chat", names);
         Assert.Contains("Delete chat", names);
-        Assert.True(chat.UsesCards);
         window.Close();
     }
 
