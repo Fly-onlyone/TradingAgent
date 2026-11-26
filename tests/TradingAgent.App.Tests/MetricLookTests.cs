@@ -5,6 +5,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using TradingAgent.App.Controls;
+using TradingAgent.App.Effects;
 using TradingAgent.App.Motion;
 using TradingAgent.App.ViewModels;
 using TradingAgent.App.Views;
@@ -124,6 +125,23 @@ public sealed class MetricLookTests
 
         Assert.True(Magnet.GetOn(holder));
         Assert.Null(holder.RenderTransform);
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void Glass_that_lies_on_glass_draws_no_backdrop_of_its_own()
+    {
+        var inner = new Card { Content = "inside" };
+        var outer = new Card { Content = inner };
+        var alone = new Card { Content = "alone" };
+        var window = Show(new StackPanel { Children = { outer, alone } });
+
+        static BackdropBlur Sheet(Card card) => card.GetVisualDescendants().OfType<BackdropBlur>().First();
+
+        // Under the inner card is the tint of the outer one; drawing the background again would cut a hole in it.
+        Assert.False(Sheet(outer).LiesOnGlass);
+        Assert.True(inner.GetVisualDescendants().OfType<BackdropBlur>().Single().LiesOnGlass);
+        Assert.False(Sheet(alone).LiesOnGlass);
         window.Close();
     }
 

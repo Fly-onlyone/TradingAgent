@@ -222,6 +222,8 @@ public sealed class EffectsLayer : Control
                 return;
             }
 
+            // Another size or another theme: the picture the glass draws from is of the old one.
+            GlassBackdrop.Drop();
             _scene = scene;
             if (scene.IsNothing)
             {
@@ -252,10 +254,18 @@ public sealed class EffectsLayer : Control
 
         public override void OnRender(ImmediateDrawingContext drawingContext)
         {
-            if (_scene.IsNothing || _field is not { } field)
+            if (!_scene.IsNothing && _field is { } field)
             {
-                return;
+                Draw(drawingContext, field);
             }
+
+            // This is the last thing drawn under the pages, so now the canvas holds the background and
+            // nothing else. With nothing to draw that still holds: the plain background is one too.
+            GlassBackdrop.Capture(drawingContext, EffectiveSize);
+        }
+
+        private void Draw(ImmediateDrawingContext drawingContext, ParticleField field)
+        {
 
             var now = CompositionNow;
             _start ??= now;

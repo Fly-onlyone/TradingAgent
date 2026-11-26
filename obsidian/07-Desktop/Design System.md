@@ -123,9 +123,24 @@ Lowering Skia's GPU cache limit changed nothing. Whether the look is worth it is
 
 ## Glass
 
-`Effects/BackdropBlur` blurs what is behind a control, as `backdrop-filter` did. It asks the Skia
-canvas for a layer that starts as a blurred copy of the frame. Checked in a real window and in the
-Native AOT build. Without a Skia canvas (a headless test) it does nothing.
+`Effects/BackdropBlur` is the frosted sheet under a card, the header and the sidebar. It shows the
+window's background blurred, as `backdrop-filter` did. Without a Skia canvas (a headless test) it
+does nothing.
+
+It does not blur "what is on the canvas under it". That is only right in a frame that redraws the
+whole window. Most frames redraw a small part (a moving line, a card under the pointer), and then
+the pixels around that part are those of the frame before, with cards and text on them. Glass that
+blurred them changed its look from frame to frame: lines on glass flickered, and a card flashed
+around its edges when the pointer came over it.
+
+- `Effects/GlassBackdrop` keeps one blurred picture of the background, a quarter of the window's
+  size. `EffectsLayer` takes it right after it drew the background, and only in a frame that
+  redraws everything. Every sheet of glass draws its part of that picture.
+- Glass that lies on glass draws nothing: under it is the tint of the sheet below.
+- `IsLive="True"` is the old way, blurring whatever is under it. Only the scrim of a `Dialog` uses
+  it, because it must blur the page.
+- While there is no picture yet (the first frames, a still picture of a page) glass falls back to
+  the old way.
 
 ## Looking at it
 

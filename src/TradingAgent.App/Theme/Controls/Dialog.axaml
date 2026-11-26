@@ -16,7 +16,7 @@
     <Setter Property="Template">
       <ControlTemplate>
         <Panel>
-          <fx:BackdropBlur Radius="8" />
+          <fx:BackdropBlur Radius="8" IsLive="True" />
           <Border x:Name="PART_Scrim" Background="{DynamicResource ScrimBrush}" />
           <Panel x:Name="PART_Paper"
                  Width="444"
