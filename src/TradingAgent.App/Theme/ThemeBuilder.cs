@@ -156,6 +156,7 @@ public static class ThemeBuilder
         resources["GradientPrimaryBrush"] = Diagonal(preset.Primary.Main, preset.Primary.Light);
         resources["GradientSecondaryBrush"] = Diagonal(preset.Secondary.Main, preset.Secondary.Light);
         resources["GradientPrimarySecondaryBrush"] = Diagonal(preset.Primary.Main, preset.Secondary.Main);
+        resources["GradientHeroBrush"] = Diagonal(Alpha(primary, 0.1), Alpha(primary, 0.02));
         resources["GradientThemeTileBrush"] = Diagonal(preset.Primary.Main, preset.Secondary.Main, preset.Accent.Main);
         resources["GradientAccentStops"] = AccentStops(preset);
         resources["GradientAccentBrush"] = new ImmutableLinearGradientBrush(
@@ -249,6 +250,8 @@ public static class ThemeBuilder
         resources["RadiusBubbleUser"] = new CornerRadius(radius * 2, 4, radius * 2, radius * 2);
         resources["RadiusBubbleAssistant"] = new CornerRadius(4, radius * 2, radius * 2, radius * 2);
         resources["RadiusBaseValue"] = radius;
+        resources["RadiusLeft"] = new CornerRadius(radius, 0, 0, radius);
+        resources["RadiusRight"] = new CornerRadius(0, radius, radius, 0);
         resources["RadiusCardValue"] = radius + 4;
         resources["CardBlur"] = glass.CardBlur;
         resources["ElevatedBlur"] = Math.Round(glass.CardBlur * 0.75);

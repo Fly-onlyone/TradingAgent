@@ -38,6 +38,7 @@ internal sealed partial class MainViewModel : ObservableObject
         if (navigator is not null)
         {
             navigator.ChatRequested += OpenChat;
+            navigator.PageRequested += OpenPage;
         }
         WindowTitle = info.IsDevelopmentBuild ? $"{AppInfo.ProductName} (dev)" : AppInfo.ProductName;
         VersionLabel = $"v{info.Version}";
@@ -173,6 +174,14 @@ internal sealed partial class MainViewModel : ObservableObject
     partial void OnEffectsEnabledChanged(bool value) => Appearance.EffectsEnabled = value;
 
     partial void OnReducedMotionChanged(bool value) => Appearance.ReducedMotion = value;
+
+    private void OpenPage(string title)
+    {
+        if (Pages.FirstOrDefault(page => page.Title == title) is { } page)
+        {
+            SelectedPage = page;
+        }
+    }
 
     private void OpenChat(string sessionId)
     {

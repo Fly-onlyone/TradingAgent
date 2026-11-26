@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using TradingAgent.Agent.Orders;
+using TradingAgent.App.Controls;
 using TradingAgent.App.ViewModels;
 using TradingAgent.Core;
 using TradingAgent.Core.Settings;
@@ -98,16 +99,29 @@ public sealed class TradingPagesTests : IDisposable
         Assert.Equal(2, page.RecentOrders.Count);
         Assert.StartsWith("1 of 1 tasks active. Next: Morning review", page.TaskLine, StringComparison.Ordinal);
         Assert.True(page.EmergencyStop);
+        // The tiles of the closed trades need no answer from OKX either; the account's tile waits for it.
+        Assert.Equal(("100.0%", "1 of 1 trades", MetricTone.Success), (page.WinRate, page.WinRateLine, page.WinRateTone));
+        Assert.Equal(("+$10.00", MetricTone.Success), (page.Realized, page.RealizedTone));
+        Assert.Equal(10, Assert.Single(page.EquityCurve).Value);
+        Assert.Equal("1 of 1 active", page.TasksActive);
+        Assert.StartsWith("Morning review, ", page.NextRun, StringComparison.Ordinal);
+        Assert.True(page.IsLoading);
+        Assert.False(page.IsFirstRun);
 
         await page.RefreshAsync();
 
         Assert.Equal("Demo trading", page.Status);
         Assert.StartsWith("$12", page.Equity, StringComparison.Ordinal);
         // The dust is left out; the largest holding comes first.
-        Assert.Equal(["USDT", "BTC"], page.Assets.Select(row => row.A));
+        Assert.Equal(["USDT", "BTC"], page.Assets.Select(row => row.Currency));
         var position = Assert.Single(page.Positions);
-        Assert.Equal(("BTC-USDT-SWAP", "long", "3x", true), (position.A, position.B, position.G, position.IsGood));
+        Assert.Equal(("BTC-USDT-SWAP", "long", "3x", true), (position.Symbol, position.Side, position.Leverage, position.IsGood));
         Assert.True(page.HasPositions);
+        Assert.False(page.IsLoading);
+        Assert.False(page.HasProblem);
+        // What the open positions are ahead by, and that as a share of the account.
+        Assert.StartsWith("+$", page.UnrealizedPnl, StringComparison.Ordinal);
+        Assert.True(page.UnrealizedChange > 0);
     }
 
     [Fact]
@@ -120,6 +134,11 @@ public sealed class TradingPagesTests : IDisposable
         await page.RefreshAsync();
 
         Assert.Equal("LIVE trading. No OKX key is saved, or OKX refused it. Save the key in Settings.", page.Status);
+        Assert.Equal(("No OKX key is saved, or OKX refused it. Save the key in Settings.", true, true), (page.Problem, page.HasProblem, page.IsLive));
+        // Nothing stored and nothing open: the page says where to begin.
+        Assert.True(page.IsFirstRun);
+        Assert.Equal(("—", "No trades yet", MetricTone.Neutral), (page.WinRate, page.WinRateLine, page.WinRateTone));
+        Assert.Empty(page.EquityCurve);
         Assert.Equal("–", page.Equity);
         Assert.Equal("no closed trades", page.PnlMonth);
         Assert.Equal("No scheduled tasks.", page.TaskLine);
@@ -140,12 +159,21 @@ public sealed class TradingPagesTests : IDisposable
         Assert.StartsWith("24 h: low", page.Day, StringComparison.Ordinal);
         Assert.StartsWith("1H: trend", page.Indicators, StringComparison.Ordinal);
         Assert.Equal(string.Empty, page.Status);
+        // The same figures one by one, for the cards.
+        Assert.Equal(("BTC-USDT", "BTC / USDT", "B", true), (page.Shown, page.Pair, page.Initial, page.HasTicker));
+        Assert.StartsWith("$", page.Last, StringComparison.Ordinal);
+        Assert.EndsWith("%", page.Change, StringComparison.Ordinal);
+        Assert.Equal(48, page.Closes.Count);
+        Assert.InRange(page.RangePosition, 0, 100);
+        Assert.Equal(["Trend (1H)", "RSI 14", "SMA 20", "SMA 50", "ATR"], page.IndicatorRows.Select(row => row.Label));
+        Assert.False(page.LacksIndicators);
 
         page.Symbol = "NOPE-USDT";
         await page.LoadAsync();
 
         // The last good chart stays; the problem is said next to it.
         Assert.Equal("Instrument ID does not exist", page.Status);
+        Assert.Equal("BTC-USDT", page.Shown);
         Assert.Equal(300, page.Candles.Count);
     }
 
@@ -156,14 +184,16 @@ public sealed class TradingPagesTests : IDisposable
         AddOrder("2", "ETH-USDT", "sell", "open", null, 2000);
         var page = new OrdersViewModel(_trades, NewMirror(), action => action());
 
-        Assert.Equal(["ETH-USDT", "BTC-USDT"], page.Orders.Select(row => row.B));
-        Assert.Equal(("sell", "market", "open"), (page.Orders[0].C, page.Orders[0].D, page.Orders[0].G));
+        Assert.Equal(["ETH-USDT", "BTC-USDT"], page.Orders.Select(row => row.Symbol));
+        Assert.Equal(("sell", "SELL", "market", "open", true), (page.Orders[0].Side, page.Orders[0].SideLabel, page.Orders[0].Type, page.Orders[0].Status, page.Orders[0].IsOpen));
         Assert.True(page.Orders[1].IsGood);
+        Assert.Equal((true, "2 orders"), (page.HasOrders, page.CountLabel));
 
         page.Filter = "filled";
-        Assert.Equal("BTC-USDT", Assert.Single(page.Orders).B);
+        Assert.Equal("BTC-USDT", Assert.Single(page.Orders).Symbol);
         page.Filter = "rejected";
         Assert.Empty(page.Orders);
+        Assert.False(page.HasOrders);
         Assert.StartsWith("No orders yet.", page.Status, StringComparison.Ordinal);
 
         await page.RefreshAsync();
@@ -186,12 +216,19 @@ public sealed class TradingPagesTests : IDisposable
         await page.RefreshAsync();
 
         var trade = Assert.Single(page.Trades);
-        Assert.Equal(("BTC-USDT", "long", true), (trade.B, trade.C, trade.IsBad));
-        Assert.Contains("-2.00 %", trade.G, StringComparison.Ordinal);
+        Assert.Equal(("BTC-USDT", "long", true, true), (trade.Symbol, trade.Side, trade.IsLong, trade.IsBad));
+        Assert.Equal(("-$10.00", "-2.00 %"), (trade.Pnl, trade.PnlPercent));
+        // The tiles: one trade, lost.
+        Assert.Equal(("-$10.00", MetricTone.Error, "30 days: -$10.00"), (page.TotalPnl, page.TotalTone, page.TotalLine));
+        Assert.Equal(("0.0%", "0W / 1L", MetricTone.Warning), (page.WinRate, page.WinLine, page.WinTone));
+        Assert.Equal(("1", "Avg: -$10.00"), (page.TradeCount, page.AverageLine));
+        Assert.Equal(("-$10.00", "Worst: -$10.00", MetricTone.Warning), (page.Best, page.WorstLine, page.BestTone));
+        Assert.Equal(-10, Assert.Single(page.PnlBars).Value);
+        Assert.True(page.HasTrades);
         Assert.Contains("24 h: -10", page.Summary, StringComparison.Ordinal);
         Assert.Contains("0 of 1 won", page.Summary, StringComparison.Ordinal);
         var pattern = Assert.Single(page.Patterns);
-        Assert.Equal(("BTC-USDT 1H: RSI below 30", "75 % higher after 12 bars", "12 cases", true), (pattern.A, pattern.B, pattern.D, pattern.IsGood));
+        Assert.Equal(("BTC-USDT 1H: RSI below 30", "75 % higher after 12 bars", "12 cases", true), (pattern.Name, pattern.Rate, pattern.Cases, pattern.IsGood));
     }
 
     [Fact]

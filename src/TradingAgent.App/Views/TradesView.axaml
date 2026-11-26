@@ -1,64 +1,170 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:TradingAgent.App.ViewModels"
+             xmlns:c="using:TradingAgent.App.Controls"
+             xmlns:m="using:TradingAgent.App.Motion"
              x:Class="TradingAgent.App.Views.TradesView"
              x:DataType="vm:TradesViewModel">
 
-  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto,Auto" Margin="24,16">
-    <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto,Auto,*">
-      <TextBlock Grid.Column="0" Classes="pageTitle" Text="{Binding Title}" VerticalAlignment="Center" Margin="0,0,16,0" />
-      <Button Classes="outlined" Grid.Column="1" Content="Work out now" Command="{Binding RefreshCommand}" />
-      <Button Classes="outlined" Grid.Column="2" Content="Measure past signals" Margin="8,0,0,0" Command="{Binding MineCommand}" />
-      <TextBlock Grid.Column="3" Classes="secondary" VerticalAlignment="Center" Margin="12,0,0,0" TextWrapping="Wrap"
-                 Text="{Binding Status}" />
-    </Grid>
+  <UserControl.Styles>
+    <!-- The arrow of the total points the way the total went. -->
+    <Style Selector="c|MetricTile.total">
+      <Setter Property="Icon" Value="{StaticResource IconTrendingUp}" />
+    </Style>
+    <Style Selector="c|MetricTile.total.behind">
+      <Setter Property="Icon" Value="{StaticResource IconTrendingDown}" />
+    </Style>
+    <Style Selector="Rectangle.noData">
+      <Setter Property="Stroke" Value="{DynamicResource BorderSubtleBrush}" />
+      <Setter Property="StrokeThickness" Value="1" />
+      <Setter Property="StrokeDashArray" Value="4,3" />
+      <Setter Property="RadiusX" Value="{DynamicResource RadiusBaseValue}" />
+      <Setter Property="RadiusY" Value="{DynamicResource RadiusBaseValue}" />
+    </Style>
+  </UserControl.Styles>
 
-    <StackPanel Grid.Row="1" Spacing="4" Margin="0,12,0,0">
-      <SelectableTextBlock Text="{Binding Summary}" />
-      <TextBlock Classes="secondary" FontSize="12" TextWrapping="Wrap"
-                 Text="Profit and loss is worked out by the app from the fills, first in first out, without fees and funding. It is close to, not equal to, what OKX shows." />
+  <!-- The scroll bar stands in the margin of the page, clear of the cards. -->
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled" Margin="0,0,-16,0">
+    <StackPanel Margin="0,0,16,0">
+
+      <c:SectionHeader Title="Trade History" Subtitle="Review agent-executed trades and P&amp;L performance">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Classes="outlined" Content="Work out now" Command="{Binding RefreshCommand}"
+                  ToolTip.Tip="Work out the trades closed since the last pass" />
+          <Button Classes="outlined" AutomationProperties.Name="Measure past signals" Command="{Binding MineCommand}"
+                  ToolTip.Tip="Measure on past prices what the usual signals were worth">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <c:Spinner Width="16" Height="16" Thickness="5" IsVisible="{Binding IsMining}" />
+              <TextBlock Text="Measure past signals" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </c:SectionHeader>
+
+      <c:Alert Severity="Info" Margin="0,0,0,24" Content="{Binding Status}">
+        <c:Alert.IsVisible>
+          <MultiBinding Converter="{x:Static BoolConverters.And}">
+            <Binding Path="HasTrades" />
+            <Binding Path="Status" Converter="{x:Static StringConverters.IsNotNullOrEmpty}" />
+          </MultiBinding>
+        </c:Alert.IsVisible>
+      </c:Alert>
+
+      <UniformGrid Columns="4" ColumnSpacing="16" Margin="0,0,0,24" m:Enter.Children="Cascade">
+        <c:MetricTile Classes="total" Classes.behind="{Binding !IsAhead}"
+                      Label="Total P&amp;L" Kind="Trend"
+                      Tone="{Binding TotalTone}"
+                      Value="{Binding TotalPnl}"
+                      Subtitle="{Binding TotalLine}" />
+        <c:MetricTile Label="Win Rate" Kind="Trend"
+                      Icon="{StaticResource IconPercent}"
+                      Tone="{Binding WinTone}"
+                      Value="{Binding WinRate}"
+                      Subtitle="{Binding WinLine}" />
+        <c:MetricTile Label="Total Trades" Kind="Trend"
+                      Icon="{StaticResource IconShowChart}"
+                      Value="{Binding TradeCount}"
+                      Subtitle="{Binding AverageLine}" />
+        <c:MetricTile Label="Best / Worst" Kind="Trend"
+                      Icon="{StaticResource IconTrendingUp}"
+                      Tone="{Binding BestTone}"
+                      Value="{Binding Best}"
+                      Subtitle="{Binding WorstLine}" />
+      </UniformGrid>
+
+      <c:Card Padding="16,16,16,24" Margin="0,0,0,24" m:Enter.Kind="Fade">
+        <StackPanel>
+          <TextBlock Classes="h6" Margin="0,0,0,16" Text="P&amp;L Performance" />
+          <Panel Height="200">
+            <c:SeriesChart Kind="Bars" Points="{Binding PnlBars}" IsVisible="{Binding HasTrades}" />
+            <Panel IsVisible="{Binding !HasTrades}">
+              <Rectangle Classes="noData" />
+              <TextBlock Classes="body2 secondary" HorizontalAlignment="Center" VerticalAlignment="Center" Text="No trade data" />
+            </Panel>
+          </Panel>
+        </StackPanel>
+      </c:Card>
+
+      <!-- The closed trades -->
+      <Border Classes="paper" ClipToBounds="True" Margin="0,0,0,24" m:Enter.Kind="Tab">
+        <Panel>
+          <DockPanel IsVisible="{Binding HasTrades}">
+            <Border DockPanel.Dock="Top" Classes="tableHead">
+              <!-- 8 px less on the right: the rows give that much to their scroll bar. -->
+              <Grid ColumnDefinitions="2*,110,*,*,*,*,150" ColumnSpacing="12" Margin="0,0,8,0">
+                <TextBlock Text="Symbol" />
+                <TextBlock Grid.Column="1" HorizontalAlignment="Center" Text="Side" />
+                <TextBlock Grid.Column="2" HorizontalAlignment="Right" Text="Entry" />
+                <TextBlock Grid.Column="3" HorizontalAlignment="Right" Text="Exit" />
+                <TextBlock Grid.Column="4" HorizontalAlignment="Right" Text="Quantity" />
+                <TextBlock Grid.Column="5" HorizontalAlignment="Right" Text="P&amp;L" />
+                <TextBlock Grid.Column="6" HorizontalAlignment="Right" Text="Closed" />
+              </Grid>
+            </Border>
+            <ListBox Classes="table" MaxHeight="560" AutomationProperties.Name="Closed trades" ItemsSource="{Binding Trades}">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:TradeRow">
+                  <Grid ColumnDefinitions="2*,110,*,*,*,*,150" ColumnSpacing="12">
+                    <TextBlock Classes="semibold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Text="{Binding Symbol}" />
+                    <c:Chip Grid.Column="1" Classes="outlined small" HorizontalAlignment="Center" Content="{Binding SideLabel}"
+                            Classes.success="{Binding IsLong}" Classes.error="{Binding IsShort}" />
+                    <TextBlock Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Text="{Binding Entry}" />
+                    <TextBlock Grid.Column="3" HorizontalAlignment="Right" VerticalAlignment="Center" Text="{Binding Exit}" />
+                    <TextBlock Grid.Column="4" HorizontalAlignment="Right" VerticalAlignment="Center" Text="{Binding Quantity}" />
+                    <StackPanel Grid.Column="5" HorizontalAlignment="Right" VerticalAlignment="Center">
+                      <TextBlock Classes="semibold" HorizontalAlignment="Right" Text="{Binding Pnl}"
+                                 Classes.good="{Binding IsGood}" Classes.bad="{Binding IsBad}" />
+                      <TextBlock Classes="caption" HorizontalAlignment="Right" Text="{Binding PnlPercent}"
+                                 Classes.good="{Binding IsGood}" Classes.bad="{Binding IsBad}" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="6" Classes="secondary" HorizontalAlignment="Right" VerticalAlignment="Center" Text="{Binding Time}" />
+                  </Grid>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </DockPanel>
+          <TextBlock Classes="body1 secondary" Margin="32" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"
+                     Text="{Binding Status}" IsVisible="{Binding !HasTrades}" />
+        </Panel>
+      </Border>
+
+      <!-- What the usual signals were worth on past prices -->
+      <c:Card Padding="16,16,16,24" m:Enter.Kind="Reveal" m:Enter.Delay="0.1">
+        <StackPanel>
+          <TextBlock Classes="h6" Text="Signal Patterns" />
+          <TextBlock Classes="body2 secondary" Margin="0,4,0,12" TextWrapping="Wrap"
+                     Text="What the usual signals were worth on past prices. A pattern with fewer than 10 cases is not coloured." />
+          <StackPanel IsVisible="{Binding HasPatterns}">
+            <Border Classes="tableHead small">
+              <Grid ColumnDefinitions="3*,2*,2*,*" ColumnSpacing="12">
+                <TextBlock Text="Pattern" />
+                <TextBlock Grid.Column="1" Text="Outcome" />
+                <TextBlock Grid.Column="2" HorizontalAlignment="Right" Text="Average" />
+                <TextBlock Grid.Column="3" HorizontalAlignment="Right" Text="Cases" />
+              </Grid>
+            </Border>
+            <ListBox Classes="table small" AutomationProperties.Name="Signal patterns" ItemsSource="{Binding Patterns}"
+                     ScrollViewer.VerticalScrollBarVisibility="Disabled">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:PatternItem">
+                  <Grid ColumnDefinitions="3*,2*,2*,*" ColumnSpacing="12">
+                    <TextBlock TextTrimming="CharacterEllipsis" Text="{Binding Name}" />
+                    <TextBlock Grid.Column="1" Classes="secondary" TextTrimming="CharacterEllipsis" Text="{Binding Rate}" />
+                    <TextBlock Grid.Column="2" Classes="medium" HorizontalAlignment="Right" Text="{Binding Average}"
+                               Classes.good="{Binding IsGood}" Classes.bad="{Binding IsBad}" />
+                    <TextBlock Grid.Column="3" Classes="secondary" HorizontalAlignment="Right" Text="{Binding Cases}" />
+                  </Grid>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </StackPanel>
+          <c:EmptyState Classes="compact" IsVisible="{Binding !HasPatterns}"
+                        Icon="{StaticResource IconInsights}"
+                        Title="No patterns measured yet"
+                        Description="Press Measure past signals to work them out from price history." />
+        </StackPanel>
+      </c:Card>
+
     </StackPanel>
-
-    <Grid Grid.Row="2" ColumnDefinitions="150,210,90,150,150,150,*" Margin="12,14,12,4">
-      <TextBlock Grid.Column="0" Classes="secondary" FontSize="12" Text="Closed" />
-      <TextBlock Grid.Column="1" Classes="secondary" FontSize="12" Text="Instrument" />
-      <TextBlock Grid.Column="2" Classes="secondary" FontSize="12" Text="Position" />
-      <TextBlock Grid.Column="3" Classes="secondary" FontSize="12" Text="Size" />
-      <TextBlock Grid.Column="4" Classes="secondary" FontSize="12" Text="Entry" />
-      <TextBlock Grid.Column="5" Classes="secondary" FontSize="12" Text="Exit" />
-      <TextBlock Grid.Column="6" Classes="secondary" FontSize="12" Text="Result" />
-    </Grid>
-
-    <ListBox Grid.Row="3" Background="Transparent" ItemsSource="{Binding Trades}">
-      <ListBox.ItemTemplate>
-        <DataTemplate x:DataType="vm:RowViewModel">
-          <Grid ColumnDefinitions="150,210,90,150,150,150,*">
-            <TextBlock Grid.Column="0" Classes="secondary" Text="{Binding A}" />
-            <TextBlock Grid.Column="1" Text="{Binding B}" />
-            <TextBlock Grid.Column="2" Text="{Binding C}" />
-            <TextBlock Grid.Column="3" Text="{Binding D}" />
-            <TextBlock Grid.Column="4" Text="{Binding E}" />
-            <TextBlock Grid.Column="5" Text="{Binding F}" />
-            <TextBlock Grid.Column="6" Text="{Binding G}" Classes.good="{Binding IsGood}" Classes.bad="{Binding IsBad}" />
-          </Grid>
-        </DataTemplate>
-      </ListBox.ItemTemplate>
-    </ListBox>
-
-    <TextBlock Grid.Row="4" Classes="title" Text="What past signals were worth" Margin="0,12,0,6" />
-    <ScrollViewer Grid.Row="5" MaxHeight="220">
-      <ItemsControl ItemsSource="{Binding Patterns}">
-        <ItemsControl.ItemTemplate>
-          <DataTemplate x:DataType="vm:RowViewModel">
-            <Grid ColumnDefinitions="360,240,200,*" Margin="12,3">
-              <TextBlock Grid.Column="0" Text="{Binding A}" />
-              <TextBlock Grid.Column="1" Text="{Binding B}" />
-              <TextBlock Grid.Column="2" Text="{Binding C}" Classes.good="{Binding IsGood}" Classes.bad="{Binding IsBad}" />
-              <TextBlock Grid.Column="3" Classes="secondary" Text="{Binding D}" />
-            </Grid>
-          </DataTemplate>
-        </ItemsControl.ItemTemplate>
-      </ItemsControl>
-    </ScrollViewer>
-  </Grid>
+  </ScrollViewer>
 </UserControl>

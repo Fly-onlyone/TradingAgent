@@ -1,121 +1,259 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:TradingAgent.App.ViewModels"
+             xmlns:c="using:TradingAgent.App.Controls"
+             xmlns:m="using:TradingAgent.App.Motion"
              x:Class="TradingAgent.App.Views.DashboardView"
              x:DataType="vm:DashboardViewModel">
 
-  <ScrollViewer>
-    <StackPanel Margin="24" Spacing="18">
+  <UserControl.Styles>
+    <!-- A step of the welcome card: a chip that is pressed. -->
+    <Style Selector="Button.step">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="CornerRadius" Value="{DynamicResource RadiusChip}" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.step:pointerover">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <!-- The frame that stands where a chart will be once there is something to draw. -->
+    <Style Selector="Rectangle.noData">
+      <Setter Property="Stroke" Value="{DynamicResource BorderSubtleBrush}" />
+      <Setter Property="StrokeThickness" Value="1" />
+      <Setter Property="StrokeDashArray" Value="4,3" />
+      <Setter Property="RadiusX" Value="{DynamicResource RadiusBaseValue}" />
+      <Setter Property="RadiusY" Value="{DynamicResource RadiusBaseValue}" />
+    </Style>
+  </UserControl.Styles>
 
-      <Grid ColumnDefinitions="*,Auto">
-        <TextBlock Grid.Column="0" Classes="pageTitle" Text="{Binding Title}" />
-        <Button Classes="outlined" Grid.Column="1" Content="Refresh" Command="{Binding RefreshCommand}" />
+  <!-- The scroll bar stands in the margin of the page, clear of the cards. -->
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled" Margin="0,0,-16,0">
+    <StackPanel Margin="0,0,16,0">
+
+      <c:SectionHeader Title="Dashboard" Subtitle="Agent command center — overview of automated trading activity">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Classes="outlined" Content="Refresh" Command="{Binding RefreshCommand}" />
+          <!-- The main button of the page leans toward the pointer. -->
+          <Border m:Magnet.On="True">
+            <Button Classes="contained" AutomationProperties.Name="Ask Agent" Command="{Binding AskAgentCommand}">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <PathIcon Width="20" Height="20" Margin="-4,0,0,0" Data="{StaticResource IconSmartToy}" />
+                <TextBlock Text="Ask Agent" />
+              </StackPanel>
+            </Button>
+          </Border>
+        </StackPanel>
+      </c:SectionHeader>
+
+      <c:Alert Severity="Error" Margin="0,0,0,24" IsVisible="{Binding EmergencyStop}"
+               Content="The emergency stop is on: the agent places no orders until trading is resumed with the button in the header." />
+      <c:Alert Severity="Warning" Margin="0,0,0,24" IsVisible="{Binding HasProblem}" Content="{Binding Problem}" />
+
+      <!-- Nothing has happened yet: where to begin. -->
+      <c:Card Padding="24" Margin="0,0,0,24" IsVisible="{Binding IsFirstRun}">
+        <StackPanel>
+          <TextBlock Classes="h5 bold" Margin="0,0,0,8" Text="Welcome to Trading agent" />
+          <TextBlock Classes="body2 secondary" Margin="0,0,0,24" Text="Get started with automated trading in 3 steps:" />
+          <StackPanel Orientation="Horizontal" Spacing="16">
+            <Button Classes="step" AutomationProperties.Name="Configure Exchange" Command="{Binding OpenPageCommand}" CommandParameter="Settings">
+              <c:Chip Content="1. Configure Exchange" />
+            </Button>
+            <Button Classes="step" AutomationProperties.Name="Import Strategy" Command="{Binding OpenPageCommand}" CommandParameter="Strategies">
+              <c:Chip Content="2. Import Strategy" />
+            </Button>
+            <Button Classes="step" AutomationProperties.Name="Create Task" Command="{Binding OpenPageCommand}" CommandParameter="Tasks">
+              <c:Chip Content="3. Create Task" />
+            </Button>
+          </StackPanel>
+        </StackPanel>
+      </c:Card>
+
+      <!-- The four figures. They come in one after the other. -->
+      <UniformGrid Columns="4" ColumnSpacing="24" Margin="0,0,0,32" m:Enter.Children="Cascade">
+        <c:MetricTile Label="Total Equity" Kind="Kpi" IsRolling="True"
+                      Icon="{StaticResource IconAutoGraph}"
+                      Value="{Binding Equity}"
+                      Subtitle="{Binding Mode}"
+                      IsLoading="{Binding IsLoading}" />
+        <c:MetricTile Label="Unrealized P&amp;L" Kind="Delta"
+                      Icon="{StaticResource IconTrendingUp}"
+                      Value="{Binding UnrealizedPnl}"
+                      Change="{Binding UnrealizedChange}"
+                      Subtitle="Of the open positions"
+                      IsLoading="{Binding IsLoading}" />
+        <c:MetricTile Label="Agent Win Rate" Kind="Trend"
+                      Icon="{StaticResource IconInsights}"
+                      Tone="{Binding WinRateTone}"
+                      Value="{Binding WinRate}"
+                      Subtitle="{Binding WinRateLine}" />
+        <c:MetricTile Label="Realized P&amp;L · 30 days" Kind="Trend"
+                      Icon="{StaticResource IconShowChart}"
+                      Tone="{Binding RealizedTone}"
+                      Value="{Binding Realized}"
+                      Subtitle="{Binding RealizedLine}" />
+      </UniformGrid>
+
+      <Grid ColumnDefinitions="2*,*" ColumnSpacing="24" Margin="0,0,0,24" m:Enter.Kind="Reveal" m:Enter.Delay="0.1">
+        <c:Card Height="280" Padding="16">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Top" Classes="h6" Margin="0,0,0,16" Text="Portfolio Equity" />
+            <Panel Height="220">
+              <c:SeriesChart Kind="Area" Points="{Binding EquityCurve}" IsVisible="{Binding HasCurve}" />
+              <Panel IsVisible="{Binding !HasCurve}">
+                <Rectangle Classes="noData" />
+                <TextBlock Classes="body2 secondary" HorizontalAlignment="Center" VerticalAlignment="Center" Text="No trade data" />
+              </Panel>
+            </Panel>
+          </DockPanel>
+        </c:Card>
+
+        <c:Card Grid.Column="1" Height="280" Padding="16">
+          <StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+              <PathIcon VerticalAlignment="Center" Foreground="{DynamicResource PrimaryBrush}" Data="{StaticResource IconSmartToy}" />
+              <TextBlock Classes="h6" Text="Agent Status" />
+            </StackPanel>
+            <c:MetricRow Label="Trading">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <c:StatusDot Width="7" Height="7" VerticalAlignment="Center" Status="Online" IsVisible="{Binding !EmergencyStop}" />
+                <c:StatusDot Width="7" Height="7" VerticalAlignment="Center" Status="Busy" IsVisible="{Binding EmergencyStop}" />
+                <TextBlock Classes="body2 medium" Text="{Binding Mode}" Classes.bad="{Binding IsLive}" />
+              </StackPanel>
+            </c:MetricRow>
+            <c:MetricRow Label="Emergency stop">
+              <Panel>
+                <TextBlock Classes="body2 medium" Text="Off" IsVisible="{Binding !EmergencyStop}" />
+                <TextBlock Classes="body2 medium bad" Text="On" IsVisible="{Binding EmergencyStop}" />
+              </Panel>
+            </c:MetricRow>
+            <c:MetricRow Label="Scheduled tasks">
+              <TextBlock Classes="body2 medium" Text="{Binding TasksActive}" />
+            </c:MetricRow>
+            <c:MetricRow Classes="last" Label="Next run">
+              <TextBlock Classes="body2 medium" TextTrimming="CharacterEllipsis" Text="{Binding NextRun}" />
+            </c:MetricRow>
+          </StackPanel>
+        </c:Card>
       </Grid>
 
-      <Border Classes="panel" BorderBrush="{DynamicResource BearishBrush}" BorderThickness="1" Padding="16,10"
-              IsVisible="{Binding EmergencyStop}">
-        <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource BearishBrush}"
-                   Text="Emergency stop is ON: the agent can cancel orders and nothing else. Switch it off in Settings." />
-      </Border>
+      <Grid ColumnDefinitions="*,*" ColumnSpacing="24" Margin="0,0,0,24" m:Enter.Kind="Reveal" m:Enter.Delay="0.2">
+        <c:Card Padding="16,16,16,24">
+          <StackPanel>
+            <TextBlock Classes="h6" Margin="0,0,0,8" Text="Open Positions" />
+            <StackPanel IsVisible="{Binding HasPositions}">
+              <Border Classes="tableHead small">
+                <Grid ColumnDefinitions="2*,70,*,*,*,*" ColumnSpacing="12">
+                  <TextBlock Text="Symbol" />
+                  <TextBlock Grid.Column="1" Text="Side" />
+                  <TextBlock Grid.Column="2" HorizontalAlignment="Right" Text="Size" />
+                  <TextBlock Grid.Column="3" HorizontalAlignment="Right" Text="Entry" />
+                  <TextBlock Grid.Column="4" HorizontalAlignment="Right" Text="Mark" />
+                  <TextBlock Grid.Column="5" HorizontalAlignment="Right" Text="P&amp;L" />
+                </Grid>
+              </Border>
+              <ListBox Classes="table small" AutomationProperties.Name="Open positions" ItemsSource="{Binding Positions}"
+                       ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:PositionRow">
+                    <Grid ColumnDefinitions="2*,70,*,*,*,*" ColumnSpacing="12">
+                      <StackPanel VerticalAlignment="Center">
+                        <TextBlock Classes="semibold" TextTrimming="CharacterEllipsis" Text="{Binding Symbol}" />
+                        <TextBlock Classes="caption secondary" Text="{Binding Leverage}" />
+                      </StackPanel>
+                      <c:Chip Grid.Column="1" Classes="small" FontWeight="SemiBold" HorizontalAlignment="Left" Content="{Binding SideLabel}" />
+                      <TextBlock Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Text="{Binding Size}" />
+                      <TextBlock Grid.Column="3" HorizontalAlignment="Right" VerticalAlignment="Center" Text="{Binding Entry}" />
+                      <TextBlock Grid.Column="4" HorizontalAlignment="Right" VerticalAlignment="Center" Text="{Binding Mark}" />
+                      <TextBlock Grid.Column="5" Classes="medium" HorizontalAlignment="Right" VerticalAlignment="Center" Text="{Binding Pnl}"
+                                 Classes.good="{Binding IsGood}" Classes.bad="{Binding IsBad}" />
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </StackPanel>
+            <c:EmptyState Classes="compact" IsVisible="{Binding !HasPositions}"
+                          Icon="{StaticResource IconListAlt}"
+                          Title="No open positions"
+                          Description="The agent hasn't opened any trades yet" />
+          </StackPanel>
+        </c:Card>
 
-      <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="12">
-        <Border Grid.Column="0" Classes="panel" Padding="16,12">
-          <StackPanel Spacing="4">
-            <TextBlock Classes="secondary" Text="Account value" />
-            <SelectableTextBlock FontSize="24" FontWeight="SemiBold" Text="{Binding Equity}" />
-            <TextBlock Classes="secondary" FontSize="12" TextWrapping="Wrap" Text="{Binding Status}" />
+        <c:Card Grid.Column="1" Padding="16,16,16,24">
+          <StackPanel>
+            <TextBlock Classes="h6" Margin="0,0,0,8" Text="Holdings" />
+            <StackPanel IsVisible="{Binding HasAssets}">
+              <Border Classes="tableHead small">
+                <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="12">
+                  <TextBlock Text="Asset" />
+                  <TextBlock Grid.Column="1" HorizontalAlignment="Right" Text="Amount" />
+                  <TextBlock Grid.Column="2" HorizontalAlignment="Right" Text="Available" />
+                  <TextBlock Grid.Column="3" HorizontalAlignment="Right" Text="Value" />
+                </Grid>
+              </Border>
+              <ListBox Classes="table small" AutomationProperties.Name="Holdings" ItemsSource="{Binding Assets}"
+                       ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:HoldingRow">
+                    <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="12">
+                      <TextBlock Classes="semibold" Text="{Binding Currency}" />
+                      <TextBlock Grid.Column="1" HorizontalAlignment="Right" Text="{Binding Amount}" />
+                      <TextBlock Grid.Column="2" HorizontalAlignment="Right" Text="{Binding Available}" />
+                      <TextBlock Grid.Column="3" HorizontalAlignment="Right" Text="{Binding Value}" />
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </StackPanel>
+            <c:EmptyState Classes="compact" IsVisible="{Binding !HasAssets}"
+                          Icon="{StaticResource IconAccountBalanceWallet}"
+                          Title="No holdings to show"
+                          Description="The coins of the OKX account appear here once its key is saved" />
           </StackPanel>
-        </Border>
-        <Border Grid.Column="1" Classes="panel" Padding="16,12">
-          <StackPanel Spacing="4">
-            <TextBlock Classes="secondary" Text="Closed trades, 24 h" />
-            <TextBlock FontSize="16" TextWrapping="Wrap" Text="{Binding PnlDay}" />
-          </StackPanel>
-        </Border>
-        <Border Grid.Column="2" Classes="panel" Padding="16,12">
-          <StackPanel Spacing="4">
-            <TextBlock Classes="secondary" Text="Closed trades, 7 days" />
-            <TextBlock FontSize="16" TextWrapping="Wrap" Text="{Binding PnlWeek}" />
-          </StackPanel>
-        </Border>
-        <Border Grid.Column="3" Classes="panel" Padding="16,12">
-          <StackPanel Spacing="4">
-            <TextBlock Classes="secondary" Text="Closed trades, 30 days" />
-            <TextBlock FontSize="16" TextWrapping="Wrap" Text="{Binding PnlMonth}" />
-          </StackPanel>
-        </Border>
+        </c:Card>
       </Grid>
 
-      <TextBlock Classes="secondary" Text="{Binding TaskLine}" />
-
-      <StackPanel Spacing="6" IsVisible="{Binding HasPositions}">
-        <TextBlock Classes="title" Text="Open positions" />
-        <Grid ColumnDefinitions="220,90,130,130,130,130,*">
-          <TextBlock Grid.Column="0" Classes="secondary" FontSize="12" Text="Instrument" />
-          <TextBlock Grid.Column="1" Classes="secondary" FontSize="12" Text="Side" />
-          <TextBlock Grid.Column="2" Classes="secondary" FontSize="12" Text="Size" />
-          <TextBlock Grid.Column="3" Classes="secondary" FontSize="12" Text="Entry" />
-          <TextBlock Grid.Column="4" Classes="secondary" FontSize="12" Text="Mark" />
-          <TextBlock Grid.Column="5" Classes="secondary" FontSize="12" Text="Unrealized" />
-          <TextBlock Grid.Column="6" Classes="secondary" FontSize="12" Text="Leverage" />
-        </Grid>
-        <ItemsControl ItemsSource="{Binding Positions}">
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="vm:RowViewModel">
-              <Grid ColumnDefinitions="220,90,130,130,130,130,*" Margin="0,3">
-                <TextBlock Grid.Column="0" Text="{Binding A}" />
-                <TextBlock Grid.Column="1" Text="{Binding B}" />
-                <TextBlock Grid.Column="2" Text="{Binding C}" />
-                <TextBlock Grid.Column="3" Text="{Binding D}" />
-                <TextBlock Grid.Column="4" Text="{Binding E}" />
-                <TextBlock Grid.Column="5" Text="{Binding F}" Classes.good="{Binding IsGood}" Classes.bad="{Binding IsBad}" />
-                <TextBlock Grid.Column="6" Text="{Binding G}" />
+      <c:Card Padding="16,16,16,24" m:Enter.Kind="Reveal" m:Enter.Delay="0.3">
+        <StackPanel>
+          <TextBlock Classes="h6" Margin="0,0,0,8" Text="Recent Orders" />
+          <StackPanel IsVisible="{Binding HasOrders}">
+            <Border Classes="tableHead small">
+              <Grid ColumnDefinitions="110,2*,*,*,*,130,150" ColumnSpacing="12">
+                <TextBlock Text="Side" />
+                <TextBlock Grid.Column="1" Text="Symbol" />
+                <TextBlock Grid.Column="2" Text="Type" />
+                <TextBlock Grid.Column="3" HorizontalAlignment="Right" Text="Price" />
+                <TextBlock Grid.Column="4" HorizontalAlignment="Right" Text="Filled" />
+                <TextBlock Grid.Column="5" Text="Status" />
+                <TextBlock Grid.Column="6" HorizontalAlignment="Right" Text="Time" />
               </Grid>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </StackPanel>
-
-      <StackPanel Spacing="6">
-        <TextBlock Classes="title" Text="Holdings" />
-        <Grid ColumnDefinitions="120,180,180,*">
-          <TextBlock Grid.Column="0" Classes="secondary" FontSize="12" Text="Coin" />
-          <TextBlock Grid.Column="1" Classes="secondary" FontSize="12" Text="Amount" />
-          <TextBlock Grid.Column="2" Classes="secondary" FontSize="12" Text="Free" />
-          <TextBlock Grid.Column="3" Classes="secondary" FontSize="12" Text="Value" />
-        </Grid>
-        <ItemsControl ItemsSource="{Binding Assets}">
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="vm:RowViewModel">
-              <Grid ColumnDefinitions="120,180,180,*" Margin="0,3">
-                <TextBlock Grid.Column="0" Text="{Binding A}" />
-                <TextBlock Grid.Column="1" Text="{Binding B}" />
-                <TextBlock Grid.Column="2" Text="{Binding C}" />
-                <TextBlock Grid.Column="3" Text="{Binding D}" />
-              </Grid>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </StackPanel>
-
-      <StackPanel Spacing="6">
-        <TextBlock Classes="title" Text="Newest orders" />
-        <ItemsControl ItemsSource="{Binding RecentOrders}">
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="vm:RowViewModel">
-              <Grid ColumnDefinitions="150,200,110,130,200,140,*" Margin="0,3">
-                <TextBlock Grid.Column="0" Classes="secondary" Text="{Binding A}" />
-                <TextBlock Grid.Column="1" Text="{Binding B}" />
-                <TextBlock Grid.Column="2" Text="{Binding C}" />
-                <TextBlock Grid.Column="3" Text="{Binding D}" />
-                <TextBlock Grid.Column="4" Text="{Binding E}" />
-                <TextBlock Grid.Column="5" Text="{Binding F}" />
-                <TextBlock Grid.Column="6" Text="{Binding G}" Classes.good="{Binding IsGood}" Classes.bad="{Binding IsBad}" />
-              </Grid>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </StackPanel>
+            </Border>
+            <ListBox Classes="table small" AutomationProperties.Name="Recent orders" ItemsSource="{Binding RecentOrders}"
+                     ScrollViewer.VerticalScrollBarVisibility="Disabled">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:OrderItem">
+                  <Grid ColumnDefinitions="110,2*,*,*,*,130,150" ColumnSpacing="12">
+                    <c:Chip Classes="small" FontWeight="SemiBold" HorizontalAlignment="Left" Content="{Binding SideLabel}" />
+                    <TextBlock Grid.Column="1" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Text="{Binding Symbol}" />
+                    <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="{Binding Type}" />
+                    <TextBlock Grid.Column="3" HorizontalAlignment="Right" VerticalAlignment="Center" Text="{Binding Price}" />
+                    <TextBlock Grid.Column="4" HorizontalAlignment="Right" VerticalAlignment="Center" Text="{Binding Filled}" />
+                    <c:Chip Grid.Column="5" Classes="outlined small" HorizontalAlignment="Left" Content="{Binding Status}"
+                            Classes.success="{Binding IsGood}" Classes.error="{Binding IsBad}"
+                            Classes.info="{Binding IsOpen}" Classes.warning="{Binding IsPartial}" />
+                    <TextBlock Grid.Column="6" Classes="secondary" HorizontalAlignment="Right" VerticalAlignment="Center" Text="{Binding Time}" />
+                  </Grid>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </StackPanel>
+          <c:EmptyState Classes="compact" IsVisible="{Binding !HasOrders}"
+                        Icon="{StaticResource IconTrendingUp}"
+                        Title="No orders yet"
+                        Description="Orders the agent places, and orders placed on OKX itself, appear here." />
+        </StackPanel>
+      </c:Card>
 
     </StackPanel>
   </ScrollViewer>
