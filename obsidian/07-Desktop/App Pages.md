@@ -62,6 +62,8 @@ no implicit way back.
 
 `AppNavigator.OpenChat(sessionId)` asks the shell to show the chat screen with one session: the
 Tasks page uses it for "Open last run", the Strategies page after "Have the agent read it".
+`AppNavigator.OpenPage(title)` asks for a page by its title: "Ask Agent" and the steps of the
+welcome card on the Dashboard use it.
 
 ## Chat
 
@@ -78,6 +80,30 @@ message. The effort level in the bar under the box is the setting `agent.effort`
 
 Not ported, because the app has no data for them: the Decisions tab, charts inside a reply, the
 thinking-mode menu, renaming a chat.
+
+## Dashboard, Trading, Orders, Trades
+
+Laid out as the pages of the previous UI, with what this app has data for.
+
+| Page      | Shows                                                                                   |
+|-----------|-----------------------------------------------------------------------------------------|
+| Dashboard | Four tiles (equity, unrealized P&L, win rate, realized P&L of 30 days), the running total of the closed trades as a chart, a status card, open positions, holdings, the newest orders. With nothing stored, a welcome card with three steps |
+| Trading   | "Market Monitor": on the left the instrument, its price with the last closes, the timeframes, the day's range, volume, spread and the indicators; on the right the price chart |
+| Orders    | A status filter and the orders as a table with chips for side and status                  |
+| Trades    | Four tiles, a bar per closed trade, the closed trades, and what past signals were worth   |
+
+Each view model keeps the lines of text the earlier page showed (`Price`, `Day`, `Indicators`,
+`Summary`, `TaskLine`) and adds the same figures one by one for the tiles. Rows are typed records
+(`HoldingRow`, `PositionRow`, `OrderItem`, `TradeRow`, `PatternItem`).
+
+The tiles of the closed trades and the chart need no answer from OKX and show at once; the tiles of
+the account shimmer until OKX has answered or failed (`IsLoading`).
+
+Not ported, because the app has no data for them: "Decisions Today" and the list of decisions, the
+watchlist, the market overview of gainers and losers, the symbol search, sorting and paging of
+tables, export of trades. The old Trading page had tabs for holdings, positions and orders; here
+they are on the Dashboard and the Orders page, and the Trading page has the price chart instead.
+The charts cannot be scrolled and have no crosshair.
 
 ## Pages with cards
 

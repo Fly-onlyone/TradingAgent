@@ -1,0 +1,280 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:c="using:TradingAgent.App.Controls"
+                    xmlns:fx="using:TradingAgent.App.Effects"
+                    xmlns:m="using:TradingAgent.App.Motion">
+
+  <!--
+    A metric tile: a card with a strip of its tone down the left edge and a glow of it in the top
+    right corner. Under the pointer it lifts 2 px and its border and shadow take the tone.
+  -->
+  <ControlTheme x:Key="{x:Type c:MetricTile}" TargetType="c:MetricTile">
+    <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderMediumBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusCard}" />
+    <Setter Property="MinHeight" Value="120" />
+    <!-- 16 px all round, and 2 more on the left for the strip. -->
+    <Setter Property="Padding" Value="18,16,16,16" />
+    <Setter Property="ClipToBounds" Value="False" />
+    <Setter Property="RenderTransform" Value="none" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.2" Easing="{StaticResource EaseCss}" />
+      </Transitions>
+    </Setter>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Panel>
+          <!-- 12 px of CSS blur, whatever the theme gives its cards. -->
+          <fx:BackdropBlur Radius="19.05" CornerRadius="{TemplateBinding CornerRadius}" />
+          <Border x:Name="PART_Surface"
+                  Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="{TemplateBinding CornerRadius}"
+                  BoxShadow="{DynamicResource CardShadow}">
+            <Border.Transitions>
+              <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.2" Easing="{StaticResource EaseCss}" />
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.2" Easing="{StaticResource EaseCss}" />
+                <BoxShadowsTransition Property="BoxShadow" Duration="0:0:0.2" Easing="{StaticResource EaseCss}" />
+              </Transitions>
+            </Border.Transitions>
+            <Border CornerRadius="{TemplateBinding CornerRadius}" ClipToBounds="True">
+              <Panel>
+                <Ellipse Width="220" Height="220" Margin="0,-80,-80,0"
+                         HorizontalAlignment="Right" VerticalAlignment="Top"
+                         IsHitTestVisible="False"
+                         Fill="{TemplateBinding GlowBrush}" />
+                <Border x:Name="PART_Flash" Opacity="0" IsHitTestVisible="False" Background="{TemplateBinding FlashBrush}" />
+                <Border Width="2" HorizontalAlignment="Left" IsHitTestVisible="False" Background="{TemplateBinding StripBrush}" />
+                <Border Height="1" VerticalAlignment="Top" IsHitTestVisible="False" Background="{DynamicResource White05Brush}" />
+                <c:GradientFlow x:Name="PART_TopLine"
+                                Height="1.5"
+                                UseLayoutRounding="False"
+                                VerticalAlignment="Top"
+                                Stops="{DynamicResource GradientAccentStops}" />
+
+                <DockPanel Margin="{TemplateBinding Padding}">
+                  <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,0,0,8">
+                    <TextBlock FontSize="11" FontWeight="Medium" LetterSpacing="0.88" LineHeight="13.2"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               Text="{TemplateBinding Label}" />
+                    <Border x:Name="PART_Badge" Grid.Column="1" Width="28" Height="28"
+                            CornerRadius="{DynamicResource RadiusOneAndHalf}"
+                            Background="{TemplateBinding ToneSoftBrush}"
+                            BorderBrush="{TemplateBinding ToneBorderBrush}"
+                            BorderThickness="1"
+                            IsVisible="{TemplateBinding Icon, Converter={x:Static ObjectConverters.IsNotNull}}">
+                      <PathIcon Width="16" Height="16" Data="{TemplateBinding Icon}" Foreground="{TemplateBinding ToneBrush}" />
+                    </Border>
+                  </Grid>
+
+                  <Panel>
+                    <!-- While the figure is not known: two bars that shimmer where it will be. -->
+                    <StackPanel x:Name="PART_Loading" Spacing="8" IsVisible="False">
+                      <Grid ColumnDefinitions="7*,3*">
+                        <c:Skeleton Height="20" Margin="0,4" />
+                      </Grid>
+                      <Grid ColumnDefinitions="4*,6*">
+                        <c:Skeleton Height="11" Margin="0,2" />
+                      </Grid>
+                    </StackPanel>
+
+                    <!-- One large figure. -->
+                    <StackPanel x:Name="PART_Kpi" VerticalAlignment="Center" IsVisible="False">
+                      <Panel HorizontalAlignment="Left">
+                        <TextBlock x:Name="PART_Plain"
+                                   FontFamily="{StaticResource FontMono}" FontSize="28" FontWeight="Bold" LineHeight="32.2"
+                                   Foreground="{TemplateBinding ValueBrush}"
+                                   Text="{TemplateBinding Value}" />
+                        <c:RollingDigits x:Name="PART_Rolling" IsVisible="False"
+                                         FontFamily="{StaticResource FontMono}" FontSize="28" FontWeight="Bold"
+                                         Foreground="{TemplateBinding ValueBrush}"
+                                         Value="{TemplateBinding Value}" />
+                      </Panel>
+                      <TextBlock FontSize="11" Margin="0,10,0,0" MinHeight="20"
+                                 TextTrimming="CharacterEllipsis"
+                                 Foreground="{DynamicResource TextDisabledBrush}"
+                                 Text="{TemplateBinding Subtitle}"
+                                 IsVisible="{TemplateBinding Subtitle, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    </StackPanel>
+
+                    <!-- A figure, what it changed by, and a small chart or a line under them. -->
+                    <DockPanel x:Name="PART_Delta" IsVisible="False">
+                      <Panel DockPanel.Dock="Bottom" Margin="0,6,0,0">
+                        <c:Sparkline x:Name="PART_Spark" Height="22" MaxWidth="220" HorizontalAlignment="Left"
+                                     Data="{TemplateBinding Spark}"
+                                     Stroke="{TemplateBinding ToneColor}"
+                                     Rising="{DynamicResource BullishColor}"
+                                     Falling="{DynamicResource BearishColor}"
+                                     IsVisible="{TemplateBinding HasSpark}" />
+                        <TextBlock x:Name="PART_Caption" FontSize="11" TextTrimming="CharacterEllipsis"
+                                   Foreground="{DynamicResource TextDisabledBrush}"
+                                   Text="{TemplateBinding Subtitle}" />
+                      </Panel>
+                      <WrapPanel VerticalAlignment="Center">
+                        <TextBlock FontFamily="{StaticResource FontMono}" FontSize="28" FontWeight="Bold" LineHeight="32.2"
+                                   Margin="0,0,8,0"
+                                   Foreground="{TemplateBinding ValueBrush}"
+                                   Text="{TemplateBinding Value}" />
+                        <Border VerticalAlignment="Bottom" Margin="0,0,0,6" Padding="4,1" CornerRadius="999"
+                                Background="{TemplateBinding TonePillBrush}"
+                                IsVisible="{TemplateBinding ChangeText, Converter={x:Static ObjectConverters.IsNotNull}}">
+                          <StackPanel Orientation="Horizontal" Spacing="2">
+                            <Panel Width="14" Height="14" VerticalAlignment="Center">
+                              <PathIcon x:Name="PART_Up" Width="14" Height="14" Data="{StaticResource IconArrowDropUp}" Foreground="{TemplateBinding ToneBrush}" />
+                              <PathIcon x:Name="PART_Down" Width="14" Height="14" IsVisible="False" Data="{StaticResource IconArrowDropDown}" Foreground="{TemplateBinding ToneBrush}" />
+                            </Panel>
+                            <TextBlock FontFamily="{StaticResource FontMono}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"
+                                       Foreground="{TemplateBinding ToneBrush}"
+                                       Text="{TemplateBinding ChangeText}" />
+                          </StackPanel>
+                        </Border>
+                      </WrapPanel>
+                    </DockPanel>
+
+                    <!-- An icon in a tinted square beside the figure. -->
+                    <Grid x:Name="PART_Trend" ColumnDefinitions="Auto,*" ColumnSpacing="12" VerticalAlignment="Center" IsVisible="False">
+                      <Border Width="44" Height="44"
+                              CornerRadius="{DynamicResource RadiusDouble}"
+                              Background="{TemplateBinding ToneSoftBrush}"
+                              BorderBrush="{TemplateBinding ToneBorderBrush}"
+                              BorderThickness="1">
+                        <PathIcon Width="22" Height="22" Data="{TemplateBinding Icon}" Foreground="{TemplateBinding ToneBrush}" />
+                      </Border>
+                      <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock FontFamily="{StaticResource FontMono}" FontSize="22" FontWeight="Bold" LineHeight="25.3"
+                                   TextTrimming="CharacterEllipsis"
+                                   Foreground="{TemplateBinding ToneBrush}"
+                                   Text="{TemplateBinding Value}" />
+                        <TextBlock FontSize="11" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   Text="{TemplateBinding Subtitle}"
+                                   IsVisible="{TemplateBinding Subtitle, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                      </StackPanel>
+                    </Grid>
+                  </Panel>
+                </DockPanel>
+              </Panel>
+            </Border>
+          </Border>
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+
+    <Style Selector="^[IsLoading=True] /template/ StackPanel#PART_Loading">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="^[IsLoading=False][Kind=Kpi] /template/ StackPanel#PART_Kpi">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="^[IsLoading=False][Kind=Delta] /template/ DockPanel#PART_Delta">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="^[IsLoading=False][Kind=Trend] /template/ Grid#PART_Trend">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <!-- The large icon of this kind stands in for the small one of the head. -->
+    <Style Selector="^[Kind=Trend] /template/ Border#PART_Badge">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="^[IsRolling=True] /template/ TextBlock#PART_Plain">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="^[IsRolling=True] /template/ c|RollingDigits#PART_Rolling">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="^[HasSpark=True] /template/ TextBlock#PART_Caption">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="^[IsFalling=True] /template/ PathIcon#PART_Up">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="^[IsFalling=True] /template/ PathIcon#PART_Down">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <Style Selector="^:pointerover">
+      <Setter Property="RenderTransform" Value="translateY(-2px)" />
+      <Setter Property="BorderBrush" Value="{Binding $self.HoverBorderBrush}" />
+      <Style Selector="^ /template/ Border#PART_Surface">
+        <Setter Property="BoxShadow" Value="{Binding $parent[c:MetricTile].HoverShadow}" />
+      </Style>
+      <Style Selector="^ /template/ c|GradientFlow#PART_TopLine">
+        <Setter Property="Motion" Value="Flow" />
+      </Style>
+    </Style>
+  </ControlTheme>
+
+  <!-- The head of a page. It comes in from 20 px below. -->
+  <ControlTheme x:Key="{x:Type c:SectionHeader}" TargetType="c:SectionHeader">
+    <Setter Property="Margin" Value="0,0,0,24" />
+    <Setter Property="(m:Enter.Kind)" Value="FadeUp" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+          <StackPanel>
+            <TextBlock Classes="h4 bold" Text="{TemplateBinding Title}" />
+            <TextBlock Classes="body2 secondary" Margin="0,4,0,0" TextWrapping="Wrap"
+                       Text="{TemplateBinding Subtitle}"
+                       IsVisible="{TemplateBinding Subtitle, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          </StackPanel>
+          <ContentPresenter Grid.Column="1" VerticalAlignment="Top" Content="{TemplateBinding Content}" />
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <!-- Nothing to show: a large faint icon, a title, a line. -->
+  <ControlTheme x:Key="{x:Type c:EmptyState}" TargetType="c:EmptyState">
+    <Setter Property="Padding" Value="24,64" />
+    <Setter Property="Icon" Value="{StaticResource IconInbox}" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <StackPanel Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center">
+          <Panel x:Name="PART_Icon" Margin="0,0,0,16" HorizontalAlignment="Center">
+            <PathIcon Width="64" Height="64" Data="{TemplateBinding Icon}" Foreground="{DynamicResource TextDisabledBrush}" />
+          </Panel>
+          <TextBlock Classes="h6" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,6"
+                     Text="{TemplateBinding Title}" />
+          <TextBlock Classes="body2 secondary" MaxWidth="300" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"
+                     Text="{TemplateBinding Description}"
+                     IsVisible="{TemplateBinding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <ContentPresenter Margin="0,24,0,0" HorizontalAlignment="Center" Content="{TemplateBinding Content}"
+                            IsVisible="{TemplateBinding Content, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        </StackPanel>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^.compact">
+      <Setter Property="Padding" Value="24,32" />
+    </Style>
+  </ControlTheme>
+
+  <!-- A line of a summary card. -->
+  <ControlTheme x:Key="{x:Type c:MetricRow}" TargetType="c:MetricRow">
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="Padding" Value="0,12" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}">
+          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
+            <TextBlock Classes="body2 secondary" FontWeight="Normal" VerticalAlignment="Center" Text="{TemplateBinding Label}" />
+            <ContentPresenter Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center"
+                              TextBlock.TextAlignment="Right"
+                              Content="{TemplateBinding Content}" />
+          </Grid>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^.last">
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+  </ControlTheme>
+
+</ResourceDictionary>

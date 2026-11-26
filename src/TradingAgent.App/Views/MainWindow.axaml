@@ -379,7 +379,7 @@
                 <Setter Property="Padding" Value="7" />
               </Style>
             </Border.Styles>
-            <ContentControl x:Name="PageHost" Content="{Binding SelectedPage}" />
+            <ContentControl x:Name="PageHost" ClipToBounds="False" Content="{Binding SelectedPage}" />
           </Border>
         </Panel>
       </Grid>

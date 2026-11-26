@@ -27,14 +27,16 @@ public sealed class CandleChart : Control
     private const double Padding = 8;
     private const int AveragePeriod = 20;
 
-    private static readonly IBrush _bullBrush = new ImmutableSolidColorBrush(Color.Parse("#10B981"));
-    private static readonly IBrush _bearBrush = new ImmutableSolidColorBrush(Color.Parse("#EF4444"));
-    private static readonly IBrush _textBrush = new ImmutableSolidColorBrush(Color.Parse("#B8A894"));
-    private static readonly IPen _bullPen = new Pen(_bullBrush, 1);
-    private static readonly IPen _bearPen = new Pen(_bearBrush, 1);
-    private static readonly IPen _gridPen = new Pen(new ImmutableSolidColorBrush(Color.FromArgb(77, 88, 68, 36)), 1);
-    private static readonly IPen _averagePen = new Pen(new ImmutableSolidColorBrush(Color.Parse("#F97316")), 1.5);
-    private static readonly IPen _axisPen = new Pen(new ImmutableSolidColorBrush(Color.Parse("#26F97316")), 1);
+    // The colours of the theme in use; read again when the theme changes.
+    private IBrush _bullBrush = Brushes.Green;
+    private IBrush _bearBrush = Brushes.Red;
+    private IBrush _textBrush = Brushes.Gray;
+    private IPen _bullPen = new Pen(Brushes.Green, 1);
+    private IPen _bearPen = new Pen(Brushes.Red, 1);
+    private IPen _gridPen = new Pen(Brushes.Gray, 1);
+    private IPen _averagePen = new Pen(Brushes.Orange, 1.5);
+    private IPen _axisPen = new Pen(Brushes.Gray, 1);
+    private Typeface _typeface = Typeface.Default;
 
     private Bar[] _bars = [];
     private double _viewStart;
@@ -52,6 +54,19 @@ public sealed class CandleChart : Control
     {
         get => GetValue(CandlesProperty);
         set => SetValue(CandlesProperty, value);
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        ResourcesChanged += OnResourcesChanged;
+        ReadTheme();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        ResourcesChanged -= OnResourcesChanged;
     }
 
     private double PlotWidth => Math.Max(10, Bounds.Width - PriceAxisWidth - Padding);
@@ -237,8 +252,30 @@ public sealed class CandleChart : Control
         }
     }
 
-    private static FormattedText Label(string text) =>
-        new(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Typeface.Default, 11, _textBrush);
+    private FormattedText Label(string text) =>
+        new(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, _typeface, 11, _textBrush);
+
+    private void OnResourcesChanged(object? sender, ResourcesChangedEventArgs e)
+    {
+        ReadTheme();
+        InvalidateVisual();
+    }
+
+    private void ReadTheme()
+    {
+        Color Find(string key, Color fallback) => this.TryFindResource(key, out var found) && found is Color color ? color : fallback;
+
+        var primary = Find("PrimaryColor", Colors.Orange);
+        _bullBrush = new ImmutableSolidColorBrush(Find("BullishColor", Colors.Green));
+        _bearBrush = new ImmutableSolidColorBrush(Find("BearishColor", Colors.Red));
+        _textBrush = new ImmutableSolidColorBrush(Find("TextSecondaryColor", Colors.Gray));
+        _bullPen = new ImmutablePen(new ImmutableSolidColorBrush(Find("BullishColor", Colors.Green)), 1);
+        _bearPen = new ImmutablePen(new ImmutableSolidColorBrush(Find("BearishColor", Colors.Red)), 1);
+        _gridPen = new ImmutablePen(new ImmutableSolidColorBrush(Colors.White, 0.06), 1);
+        _averagePen = new ImmutablePen(new ImmutableSolidColorBrush(primary), 1.5);
+        _axisPen = new ImmutablePen(new ImmutableSolidColorBrush(primary, 0.15), 1);
+        _typeface = this.TryFindResource("FontSans", out var font) && font is FontFamily family ? new Typeface(family) : Typeface.Default;
+    }
 
     private void Load()
     {

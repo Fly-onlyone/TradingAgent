@@ -16,6 +16,11 @@ internal sealed class AppNavigator
     public event Action<string>? ChatRequested;
 
     public void OpenChat(string sessionId) => ChatRequested?.Invoke(sessionId);
+
+    /// <summary>Raised when a page asks the shell to show another page, named by its title.</summary>
+    public event Action<string>? PageRequested;
+
+    public void OpenPage(string title) => PageRequested?.Invoke(title);
 }
 
 /// <summary>Times as the pages show them.</summary>

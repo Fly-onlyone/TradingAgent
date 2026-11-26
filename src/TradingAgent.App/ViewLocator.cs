@@ -37,6 +37,8 @@ public sealed class ViewLocator : IDataTemplate
     private static Control Entering(Control view)
     {
         Enter.SetKind(view, EnterKind.Page);
+        // A page of cards lets their shadows, and its scroll bar, stand in the margin around it.
+        view.ClipToBounds = false;
         return view;
     }
 }

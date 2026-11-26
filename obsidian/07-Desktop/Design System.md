@@ -41,6 +41,15 @@ the base of controls the kit does not cover yet.
 | `ListBox`                       | `table` (rows with a hover bar), `plain` (rows without any state)        |
 | `c:Card`, `c:Chip`, `c:Alert`   | `outlined`, `small`, colours on a chip; `filled` on an alert             |
 | `TextBlock`                     | `h1` to `h6`, `subtitle1/2`, `body1/2`, `caption`, `overline`, `mono`    |
+| `c:SectionHeader`               | the head of a page: `Title`, `Subtitle`, and its content on the right    |
+| `c:EmptyState`                  | icon, `Title`, `Description`; `compact` inside a card                    |
+| `c:MetricTile`                  | `Kind` = `Kpi`, `Delta` or `Trend`; `Tone`; `IsRolling`; `IsLoading`     |
+| `c:MetricRow`                   | a line of a summary card; `last` has no rule under it                    |
+
+Drawn by hand, in `Controls`: `Sparkline`, `RollingDigits`, `RangeBar`, `SeriesChart` (the equity
+line and the bars of the Trades page) and `CandleChart`. They read their colours from the theme when
+they are attached and again when the theme changes, because a drawn control cannot bind a brush for
+each stroke.
 
 Things to know:
 
@@ -52,6 +61,10 @@ Things to know:
   `@mui/icons-material` 6. Add one by copying its path there.
 - Fonts ship in `Assets/Fonts`: Inter 3.19 and JetBrains Mono, static files. The old UI named both
   but relied on them being installed.
+- A metric tile works its colours out from its tone (`MetricTile.Paint`): one tone at six strengths.
+  A tile of the kind `Delta` takes its tone from the sign of `Change`, whatever `Tone` says.
+- A shadow under the pointer keeps the number and order of layers of the shadow at rest
+  (`MetricTile.HoverShadow`), or the transition between them jumps.
 - Menus, select lists and tooltips are drawn inside the window (`OverlayPopups`), so shadows are not
   cut and they can animate.
 

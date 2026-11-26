@@ -1,43 +1,75 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:TradingAgent.App.ViewModels"
+             xmlns:c="using:TradingAgent.App.Controls"
+             xmlns:m="using:TradingAgent.App.Motion"
              x:Class="TradingAgent.App.Views.OrdersView"
              x:DataType="vm:OrdersViewModel">
 
-  <Grid RowDefinitions="Auto,Auto,*" Margin="24,16">
-    <Grid Grid.Row="0" ColumnDefinitions="Auto,180,Auto,*">
-      <TextBlock Grid.Column="0" Classes="pageTitle" Text="{Binding Title}" VerticalAlignment="Center" Margin="0,0,16,0" />
-      <ComboBox Classes="small" Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding Statuses}" SelectedItem="{Binding Filter}"
+  <Grid RowDefinitions="Auto,Auto,*">
+    <c:SectionHeader Title="Orders" Subtitle="Review the orders the agent placed, and orders placed on OKX itself" />
+
+    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="16" Margin="0,0,0,16">
+      <ComboBox Classes="small" Width="220"
+                c:Field.Label="Status"
+                ItemsSource="{Binding Statuses}"
+                SelectedItem="{Binding Filter}"
                 AutomationProperties.Name="Status filter" />
-      <Button Classes="outlined" Grid.Column="2" Content="Ask OKX now" Margin="8,0,0,0" Command="{Binding RefreshCommand}" />
-      <TextBlock Grid.Column="3" Classes="secondary" VerticalAlignment="Center" Margin="12,0,0,0" TextWrapping="Wrap"
-                 Text="{Binding Status}" />
-    </Grid>
+      <Button Classes="outlined" AutomationProperties.Name="Ask OKX now" Command="{Binding RefreshCommand}">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Panel Width="20" Height="20" Margin="-4,0,0,0">
+            <PathIcon Width="20" Height="20" Data="{StaticResource IconRefresh}" IsVisible="{Binding !IsAsking}" />
+            <c:Spinner Width="16" Height="16" Thickness="5" IsVisible="{Binding IsAsking}" />
+          </Panel>
+          <TextBlock Text="Ask OKX now" />
+        </StackPanel>
+      </Button>
+      <TextBlock Classes="body2 secondary" VerticalAlignment="Center" Text="{Binding CountLabel}" IsVisible="{Binding HasOrders}" />
+      <TextBlock Classes="body2 secondary" VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding Status}" IsVisible="{Binding HasOrders}" />
+    </StackPanel>
 
-    <Grid Grid.Row="1" ColumnDefinitions="150,210,110,140,210,150,*" Margin="12,14,12,4">
-      <TextBlock Grid.Column="0" Classes="secondary" FontSize="12" Text="Placed" />
-      <TextBlock Grid.Column="1" Classes="secondary" FontSize="12" Text="Instrument" />
-      <TextBlock Grid.Column="2" Classes="secondary" FontSize="12" Text="Side" />
-      <TextBlock Grid.Column="3" Classes="secondary" FontSize="12" Text="Type" />
-      <TextBlock Grid.Column="4" Classes="secondary" FontSize="12" Text="Filled / size" />
-      <TextBlock Grid.Column="5" Classes="secondary" FontSize="12" Text="Price" />
-      <TextBlock Grid.Column="6" Classes="secondary" FontSize="12" Text="State" />
-    </Grid>
-
-    <ListBox Grid.Row="2" Background="Transparent" ItemsSource="{Binding Orders}">
-      <ListBox.ItemTemplate>
-        <DataTemplate x:DataType="vm:RowViewModel">
-          <Grid ColumnDefinitions="150,210,110,140,210,150,*">
-            <TextBlock Grid.Column="0" Classes="secondary" Text="{Binding A}" />
-            <TextBlock Grid.Column="1" Text="{Binding B}" />
-            <TextBlock Grid.Column="2" Text="{Binding C}" />
-            <TextBlock Grid.Column="3" Text="{Binding D}" />
-            <TextBlock Grid.Column="4" Text="{Binding E}" />
-            <TextBlock Grid.Column="5" Text="{Binding F}" />
-            <TextBlock Grid.Column="6" Text="{Binding G}" Classes.good="{Binding IsGood}" Classes.bad="{Binding IsBad}" />
-          </Grid>
-        </DataTemplate>
-      </ListBox.ItemTemplate>
-    </ListBox>
+    <c:Card Grid.Row="2" Padding="16,16,16,24" m:Enter.Kind="Reveal">
+      <Panel>
+        <Border Classes="paper" ClipToBounds="True" IsVisible="{Binding HasOrders}">
+          <DockPanel>
+            <Border DockPanel.Dock="Top" Classes="tableHead small">
+              <!-- 8 px less on the right: the rows give that much to their scroll bar. -->
+              <Grid ColumnDefinitions="2*,110,*,*,*,*,150,150" ColumnSpacing="12" Margin="0,0,8,0">
+                <TextBlock Text="Symbol" />
+                <TextBlock Grid.Column="1" Text="Side" />
+                <TextBlock Grid.Column="2" Text="Type" />
+                <TextBlock Grid.Column="3" HorizontalAlignment="Right" Text="Quantity" />
+                <TextBlock Grid.Column="4" HorizontalAlignment="Right" Text="Filled" />
+                <TextBlock Grid.Column="5" HorizontalAlignment="Right" Text="Price" />
+                <TextBlock Grid.Column="6" Text="Status" />
+                <TextBlock Grid.Column="7" Text="Created" />
+              </Grid>
+            </Border>
+            <ListBox Classes="table small" AutomationProperties.Name="Orders" ItemsSource="{Binding Orders}">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:OrderItem">
+                  <Grid ColumnDefinitions="2*,110,*,*,*,*,150,150" ColumnSpacing="12">
+                    <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Text="{Binding Symbol}" />
+                    <c:Chip Grid.Column="1" Classes="small" HorizontalAlignment="Left" Content="{Binding SideLabel}" />
+                    <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="{Binding Type}" />
+                    <TextBlock Grid.Column="3" HorizontalAlignment="Right" VerticalAlignment="Center" Text="{Binding Quantity}" />
+                    <TextBlock Grid.Column="4" HorizontalAlignment="Right" VerticalAlignment="Center" Text="{Binding Filled}" />
+                    <TextBlock Grid.Column="5" HorizontalAlignment="Right" VerticalAlignment="Center" Text="{Binding Price}" />
+                    <c:Chip Grid.Column="6" Classes="outlined small" HorizontalAlignment="Left" Content="{Binding Status}"
+                            Classes.success="{Binding IsGood}" Classes.error="{Binding IsBad}"
+                            Classes.info="{Binding IsOpen}" Classes.warning="{Binding IsPartial}" />
+                    <TextBlock Grid.Column="7" VerticalAlignment="Center" Text="{Binding Time}" />
+                  </Grid>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </DockPanel>
+        </Border>
+        <c:EmptyState IsVisible="{Binding !HasOrders}"
+                      Icon="{StaticResource IconListAlt}"
+                      Title="No orders to show"
+                      Description="{Binding Status}" />
+      </Panel>
+    </c:Card>
   </Grid>
 </UserControl>
